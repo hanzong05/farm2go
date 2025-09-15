@@ -1,9 +1,58 @@
-import { Link } from 'expo-router';
-import { Dimensions, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Link, router, useFocusEffect } from 'expo-router';
+import { Dimensions, ScrollView, StyleSheet, Text, View, Platform } from 'react-native';
+import { useEffect, useState, useCallback } from 'react';
 
 const { width } = Dimensions.get('window');
 
 export default function LandingPage() {
+  const [isMounted, setIsMounted] = useState(false);
+  const [isRedirecting, setIsRedirecting] = useState(false);
+
+  // Wait for component to mount before navigation
+  useEffect(() => {
+    setIsMounted(true);
+  }, []);
+
+  // Use useFocusEffect for safer navigation
+  useFocusEffect(
+    useCallback(() => {
+      if (isMounted && (Platform.OS === 'ios' || Platform.OS === 'android') && !isRedirecting) {
+        setIsRedirecting(true);
+        // Add a small delay to ensure router is ready
+        setTimeout(() => {
+          router.replace('/auth/login');
+        }, 100);
+      }
+    }, [isMounted, isRedirecting])
+  );
+
+  // If this is mobile and mounted, show loading while redirecting
+  if (isMounted && (Platform.OS === 'ios' || Platform.OS === 'android')) {
+    return (
+      <View style={styles.mobileLoading}>
+        <Text style={styles.mobileLoadingTitle}>
+          🌱 Farm2Go
+        </Text>
+        <Text style={styles.mobileLoadingSubtitle}>
+          Loading...
+        </Text>
+      </View>
+    );
+  }
+
+  // If not mounted yet, show loading
+  if (!isMounted) {
+    return (
+      <View style={styles.mobileLoading}>
+        <Text style={styles.mobileLoadingTitle}>
+          🌱 Farm2Go
+        </Text>
+        <Text style={styles.mobileLoadingSubtitle}>
+          Loading...
+        </Text>
+      </View>
+    );
+  }
   return (
     <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
       {/* Navigation Bar */}
@@ -782,5 +831,23 @@ const styles = StyleSheet.create({
   footerLegalLink: {
     fontSize: width < 768 ? 12 : 14,
     color: '#9ca3af',
+  },
+
+  // Mobile Loading Styles
+  mobileLoading: {
+    flex: 1,
+    backgroundColor: '#ffffff',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  mobileLoadingTitle: {
+    fontSize: 32,
+    fontWeight: 'bold',
+    color: '#111827',
+    marginBottom: 16,
+  },
+  mobileLoadingSubtitle: {
+    fontSize: 16,
+    color: '#6b7280',
   },
 });

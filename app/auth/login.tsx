@@ -198,7 +198,7 @@ export default function LoginScreen() {
           style={styles.input}
           value={formData.email}
           onChangeText={(value) => handleInputChange('email', value)}
-          placeholder="Enter your email"
+          placeholder="Enter your email address"
           keyboardType="email-address"
           autoCapitalize="none"
           editable={!isLoading}
@@ -236,31 +236,7 @@ export default function LoginScreen() {
           <View style={styles.dividerLine} />
         </View>
 
-        <View style={styles.demoSection}>
-          <Text style={styles.demoTitle}>Quick Demo Access:</Text>
-
-          <TouchableOpacity
-            style={styles.demoButton}
-            onPress={() => router.replace('/farmer/my-products')}
-          >
-            <Text style={styles.demoButtonText}>Login as Farmer</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={styles.demoButton}
-            onPress={() => router.replace('/buyer/marketplace')}
-          >
-            <Text style={styles.demoButtonText}>Login as Buyer</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={styles.demoButton}
-            onPress={() => router.replace('/admin/users')}
-          >
-            <Text style={styles.demoButtonText}>Login as Admin</Text>
-          </TouchableOpacity>
-        </View>
-
+        
         <View style={styles.registerSection}>
           <Text style={styles.registerText}>Don't have an account? </Text>
           <Link href="/auth/register">

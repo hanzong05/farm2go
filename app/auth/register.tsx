@@ -1,6 +1,7 @@
 import { Link, router } from 'expo-router';
 import React, { useState } from 'react';
-import { Alert, Dimensions, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { Dimensions, KeyboardAvoidingView, Modal, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import LocationPicker from '../../components/LocationPicker';
 import { registerUser } from '../../services/auth';
 
 const { width, height } = Dimensions.get('window');
@@ -13,22 +14,26 @@ export default function RegisterScreen() {
   const [focusedInput, setFocusedInput] = useState<string | null>(null);
   const [isRegistering, setIsRegistering] = useState(false);
   const [rateLimitCooldown, setRateLimitCooldown] = useState(0);
+  const [showSuccessModal, setShowSuccessModal] = useState(false);
+  const [showErrorModal, setShowErrorModal] = useState(false);
+  const [errorMessage, setErrorMessage] = useState('');
+  const [errorTitle, setErrorTitle] = useState('');
   const [formData, setFormData] = useState({
     firstName: '',
+    middleName: '',
     lastName: '',
     email: '',
+    phone: '',
     password: '',
     confirmPassword: '',
-    phone: '',
+    barangay: '',
     // Farmer specific
     farmName: '',
-    farmLocation: '',
     farmSize: '',
     cropTypes: '',
     // Buyer specific
     companyName: '',
     businessType: '',
-    location: '',
   });
 
   const handleInputChange = (field: string, value: string) => {
@@ -36,50 +41,59 @@ export default function RegisterScreen() {
   };
 
   const getPasswordStrength = (password: string) => {
-    if (password.length < 4) return { strength: 'weak', color: '#ef4444', width: 0.25 };
-    if (password.length < 8) return { strength: 'medium', color: '#f59e0b', width: 0.65 };
-    return { strength: 'strong', color: '#10b981', width: 1 };
+    if (password.length < 4) return { strength: 'weak', color: '#dc2626', width: 0.25 };
+    if (password.length < 8) return { strength: 'medium', color: '#d97706', width: 0.65 };
+    return { strength: 'strong', color: '#059669', width: 1 };
   };
 
   const handleRegister = async () => {
-    // Prevent multiple submissions
     if (isRegistering || rateLimitCooldown > 0) {
       return;
     }
 
     // Basic validation
     if (!userType) {
-      Alert.alert('Selection Required', 'Please select whether you are a farmer or buyer');
+      setErrorTitle('Selection Required');
+      setErrorMessage('Please select your account type');
+      setShowErrorModal(true);
       return;
     }
 
-    if (!formData.firstName || !formData.lastName || !formData.email || !formData.password) {
-      Alert.alert('Required Fields', 'Please fill in all required fields');
+    if (!formData.firstName || !formData.lastName || !formData.email || !formData.phone || !formData.password || !formData.barangay) {
+      setErrorTitle('Required Fields');
+      setErrorMessage('Please fill in all required fields');
+      setShowErrorModal(true);
       return;
     }
 
     if (formData.password !== formData.confirmPassword) {
-      Alert.alert('Password Mismatch', 'Passwords do not match');
+      setErrorTitle('Password Mismatch');
+      setErrorMessage('Passwords do not match');
+      setShowErrorModal(true);
       return;
     }
 
     if (formData.password.length < 6) {
-      Alert.alert('Password Too Short', 'Password must be at least 6 characters long');
+      setErrorTitle('Password Too Short');
+      setErrorMessage('Password must be at least 6 characters long');
+      setShowErrorModal(true);
       return;
     }
 
-    // Validate farmer-specific required fields
     if (userType === 'farmer') {
-      if (!formData.farmName || !formData.farmLocation) {
-        Alert.alert('Required Fields', 'Please fill in all required farm information');
+      if (!formData.farmName) {
+        setErrorTitle('Required Fields');
+        setErrorMessage('Please fill in all required farm information');
+        setShowErrorModal(true);
         return;
       }
     }
 
-    // Validate buyer-specific required fields
     if (userType === 'buyer') {
-      if (!formData.companyName || !formData.location) {
-        Alert.alert('Required Fields', 'Please fill in all required business information');
+      if (!formData.companyName) {
+        setErrorTitle('Required Fields');
+        setErrorMessage('Please fill in all required business information');
+        setShowErrorModal(true);
         return;
       }
     }
@@ -89,43 +103,32 @@ export default function RegisterScreen() {
     try {
       const registrationData = {
         email: formData.email,
+        phone: formData.phone,
         password: formData.password,
         firstName: formData.firstName,
+        middleName: formData.middleName,
         lastName: formData.lastName,
-        phone: formData.phone,
+        barangay: formData.barangay,
         userType,
-        // Farmer specific fields
         farmName: formData.farmName,
-        farmLocation: formData.farmLocation,
         farmSize: formData.farmSize,
         cropTypes: formData.cropTypes,
-        // Buyer specific fields
         companyName: formData.companyName,
         businessType: formData.businessType,
-        businessLocation: formData.location,
       };
 
       await registerUser(registrationData);
+      setShowSuccessModal(true);
 
-      Alert.alert('Welcome to Farm2Go!', 'Registration successful! Please check your email to verify your account.', [
-        {
-          text: 'Continue',
-          onPress: () => {
-            router.replace('/auth/login');
-          }
-        }
-      ]);
     } catch (error: any) {
       console.error('Registration error:', error);
       
-      // Handle rate limit error specifically
       if (error.message && error.message.includes('you can only request this after')) {
         const match = error.message.match(/after (\d+) seconds/);
         const seconds = match ? parseInt(match[1]) : 60;
         
         setRateLimitCooldown(seconds);
         
-        // Start countdown
         const countdown = setInterval(() => {
           setRateLimitCooldown(prev => {
             if (prev <= 1) {
@@ -136,20 +139,20 @@ export default function RegisterScreen() {
           });
         }, 1000);
         
-        Alert.alert(
-          'Too Many Attempts',
-          `Please wait ${seconds} seconds before trying again. This security measure helps protect against spam registrations.`,
-          [{ text: 'OK' }]
-        );
+        setErrorTitle('Rate Limit Exceeded');
+        setErrorMessage(`Please wait ${seconds} seconds before attempting registration again.`);
+        setShowErrorModal(true);
       } else {
-        // Handle other errors
         let errorMessage = 'Please try again.';
         
         if (error.message) {
-          if (error.message.includes('Email already registered')) {
-            errorMessage = 'This email is already registered. Please try signing in instead.';
-          } else if (error.message.includes('Invalid email')) {
-            errorMessage = 'Please enter a valid email address.';
+          if (error.message.includes('Email already registered') ||
+              error.message.includes('User already registered') ||
+              error.message.includes('duplicate key') ||
+              error.code === '23505') {
+            errorMessage = 'This phone number is already registered. Please sign in instead.';
+          } else if (error.message.includes('Invalid phone')) {
+            errorMessage = 'Please enter a valid phone number.';
           } else if (error.message.includes('Password')) {
             errorMessage = 'Password must be at least 6 characters long.';
           } else {
@@ -157,24 +160,83 @@ export default function RegisterScreen() {
           }
         }
         
-        Alert.alert('Registration Failed', errorMessage);
+        setErrorTitle('Registration Failed');
+        setErrorMessage(errorMessage);
+        setShowErrorModal(true);
       }
     } finally {
       setIsRegistering(false);
     }
   };
 
+  const renderSuccessModal = () => (
+    <Modal
+      visible={showSuccessModal}
+      transparent={true}
+      animationType="fade"
+      onRequestClose={() => setShowSuccessModal(false)}
+    >
+      <View style={styles.modalOverlay}>
+        <View style={styles.modalContent}>
+          <View style={styles.successIcon}>
+            <Text style={styles.checkmark}>✓</Text>
+          </View>
+          <Text style={styles.modalTitle}>Registration Successful</Text>
+          <Text style={styles.modalMessage}>
+            Welcome to Farm2Go! Your account has been created successfully.
+            You can now sign in and start using the platform.
+          </Text>
+          <TouchableOpacity
+            style={styles.modalButton}
+            onPress={() => {
+              setShowSuccessModal(false);
+              router.replace('/auth/login');
+            }}
+          >
+            <Text style={styles.modalButtonText}>Continue to Sign In</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    </Modal>
+  );
+
+  const renderErrorModal = () => (
+    <Modal
+      visible={showErrorModal}
+      transparent={true}
+      animationType="fade"
+      onRequestClose={() => setShowErrorModal(false)}
+    >
+      <View style={styles.modalOverlay}>
+        <View style={styles.modalContent}>
+          <View style={styles.errorIcon}>
+            <Text style={styles.errorMark}>✕</Text>
+          </View>
+          <Text style={styles.modalTitle}>{errorTitle}</Text>
+          <Text style={styles.modalMessage}>
+            {errorMessage}
+          </Text>
+          <TouchableOpacity
+            style={styles.errorModalButton}
+            onPress={() => setShowErrorModal(false)}
+          >
+            <Text style={styles.modalButtonText}>Try Again</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    </Modal>
+  );
+
   const renderProgressBar = () => {
     const totalSteps = userType ? 2 : 1;
     const progress = currentStep / totalSteps;
-    const progressWidth = progress * (width * 0.6);
     
     return (
       <View style={styles.progressContainer}>
         <View style={styles.progressBarBg}>
           <View style={[
             styles.progressBar, 
-            { width: progressWidth }
+            { width: `${progress * 100}%` }
           ]} />
         </View>
         <Text style={styles.progressText}>
@@ -187,15 +249,10 @@ export default function RegisterScreen() {
   const renderHeader = () => (
     <View style={styles.headerContainer}>
       <View style={styles.header}>
-        <View style={styles.logoContainer}>
-          <View style={styles.logoCircle}>
-            <Text style={styles.logo}>🌱</Text>
-          </View>
-          <Text style={styles.brandName}>Farm2Go</Text>
-        </View>
-        <Text style={styles.title}>Create Your Account</Text>
+        <Text style={styles.brandName}>Farm2Go</Text>
+        <Text style={styles.title}>Create Account</Text>
         <Text style={styles.subtitle}>
-          Join thousands of farmers and buyers connecting directly
+          Join the agricultural marketplace connecting farmers and buyers
         </Text>
         {userType && renderProgressBar()}
       </View>
@@ -204,71 +261,63 @@ export default function RegisterScreen() {
 
   const renderUserTypeSelection = () => (
     <View style={styles.userTypeSection}>
-      <Text style={styles.sectionTitle}>Choose Your Role</Text>
+      <Text style={styles.sectionTitle}>Select Account Type</Text>
       <Text style={styles.sectionSubtitle}>
-        Select the option that best describes your business
+        Choose the option that best describes your business role
       </Text>
 
       <TouchableOpacity
-        style={[styles.userTypeCard, styles.farmerCard]}
+        style={[styles.userTypeCard, userType === 'farmer' && styles.selectedCard]}
         onPress={() => {
           setUserType('farmer');
           setCurrentStep(2);
         }}
-        activeOpacity={0.8}
+        activeOpacity={0.7}
       >
-        <View style={styles.cardContent}>
-          <View style={styles.cardHeader}>
-            <View style={[styles.iconContainer, styles.farmerIcon]}>
-              <Text style={styles.userTypeEmoji}>🌾</Text>
-            </View>
-            <View style={[styles.cardBadge, styles.farmerBadge]}>
-              <Text style={styles.badgeText}>PRODUCER</Text>
+        <View style={styles.cardHeader}>
+          <View style={styles.cardIcon}>
+            <View style={styles.iconCircle}>
+              <Text style={styles.iconText}>F</Text>
             </View>
           </View>
-          <Text style={styles.userTypeTitle}>Farmer / Producer</Text>
-          <Text style={styles.userTypeDescription}>
-            Sell your fresh produce directly to buyers, manage inventory, and track orders
-          </Text>
-          <View style={styles.cardFeatures}>
-            <Text style={styles.featureText}>• Direct sales to buyers</Text>
-            <Text style={styles.featureText}>• Inventory management</Text>
-            <Text style={styles.featureText}>• Order tracking</Text>
-          </View>
-          <View style={styles.cardFooter}>
-            <Text style={styles.cardCta}>Get Started →</Text>
+          <View style={styles.cardContent}>
+            <Text style={styles.cardTitle}>Farmer/Producer</Text>
+            <Text style={styles.cardDescription}>
+              Sell your agricultural products directly to buyers and distributors
+            </Text>
+            <View style={styles.cardFeatures}>
+              <Text style={styles.featureItem}>• Direct sales platform</Text>
+              <Text style={styles.featureItem}>• Inventory management</Text>
+              <Text style={styles.featureItem}>• Order tracking system</Text>
+            </View>
           </View>
         </View>
       </TouchableOpacity>
 
       <TouchableOpacity
-        style={[styles.userTypeCard, styles.buyerCard]}
+        style={[styles.userTypeCard, userType === 'buyer' && styles.selectedCard]}
         onPress={() => {
           setUserType('buyer');
           setCurrentStep(2);
         }}
-        activeOpacity={0.8}
+        activeOpacity={0.7}
       >
-        <View style={styles.cardContent}>
-          <View style={styles.cardHeader}>
-            <View style={[styles.iconContainer, styles.buyerIcon]}>
-              <Text style={styles.userTypeEmoji}>🏢</Text>
-            </View>
-            <View style={[styles.cardBadge, styles.buyerBadge]}>
-              <Text style={styles.badgeText}>BUSINESS</Text>
+        <View style={styles.cardHeader}>
+          <View style={styles.cardIcon}>
+            <View style={styles.iconCircle}>
+              <Text style={styles.iconText}>B</Text>
             </View>
           </View>
-          <Text style={styles.userTypeTitle}>Buyer / Distributor</Text>
-          <Text style={styles.userTypeDescription}>
-            Source fresh produce directly from farms, manage suppliers, and streamline procurement
-          </Text>
-          <View style={styles.cardFeatures}>
-            <Text style={styles.featureText}>• Direct farm sourcing</Text>
-            <Text style={styles.featureText}>• Supplier management</Text>
-            <Text style={styles.featureText}>• Bulk ordering</Text>
-          </View>
-          <View style={styles.cardFooter}>
-            <Text style={styles.cardCta}>Get Started →</Text>
+          <View style={styles.cardContent}>
+            <Text style={styles.cardTitle}>Buyer/Distributor</Text>
+            <Text style={styles.cardDescription}>
+              Source fresh produce directly from verified agricultural producers
+            </Text>
+            <View style={styles.cardFeatures}>
+              <Text style={styles.featureItem}>• Direct farm sourcing</Text>
+              <Text style={styles.featureItem}>• Supplier verification</Text>
+              <Text style={styles.featureItem}>• Bulk order management</Text>
+            </View>
           </View>
         </View>
       </TouchableOpacity>
@@ -294,7 +343,7 @@ export default function RegisterScreen() {
 
     return (
       <View style={styles.inputContainer}>
-        <Text style={[styles.label, isFocused && styles.labelFocused]}>
+        <Text style={styles.label}>
           {label} {options.required && <Text style={styles.required}>*</Text>}
         </Text>
         <View style={[
@@ -346,30 +395,29 @@ export default function RegisterScreen() {
           <Text style={styles.backButtonText}>← Back</Text>
         </TouchableOpacity>
         <Text style={styles.selectedUserType}>
-          {userType === 'farmer' ? '🌾 Farmer Account' : '🏢 Business Account'}
+          {userType === 'farmer' ? 'Farmer Account' : 'Business Account'}
         </Text>
       </View>
 
       {/* Personal Information */}
       <View style={styles.formGroup}>
-        <View style={styles.groupTitleContainer}>
-          <Text style={styles.groupTitle}>Personal Information</Text>
-          <View style={styles.titleUnderline} />
-        </View>
-        <View style={styles.inputRow}>
-          <View style={styles.inputHalf}>
+        <Text style={styles.groupTitle}>Personal Information</Text>
+        <View style={styles.nameRow}>
+          <View style={styles.nameInputHalf}>
             {renderFormInput('firstName', 'First Name', 'Enter first name', { required: true })}
           </View>
-          <View style={styles.inputHalf}>
+          <View style={styles.nameInputHalf}>
             {renderFormInput('lastName', 'Last Name', 'Enter last name', { required: true })}
           </View>
         </View>
+        {renderFormInput('middleName', 'Middle Name', 'Enter middle name (optional)')}
         {renderFormInput('email', 'Email Address', 'Enter email address', {
           required: true,
           keyboardType: 'email-address',
           autoCapitalize: 'none'
         })}
         {renderFormInput('phone', 'Phone Number', 'Enter phone number', {
+          required: true,
           keyboardType: 'phone-pad'
         })}
         {renderFormInput('password', 'Password', 'Enter password', {
@@ -382,15 +430,24 @@ export default function RegisterScreen() {
         })}
       </View>
 
-      {/* Farmer Specific Fields */}
+      {/* Address Information */}
+      <View style={styles.formGroup}>
+        <Text style={styles.groupTitle}>Address Information</Text>
+        <LocationPicker
+          onLocationSelect={(barangay) => {
+            handleInputChange('barangay', barangay);
+          }}
+          initialBarangay={formData.barangay}
+          focusedInput={focusedInput}
+          setFocusedInput={setFocusedInput}
+        />
+      </View>
+
+      {/* Account Specific Information */}
       {userType === 'farmer' && (
         <View style={styles.formGroup}>
-          <View style={styles.groupTitleContainer}>
-            <Text style={styles.groupTitle}>Farm Information</Text>
-            <View style={styles.titleUnderline} />
-          </View>
+          <Text style={styles.groupTitle}>Farm Information</Text>
           {renderFormInput('farmName', 'Farm Name', 'Enter farm name', { required: true })}
-          {renderFormInput('farmLocation', 'Farm Location', 'City, State/Province', { required: true })}
           {renderFormInput('farmSize', 'Farm Size', 'e.g., 50 acres or 20 hectares')}
           {renderFormInput('cropTypes', 'Primary Crop Types', 'e.g., Vegetables, Fruits, Grains', {
             multiline: true
@@ -398,16 +455,11 @@ export default function RegisterScreen() {
         </View>
       )}
 
-      {/* Buyer Specific Fields */}
       {userType === 'buyer' && (
         <View style={styles.formGroup}>
-          <View style={styles.groupTitleContainer}>
-            <Text style={styles.groupTitle}>Business Information</Text>
-            <View style={styles.titleUnderline} />
-          </View>
+          <Text style={styles.groupTitle}>Business Information</Text>
           {renderFormInput('companyName', 'Company Name', 'Enter company name', { required: true })}
           {renderFormInput('businessType', 'Business Type', 'e.g., Restaurant, Grocery Store, Distributor')}
-          {renderFormInput('location', 'Business Location', 'City, State/Province', { required: true })}
         </View>
       )}
 
@@ -418,20 +470,14 @@ export default function RegisterScreen() {
           (isRegistering || rateLimitCooldown > 0) && styles.registerButtonDisabled
         ]} 
         onPress={handleRegister} 
-        activeOpacity={0.9}
         disabled={isRegistering || rateLimitCooldown > 0}
       >
-        <View style={styles.buttonContent}>
-          <Text style={styles.registerButtonText}>
-            {isRegistering ? 'Creating Account...' : rateLimitCooldown > 0 ? `Wait ${rateLimitCooldown}s` : 'Create My Account'}
-          </Text>
-          <Text style={styles.buttonSubtext}>
-            {isRegistering ? 'Please wait...' : rateLimitCooldown > 0 ? 'Rate limit active' : 'Start connecting today'}
-          </Text>
-        </View>
+        <Text style={styles.registerButtonText}>
+          {isRegistering ? 'Creating Account...' : rateLimitCooldown > 0 ? `Wait ${rateLimitCooldown}s` : 'Create Account'}
+        </Text>
       </TouchableOpacity>
 
-      {/* Terms and Privacy */}
+      {/* Terms */}
       <Text style={styles.termsText}>
         By creating an account, you agree to our{' '}
         <Text style={styles.linkText}>Terms of Service</Text> and{' '}
@@ -449,16 +495,26 @@ export default function RegisterScreen() {
   );
 
   return (
-    <ScrollView 
-      style={styles.container} 
-      showsVerticalScrollIndicator={false}
-      bounces={false}
-    >
-      {renderHeader()}
-      <View style={styles.contentContainer}>
-        {!userType ? renderUserTypeSelection() : renderRegistrationForm()}
-      </View>
-    </ScrollView>
+    <>
+      <KeyboardAvoidingView 
+        style={styles.container}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      >
+        <ScrollView 
+          style={styles.scrollView}
+          showsVerticalScrollIndicator={false}
+          bounces={false}
+          keyboardShouldPersistTaps="handled"
+        >
+          {renderHeader()}
+          <View style={styles.contentContainer}>
+            {!userType ? renderUserTypeSelection() : renderRegistrationForm()}
+          </View>
+        </ScrollView>
+      </KeyboardAvoidingView>
+      {renderSuccessModal()}
+      {renderErrorModal()}
+    </>
   );
 }
 
@@ -467,52 +523,39 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#f8fafc',
   },
+  scrollView: {
+    flex: 1,
+  },
   headerContainer: {
-    backgroundColor: '#059669',
-    paddingBottom: 40,
+    backgroundColor: '#1f2937',
+    paddingBottom: 30,
   },
   header: {
     paddingTop: 60,
     paddingHorizontal: 24,
     alignItems: 'center',
   },
-  logoContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  logoCircle: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: 'rgba(255,255,255,0.2)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 12,
-  },
-  logo: {
-    fontSize: 24,
-  },
   brandName: {
-    fontSize: 28,
-    fontWeight: 'bold',
+    fontSize: 32,
+    fontWeight: '700',
     color: '#ffffff',
+    marginBottom: 12,
     letterSpacing: -0.5,
   },
   title: {
-    fontSize: width < 768 ? 26 : 30,
-    fontWeight: 'bold',
+    fontSize: 28,
+    fontWeight: '600',
     color: '#ffffff',
     marginBottom: 8,
     textAlign: 'center',
   },
   subtitle: {
-    fontSize: width < 768 ? 16 : 18,
-    color: '#ffffff',
+    fontSize: 16,
+    color: '#d1d5db',
     textAlign: 'center',
-    opacity: 0.9,
     lineHeight: 24,
     marginBottom: 24,
+    maxWidth: width * 0.8,
   },
   progressContainer: {
     width: '100%',
@@ -520,29 +563,29 @@ const styles = StyleSheet.create({
   },
   progressBarBg: {
     width: width * 0.6,
-    height: 4,
-    backgroundColor: 'rgba(255,255,255,0.3)',
+    height: 3,
+    backgroundColor: '#374151',
     borderRadius: 2,
     overflow: 'hidden',
   },
   progressBar: {
     height: '100%',
-    backgroundColor: '#ffffff',
+    backgroundColor: '#10b981',
     borderRadius: 2,
   },
   progressText: {
-    color: '#ffffff',
+    color: '#d1d5db',
     fontSize: 14,
     marginTop: 8,
-    opacity: 0.8,
   },
   contentContainer: {
     flex: 1,
     backgroundColor: '#ffffff',
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    marginTop: -20,
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    marginTop: -15,
     paddingTop: 32,
+    minHeight: height * 0.7,
   },
   userTypeSection: {
     paddingHorizontal: 24,
@@ -550,7 +593,7 @@ const styles = StyleSheet.create({
   },
   sectionTitle: {
     fontSize: 24,
-    fontWeight: 'bold',
+    fontWeight: '600',
     color: '#111827',
     marginBottom: 8,
     textAlign: 'center',
@@ -560,97 +603,62 @@ const styles = StyleSheet.create({
     color: '#6b7280',
     textAlign: 'center',
     marginBottom: 32,
+    lineHeight: 24,
   },
   userTypeCard: {
-    marginBottom: 20,
-    borderRadius: 16,
+    marginBottom: 16,
+    borderRadius: 12,
     backgroundColor: '#ffffff',
-    elevation: 4,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    borderWidth: 1,
+    borderWidth: 2,
     borderColor: '#e5e7eb',
+    padding: 20,
   },
-  farmerCard: {
+  selectedCard: {
+    borderColor: '#10b981',
     backgroundColor: '#f0fdf4',
-    borderColor: '#bbf7d0',
-  },
-  buyerCard: {
-    backgroundColor: '#fef2f2',
-    borderColor: '#fecaca',
-  },
-  cardContent: {
-    padding: 24,
   },
   cardHeader: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 16,
+    alignItems: 'flex-start',
   },
-  iconContainer: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
+  cardIcon: {
+    marginRight: 16,
+  },
+  iconCircle: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: '#10b981',
     justifyContent: 'center',
     alignItems: 'center',
   },
-  farmerIcon: {
-    backgroundColor: 'rgba(34, 197, 94, 0.1)',
-  },
-  buyerIcon: {
-    backgroundColor: 'rgba(220, 38, 38, 0.1)',
-  },
-  userTypeEmoji: {
-    fontSize: 28,
-  },
-  cardBadge: {
-    paddingHorizontal: 12,
-    paddingVertical: 4,
-    borderRadius: 12,
-  },
-  farmerBadge: {
-    backgroundColor: '#059669',
-  },
-  buyerBadge: {
-    backgroundColor: '#dc2626',
-  },
-  badgeText: {
+  iconText: {
+    fontSize: 20,
+    fontWeight: '700',
     color: '#ffffff',
-    fontSize: 12,
-    fontWeight: 'bold',
-    letterSpacing: 0.5,
   },
-  userTypeTitle: {
-    fontSize: 22,
-    fontWeight: 'bold',
+  cardContent: {
+    flex: 1,
+  },
+  cardTitle: {
+    fontSize: 20,
+    fontWeight: '600',
     color: '#111827',
     marginBottom: 8,
   },
-  userTypeDescription: {
-    fontSize: 16,
+  cardDescription: {
+    fontSize: 15,
     color: '#4b5563',
-    lineHeight: 24,
-    marginBottom: 16,
+    lineHeight: 22,
+    marginBottom: 12,
   },
   cardFeatures: {
-    marginBottom: 20,
+    gap: 4,
   },
-  featureText: {
+  featureItem: {
     fontSize: 14,
-    color: '#059669',
-    marginBottom: 4,
-    fontWeight: '500',
-  },
-  cardFooter: {
-    alignItems: 'flex-end',
-  },
-  cardCta: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#059669',
+    color: '#6b7280',
+    lineHeight: 20,
   },
   formSection: {
     paddingHorizontal: 24,
@@ -660,78 +668,73 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     marginBottom: 32,
+    paddingBottom: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#e5e7eb',
   },
   backButton: {
     marginRight: 16,
   },
   backButtonText: {
     fontSize: 16,
-    color: '#059669',
+    color: '#10b981',
     fontWeight: '600',
   },
   selectedUserType: {
     fontSize: 20,
-    fontWeight: 'bold',
+    fontWeight: '600',
     color: '#111827',
   },
   formGroup: {
     marginBottom: 32,
   },
-  groupTitleContainer: {
-    marginBottom: 20,
-  },
   groupTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
+    fontSize: 18,
+    fontWeight: '600',
     color: '#111827',
-    marginBottom: 8,
+    marginBottom: 20,
+    paddingBottom: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: '#e5e7eb',
   },
-  titleUnderline: {
-    width: 40,
-    height: 3,
-    backgroundColor: '#059669',
-    borderRadius: 2,
-  },
-  inputRow: {
-    flexDirection: width < 768 ? 'column' : 'row',
+  nameRow: {
+    flexDirection: width < 600 ? 'column' : 'row',
     gap: 16,
+    marginBottom: 0,
   },
-  inputHalf: {
+  nameInputHalf: {
     flex: 1,
   },
   inputContainer: {
     marginBottom: 20,
   },
   label: {
-    fontSize: 16,
-    fontWeight: '600',
+    fontSize: 15,
+    fontWeight: '500',
     color: '#374151',
     marginBottom: 8,
   },
-  labelFocused: {
-    color: '#059669',
-  },
   required: {
-    color: '#ef4444',
+    color: '#dc2626',
   },
   inputWrapper: {
-    borderWidth: 2,
-    borderColor: '#e5e7eb',
-    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#d1d5db',
+    borderRadius: 8,
     backgroundColor: '#ffffff',
   },
   inputWrapperFocused: {
-    borderColor: '#059669',
-    backgroundColor: '#f0fdf4',
+    borderColor: '#10b981',
   },
   inputWrapperFilled: {
-    borderColor: '#d1d5db',
+    borderColor: '#9ca3af',
   },
   input: {
     paddingHorizontal: 16,
-    paddingVertical: 16,
+    paddingVertical: 14,
     fontSize: 16,
     color: '#111827',
+    minHeight: 48,
   },
   textArea: {
     height: 80,
@@ -759,34 +762,19 @@ const styles = StyleSheet.create({
     textTransform: 'capitalize',
   },
   registerButton: {
-    backgroundColor: '#059669',
-    borderRadius: 16,
+    backgroundColor: '#10b981',
+    borderRadius: 8,
+    paddingVertical: 16,
+    alignItems: 'center',
     marginTop: 16,
-    elevation: 4,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 8,
   },
   registerButtonDisabled: {
     backgroundColor: '#9ca3af',
-    elevation: 2,
-    shadowOpacity: 0.1,
-  },
-  buttonContent: {
-    paddingVertical: 20,
-    alignItems: 'center',
   },
   registerButtonText: {
     color: '#ffffff',
-    fontSize: 18,
-    fontWeight: 'bold',
-    marginBottom: 2,
-  },
-  buttonSubtext: {
-    color: '#ffffff',
-    fontSize: 14,
-    opacity: 0.8,
+    fontSize: 16,
+    fontWeight: '600',
   },
   termsText: {
     fontSize: 14,
@@ -796,8 +784,8 @@ const styles = StyleSheet.create({
     lineHeight: 20,
   },
   linkText: {
-    color: '#059669',
-    fontWeight: '600',
+    color: '#10b981',
+    fontWeight: '500',
   },
   loginSection: {
     flexDirection: 'row',
@@ -809,12 +797,91 @@ const styles = StyleSheet.create({
     borderTopColor: '#e5e7eb',
   },
   loginText: {
-    fontSize: 16,
+    fontSize: 15,
     color: '#6b7280',
   },
   loginLink: {
-    fontSize: 16,
-    color: '#059669',
+    fontSize: 15,
+    color: '#10b981',
     fontWeight: '600',
+  },
+  // Modal Styles
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 24,
+  },
+  modalContent: {
+    backgroundColor: '#ffffff',
+    borderRadius: 16,
+    padding: 32,
+    alignItems: 'center',
+    maxWidth: 400,
+    width: '100%',
+  },
+  successIcon: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: '#10b981',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 24,
+  },
+  checkmark: {
+    fontSize: 32,
+    color: '#ffffff',
+    fontWeight: 'bold',
+  },
+  modalTitle: {
+    fontSize: 24,
+    fontWeight: '600',
+    color: '#111827',
+    marginBottom: 16,
+    textAlign: 'center',
+  },
+  modalMessage: {
+    fontSize: 16,
+    color: '#4b5563',
+    textAlign: 'center',
+    lineHeight: 24,
+    marginBottom: 32,
+  },
+  modalButton: {
+    backgroundColor: '#10b981',
+    borderRadius: 8,
+    paddingHorizontal: 32,
+    paddingVertical: 14,
+    alignItems: 'center',
+    width: '100%',
+  },
+  modalButtonText: {
+    color: '#ffffff',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  errorIcon: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: '#dc2626',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 24,
+  },
+  errorMark: {
+    fontSize: 32,
+    color: '#ffffff',
+    fontWeight: 'bold',
+  },
+  errorModalButton: {
+    backgroundColor: '#dc2626',
+    borderRadius: 8,
+    paddingHorizontal: 32,
+    paddingVertical: 14,
+    alignItems: 'center',
+    width: '100%',
   },
 });

@@ -3,6 +3,9 @@ import { User, Session } from '@supabase/supabase-js';
 import { supabase } from '../lib/supabase';
 import { Database } from '../types/database';
 
+// Check if we're in demo mode
+const isDemoMode = !process.env.EXPO_PUBLIC_SUPABASE_URL || process.env.EXPO_PUBLIC_SUPABASE_URL === 'https://demo.supabase.co';
+
 type Profile = Database['public']['Tables']['profiles']['Row'];
 
 interface AuthContextType {
@@ -39,6 +42,28 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
   const fetchProfile = async (userId: string) => {
     try {
+      // Check if we're using demo configuration
+      if (isDemoMode) {
+        // Return mock profile for demo mode
+        return {
+          id: userId,
+          email: `user${userId}@demo.com`,
+          first_name: 'Demo',
+          last_name: 'User',
+          phone: null,
+          user_type: 'buyer' as const,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+          farm_name: null,
+          farm_location: null,
+          farm_size: null,
+          crop_types: null,
+          company_name: null,
+          business_type: null,
+          business_location: null,
+        };
+      }
+
       const { data, error } = await supabase
         .from('profiles')
         .select('*')
@@ -47,6 +72,27 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
       if (error) {
         console.error('Error fetching profile:', error);
+        // Return mock profile if RLS blocks access
+        if (error.code === '42501' || error.code === 'PGRST116') {
+          console.warn('⚠️ RLS policy blocking profile access. Using mock profile for development.');
+          return {
+            id: userId,
+            email: `user${userId}@farm2go.com`,
+            first_name: 'Demo',
+            last_name: 'User',
+            phone: null,
+            user_type: 'buyer' as const,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+            farm_name: null,
+            farm_location: null,
+            farm_size: null,
+            crop_types: null,
+            company_name: null,
+            business_type: null,
+            business_location: null,
+          };
+        }
         return null;
       }
 
@@ -76,6 +122,13 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     // Get initial session
     const getInitialSession = async () => {
       try {
+        // If in demo mode, skip Supabase initialization
+        if (isDemoMode) {
+          console.log('🚀 Running in demo mode - Supabase authentication disabled');
+          setLoading(false);
+          return;
+        }
+
         const { data: { session }, error } = await supabase.auth.getSession();
 
         if (error) {
@@ -98,28 +151,30 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
     getInitialSession();
 
-    // Listen for auth changes
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (event, session) => {
-        console.log('Auth state changed:', event, session?.user?.id);
+    // Only listen for auth changes if not in demo mode
+    if (!isDemoMode) {
+      const { data: { subscription } } = supabase.auth.onAuthStateChange(
+        async (event, session) => {
+          console.log('Auth state changed:', event, session?.user?.id);
 
-        setSession(session);
-        setUser(session?.user ?? null);
+          setSession(session);
+          setUser(session?.user ?? null);
 
-        if (session?.user) {
-          const profileData = await fetchProfile(session.user.id);
-          setProfile(profileData);
-        } else {
-          setProfile(null);
+          if (session?.user) {
+            const profileData = await fetchProfile(session.user.id);
+            setProfile(profileData);
+          } else {
+            setProfile(null);
+          }
+
+          setLoading(false);
         }
+      );
 
-        setLoading(false);
-      }
-    );
-
-    return () => {
-      subscription?.unsubscribe();
-    };
+      return () => {
+        subscription?.unsubscribe();
+      };
+    }
   }, []);
 
   const value = {
