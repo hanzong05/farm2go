@@ -76,15 +76,23 @@ export default function CompleteProfileScreen() {
           }
         }
 
-        // Get stored user type
-        const storedUserType = await AsyncStorage.getItem('oauth_user_type');
-        console.log('🔄 Complete Profile: Stored user type:', storedUserType);
+        // Get stored user type from AsyncStorage or localStorage
+        let storedUserType = await AsyncStorage.getItem('oauth_user_type');
+
+        // If not in AsyncStorage, try localStorage (for web)
+        if (!storedUserType && typeof window !== 'undefined') {
+          storedUserType = localStorage.getItem('oauth_user_type');
+          console.log('🔄 Complete Profile: Checking localStorage for user type:', storedUserType);
+        }
+
+        console.log('🔄 Complete Profile: Final stored user type:', storedUserType);
 
         if (storedUserType) {
           setUserType(storedUserType as 'farmer' | 'buyer');
         } else {
-          console.log('❌ Complete Profile: No stored user type, defaulting to farmer');
-          setUserType('farmer'); // Default fallback
+          console.log('❌ Complete Profile: No stored user type, user will need to select');
+          // Don't set a default - let user choose
+          setUserType(null);
         }
 
         // Get current OAuth user with timeout
@@ -277,6 +285,11 @@ export default function CompleteProfileScreen() {
       // Clean up stored user type
       await AsyncStorage.removeItem('oauth_user_type');
 
+      // Also clean up localStorage
+      if (typeof window !== 'undefined') {
+        localStorage.removeItem('oauth_user_type');
+      }
+
       // Show success modal
       setShowSuccessModal(true);
 
@@ -443,9 +456,35 @@ export default function CompleteProfileScreen() {
 
           <View style={styles.contentContainer}>
             <View style={styles.formSection}>
-              <Text style={styles.selectedUserType}>
-                {userType === 'farmer' ? 'Farmer Account' : 'Business Account'}
-              </Text>
+              {/* User Type Selection (if not already stored) */}
+              {!userType ? (
+                <View style={styles.userTypeSelection}>
+                  <Text style={styles.userTypeTitle}>Select Your Account Type</Text>
+                  <Text style={styles.userTypeSubtitle}>Choose the option that best describes you</Text>
+
+                  <View style={styles.userTypeButtons}>
+                    <TouchableOpacity
+                      style={styles.userTypeButton}
+                      onPress={() => setUserType('farmer')}
+                    >
+                      <Text style={styles.userTypeButtonIcon}>🌱</Text>
+                      <Text style={styles.userTypeButtonText}>Farmer/Producer</Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      style={styles.userTypeButton}
+                      onPress={() => setUserType('buyer')}
+                    >
+                      <Text style={styles.userTypeButtonIcon}>🏢</Text>
+                      <Text style={styles.userTypeButtonText}>Buyer/Distributor</Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              ) : (
+                <Text style={styles.selectedUserType}>
+                  {userType === 'farmer' ? 'Farmer Account' : 'Business Account'}
+                </Text>
+              )}
 
               {/* Password Section */}
               <View style={styles.formGroup}>
@@ -620,6 +659,49 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#10b981',
     overflow: 'hidden',
+  },
+  userTypeSelection: {
+    marginBottom: 32,
+    alignItems: 'center',
+  },
+  userTypeTitle: {
+    fontSize: 20,
+    fontWeight: '600',
+    color: '#111827',
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  userTypeSubtitle: {
+    fontSize: 16,
+    color: '#6b7280',
+    marginBottom: 24,
+    textAlign: 'center',
+  },
+  userTypeButtons: {
+    flexDirection: 'row',
+    gap: 16,
+    width: '100%',
+  },
+  userTypeButton: {
+    flex: 1,
+    backgroundColor: '#ffffff',
+    borderWidth: 2,
+    borderColor: '#e5e7eb',
+    borderRadius: 12,
+    padding: 20,
+    alignItems: 'center',
+    minHeight: 120,
+    justifyContent: 'center',
+  },
+  userTypeButtonIcon: {
+    fontSize: 32,
+    marginBottom: 12,
+  },
+  userTypeButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#374151',
+    textAlign: 'center',
   },
   formGroup: {
     marginBottom: 32,

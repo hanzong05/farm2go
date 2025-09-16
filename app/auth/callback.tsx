@@ -11,15 +11,23 @@ export default function AuthCallback() {
         console.log('🔄 OAuth callback screen loaded!');
         console.log('🔄 Processing OAuth callback...');
 
-        // Get the stored user type from AsyncStorage
-        console.log('📱 Checking AsyncStorage for user type...');
-        const storedUserType = await AsyncStorage.getItem('oauth_user_type');
-        console.log('📱 Stored user type:', storedUserType);
+        // Get the stored user type from AsyncStorage and localStorage (for web compatibility)
+        console.log('📱 Checking storage for user type...');
+        let storedUserType = await AsyncStorage.getItem('oauth_user_type');
+
+        // If not in AsyncStorage, try localStorage (for web)
+        if (!storedUserType && typeof window !== 'undefined') {
+          storedUserType = localStorage.getItem('oauth_user_type');
+          console.log('📱 Checking localStorage for user type:', storedUserType);
+        }
+
+        console.log('📱 Final stored user type:', storedUserType);
 
         if (!storedUserType) {
-          console.error('❌ No user type found in storage');
-          console.log('🔄 Redirecting to register with error...');
-          router.replace('/auth/register?error=no_user_type');
+          console.error('❌ No user type found in any storage');
+          console.log('🔄 Redirecting to complete profile instead...');
+          // Instead of error, redirect to complete profile and let user choose type there
+          router.replace('/auth/complete-profile');
           return;
         }
 
@@ -53,6 +61,11 @@ export default function AuthCallback() {
           console.log('✅ Profile already exists, redirecting to appropriate dashboard');
           await AsyncStorage.removeItem('oauth_user_type');
 
+          // Also clean up localStorage
+          if (typeof window !== 'undefined') {
+            localStorage.removeItem('oauth_user_type');
+          }
+
           // Redirect based on user type instead of login
           const profile = existingProfile as any;
           switch (profile.user_type) {
@@ -79,6 +92,11 @@ export default function AuthCallback() {
 
         // Clean up stored user type
         await AsyncStorage.removeItem('oauth_user_type');
+
+        // Also clean up localStorage
+        if (typeof window !== 'undefined') {
+          localStorage.removeItem('oauth_user_type');
+        }
 
         // Redirect back to register with error
         console.log('🔄 Redirecting to register with error...');
