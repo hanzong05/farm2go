@@ -1,8 +1,11 @@
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Link, router } from 'expo-router';
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Dimensions, KeyboardAvoidingView, Modal, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import LocationPicker from '../../components/LocationPicker';
-import { registerUser } from '../../services/auth';
+import { supabase } from '../../lib/supabase';
+import { registerUser, signInWithFacebook, signInWithGoogle } from '../../services/auth';
+import { Database } from '../../types/database';
 
 const { width, height } = Dimensions.get('window');
 
@@ -18,6 +21,139 @@ export default function RegisterScreen() {
   const [showErrorModal, setShowErrorModal] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
   const [errorTitle, setErrorTitle] = useState('');
+  useEffect(() => {
+    console.log('🔍 Setting up React Native auth state listener...');
+    console.log('🔍 Platform:', Platform.OS);
+
+    let oauthPolling: any;
+    let checkTimeout: any;
+
+    const checkOAuthCompletion = async () => {
+      try {
+        const storedUserType = await AsyncStorage.getItem('oauth_user_type');
+
+        if (storedUserType) {
+          console.log('🔍 Found stored user type:', storedUserType);
+
+  
+          const { data: { user }, error } = await supabase.auth.getUser();
+
+          if (user && !error) {
+            console.log('✅ Found OAuth user:', user.email);
+
+     
+            const { data: existingProfile, error: profileError } = await supabase
+              .from('profiles')
+              .select('*')
+              .eq('id', user.id)
+              .single();
+
+            console.log('🔍 Existing profile check:', existingProfile);
+            console.log('🔍 Profile error:', profileError);
+
+            if (!existingProfile || profileError) {
+              console.log('🚀 No profile found, redirecting to complete profile!');
+              router.replace('/auth/complete-profile');
+            } else {
+              console.log('✅ Profile exists, redirecting to dashboard');
+              await AsyncStorage.removeItem('oauth_user_type');
+
+           
+              const profile = existingProfile as Database['public']['Tables']['profiles']['Row'];
+              switch (profile.user_type) {
+                case 'farmer':
+                  router.replace('/farmer/my-products');
+                  break;
+                case 'buyer':
+                  router.replace('/buyer/marketplace');
+                  break;
+                default:
+                  router.replace('/buyer/marketplace');
+              }
+            }
+            return true;
+          } else {
+            console.log('🔍 No user session found yet');
+          }
+        }
+        return false; 
+      } catch (error) {
+        console.error('❌ OAuth check error:', error);
+        return false;
+      }
+    };
+
+ 
+    checkOAuthCompletion();
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      try {
+        console.log('🔄 Auth state change EVENT:', event);
+        console.log('🔄 Auth state change SESSION:', !!session);
+        console.log('🔄 Auth state change USER:', !!session?.user);
+
+        if (event === 'SIGNED_IN' && session?.user) {
+          console.log('✅ User signed in via OAuth:', session.user.email);
+          const storedUserType = await AsyncStorage.getItem('oauth_user_type');
+          console.log('🔍 Stored user type:', storedUserType);
+
+          if (storedUserType) {
+            console.log('🔄 OAuth signup detected, checking for existing profile...');
+            const { data: existingProfile, error: profileError } = await supabase
+              .from('profiles')
+              .select('*')
+              .eq('id', session.user.id)
+              .single();
+
+            console.log('🔍 Existing profile:', existingProfile);
+            console.log('🔍 Profile error:', profileError);
+
+            if (!existingProfile || profileError) {
+              console.log('🚀 No profile found, redirecting to complete profile!');
+              router.replace('/auth/complete-profile');
+            } else {
+              console.log('✅ Profile exists, cleaning up and redirecting to dashboard');
+              await AsyncStorage.removeItem('oauth_user_type');
+              const profile = existingProfile as Database['public']['Tables']['profiles']['Row'];
+              switch (profile.user_type) {
+                case 'farmer':
+                  router.replace('/farmer/my-products');
+                  break;
+                case 'buyer':
+                  router.replace('/buyer/marketplace');
+                  break;
+                default:
+                  router.replace('/buyer/marketplace');
+              }
+            }
+            return; 
+          }
+        }
+      } catch (error) {
+        console.error('❌ Auth state change error:', error);
+      }
+    });
+
+
+    oauthPolling = setInterval(async () => {
+      const found = await checkOAuthCompletion();
+      if (found) {
+        console.log('🚀 OAuth completion detected, stopping polling');
+        clearInterval(oauthPolling);
+      }
+    }, 1500); 
+    checkTimeout = setTimeout(() => {
+      console.log('🛑 OAuth check timeout reached, stopping polling');
+      clearInterval(oauthPolling);
+    }, 30000);
+
+    return () => {
+      console.log('🧹 Cleaning up React Native auth listeners');
+      subscription.unsubscribe();
+      if (oauthPolling) clearInterval(oauthPolling);
+      if (checkTimeout) clearTimeout(checkTimeout);
+    };
+  }, []);
   const [formData, setFormData] = useState({
     firstName: '',
     middleName: '',
@@ -27,11 +163,9 @@ export default function RegisterScreen() {
     password: '',
     confirmPassword: '',
     barangay: '',
-    // Farmer specific
     farmName: '',
     farmSize: '',
     cropTypes: '',
-    // Buyer specific
     companyName: '',
     businessType: '',
   });
@@ -51,7 +185,7 @@ export default function RegisterScreen() {
       return;
     }
 
-    // Basic validation
+ 
     if (!userType) {
       setErrorTitle('Selection Required');
       setErrorMessage('Please select your account type');
@@ -79,7 +213,7 @@ export default function RegisterScreen() {
       setShowErrorModal(true);
       return;
     }
-
+      
     if (userType === 'farmer') {
       if (!formData.farmName) {
         setErrorTitle('Required Fields');
@@ -165,6 +299,50 @@ export default function RegisterScreen() {
         setShowErrorModal(true);
       }
     } finally {
+      setIsRegistering(false);
+    }
+  };
+
+  const handleSocialSignup = async (provider: 'google' | 'facebook') => {
+    if (!userType) {
+      setErrorTitle('Selection Required');
+      setErrorMessage('Please select your account type first');
+      setShowErrorModal(true);
+      return;
+    }
+
+    setIsRegistering(true);
+
+    try {
+      console.log(`🚀 Starting ${provider} signup...`);
+      console.log('🚀 User type selected:', userType);
+
+      await AsyncStorage.setItem('oauth_user_type', userType);
+      console.log('💾 Stored user type in AsyncStorage:', userType);
+
+  
+      const storedType = await AsyncStorage.getItem('oauth_user_type');
+      console.log('✅ Verified stored type:', storedType);
+
+      if (provider === 'google') {
+        console.log('🔄 Initiating Google OAuth...');
+        const result = await signInWithGoogle(true); 
+        console.log('📤 Google OAuth result:', result);
+      } else {
+        console.log('🔄 Initiating Facebook OAuth...');
+        const result = await signInWithFacebook();
+        console.log('📤 Facebook OAuth result:', result);
+      }
+
+      console.log('🔄 OAuth initiated, user should be redirected to provider...');
+
+    } catch (error: any) {
+      console.error(`❌ ${provider} signup error:`, error);
+      await AsyncStorage.removeItem('oauth_user_type');
+
+      setErrorTitle(`${provider === 'google' ? 'Google' : 'Facebook'} Signup Failed`);
+      setErrorMessage(error.message || 'Please try again.');
+      setShowErrorModal(true);
       setIsRegistering(false);
     }
   };
@@ -464,18 +642,51 @@ export default function RegisterScreen() {
       )}
 
       {/* Submit Button */}
-      <TouchableOpacity 
+      <TouchableOpacity
         style={[
-          styles.registerButton, 
+          styles.registerButton,
           (isRegistering || rateLimitCooldown > 0) && styles.registerButtonDisabled
-        ]} 
-        onPress={handleRegister} 
+        ]}
+        onPress={handleRegister}
         disabled={isRegistering || rateLimitCooldown > 0}
       >
         <Text style={styles.registerButtonText}>
           {isRegistering ? 'Creating Account...' : rateLimitCooldown > 0 ? `Wait ${rateLimitCooldown}s` : 'Create Account'}
         </Text>
       </TouchableOpacity>
+
+      {/* Divider - Only show when social buttons are enabled */}
+      {true && (
+        <View style={styles.dividerContainer}>
+          <View style={styles.dividerLine} />
+          <Text style={styles.dividerText}>or</Text>
+          <View style={styles.dividerLine} />
+        </View>
+      )}
+
+      {/* Social Login Buttons - Temporarily disabled until OAuth is configured */}
+      {true && (
+        <View style={styles.socialButtonsContainer}>
+          <TouchableOpacity
+            style={[styles.socialButton, styles.googleButton]}
+            onPress={() => handleSocialSignup('google')}
+            disabled={isRegistering}
+          >
+            <Text style={[styles.socialButtonIcon, styles.googleIcon]}>G</Text>
+            <Text style={styles.socialButtonText}>Continue with Google</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.socialButton, styles.facebookButton]}
+            onPress={() => handleSocialSignup('facebook')}
+            disabled={isRegistering}
+          >
+            <Text style={[styles.socialButtonIcon, styles.facebookIcon]}>f</Text>
+            <Text style={styles.socialButtonText}>Continue with Facebook</Text>
+          </TouchableOpacity>
+
+        </View>
+      )}
 
       {/* Terms */}
       <Text style={styles.termsText}>
@@ -776,6 +987,72 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
   },
+  dividerContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginVertical: 24,
+  },
+  dividerLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: '#e5e7eb',
+  },
+  dividerText: {
+    marginHorizontal: 16,
+    fontSize: 14,
+    color: '#6b7280',
+    fontWeight: '500',
+  },
+  socialButtonsContainer: {
+    gap: 12,
+    marginBottom: 24,
+  },
+  socialButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#d1d5db',
+    backgroundColor: '#ffffff',
+  },
+  googleButton: {
+    borderColor: '#db4437',
+  },
+  facebookButton: {
+    borderColor: '#4267b2',
+  },
+  socialButtonIcon: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    marginRight: 12,
+    color: '#ffffff',
+    width: 24,
+    height: 24,
+    textAlign: 'center',
+    lineHeight: 24,
+    borderRadius: 12,
+  },
+  googleIcon: {
+    backgroundColor: '#db4437',
+  },
+  facebookIcon: {
+    backgroundColor: '#4267b2',
+  },
+  socialButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#374151',
+  },
+  disabledButton: {
+    opacity: 0.5,
+    backgroundColor: '#f3f4f6',
+  },
+  disabledText: {
+    color: '#9ca3af',
+  },
   termsText: {
     fontSize: 14,
     color: '#6b7280',
@@ -805,7 +1082,6 @@ const styles = StyleSheet.create({
     color: '#10b981',
     fontWeight: '600',
   },
-  // Modal Styles
   modalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0, 0, 0, 0.5)',

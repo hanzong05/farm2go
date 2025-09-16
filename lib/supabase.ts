@@ -12,7 +12,9 @@ if (supabaseUrl === 'https://demo.supabase.co' || supabaseAnonKey === 'demo-anon
 
 export const supabase = createClient<Database>(supabaseUrl, supabaseAnonKey, {
   auth: {
-    detectSessionInUrl: false,
+    detectSessionInUrl: true,
+    persistSession: true,
+    autoRefreshToken: true,
   },
 });
 

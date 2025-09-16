@@ -1,3 +1,4 @@
+import { Linking, Platform } from 'react-native';
 import { supabase } from '../lib/supabase';
 import { Database } from '../types/database';
 
@@ -51,6 +52,7 @@ export const registerUser = async (data: RegisterData) => {
 
       const mockProfile = {
         id: mockUser.id,
+        email: data.email,
         phone: data.phone,
         first_name: data.firstName,
         middle_name: data.middleName || null,
@@ -94,7 +96,8 @@ export const registerUser = async (data: RegisterData) => {
     console.log('📡 Auth signup response:', {
       user: authData?.user ? 'User created' : 'No user',
       session: authData?.session ? 'Session created' : 'No session',
-      error: authError ? authError.message : 'No error'
+      error: authError ? authError.message : 'No error',
+      userConfirmed: authData?.user?.email_confirmed_at ? 'Email confirmed' : 'Email not confirmed'
     });
 
     if (authError) {
@@ -107,6 +110,11 @@ export const registerUser = async (data: RegisterData) => {
       throw new Error('Failed to create user');
     }
 
+    if (!authData.user.id) {
+      console.error('❌ No user ID returned from signup');
+      throw new Error('Failed to create user - no ID');
+    }
+
     console.log('✅ Auth user created successfully:', authData.user.id);
 
     console.log('📝 Creating user profile...');
@@ -114,6 +122,7 @@ export const registerUser = async (data: RegisterData) => {
     // Create user profile
     const profileData: Database['public']['Tables']['profiles']['Insert'] = {
       id: authData.user.id,
+      email: data.email,
       phone: data.phone,
       first_name: data.firstName,
       middle_name: data.middleName || null,
@@ -139,9 +148,9 @@ export const registerUser = async (data: RegisterData) => {
 
     try {
       console.log('📡 Inserting profile into database...');
-      const { error: profileError } = await (supabase
-        .from('profiles') as any)
-        .insert(profileData);
+      const { error: profileError } = await supabase
+        .from('profiles')
+        .insert(profileData as any);
 
       if (profileError) {
         console.error('❌ Profile creation error:', profileError);
@@ -280,6 +289,206 @@ export const getCurrentSession = async () => {
     return session;
   } catch (error) {
     console.error('Get session error:', error);
+    throw error;
+  }
+};
+
+// Social auth functions
+export const signInWithGoogle = async (isRegistration = false) => {
+  try {
+    console.log('🚀 Starting Google OAuth sign in...');
+
+    if (isDemoMode) {
+      console.log('🚀 Demo mode: Simulating Google OAuth');
+      await new Promise(resolve => setTimeout(resolve, 1000));
+
+      const mockUser = {
+        id: `google-demo-${Date.now()}`,
+        email: 'demo@google.com',
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      };
+
+      return { user: mockUser, session: null };
+    }
+
+    // Different redirect URLs for registration vs login
+    // Use local IP for both web and mobile development
+    const getRedirectUrl = (isRegistration: boolean) => {
+      return isRegistration
+        ? 'http://10.151.5.55:8081/auth/register'
+        : 'http://10.151.5.55:8081/auth/login';
+    };
+
+    const redirectTo = getRedirectUrl(isRegistration);
+
+    console.log('🔗 Redirect URL:', redirectTo);
+    console.log('📱 Platform:', Platform.OS);
+
+    const oauthOptions = {
+      provider: 'google' as const,
+      options: {
+        redirectTo,
+        queryParams: {
+          access_type: 'offline',
+          prompt: 'consent',
+        },
+      },
+    };
+
+    // For mobile platforms, try to open OAuth in external browser
+    if (Platform.OS !== 'web') {
+      console.log('📱 Mobile platform detected, attempting external browser OAuth...');
+    }
+
+    const { data, error } = await supabase.auth.signInWithOAuth(oauthOptions);
+
+    if (error) {
+      console.error('❌ Google OAuth error:', error);
+      console.error('❌ Error details:', JSON.stringify(error, null, 2));
+      throw error;
+    }
+
+    console.log('✅ Google OAuth initiated');
+    console.log('📤 OAuth data:', data);
+
+    // On mobile, the OAuth should open in the browser
+    if (Platform.OS !== 'web' && data.url) {
+      console.log('🌐 Opening OAuth URL in browser:', data.url);
+      const canOpen = await Linking.canOpenURL(data.url);
+      if (canOpen) {
+        await Linking.openURL(data.url);
+      } else {
+        console.error('❌ Cannot open OAuth URL');
+        throw new Error('Cannot open OAuth URL');
+      }
+    }
+
+    return data;
+  } catch (error) {
+    console.error('Google sign in error:', error);
+    throw error;
+  }
+};
+
+export const signInWithFacebook = async () => {
+  try {
+    console.log('🚀 Starting Facebook OAuth sign in...');
+
+    if (isDemoMode) {
+      console.log('🚀 Demo mode: Simulating Facebook OAuth');
+      await new Promise(resolve => setTimeout(resolve, 1000));
+
+      const mockUser = {
+        id: `facebook-demo-${Date.now()}`,
+        email: 'demo@facebook.com',
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      };
+
+      return { user: mockUser, session: null };
+    }
+
+    const facebookRedirectTo = 'http://10.151.5.55:8081/auth/register';
+    console.log('🔗 Facebook Redirect URL:', facebookRedirectTo);
+    console.log('📱 Platform:', Platform.OS);
+
+    const facebookOauthOptions = {
+      provider: 'facebook' as const,
+      options: {
+        redirectTo: facebookRedirectTo,
+        scopes: 'email',
+      },
+    };
+
+    // For mobile platforms, try to open OAuth in external browser
+    if (Platform.OS !== 'web') {
+      console.log('📱 Mobile platform detected, attempting external browser OAuth...');
+    }
+
+    const { data, error } = await supabase.auth.signInWithOAuth(facebookOauthOptions);
+
+    if (error) {
+      console.error('❌ Facebook OAuth error:', error);
+      console.error('❌ Error details:', JSON.stringify(error, null, 2));
+      throw error;
+    }
+
+    console.log('✅ Facebook OAuth initiated');
+    console.log('📤 OAuth data:', data);
+
+    // On mobile, the OAuth should open in the browser
+    if (Platform.OS !== 'web' && data.url) {
+      console.log('🌐 Opening Facebook OAuth URL in browser:', data.url);
+      const canOpen = await Linking.canOpenURL(data.url);
+      if (canOpen) {
+        await Linking.openURL(data.url);
+      } else {
+        console.error('❌ Cannot open Facebook OAuth URL');
+        throw new Error('Cannot open Facebook OAuth URL');
+      }
+    }
+
+    return data;
+  } catch (error) {
+    console.error('Facebook sign in error:', error);
+    throw error;
+  }
+};
+
+// Handle OAuth callback and create profile if needed
+export const handleOAuthCallback = async (userType: 'farmer' | 'buyer') => {
+  try {
+    const { data: { user }, error: userError } = await supabase.auth.getUser();
+
+    if (userError || !user) {
+      throw new Error('No user found after OAuth');
+    }
+
+    // Check if profile already exists
+    const { data: existingProfile } = await supabase
+      .from('profiles')
+      .select('*')
+      .eq('id', user.id)
+      .single();
+
+    if (existingProfile) {
+      console.log('✅ Profile already exists for OAuth user');
+      return { user, profile: existingProfile };
+    }
+
+    // Create profile for OAuth user
+    const profileData: Database['public']['Tables']['profiles']['Insert'] = {
+      id: user.id,
+      email: user.email || '',
+      first_name: user.user_metadata?.full_name?.split(' ')[0] || null,
+      last_name: user.user_metadata?.full_name?.split(' ').slice(1).join(' ') || null,
+      middle_name: null,
+      phone: null,
+      barangay: null,
+      user_type: userType,
+      farm_name: null,
+      farm_location: null,
+      farm_size: null,
+      crop_types: null,
+      company_name: null,
+      business_type: null,
+      business_location: null,
+    };
+
+    const { error: profileError } = await supabase
+      .from('profiles')
+      .insert(profileData as any);
+
+    if (profileError) {
+      console.error('❌ OAuth profile creation error:', profileError);
+      throw profileError;
+    }
+
+    console.log('✅ OAuth profile created successfully');
+    return { user, profile: profileData };
+  } catch (error) {
+    console.error('OAuth callback error:', error);
     throw error;
   }
 };

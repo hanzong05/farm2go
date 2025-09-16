@@ -11,8 +11,10 @@ CREATE TABLE public.profiles (
     id UUID REFERENCES auth.users(id) ON DELETE CASCADE PRIMARY KEY,
     email TEXT UNIQUE NOT NULL,
     first_name TEXT,
+    middle_name TEXT,
     last_name TEXT,
     phone TEXT,
+    barangay TEXT,
     user_type user_type NOT NULL,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
@@ -205,17 +207,5 @@ CREATE POLICY "Admins can manage all transactions" ON public.transactions
         )
     );
 
--- Create function to handle new user registration
-CREATE OR REPLACE FUNCTION public.handle_new_user()
-RETURNS TRIGGER AS $$
-BEGIN
-    INSERT INTO public.profiles (id, email, user_type)
-    VALUES (NEW.id, NEW.email, 'buyer'); -- Default to buyer, can be changed during registration
-    RETURN NEW;
-END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
-
--- Create trigger for new user registration
-CREATE TRIGGER on_auth_user_created
-    AFTER INSERT ON auth.users
-    FOR EACH ROW EXECUTE FUNCTION public.handle_new_user();
+-- Note: Profile creation is handled manually in the application
+-- No automatic trigger needed since registration process creates complete profile

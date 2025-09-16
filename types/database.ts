@@ -14,8 +14,10 @@ export interface Database {
           id: string
           email: string
           first_name: string | null
+          middle_name: string | null
           last_name: string | null
           phone: string | null
+          barangay: string | null
           user_type: 'farmer' | 'buyer' | 'admin'
           created_at: string
           updated_at: string
@@ -33,8 +35,10 @@ export interface Database {
           id: string
           email: string
           first_name?: string | null
+          middle_name?: string | null
           last_name?: string | null
           phone?: string | null
+          barangay?: string | null
           user_type: 'farmer' | 'buyer' | 'admin'
           created_at?: string
           updated_at?: string
@@ -50,8 +54,10 @@ export interface Database {
           id?: string
           email?: string
           first_name?: string | null
+          middle_name?: string | null
           last_name?: string | null
           phone?: string | null
+          barangay?: string | null
           user_type?: 'farmer' | 'buyer' | 'admin'
           created_at?: string
           updated_at?: string
