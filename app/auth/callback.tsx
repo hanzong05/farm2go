@@ -23,10 +23,36 @@ export default function AuthCallback() {
 
         console.log('📱 Final stored user type:', storedUserType);
 
+        // If no stored user type, check if user already has a profile in database
         if (!storedUserType) {
-          console.error('❌ No user type found in any storage');
-          console.log('🔄 Redirecting to complete profile instead...');
-          // Instead of error, redirect to complete profile and let user choose type there
+          console.log('📱 No stored user type, checking database for existing profile...');
+
+          // First get the OAuth user to check their email
+          const { data: { user: oauthUser }, error: userError } = await supabase.auth.getUser();
+
+          if (oauthUser && oauthUser.email) {
+            console.log('🔍 Checking database for existing profile with email:', oauthUser.email);
+
+            // Import the helper function
+            const { checkExistingUserProfile } = await import('../../services/auth');
+            const existingProfile = await checkExistingUserProfile(oauthUser.email);
+
+            if (existingProfile && existingProfile.user_type) {
+              console.log('✅ Found existing profile with user type:', existingProfile.user_type);
+              storedUserType = existingProfile.user_type;
+
+              // Store it for future reference
+              await AsyncStorage.setItem('oauth_user_type', existingProfile.user_type);
+              if (typeof window !== 'undefined') {
+                localStorage.setItem('oauth_user_type', existingProfile.user_type);
+              }
+            }
+          }
+        }
+
+        if (!storedUserType) {
+          console.error('❌ No user type found in storage or database');
+          console.log('🔄 Redirecting to complete profile to let user choose...');
           router.replace('/auth/complete-profile');
           return;
         }

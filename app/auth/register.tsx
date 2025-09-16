@@ -35,13 +35,11 @@ export default function RegisterScreen() {
         if (storedUserType) {
           console.log('🔍 Found stored user type:', storedUserType);
 
-  
           const { data: { user }, error } = await supabase.auth.getUser();
 
           if (user && !error) {
             console.log('✅ Found OAuth user:', user.email);
 
-     
             const { data: existingProfile, error: profileError } = await supabase
               .from('profiles')
               .select('*')
@@ -58,7 +56,6 @@ export default function RegisterScreen() {
               console.log('✅ Profile exists, redirecting to dashboard');
               await AsyncStorage.removeItem('oauth_user_type');
 
-           
               const profile = existingProfile as Database['public']['Tables']['profiles']['Row'];
               switch (profile.user_type) {
                 case 'farmer':
@@ -73,7 +70,28 @@ export default function RegisterScreen() {
             }
             return true;
           } else {
-            console.log('🔍 No user session found yet');
+            console.log('🔍 No user session found yet, but checking for existing profile by email...');
+
+            // If we have stored user type but no session, try to find existing profile by email
+            // This can happen when users sign in with Gmail after previously registering
+            if (typeof window !== 'undefined') {
+              // For web, we might have access to the email from URL or other sources
+              const urlParams = new URLSearchParams(window.location.search);
+              const emailFromUrl = urlParams.get('email');
+
+              if (emailFromUrl) {
+                console.log('🔍 Checking for existing profile with email from URL:', emailFromUrl);
+                const { checkExistingUserProfile } = await import('../../services/auth');
+                const existingProfile = await checkExistingUserProfile(emailFromUrl);
+
+                if (existingProfile && existingProfile.user_type) {
+                  console.log('✅ Found existing profile, updating stored user type');
+                  await AsyncStorage.setItem('oauth_user_type', existingProfile.user_type);
+                  localStorage.setItem('oauth_user_type', existingProfile.user_type);
+                  // Continue with normal flow
+                }
+              }
+            }
           }
         }
         return false; 
@@ -94,8 +112,26 @@ export default function RegisterScreen() {
 
         if (event === 'SIGNED_IN' && session?.user) {
           console.log('✅ User signed in via OAuth:', session.user.email);
-          const storedUserType = await AsyncStorage.getItem('oauth_user_type');
+          let storedUserType = await AsyncStorage.getItem('oauth_user_type');
           console.log('🔍 Stored user type:', storedUserType);
+
+          // If no stored user type, check database for existing profile
+          if (!storedUserType && session.user.email) {
+            console.log('🔍 No stored user type, checking database for existing profile...');
+            const { checkExistingUserProfile } = await import('../../services/auth');
+            const existingProfile = await checkExistingUserProfile(session.user.email);
+
+            if (existingProfile && existingProfile.user_type) {
+              console.log('✅ Found existing profile with user type:', existingProfile.user_type);
+              storedUserType = existingProfile.user_type;
+
+              // Store it for future reference
+              await AsyncStorage.setItem('oauth_user_type', existingProfile.user_type);
+              if (typeof window !== 'undefined') {
+                localStorage.setItem('oauth_user_type', existingProfile.user_type);
+              }
+            }
+          }
 
           if (storedUserType) {
             console.log('🔄 OAuth signup detected, checking for existing profile...');
@@ -126,7 +162,7 @@ export default function RegisterScreen() {
                   router.replace('/buyer/marketplace');
               }
             }
-            return; 
+            return;
           }
         }
       } catch (error) {

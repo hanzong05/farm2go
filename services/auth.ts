@@ -293,10 +293,44 @@ export const getCurrentSession = async () => {
   }
 };
 
+// Helper function to check for existing user profile by email
+export const checkExistingUserProfile = async (email: string) => {
+  try {
+    console.log('🔍 Checking for existing profile with email:', email);
+
+    const { data: existingProfile, error } = await supabase
+      .from('profiles')
+      .select('*')
+      .eq('email', email)
+      .single();
+
+    if (error && error.code !== 'PGRST116') { // PGRST116 = no rows returned
+      console.error('❌ Error checking existing profile:', error);
+      return null;
+    }
+
+    if (existingProfile) {
+      console.log('✅ Found existing profile:', {
+        id: existingProfile.id,
+        user_type: existingProfile.user_type,
+        email: existingProfile.email
+      });
+      return existingProfile;
+    }
+
+    console.log('ℹ️ No existing profile found for email:', email);
+    return null;
+  } catch (error) {
+    console.error('❌ Error checking existing profile:', error);
+    return null;
+  }
+};
+
 // Social auth functions
 export const signInWithGoogle = async (isRegistration = false) => {
   try {
     console.log('🚀 Starting Google OAuth sign in...');
+    console.log('📝 Registration mode:', isRegistration);
 
     if (isDemoMode) {
       console.log('🚀 Demo mode: Simulating Google OAuth');

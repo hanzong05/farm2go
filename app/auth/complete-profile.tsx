@@ -90,9 +90,35 @@ export default function CompleteProfileScreen() {
         if (storedUserType) {
           setUserType(storedUserType as 'farmer' | 'buyer');
         } else {
-          console.log('❌ Complete Profile: No stored user type, user will need to select');
-          // Don't set a default - let user choose
-          setUserType(null);
+          console.log('❌ Complete Profile: No stored user type, checking database...');
+
+          // Check if user already has a profile in database by email
+          const { data: { user }, error: userError } = await supabase.auth.getUser();
+
+          if (user && user.email) {
+            console.log('🔍 Complete Profile: Checking database for existing profile with email:', user.email);
+
+            // Import and use the helper function
+            const { checkExistingUserProfile } = await import('../../services/auth');
+            const existingProfile = await checkExistingUserProfile(user.email);
+
+            if (existingProfile && existingProfile.user_type) {
+              console.log('✅ Complete Profile: Found existing profile with user type:', existingProfile.user_type);
+              setUserType(existingProfile.user_type as 'farmer' | 'buyer');
+
+              // Store it for future reference
+              await AsyncStorage.setItem('oauth_user_type', existingProfile.user_type);
+              if (typeof window !== 'undefined') {
+                localStorage.setItem('oauth_user_type', existingProfile.user_type);
+              }
+            } else {
+              console.log('❌ Complete Profile: No existing profile found, user will need to select');
+              setUserType(null);
+            }
+          } else {
+            console.log('❌ Complete Profile: No user found, user will need to select');
+            setUserType(null);
+          }
         }
 
         // Get current OAuth user with timeout
