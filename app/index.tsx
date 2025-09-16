@@ -1,29 +1,53 @@
 import { Link, router, useFocusEffect } from 'expo-router';
 import { Dimensions, ScrollView, StyleSheet, Text, View, Platform } from 'react-native';
 import { useEffect, useState, useCallback } from 'react';
+import { useAuth } from '../contexts/AuthContext';
 
 const { width } = Dimensions.get('window');
 
 export default function LandingPage() {
   const [isMounted, setIsMounted] = useState(false);
   const [isRedirecting, setIsRedirecting] = useState(false);
+  const { user, profile, loading } = useAuth();
 
   // Wait for component to mount before navigation
   useEffect(() => {
     setIsMounted(true);
   }, []);
 
-  // Use useFocusEffect for safer navigation
+  // Use useFocusEffect for safer navigation with authentication check
   useFocusEffect(
     useCallback(() => {
-      if (isMounted && (Platform.OS === 'ios' || Platform.OS === 'android') && !isRedirecting) {
+      if (isMounted && (Platform.OS === 'ios' || Platform.OS === 'android') && !isRedirecting && !loading) {
         setIsRedirecting(true);
+
         // Add a small delay to ensure router is ready
         setTimeout(() => {
-          router.replace('/auth/login');
+          if (user && profile) {
+            // User is authenticated and has profile, redirect to appropriate dashboard
+            console.log('User authenticated, redirecting to dashboard. User type:', profile.user_type);
+            switch (profile.user_type) {
+              case 'farmer':
+                router.replace('/farmer/my-products');
+                break;
+              case 'buyer':
+                router.replace('/buyer/marketplace');
+                break;
+              default:
+                router.replace('/buyer/marketplace');
+            }
+          } else if (user && !profile) {
+            // User is authenticated but no profile, redirect to complete profile
+            console.log('User authenticated but no profile, redirecting to complete profile');
+            router.replace('/auth/complete-profile');
+          } else {
+            // Not authenticated, redirect to login
+            console.log('User not authenticated, redirecting to login');
+            router.replace('/auth/login');
+          }
         }, 100);
       }
-    }, [isMounted, isRedirecting])
+    }, [isMounted, isRedirecting, loading, user, profile])
   );
 
   // If this is mobile and mounted, show loading while redirecting
