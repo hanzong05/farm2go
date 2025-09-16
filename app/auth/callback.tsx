@@ -49,19 +49,30 @@ export default function AuthCallback() {
           if (oauthUser && oauthUser.email) {
             console.log('🔍 Checking database for existing profile with email:', oauthUser.email);
 
-            // Import the helper function
-            const { checkExistingUserProfile } = await import('../../services/auth');
-            const existingProfile = await checkExistingUserProfile(oauthUser.email);
+            try {
+              // Direct database query to check for existing profile
+              const { data: existingProfile, error: profileError } = await supabase
+                .from('profiles')
+                .select('user_type, email, id')
+                .eq('email', oauthUser.email)
+                .single();
 
-            if (existingProfile && existingProfile.user_type) {
-              console.log('✅ Found existing profile with user type:', existingProfile.user_type);
-              storedUserType = existingProfile.user_type;
+              console.log('🔍 Profile query result:', { existingProfile, profileError });
 
-              // Store it for future reference
-              await AsyncStorage.setItem('oauth_user_type', existingProfile.user_type);
-              if (typeof window !== 'undefined') {
-                localStorage.setItem('oauth_user_type', existingProfile.user_type);
+              if (existingProfile && existingProfile.user_type) {
+                console.log('✅ Found existing profile with user type:', existingProfile.user_type);
+                storedUserType = existingProfile.user_type;
+
+                // Store it for future reference
+                await AsyncStorage.setItem('oauth_user_type', existingProfile.user_type);
+                if (typeof window !== 'undefined') {
+                  localStorage.setItem('oauth_user_type', existingProfile.user_type);
+                }
+              } else {
+                console.log('ℹ️ No existing profile found or no user_type set for email:', oauthUser.email);
               }
+            } catch (error) {
+              console.error('❌ Error checking for existing profile:', error);
             }
           }
         }
