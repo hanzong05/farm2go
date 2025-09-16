@@ -1,20 +1,30 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { router } from 'expo-router';
 import { View, Text, ActivityIndicator, StyleSheet } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from '../../lib/supabase';
 
 export default function AuthCallback() {
+  const [isClient, setIsClient] = useState(false);
+
   useEffect(() => {
+    setIsClient(true);
+  }, []);
+
+  useEffect(() => {
+    if (!isClient) return;
     const handleCallback = async () => {
       try {
         console.log('🔄 OAuth callback screen loaded!');
         console.log('🔄 Processing OAuth callback...');
-        console.log('🌐 Platform info:', {
-          userAgent: typeof navigator !== 'undefined' ? navigator.userAgent : 'Unknown',
-          url: typeof window !== 'undefined' ? window.location.href : 'Unknown',
-          hash: typeof window !== 'undefined' ? window.location.hash : 'Unknown'
-        });
+        // Only log platform info on client side to avoid hydration issues
+        if (typeof window !== 'undefined') {
+          console.log('🌐 Platform info:', {
+            userAgent: navigator.userAgent,
+            url: window.location.href,
+            hash: window.location.hash
+          });
+        }
 
 
         // Get the stored user type from AsyncStorage and localStorage (for web compatibility)
@@ -162,7 +172,7 @@ export default function AuthCallback() {
       console.log('🧹 Cleaning up callback timer');
       clearTimeout(timer);
     };
-  }, []);
+  }, [isClient]);
 
   return (
     <View style={styles.container}>

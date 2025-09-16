@@ -1,6 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { router, useLocalSearchParams } from 'expo-router';
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { Dimensions, KeyboardAvoidingView, Modal, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import LocationPicker from '../../components/LocationPicker';
 import { supabase } from '../../lib/supabase';
@@ -229,8 +229,13 @@ export default function CompleteProfileScreen() {
 
       // Create complete profile data
       // For mock users, create a UUID-like ID that Supabase will accept
+      const generateStableId = () => {
+        const timestamp = new Date().getTime().toString();
+        return `00000000-0000-0000-0000-${timestamp.padStart(12, '0')}`;
+      };
+
       const userId = oauthUser.id.startsWith('mock-user-') || oauthUser.id.startsWith('manual-user-')
-        ? `00000000-0000-0000-0000-${Date.now().toString().padStart(12, '0')}`
+        ? generateStableId()
         : oauthUser.id;
 
       const profileData: Database['public']['Tables']['profiles']['Insert'] = {
