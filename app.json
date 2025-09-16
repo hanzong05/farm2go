@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "farm2go",
+    "name": "Farm2Go",
     "slug": "farm2go",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -8,10 +8,14 @@
     "scheme": "farm2go",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
+    "owner": "hanz-pillerva",
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.hanzpillerva.farm2go"
     },
     "android": {
+      "package": "com.hanzpillerva.farm2go",
+      "versionCode": 1,
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
