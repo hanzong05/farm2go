@@ -64,41 +64,46 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         };
       }
 
+      console.log('🔍 Fetching profile for user ID:', userId);
+
       const { data, error } = await supabase
         .from('profiles')
         .select('*')
         .eq('id', userId)
         .single();
 
+      console.log('📊 Profile fetch result:', { data, error });
+
       if (error) {
-        console.error('Error fetching profile:', error);
-        // Return mock profile if RLS blocks access
-        if (error.code === '42501' || error.code === 'PGRST116') {
-          console.warn('⚠️ RLS policy blocking profile access. Using mock profile for development.');
-          return {
-            id: userId,
-            email: `user${userId}@farm2go.com`,
-            first_name: 'Demo',
-            last_name: 'User',
-            phone: null,
-            user_type: 'buyer' as const,
-            created_at: new Date().toISOString(),
-            updated_at: new Date().toISOString(),
-            farm_name: null,
-            farm_location: null,
-            farm_size: null,
-            crop_types: null,
-            company_name: null,
-            business_type: null,
-            business_location: null,
-          };
+        console.error('❌ Error fetching profile:', error);
+        console.error('❌ Error details:', {
+          code: error.code,
+          message: error.message,
+          details: error.details,
+          hint: error.hint
+        });
+
+        // If it's a PGRST116 error (no rows), the profile doesn't exist
+        if (error.code === 'PGRST116') {
+          console.log('📝 No profile found - user needs to complete profile');
+          return null;
         }
+
+        // If it's an RLS error, we have a permissions issue
+        if (error.code === '42501') {
+          console.error('🔒 RLS policy blocking access - check Supabase policies');
+          return null;
+        }
+
+        // Other errors
+        console.error('⚠️ Unknown profile fetch error');
         return null;
       }
 
+      console.log('✅ Profile found:', data);
       return data;
     } catch (error) {
-      console.error('Profile fetch error:', error);
+      console.error('💥 Profile fetch exception:', error);
       return null;
     }
   };
