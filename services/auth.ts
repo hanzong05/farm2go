@@ -313,11 +313,19 @@ export const signInWithGoogle = async (isRegistration = false) => {
     }
 
     // Different redirect URLs for registration vs login
-    // Use local IP for both web and mobile development
+    // Use proper callback routing for development and production
     const getRedirectUrl = (isRegistration: boolean) => {
-      return isRegistration
-        ? 'http://10.151.5.55:8081/auth/register'
-        : 'http://10.151.5.55:8081/auth/login';
+      // For web development and production
+      if (Platform.OS === 'web') {
+        // Check if we're in production (deployed on Vercel)
+        const baseUrl = typeof window !== 'undefined'
+          ? window.location.origin
+          : 'http://localhost:8081';
+        return `${baseUrl}/auth/callback`;
+      } else {
+        // For mobile, use the proper app scheme
+        return 'farm2go://auth/callback';
+      }
     };
 
     const redirectTo = getRedirectUrl(isRegistration);
@@ -389,7 +397,9 @@ export const signInWithFacebook = async () => {
       return { user: mockUser, session: null };
     }
 
-    const facebookRedirectTo = 'http://10.151.5.55:8081/auth/register';
+    const facebookRedirectTo = Platform.OS === 'web'
+      ? (typeof window !== 'undefined' ? `${window.location.origin}/auth/callback` : 'http://localhost:8081/auth/callback')
+      : 'farm2go://auth/callback';
     console.log('🔗 Facebook Redirect URL:', facebookRedirectTo);
     console.log('📱 Platform:', Platform.OS);
 
