@@ -4,7 +4,8 @@
       "Bash(git add:*)",
       "Read(//c/Users/Admin/Pictures/Screenshots/**)",
       "Bash(npm start)",
-      "Bash(npm run build:*)"
+      "Bash(npm run build:*)",
+      "Bash(npx tsc:*)"
     ],
     "deny": [],
     "ask": []

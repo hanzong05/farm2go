@@ -388,9 +388,9 @@ export default function EnhancedFarmerDashboard() {
               ))}
               
               {products.length > 3 && (
-                <TouchableOpacity 
+                <TouchableOpacity
                   style={styles.viewAllButton}
-                  onPress={() => router.push('/farmer/products')}
+                  onPress={() => router.push('/farmer/my-products')}
                 >
                   <Text style={styles.viewAllText}>
                     View all {products.length} products →

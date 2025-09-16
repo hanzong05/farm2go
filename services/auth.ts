@@ -1,6 +1,7 @@
 import { Linking, Platform } from 'react-native';
 import { supabase } from '../lib/supabase';
 import { Database } from '../types/database';
+import type { AuthResponse } from '@supabase/supabase-js';
 
 // Check if we're in demo mode
 const isDemoMode = !process.env.EXPO_PUBLIC_SUPABASE_URL || process.env.EXPO_PUBLIC_SUPABASE_URL === 'https://demo.supabase.co';
@@ -88,10 +89,12 @@ export const registerUser = async (data: RegisterData) => {
       }, 30000);
     });
 
-    const { data: authData, error: authError } = await Promise.race([
+    const authResult = await Promise.race([
       signupPromise,
       timeoutPromise
-    ]) as any;
+    ]) as AuthResponse;
+
+    const { data: authData, error: authError } = authResult;
 
     console.log('📡 Auth signup response:', {
       user: authData?.user ? 'User created' : 'No user',
@@ -294,7 +297,7 @@ export const getCurrentSession = async () => {
 };
 
 // Helper function to check for existing user profile by email
-export const checkExistingUserProfile = async (email: string) => {
+export const checkExistingUserProfile = async (email: string): Promise<Profile | null> => {
   try {
     console.log('🔍 Checking for existing profile with email:', email);
 
@@ -310,12 +313,13 @@ export const checkExistingUserProfile = async (email: string) => {
     }
 
     if (existingProfile) {
+      const profile = existingProfile as Profile;
       console.log('✅ Found existing profile:', {
-        id: existingProfile.id,
-        user_type: existingProfile.user_type,
-        email: existingProfile.email
+        id: profile.id,
+        user_type: profile.user_type,
+        email: profile.email
       });
-      return existingProfile;
+      return profile;
     }
 
     console.log('ℹ️ No existing profile found for email:', email);
