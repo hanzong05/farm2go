@@ -118,11 +118,11 @@ export default function CompleteProfileScreen() {
       }
     };
 
-    // Add timeout to prevent infinite loading
+    // Add timeout to prevent infinite loading - increased timeout for slow connections
     const timeoutId = setTimeout(() => {
       console.log('⏰ Complete Profile: Timeout reached, redirecting back to register');
       router.replace('/auth/register');
-    }, 5000); // 5 second timeout
+    }, 15000); // 15 second timeout
 
     loadOAuthData().then(() => {
       clearTimeout(timeoutId);
