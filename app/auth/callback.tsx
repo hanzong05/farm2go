@@ -10,6 +10,12 @@ export default function AuthCallback() {
       try {
         console.log('🔄 OAuth callback screen loaded!');
         console.log('🔄 Processing OAuth callback...');
+        console.log('🌐 Platform info:', {
+          userAgent: typeof navigator !== 'undefined' ? navigator.userAgent : 'Unknown',
+          url: typeof window !== 'undefined' ? window.location.href : 'Unknown',
+          hash: typeof window !== 'undefined' ? window.location.hash : 'Unknown'
+        });
+
 
         // Get the stored user type from AsyncStorage and localStorage (for web compatibility)
         console.log('📱 Checking storage for user type...');
@@ -59,12 +65,30 @@ export default function AuthCallback() {
 
         // Verify the OAuth user exists
         console.log('🔐 Checking for OAuth user...');
-        const { data: { user }, error: userError } = await supabase.auth.getUser();
+
+        // Simple retry logic for desktop Chrome
+        let user = null;
+        let userError = null;
+        let retryCount = 0;
+        const maxRetries = 3;
+
+        while (!user && retryCount < maxRetries) {
+          const result = await supabase.auth.getUser();
+          user = result.data.user;
+          userError = result.error;
+
+          if (!user && retryCount < maxRetries - 1) {
+            console.log(`🔄 Retry ${retryCount + 1}/${maxRetries} - waiting 1 second...`);
+            await new Promise(resolve => setTimeout(resolve, 1000));
+          }
+          retryCount++;
+        }
+
         console.log('🔐 OAuth user data:', user);
         console.log('🔐 OAuth user error:', userError);
 
         if (userError || !user) {
-          console.error('❌ No OAuth user found:', userError);
+          console.error('❌ No OAuth user found after retries:', userError);
           throw new Error('OAuth authentication failed');
         }
 
@@ -131,8 +155,8 @@ export default function AuthCallback() {
     };
 
     console.log('⏰ Setting callback timer...');
-    // Add a small delay to ensure the OAuth process is complete
-    const timer = setTimeout(handleCallback, 1000);
+    // Add longer delay for desktop Chrome compatibility
+    const timer = setTimeout(handleCallback, 2000);
 
     return () => {
       console.log('🧹 Cleaning up callback timer');
