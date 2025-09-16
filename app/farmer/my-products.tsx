@@ -14,6 +14,7 @@ import {
 } from 'react-native';
 import { supabase } from '../../lib/supabase';
 import { getUserWithProfile, logoutUser } from '../../services/auth';
+import { Database } from '../../types/database';
 
 const { width } = Dimensions.get('window');
 
@@ -29,12 +30,7 @@ interface Product {
   created_at: string;
 }
 
-interface Profile {
-  first_name: string;
-  last_name: string;
-  farm_name: string;
-  farm_location: string;
-}
+type Profile = Database['public']['Tables']['profiles']['Row'];
 
 export default function EnhancedFarmerDashboard() {
   const [products, setProducts] = useState<Product[]>([]);
@@ -351,7 +347,7 @@ export default function EnhancedFarmerDashboard() {
                       }]
                     }
                   ]}
-                  onPress={() => router.push(`/farmer/products/${product.id}`)}
+                  onPress={() => router.push(`/farmer/products/${product.id}` as any)}
                 >
                   <View style={styles.productHeader}>
                     <View style={styles.productInfo}>

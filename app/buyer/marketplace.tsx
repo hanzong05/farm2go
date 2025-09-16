@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, ScrollView, TouchableOpacity, RefreshControl, A
 import { router } from 'expo-router';
 import { supabase } from '../../lib/supabase';
 import { getUserWithProfile, logoutUser } from '../../services/auth';
+import { Database } from '../../types/database';
 
 const { width } = Dimensions.get('window');
 
@@ -18,19 +19,14 @@ interface Product {
   created_at: string;
   farmer_id: string;
   profiles?: {
-    first_name: string;
-    last_name: string;
-    farm_name: string;
-    farm_location: string;
+    first_name: string | null;
+    last_name: string | null;
+    farm_name: string | null;
+    farm_location: string | null;
   };
 }
 
-interface Profile {
-  first_name: string;
-  last_name: string;
-  company_name: string;
-  business_location: string;
-}
+type Profile = Database['public']['Tables']['profiles']['Row'];
 
 const categories = [
   'All',
@@ -169,7 +165,7 @@ export default function MarketplaceScreen() {
     <TouchableOpacity
       key={product.id}
       style={styles.productCard}
-      onPress={() => router.push(`/buyer/products/${product.id}`)}
+      onPress={() => router.push(`/buyer/products/${product.id}` as any)}
     >
       <View style={styles.productHeader}>
         <View style={styles.productInfo}>
@@ -200,13 +196,13 @@ export default function MarketplaceScreen() {
       <View style={styles.productFooter}>
         <TouchableOpacity
           style={styles.contactButton}
-          onPress={() => router.push(`/buyer/contact-farmer/${product.farmer_id}`)}
+          onPress={() => router.push(`/buyer/contact-farmer/${product.farmer_id}` as any)}
         >
           <Text style={styles.contactButtonText}>Contact Farmer</Text>
         </TouchableOpacity>
         <TouchableOpacity
           style={styles.orderButton}
-          onPress={() => router.push(`/buyer/order/${product.id}`)}
+          onPress={() => router.push(`/buyer/order/${product.id}` as any)}
         >
           <Text style={styles.orderButtonText}>Order Now</Text>
         </TouchableOpacity>
