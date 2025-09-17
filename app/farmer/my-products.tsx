@@ -60,9 +60,14 @@ export default function EnhancedFarmerDashboard() {
 
   const loadData = async () => {
     try {
+      console.log('🔍 Loading farmer data...');
       const userData = await getUserWithProfile();
+      console.log('👤 User data:', userData);
+
       if (userData?.profile) {
         setProfile(userData.profile);
+        console.log('✅ Profile set:', userData.profile.user_type);
+        console.log('🆔 User ID for query:', userData.user.id);
 
         const { data: productsData, error } = await supabase
           .from('products')
@@ -70,11 +75,21 @@ export default function EnhancedFarmerDashboard() {
           .eq('farmer_id', userData.user.id)
           .order('created_at', { ascending: false });
 
-        if (error) throw error;
+        console.log('📦 Products query result:', { productsData, error });
+        console.log('📊 Products count:', productsData?.length || 0);
+
+        if (error) {
+          console.error('❌ Products query error:', error);
+          throw error;
+        }
+
         setProducts(productsData || []);
+        console.log('✅ Products state updated');
+      } else {
+        console.log('❌ No user data or profile found');
       }
     } catch (error) {
-      console.error('Error loading data:', error);
+      console.error('❌ Error loading data:', error);
       Alert.alert('Error', 'Failed to load data');
     } finally {
       setLoading(false);
@@ -144,48 +159,54 @@ export default function EnhancedFarmerDashboard() {
     </Animated.View>
   );
 
-  const renderEmptyState = () => (
-    <Animated.View 
-      style={[
-        styles.emptyState,
-        { 
-          opacity: fadeAnim,
-          transform: [{ translateY: slideAnim }]
-        }
-      ]}
-    >
-      <View style={styles.emptyIcon}>
-        <Text style={styles.emptyIconText}>🌱</Text>
-      </View>
-      <Text style={styles.emptyTitle}>Start Growing Your Business</Text>
-      <Text style={styles.emptyDescription}>
-        Add your first product to begin connecting with buyers in your area. 
-        It only takes a few minutes to get started!
-      </Text>
-      <TouchableOpacity
-        style={styles.emptyButton}
-        onPress={() => router.push('/farmer/products/add')}
+  const renderEmptyState = () => {
+    console.log('📄 Rendering empty state - no products found');
+    return (
+      <Animated.View
+        style={[
+          styles.emptyState,
+          {
+            opacity: fadeAnim,
+            transform: [{ translateY: slideAnim }]
+          }
+        ]}
       >
-        <Text style={styles.emptyButtonIcon}>+</Text>
-        <Text style={styles.emptyButtonText}>Add Your First Product</Text>
-      </TouchableOpacity>
-      
-      <View style={styles.emptyFeatures}>
-        <View style={styles.emptyFeature}>
-          <Text style={styles.emptyFeatureIcon}>✨</Text>
-          <Text style={styles.emptyFeatureText}>Quick approval process</Text>
+        <View style={styles.emptyIcon}>
+          <Text style={styles.emptyIconText}>🌱</Text>
         </View>
-        <View style={styles.emptyFeature}>
-          <Text style={styles.emptyFeatureIcon}>💰</Text>
-          <Text style={styles.emptyFeatureText}>Competitive pricing</Text>
+        <Text style={styles.emptyTitle}>Start Growing Your Business</Text>
+        <Text style={styles.emptyDescription}>
+          Add your first product to begin connecting with buyers in your area.
+          It only takes a few minutes to get started!
+        </Text>
+        <TouchableOpacity
+          style={styles.emptyButton}
+          onPress={() => {
+            console.log('🚀 Navigating to add product page');
+            router.push('/farmer/products/add');
+          }}
+        >
+          <Text style={styles.emptyButtonIcon}>+</Text>
+          <Text style={styles.emptyButtonText}>Add Your First Product</Text>
+        </TouchableOpacity>
+
+        <View style={styles.emptyFeatures}>
+          <View style={styles.emptyFeature}>
+            <Text style={styles.emptyFeatureIcon}>✨</Text>
+            <Text style={styles.emptyFeatureText}>Quick approval process</Text>
+          </View>
+          <View style={styles.emptyFeature}>
+            <Text style={styles.emptyFeatureIcon}>💰</Text>
+            <Text style={styles.emptyFeatureText}>Competitive pricing</Text>
+          </View>
+          <View style={styles.emptyFeature}>
+            <Text style={styles.emptyFeatureIcon}>📱</Text>
+            <Text style={styles.emptyFeatureText}>Easy management</Text>
+          </View>
         </View>
-        <View style={styles.emptyFeature}>
-          <Text style={styles.emptyFeatureIcon}>📱</Text>
-          <Text style={styles.emptyFeatureText}>Easy management</Text>
-        </View>
-      </View>
-    </Animated.View>
-  );
+      </Animated.View>
+    );
+  };
 
   if (loading) {
     return (
@@ -331,7 +352,12 @@ export default function EnhancedFarmerDashboard() {
             )}
           </View>
 
-          {products.length === 0 ? renderEmptyState() : (
+          {products.length === 0 ? (
+            <>
+              {console.log('🔍 Products length is 0, showing empty state')}
+              {renderEmptyState()}
+            </>
+          ) : (
             <View style={styles.productsList}>
               {products.slice(0, 3).map((product, index) => (
                 <TouchableOpacity
