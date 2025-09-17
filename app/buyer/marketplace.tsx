@@ -4,6 +4,7 @@ import { router } from 'expo-router';
 import { supabase } from '../../lib/supabase';
 import { getUserWithProfile, logoutUser } from '../../services/auth';
 import { Database } from '../../types/database';
+import NavBar from '../../components/NavBar';
 
 const { width } = Dimensions.get('window');
 
@@ -220,21 +221,7 @@ export default function MarketplaceScreen() {
 
   return (
     <View style={styles.container}>
-      {/* Header */}
-      <View style={styles.header}>
-        <View style={styles.headerContent}>
-          <View style={styles.headerLeft}>
-            <Text style={styles.welcomeText}>Welcome to</Text>
-            <Text style={styles.appName}>Farm2Go Marketplace</Text>
-            <Text style={styles.buyerName}>
-              {profile?.first_name} {profile?.last_name}
-            </Text>
-          </View>
-          <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
-            <Text style={styles.logoutText}>Logout</Text>
-          </TouchableOpacity>
-        </View>
-      </View>
+      <NavBar currentRoute="/buyer/marketplace" />
 
       <ScrollView
         style={styles.content}

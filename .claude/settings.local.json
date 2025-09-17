@@ -9,7 +9,8 @@
       "Bash(git commit:*)",
       "Bash(git push:*)",
       "Bash(npm run:*)",
-      "Read(//c/Users/KID/Pictures/**)"
+      "Read(//c/Users/KID/Pictures/**)",
+      "Bash(cat:*)"
     ],
     "deny": [],
     "ask": []

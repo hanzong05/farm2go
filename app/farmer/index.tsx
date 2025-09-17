@@ -1,5 +1,6 @@
 import { View, Text, Pressable, ScrollView } from 'react-native';
 import { Link } from 'expo-router';
+import NavBar from '../../components/NavBar';
 
 export default function FarmerDashboard() {
   const farmerFeatures = [
@@ -10,33 +11,11 @@ export default function FarmerDashboard() {
   ];
 
   return (
-    <ScrollView style={{ flex: 1, backgroundColor: '#f8f8f8' }}>
-      {/* Header */}
-      <View style={{
-        backgroundColor: '#4CAF50',
-        padding: 20,
-        paddingTop: 60,
-      }}>
-        <Text style={{
-          fontSize: 24,
-          fontWeight: 'bold',
-          color: 'white',
-          textAlign: 'center'
-        }}>
-          Welcome Back, John! 👨‍🌾
-        </Text>
-        <Text style={{
-          fontSize: 16,
-          color: 'white',
-          textAlign: 'center',
-          marginTop: 8,
-          opacity: 0.9
-        }}>
-          Green Valley Farm
-        </Text>
-      </View>
+    <View style={{ flex: 1, backgroundColor: '#f8f8f8' }}>
+      <NavBar currentRoute="/farmer" />
 
-      {/* Quick Actions */}
+      <ScrollView style={{ flex: 1 }}>
+        {/* Quick Actions */}
       <View style={{ padding: 20 }}>
         <Text style={{
           fontSize: 20,

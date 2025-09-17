@@ -6,7 +6,6 @@ import {
   Dimensions,
   RefreshControl,
   ScrollView,
-  StatusBar,
   StyleSheet,
   Text,
   TouchableOpacity,
@@ -15,6 +14,7 @@ import {
 import { supabase } from '../../lib/supabase';
 import { getUserWithProfile, logoutUser } from '../../services/auth';
 import { Database } from '../../types/database';
+import NavBar from '../../components/NavBar';
 
 const { width } = Dimensions.get('window');
 
@@ -231,26 +231,7 @@ export default function MyProductsScreen() {
 
   return (
     <View style={styles.container}>
-      <StatusBar barStyle="light-content" backgroundColor="#10b981" />
-
-      {/* Header */}
-        <View style={styles.headerTop}>
-          <View style={styles.userInfo}>
-            <Text style={styles.farmerName}>
-              {profile?.first_name} {profile?.last_name}
-            </Text>
-            {profile?.farm_name && (
-              <View style={styles.farmInfo}>
-                <Text style={styles.farmIcon}>🏡</Text>
-                <Text style={styles.farmName}>{profile.farm_name}</Text>
-              </View>
-            )}
-          </View>
-
-          <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
-            <Text style={styles.logoutText}>Logout</Text>
-          </TouchableOpacity>
-      </View>
+      <NavBar currentRoute="/farmer/my-products" />
 
       <ScrollView
         style={styles.content}
@@ -340,64 +321,12 @@ const styles = StyleSheet.create({
     color: '#64748b',
   },
 
-  // Header
-  header: {
-    backgroundColor: '#10b981',
-    paddingTop: 50,
-    paddingBottom: 30,
-    paddingHorizontal: 24,
-  },
-  headerTop: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-  },
-  userInfo: {
-    flex: 1,
-  },
-  welcomeText: {
-    fontSize: 16,
-    color: '#d1fae5',
-    marginBottom: 4,
-  },
-  farmerName: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#ffffff',
-    marginBottom: 8,
-  },
-  farmInfo: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  farmIcon: {
-    fontSize: 16,
-    marginRight: 8,
-  },
-  farmName: {
-    fontSize: 16,
-    color: '#d1fae5',
-    fontWeight: '600',
-  },
-  logoutButton: {
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 8,
-  },
-  logoutText: {
-    color: '#ffffff',
-    fontWeight: '600',
-  },
 
   // Content
   content: {
     flex: 1,
-    backgroundColor: '#ffffff',
-    marginTop: -15,
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    paddingTop: 24,
+    backgroundColor: '#f8fafc',
+    paddingTop: 16,
   },
 
   // Stats
