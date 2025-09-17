@@ -4,7 +4,6 @@ import {
   ActivityIndicator,
   Alert,
   Dimensions,
-  LinearGradient,
   RefreshControl,
   ScrollView,
   StyleSheet,
@@ -122,36 +121,31 @@ export default function MyProductsScreen() {
 
   const stats = getStats();
 
-  const renderStatCard = (title: string, value: string | number, color: string, gradient: string[], icon: string) => (
-    <View style={styles.statCard}>
-      <LinearGradient
-        colors={gradient}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
-        style={styles.statGradient}
-      >
-        <View style={styles.statIconContainer}>
+  const renderStatCard = (title: string, value: string | number, color: string, backgroundColor: string, icon: string) => (
+    <View style={[styles.statCard, { backgroundColor }]}>
+      <View style={styles.statHeader}>
+        <View style={[styles.statIconContainer, { backgroundColor: color }]}>
           <Text style={styles.statIcon}>{icon}</Text>
         </View>
         <View style={styles.statContent}>
-          <Text style={styles.statValue}>{value}</Text>
+          <Text style={[styles.statValue, { color }]}>{value}</Text>
           <Text style={styles.statTitle}>{title}</Text>
         </View>
-      </LinearGradient>
+      </View>
     </View>
   );
 
   const renderWelcomeHeader = () => (
     <View style={styles.welcomeContainer}>
-      <LinearGradient
-        colors={['#059669', '#10b981', '#34d399']}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
-        style={styles.welcomeGradient}
-      >
-        <View style={styles.welcomeContent}>
+      <View style={styles.welcomeContent}>
+        <View style={styles.welcomeText}>
           <Text style={styles.welcomeGreeting}>Good day, Farmer!</Text>
-          <Text style={styles.welcomeName}>{profile?.full_name || 'Welcome back'}</Text>
+          <Text style={styles.welcomeName}>
+            {profile?.first_name 
+              ? `${profile.first_name}${profile.last_name ? ` ${profile.last_name}` : ''}`
+              : 'Welcome back'
+            }
+          </Text>
           <Text style={styles.welcomeSubtitle}>
             {products.length > 0 
               ? `Managing ${products.length} product${products.length !== 1 ? 's' : ''}`
@@ -159,22 +153,19 @@ export default function MyProductsScreen() {
             }
           </Text>
         </View>
-        <View style={styles.welcomeDecoration}>
-          <Text style={styles.welcomeEmoji}>🌾</Text>
+        <View style={styles.welcomeIconContainer}>
+          <Text style={styles.welcomeIcon}>🌾</Text>
         </View>
-      </LinearGradient>
+      </View>
     </View>
   );
 
   const renderEmptyState = () => (
     <View style={styles.emptyContainer}>
       <View style={styles.emptyIllustration}>
-        <LinearGradient
-          colors={['#f0fdf4', '#dcfce7']}
-          style={styles.emptyIconContainer}
-        >
+        <View style={styles.emptyIconContainer}>
           <Text style={styles.emptyIcon}>🌱</Text>
-        </LinearGradient>
+        </View>
       </View>
       
       <Text style={styles.emptyTitle}>Start Your Digital Farm</Text>
@@ -191,13 +182,8 @@ export default function MyProductsScreen() {
         }}
         activeOpacity={0.8}
       >
-        <LinearGradient
-          colors={['#059669', '#10b981']}
-          style={styles.ctaGradient}
-        >
-          <Text style={styles.ctaIcon}>+</Text>
-          <Text style={styles.ctaText}>List Your First Product</Text>
-        </LinearGradient>
+        <Text style={styles.ctaIcon}>+</Text>
+        <Text style={styles.ctaText}>List Your First Product</Text>
       </TouchableOpacity>
 
       <View style={styles.benefitsGrid}>
@@ -210,7 +196,9 @@ export default function MyProductsScreen() {
             { icon: '🚀', title: 'Grow Business', desc: 'Expand your reach' },
           ].map((benefit, index) => (
             <View key={index} style={styles.benefitCard}>
-              <Text style={styles.benefitIcon}>{benefit.icon}</Text>
+              <View style={styles.benefitIconContainer}>
+                <Text style={styles.benefitIcon}>{benefit.icon}</Text>
+              </View>
               <Text style={styles.benefitTitle}>{benefit.title}</Text>
               <Text style={styles.benefitDesc}>{benefit.desc}</Text>
             </View>
@@ -248,18 +236,18 @@ export default function MyProductsScreen() {
       </View>
 
       <View style={styles.productMetrics}>
-        <View style={styles.priceContainer}>
-          <Text style={styles.priceLabel}>Price</Text>
+        <View style={styles.priceSection}>
+          <Text style={styles.metricLabel}>Price</Text>
           <Text style={styles.priceValue}>{formatPrice(product.price)}</Text>
-          <Text style={styles.priceUnit}>per {product.unit}</Text>
+          <Text style={styles.metricUnit}>per {product.unit}</Text>
         </View>
         
-        <View style={styles.divider} />
+        <View style={styles.metricsVerticalDivider} />
         
-        <View style={styles.stockContainer}>
-          <Text style={styles.stockLabel}>In Stock</Text>
+        <View style={styles.stockSection}>
+          <Text style={styles.metricLabel}>In Stock</Text>
           <Text style={styles.stockValue}>{product.quantity_available}</Text>
-          <Text style={styles.stockUnit}>{product.unit}</Text>
+          <Text style={styles.metricUnit}>{product.unit}</Text>
         </View>
       </View>
 
@@ -276,7 +264,7 @@ export default function MyProductsScreen() {
             day: 'numeric'
           })}
         </Text>
-        <TouchableOpacity style={styles.editButton}>
+        <TouchableOpacity style={styles.editButton} activeOpacity={0.7}>
           <Text style={styles.editButtonText}>Edit</Text>
         </TouchableOpacity>
       </View>
@@ -315,10 +303,10 @@ export default function MyProductsScreen() {
         <View style={styles.statsSection}>
           <Text style={styles.sectionTitle}>Dashboard Overview</Text>
           <View style={styles.statsGrid}>
-            {renderStatCard('Total Products', stats.total, '#6366f1', ['#6366f1', '#8b5cf6'], '📊')}
-            {renderStatCard('Live Products', stats.approved, '#10b981', ['#10b981', '#34d399'], '✅')}
-            {renderStatCard('Under Review', stats.pending, '#f59e0b', ['#f59e0b', '#fbbf24'], '⏳')}
-            {renderStatCard('Total Value', formatPrice(stats.totalValue), '#06b6d4', ['#06b6d4', '#22d3ee'], '💰')}
+            {renderStatCard('Total Products', stats.total, '#6366f1', '#f0f0ff', '📊')}
+            {renderStatCard('Live Products', stats.approved, '#10b981', '#ecfdf5', '✅')}
+            {renderStatCard('Under Review', stats.pending, '#f59e0b', '#fffbeb', '⏳')}
+            {renderStatCard('Total Value', formatPrice(stats.totalValue), '#06b6d4', '#ecfeff', '💰')}
           </View>
         </View>
 
@@ -331,14 +319,9 @@ export default function MyProductsScreen() {
               onPress={() => router.push('/farmer/products/add')}
               activeOpacity={0.8}
             >
-              <LinearGradient
-                colors={['#059669', '#10b981']}
-                style={styles.actionGradient}
-              >
-                <Text style={styles.actionIcon}>+</Text>
-                <Text style={styles.primaryActionTitle}>Add Product</Text>
-                <Text style={styles.primaryActionSubtitle}>List new produce</Text>
-              </LinearGradient>
+              <Text style={styles.primaryActionIcon}>+</Text>
+              <Text style={styles.primaryActionTitle}>Add Product</Text>
+              <Text style={styles.primaryActionSubtitle}>List new produce</Text>
             </TouchableOpacity>
 
             <TouchableOpacity
@@ -346,11 +329,9 @@ export default function MyProductsScreen() {
               onPress={() => router.push('/farmer/orders')}
               activeOpacity={0.8}
             >
-              <View style={styles.secondaryActionContent}>
-                <Text style={styles.secondaryActionIcon}>📋</Text>
-                <Text style={styles.secondaryActionTitle}>View Orders</Text>
-                <Text style={styles.secondaryActionSubtitle}>Manage sales</Text>
-              </View>
+              <Text style={styles.secondaryActionIcon}>📋</Text>
+              <Text style={styles.secondaryActionTitle}>View Orders</Text>
+              <Text style={styles.secondaryActionSubtitle}>Manage sales</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -365,6 +346,7 @@ export default function MyProductsScreen() {
               <TouchableOpacity 
                 style={styles.viewAllButton}
                 onPress={() => router.push('/farmer/inventory')}
+                activeOpacity={0.7}
               >
                 <Text style={styles.viewAllText}>View All</Text>
               </TouchableOpacity>
@@ -387,7 +369,7 @@ export default function MyProductsScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f8fafc',
+    backgroundColor: '#f1f5f9',
   },
   
   // Loading
@@ -395,7 +377,7 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#f8fafc',
+    backgroundColor: '#f1f5f9',
   },
   loadingText: {
     marginTop: 20,
@@ -414,94 +396,95 @@ const styles = StyleSheet.create({
 
   // Welcome Header
   welcomeContainer: {
+    backgroundColor: '#10b981',
     margin: 20,
     marginBottom: 32,
     borderRadius: 20,
     overflow: 'hidden',
-    elevation: 8,
-    shadowColor: '#059669',
-    shadowOffset: { width: 0, height: 4 },
+    elevation: 12,
+    shadowColor: '#10b981',
+    shadowOffset: { width: 0, height: 8 },
     shadowOpacity: 0.3,
-    shadowRadius: 12,
+    shadowRadius: 16,
   },
-  welcomeGradient: {
-    padding: 24,
+  welcomeContent: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    padding: 28,
   },
-  welcomeContent: {
+  welcomeText: {
     flex: 1,
   },
   welcomeGreeting: {
     fontSize: 16,
     color: 'rgba(255, 255, 255, 0.9)',
     fontWeight: '500',
-    marginBottom: 4,
+    marginBottom: 6,
   },
   welcomeName: {
-    fontSize: 24,
+    fontSize: 26,
     color: '#ffffff',
     fontWeight: 'bold',
-    marginBottom: 4,
+    marginBottom: 6,
   },
   welcomeSubtitle: {
     fontSize: 14,
     color: 'rgba(255, 255, 255, 0.8)',
     fontWeight: '400',
+    lineHeight: 20,
   },
-  welcomeDecoration: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+  welcomeIconContainer: {
+    width: 70,
+    height: 70,
+    borderRadius: 35,
+    backgroundColor: 'rgba(255, 255, 255, 0.15)',
     alignItems: 'center',
     justifyContent: 'center',
+    marginLeft: 20,
   },
-  welcomeEmoji: {
-    fontSize: 28,
+  welcomeIcon: {
+    fontSize: 32,
   },
 
   // Section Titles
   sectionTitle: {
-    fontSize: 20,
+    fontSize: 22,
     fontWeight: 'bold',
-    color: '#1f2937',
-    marginBottom: 16,
+    color: '#0f172a',
+    marginBottom: 20,
   },
 
   // Stats Section
   statsSection: {
     paddingHorizontal: 20,
-    marginBottom: 32,
+    marginBottom: 36,
   },
   statsGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 12,
+    gap: 16,
   },
   statCard: {
     width: (width - 56) / 2,
-    borderRadius: 16,
-    overflow: 'hidden',
-    elevation: 4,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-  },
-  statGradient: {
+    borderRadius: 18,
     padding: 20,
+    elevation: 6,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.08,
+    shadowRadius: 12,
+  },
+  statHeader: {
     alignItems: 'center',
   },
   statIconContainer: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    width: 52,
+    height: 52,
+    borderRadius: 26,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 12,
+    marginBottom: 16,
   },
   statIcon: {
     fontSize: 24,
@@ -511,46 +494,43 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   statValue: {
-    fontSize: 24,
+    fontSize: 26,
     fontWeight: 'bold',
-    color: '#ffffff',
-    marginBottom: 4,
+    marginBottom: 6,
   },
   statTitle: {
-    fontSize: 12,
-    color: 'rgba(255, 255, 255, 0.9)',
+    fontSize: 13,
+    color: '#64748b',
     fontWeight: '600',
     textTransform: 'uppercase',
-    letterSpacing: 0.5,
+    letterSpacing: 0.8,
   },
 
   // Actions Section
   actionsSection: {
     paddingHorizontal: 20,
-    marginBottom: 32,
+    marginBottom: 36,
   },
   actionsGrid: {
     flexDirection: 'row',
-    gap: 12,
+    gap: 16,
   },
   primaryActionCard: {
     flex: 2,
-    borderRadius: 16,
-    overflow: 'hidden',
-    elevation: 6,
-    shadowColor: '#059669',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 12,
-  },
-  actionGradient: {
-    padding: 20,
+    backgroundColor: '#10b981',
+    borderRadius: 18,
+    padding: 24,
     alignItems: 'center',
+    elevation: 8,
+    shadowColor: '#10b981',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.25,
+    shadowRadius: 16,
   },
-  actionIcon: {
-    fontSize: 28,
+  primaryActionIcon: {
+    fontSize: 32,
     color: '#ffffff',
-    marginBottom: 8,
+    marginBottom: 12,
     fontWeight: 'bold',
   },
   primaryActionTitle: {
@@ -567,26 +547,26 @@ const styles = StyleSheet.create({
   secondaryActionCard: {
     flex: 1,
     backgroundColor: '#ffffff',
-    borderRadius: 16,
-    elevation: 3,
+    borderRadius: 18,
+    padding: 24,
+    alignItems: 'center',
+    elevation: 4,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
-  },
-  secondaryActionContent: {
-    padding: 20,
-    alignItems: 'center',
+    shadowOpacity: 0.08,
+    shadowRadius: 12,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
   },
   secondaryActionIcon: {
-    fontSize: 24,
-    marginBottom: 8,
+    fontSize: 28,
+    marginBottom: 12,
   },
   secondaryActionTitle: {
     fontSize: 14,
-    color: '#1f2937',
+    color: '#0f172a',
     fontWeight: 'bold',
-    marginBottom: 2,
+    marginBottom: 4,
   },
   secondaryActionSubtitle: {
     fontSize: 11,
@@ -602,13 +582,15 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 20,
+    marginBottom: 24,
   },
   viewAllButton: {
-    paddingVertical: 8,
-    paddingHorizontal: 16,
-    backgroundColor: '#f0fdf4',
-    borderRadius: 20,
+    paddingVertical: 10,
+    paddingHorizontal: 18,
+    backgroundColor: '#ecfdf5',
+    borderRadius: 24,
+    borderWidth: 1,
+    borderColor: '#10b981',
   },
   viewAllText: {
     fontSize: 14,
@@ -619,54 +601,55 @@ const styles = StyleSheet.create({
   // Empty State
   emptyContainer: {
     alignItems: 'center',
-    paddingVertical: 40,
+    paddingVertical: 48,
   },
   emptyIllustration: {
-    marginBottom: 24,
+    marginBottom: 32,
   },
   emptyIconContainer: {
-    width: 100,
-    height: 100,
-    borderRadius: 50,
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    backgroundColor: '#ecfdf5',
     alignItems: 'center',
     justifyContent: 'center',
+    borderWidth: 3,
+    borderColor: '#bbf7d0',
   },
   emptyIcon: {
-    fontSize: 50,
+    fontSize: 60,
   },
   emptyTitle: {
     fontSize: 28,
     fontWeight: 'bold',
-    color: '#1f2937',
-    marginBottom: 12,
+    color: '#0f172a',
+    marginBottom: 16,
     textAlign: 'center',
   },
   emptyDescription: {
     fontSize: 16,
     color: '#64748b',
     textAlign: 'center',
-    marginBottom: 32,
+    marginBottom: 40,
     lineHeight: 24,
     paddingHorizontal: 20,
   },
   ctaButton: {
-    borderRadius: 16,
-    overflow: 'hidden',
-    marginBottom: 40,
-    elevation: 6,
-    shadowColor: '#059669',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 12,
-  },
-  ctaGradient: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 32,
-    paddingVertical: 18,
+    backgroundColor: '#10b981',
+    paddingHorizontal: 36,
+    paddingVertical: 20,
+    borderRadius: 16,
+    marginBottom: 48,
+    elevation: 8,
+    shadowColor: '#10b981',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.25,
+    shadowRadius: 16,
   },
   ctaIcon: {
-    fontSize: 20,
+    fontSize: 22,
     color: '#ffffff',
     marginRight: 12,
     fontWeight: 'bold',
@@ -680,10 +663,10 @@ const styles = StyleSheet.create({
     width: '100%',
   },
   benefitsTitle: {
-    fontSize: 18,
+    fontSize: 20,
     fontWeight: 'bold',
-    color: '#1f2937',
-    marginBottom: 20,
+    color: '#0f172a',
+    marginBottom: 24,
     textAlign: 'center',
   },
   benefitsContainer: {
@@ -695,45 +678,56 @@ const styles = StyleSheet.create({
   benefitCard: {
     width: (width - 80) / 2,
     backgroundColor: '#ffffff',
-    padding: 16,
-    borderRadius: 12,
+    padding: 20,
+    borderRadius: 16,
     alignItems: 'center',
-    elevation: 2,
+    elevation: 4,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 8,
+    borderWidth: 1,
+    borderColor: '#f1f5f9',
+  },
+  benefitIconContainer: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: '#f8fafc',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 12,
   },
   benefitIcon: {
     fontSize: 24,
-    marginBottom: 8,
   },
   benefitTitle: {
-    fontSize: 12,
+    fontSize: 13,
     fontWeight: 'bold',
-    color: '#1f2937',
-    marginBottom: 4,
+    color: '#0f172a',
+    marginBottom: 6,
     textAlign: 'center',
   },
   benefitDesc: {
-    fontSize: 10,
+    fontSize: 11,
     color: '#64748b',
     textAlign: 'center',
+    lineHeight: 16,
   },
 
   // Products List
   productsList: {
-    gap: 16,
+    gap: 20,
   },
   productCard: {
     backgroundColor: '#ffffff',
-    borderRadius: 16,
-    padding: 20,
-    elevation: 3,
+    borderRadius: 20,
+    padding: 24,
+    elevation: 6,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
+    shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.08,
-    shadowRadius: 8,
+    shadowRadius: 12,
     borderWidth: 1,
     borderColor: '#f1f5f9',
   },
@@ -741,93 +735,93 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
-    marginBottom: 16,
+    marginBottom: 20,
   },
   productMainInfo: {
     flex: 1,
-    marginRight: 12,
+    marginRight: 16,
   },
   productName: {
-    fontSize: 18,
+    fontSize: 20,
     fontWeight: 'bold',
-    color: '#1f2937',
-    marginBottom: 4,
+    color: '#0f172a',
+    marginBottom: 6,
+    lineHeight: 26,
   },
   productCategory: {
     fontSize: 14,
     color: '#64748b',
     fontWeight: '500',
+    textTransform: 'capitalize',
   },
   statusBadge: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 16,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 20,
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
   },
   statusText: {
-    fontSize: 10,
+    fontSize: 11,
     color: '#ffffff',
     fontWeight: 'bold',
-    letterSpacing: 0.5,
+    letterSpacing: 0.8,
   },
   productMetrics: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 16,
     backgroundColor: '#f8fafc',
-    borderRadius: 12,
-    padding: 16,
+    borderRadius: 16,
+    padding: 20,
+    marginBottom: 20,
   },
-  priceContainer: {
+  priceSection: {
     flex: 1,
     alignItems: 'center',
   },
-  priceLabel: {
+  stockSection: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  metricLabel: {
     fontSize: 12,
     color: '#64748b',
-    fontWeight: '500',
-    marginBottom: 4,
+    fontWeight: '600',
+    marginBottom: 6,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
   },
   priceValue: {
-    fontSize: 20,
+    fontSize: 22,
     fontWeight: 'bold',
     color: '#059669',
-    marginBottom: 2,
-  },
-  priceUnit: {
-    fontSize: 12,
-    color: '#64748b',
-  },
-  divider: {
-    width: 1,
-    height: 40,
-    backgroundColor: '#e2e8f0',
-    marginHorizontal: 16,
-  },
-  stockContainer: {
-    flex: 1,
-    alignItems: 'center',
-  },
-  stockLabel: {
-    fontSize: 12,
-    color: '#64748b',
-    fontWeight: '500',
     marginBottom: 4,
   },
   stockValue: {
-    fontSize: 20,
+    fontSize: 22,
     fontWeight: 'bold',
-    color: '#1f2937',
-    marginBottom: 2,
+    color: '#0f172a',
+    marginBottom: 4,
   },
-  stockUnit: {
+  metricUnit: {
     fontSize: 12,
     color: '#64748b',
+    fontWeight: '500',
+  },
+  metricsVerticalDivider: {
+    width: 1,
+    height: 48,
+    backgroundColor: '#e2e8f0',
+    marginHorizontal: 20,
   },
   productDescription: {
     fontSize: 14,
     color: '#64748b',
-    lineHeight: 20,
-    marginBottom: 16,
+    lineHeight: 22,
+    marginBottom: 20,
   },
   productFooter: {
     flexDirection: 'row',
@@ -835,7 +829,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     borderTopWidth: 1,
     borderTopColor: '#f1f5f9',
-    paddingTop: 16,
+    paddingTop: 20,
   },
   productDate: {
     fontSize: 12,
@@ -843,10 +837,12 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
   editButton: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
+    paddingHorizontal: 18,
+    paddingVertical: 10,
     backgroundColor: '#f1f5f9',
-    borderRadius: 20,
+    borderRadius: 24,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
   },
   editButtonText: {
     fontSize: 12,
