@@ -234,7 +234,6 @@ export default function MyProductsScreen() {
       <StatusBar barStyle="light-content" backgroundColor="#10b981" />
 
       {/* Header */}
-      <View style={styles.header}>
         <View style={styles.headerTop}>
           <View style={styles.userInfo}>
             <Text style={styles.farmerName}>
@@ -251,7 +250,6 @@ export default function MyProductsScreen() {
           <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
             <Text style={styles.logoutText}>Logout</Text>
           </TouchableOpacity>
-        </View>
       </View>
 
       <ScrollView
