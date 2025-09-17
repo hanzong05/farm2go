@@ -1,18 +1,31 @@
-import { Link, router } from 'expo-router';
+import { Link, router, useLocalSearchParams } from 'expo-router';
 import { useState, useEffect } from 'react';
-import { Alert, Dimensions, StyleSheet, Text, TextInput, TouchableOpacity, View, KeyboardAvoidingView, ScrollView, Platform } from 'react-native';
+import { Alert, Dimensions, StyleSheet, Text, TextInput, TouchableOpacity, View, KeyboardAvoidingView, ScrollView, Platform, Modal } from 'react-native';
 import { getUserWithProfile, loginUser, signInWithGoogle } from '../../services/auth';
 import { supabase } from '../../lib/supabase';
 
 const { width, height } = Dimensions.get('window');
 
 export default function LoginScreen() {
+  const { info, error } = useLocalSearchParams();
   const [formData, setFormData] = useState({
     email: '',
     password: '',
   });
   const [isLoading, setIsLoading] = useState(false);
   const [focusedInput, setFocusedInput] = useState<string | null>(null);
+  const [showInfoModal, setShowInfoModal] = useState(false);
+  const [infoMessage, setInfoMessage] = useState('');
+
+  // Handle URL parameters for info messages
+  useEffect(() => {
+    if (info && typeof info === 'string') {
+      setInfoMessage(info);
+      setShowInfoModal(true);
+    } else if (error && typeof error === 'string') {
+      Alert.alert('Notice', error);
+    }
+  }, [info, error]);
 
   const handleInputChange = (field: string, value: string) => {
     setFormData(prev => ({ ...prev, [field]: value }));
@@ -163,6 +176,33 @@ export default function LoginScreen() {
     );
   };
 
+  const renderInfoModal = () => (
+    <Modal
+      visible={showInfoModal}
+      transparent={true}
+      animationType="fade"
+      onRequestClose={() => setShowInfoModal(false)}
+    >
+      <View style={styles.modalOverlay}>
+        <View style={styles.modalContent}>
+          <View style={styles.infoIcon}>
+            <Text style={styles.infoMark}>ℹ</Text>
+          </View>
+          <Text style={styles.modalTitle}>Account Already Exists</Text>
+          <Text style={styles.modalMessage}>
+            {infoMessage}
+          </Text>
+          <TouchableOpacity
+            style={styles.modalButton}
+            onPress={() => setShowInfoModal(false)}
+          >
+            <Text style={styles.modalButtonText}>Continue to Sign In</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    </Modal>
+  );
+
   return (
     <KeyboardAvoidingView
       style={styles.container}
@@ -232,7 +272,7 @@ export default function LoginScreen() {
 
             {/* Register Link */}
             <View style={styles.registerSection}>
-              <Text style={styles.registerText}>Don't have an account? </Text>
+              <Text style={styles.registerText}>Don&apos;t have an account? </Text>
               <Link href="/auth/register">
                 <Text style={styles.registerLink}>Sign Up</Text>
               </Link>
@@ -240,6 +280,7 @@ export default function LoginScreen() {
           </View>
         </View>
       </ScrollView>
+      {renderInfoModal()}
     </KeyboardAvoidingView>
   );
 }
@@ -413,6 +454,62 @@ const styles = StyleSheet.create({
   registerLink: {
     fontSize: 15,
     color: '#10b981',
+    fontWeight: '600',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 24,
+  },
+  modalContent: {
+    backgroundColor: '#ffffff',
+    borderRadius: 16,
+    padding: 32,
+    alignItems: 'center',
+    maxWidth: 400,
+    width: '100%',
+  },
+  infoIcon: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: '#3b82f6',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 24,
+  },
+  infoMark: {
+    fontSize: 32,
+    color: '#ffffff',
+    fontWeight: 'bold',
+  },
+  modalTitle: {
+    fontSize: 24,
+    fontWeight: '600',
+    color: '#111827',
+    marginBottom: 16,
+    textAlign: 'center',
+  },
+  modalMessage: {
+    fontSize: 16,
+    color: '#4b5563',
+    textAlign: 'center',
+    lineHeight: 24,
+    marginBottom: 32,
+  },
+  modalButton: {
+    backgroundColor: '#10b981',
+    borderRadius: 8,
+    paddingHorizontal: 32,
+    paddingVertical: 14,
+    alignItems: 'center',
+    width: '100%',
+  },
+  modalButtonText: {
+    color: '#ffffff',
+    fontSize: 16,
     fontWeight: '600',
   },
 });

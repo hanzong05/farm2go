@@ -39,9 +39,9 @@ export default function AuthCallback() {
 
         console.log('📱 Final stored user type:', storedUserType);
 
-        // If no stored user type, check if user already has a profile in database
+        // If no stored user type, this means it's a sign-in attempt, not registration
         if (!storedUserType) {
-          console.log('📱 No stored user type, checking database for existing profile...');
+          console.log('📱 No stored user type - this appears to be a sign-in attempt, not registration');
 
           // First get the OAuth user to check their email
           const { data: { user: oauthUser }, error: userError } = await supabase.auth.getUser();
@@ -59,17 +59,22 @@ export default function AuthCallback() {
 
               console.log('🔍 Profile query result:', { existingProfile, profileError });
 
-              if (existingProfile && existingProfile.user_type) {
-                console.log('✅ Found existing profile with user type:', existingProfile.user_type);
-                storedUserType = existingProfile.user_type;
+              if (existingProfile && (existingProfile as any).user_type) {
+                console.log('✅ Found existing profile with user type:', (existingProfile as any).user_type);
+                storedUserType = (existingProfile as any).user_type;
 
                 // Store it for future reference
-                await AsyncStorage.setItem('oauth_user_type', existingProfile.user_type);
+                await AsyncStorage.setItem('oauth_user_type', (existingProfile as any).user_type);
                 if (typeof window !== 'undefined') {
-                  localStorage.setItem('oauth_user_type', existingProfile.user_type);
+                  localStorage.setItem('oauth_user_type', (existingProfile as any).user_type);
                 }
               } else {
-                console.log('ℹ️ No existing profile found or no user_type set for email:', oauthUser.email);
+                console.log('ℹ️ No existing profile found for email:', oauthUser.email);
+                console.log('⚠️ User trying to sign in with Google but no account exists');
+
+                // Redirect to register page with error message
+                router.replace('/auth/register?error=' + encodeURIComponent('No account found with this email. Please register first or use a different sign-in method.'));
+                return;
               }
             } catch (error) {
               console.error('❌ Error checking for existing profile:', error);
@@ -117,7 +122,7 @@ export default function AuthCallback() {
         console.log('✅ OAuth user ID:', user.id);
         console.log('✅ OAuth user metadata:', user.user_metadata);
 
-        // Check if profile already exists (in case of re-authentication)
+        // Check if profile already exists
         console.log('🔍 Checking for existing profile...');
         const { data: existingProfile, error: profileError } = await supabase
           .from('profiles')
@@ -129,7 +134,7 @@ export default function AuthCallback() {
         console.log('🔍 Profile check error:', profileError);
 
         if (existingProfile) {
-          console.log('✅ Profile already exists, redirecting to appropriate dashboard');
+          console.log('✅ Profile already exists');
           await AsyncStorage.removeItem('oauth_user_type');
 
           // Also clean up localStorage
@@ -137,19 +142,30 @@ export default function AuthCallback() {
             localStorage.removeItem('oauth_user_type');
           }
 
-          // Redirect based on user type instead of login
-          const profile = existingProfile as any;
-          switch (profile.user_type) {
-            case 'farmer':
-              router.replace('/farmer/my-products');
-              break;
-            case 'buyer':
-              router.replace('/buyer/marketplace');
-              break;
-            default:
-              router.replace('/buyer/marketplace');
+          // Check if this was a registration attempt
+          if (storedUserType) {
+            console.log('⚠️ User attempted to register with Gmail but account already exists');
+            console.log('🔄 Redirecting to login with message...');
+
+            const errorMessage = `An account with this email (${user.email}) already exists. Please sign in instead.`;
+            router.replace(`/auth/login?info=${encodeURIComponent(errorMessage)}`);
+            return;
+          } else {
+            // Regular sign-in flow
+            console.log('✅ Regular sign-in, redirecting to dashboard');
+            const profile = existingProfile as any;
+            switch (profile.user_type) {
+              case 'farmer':
+                router.replace('/farmer/my-products');
+                break;
+              case 'buyer':
+                router.replace('/buyer/marketplace');
+                break;
+              default:
+                router.replace('/buyer/marketplace');
+            }
+            return;
           }
-          return;
         }
 
         // Redirect to complete profile screen

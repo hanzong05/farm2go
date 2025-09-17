@@ -350,21 +350,31 @@ export default function RegisterScreen() {
     setIsRegistering(true);
 
     try {
-      console.log(`🚀 Starting ${provider} signup...`);
+      console.log(`🚀 Starting ${provider} registration...`);
       console.log('🚀 User type selected:', userType);
 
-      await AsyncStorage.setItem('oauth_user_type', userType);
-      console.log('💾 Stored user type in AsyncStorage:', userType);
-
-  
-      const storedType = await AsyncStorage.getItem('oauth_user_type');
-      console.log('✅ Verified stored type:', storedType);
+      // First, check if user already exists by initiating OAuth to get email
+      console.log('🔄 Initiating OAuth to check for existing user...');
 
       if (provider === 'google') {
+        // Store the user type for this registration attempt
+        await AsyncStorage.setItem('oauth_user_type', userType);
+        console.log('💾 Stored user type in AsyncStorage:', userType);
+
+        const storedType = await AsyncStorage.getItem('oauth_user_type');
+        console.log('✅ Verified stored type:', storedType);
+
         console.log('🔄 Initiating Google OAuth...');
-        const result = await signInWithGoogle(true); 
+        const result = await signInWithGoogle(true);
         console.log('📤 Google OAuth result:', result);
       } else {
+        // Store the user type for this registration attempt
+        await AsyncStorage.setItem('oauth_user_type', userType);
+        console.log('💾 Stored user type in AsyncStorage:', userType);
+
+        const storedType = await AsyncStorage.getItem('oauth_user_type');
+        console.log('✅ Verified stored type:', storedType);
+
         console.log('🔄 Initiating Facebook OAuth...');
         const result = await signInWithFacebook();
         console.log('📤 Facebook OAuth result:', result);
@@ -373,10 +383,10 @@ export default function RegisterScreen() {
       console.log('🔄 OAuth initiated, user should be redirected to provider...');
 
     } catch (error: any) {
-      console.error(`❌ ${provider} signup error:`, error);
+      console.error(`❌ ${provider} registration error:`, error);
       await AsyncStorage.removeItem('oauth_user_type');
 
-      setErrorTitle(`${provider === 'google' ? 'Google' : 'Facebook'} Signup Failed`);
+      setErrorTitle(`${provider === 'google' ? 'Google' : 'Facebook'} Registration Failed`);
       setErrorMessage(error.message || 'Please try again.');
       setShowErrorModal(true);
       setIsRegistering(false);

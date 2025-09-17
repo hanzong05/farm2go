@@ -330,6 +330,31 @@ export const checkExistingUserProfile = async (email: string): Promise<Profile |
   }
 };
 
+// Helper function to check if user exists by email (lightweight check for registration)
+export const checkUserExistsByEmail = async (email: string): Promise<boolean> => {
+  try {
+    console.log('🔍 Checking if user exists with email:', email);
+
+    const { data, error } = await supabase
+      .from('profiles')
+      .select('email')
+      .eq('email', email)
+      .single();
+
+    if (error && error.code !== 'PGRST116') { // PGRST116 = no rows returned
+      console.error('❌ Error checking user existence:', error);
+      return false;
+    }
+
+    const exists = !!data;
+    console.log(`${exists ? '✅' : 'ℹ️'} User ${exists ? 'exists' : 'does not exist'} with email:`, email);
+    return exists;
+  } catch (error) {
+    console.error('❌ Error checking user existence:', error);
+    return false;
+  }
+};
+
 // Social auth functions
 export const signInWithGoogle = async (isRegistration = false) => {
   try {
