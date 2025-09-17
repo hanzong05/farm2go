@@ -162,19 +162,82 @@ export default function AuthCallback() {
         console.log('✅ OAuth user ID:', user.id);
         console.log('✅ OAuth user metadata:', user.user_metadata);
 
-        // Check if profile already exists
-        console.log('🔍 Checking for existing profile...');
-        const { data: existingProfile, error: profileError } = await supabase
+        // Check if profile already exists by ID first
+        console.log('🔍 Checking for existing profile by user ID...');
+        const { data: existingProfileById, error: profileByIdError } = await supabase
           .from('profiles')
           .select('*')
           .eq('id', user.id)
           .single();
 
-        console.log('🔍 Existing profile:', existingProfile);
-        console.log('🔍 Profile check error:', profileError);
+        console.log('🔍 Existing profile by ID:', existingProfileById);
+        console.log('🔍 Profile by ID check error:', profileByIdError);
+
+        let existingProfile = existingProfileById;
+
+        // If no profile found by ID, check by email (for OAuth users with existing accounts)
+        if (!existingProfile && user.email) {
+          console.log('🔍 No profile found by ID, checking by email for existing user...');
+          const { data: existingProfileByEmail, error: profileByEmailError } = await supabase
+            .from('profiles')
+            .select('*')
+            .eq('email', user.email)
+            .single();
+
+          console.log('🔍 Existing profile by email:', existingProfileByEmail);
+          console.log('🔍 Profile by email check error:', profileByEmailError);
+
+          if (existingProfileByEmail) {
+            existingProfile = existingProfileByEmail;
+            console.log('✅ Found existing profile by email - this is an existing user signing in with OAuth');
+          }
+        }
 
         if (existingProfile) {
           console.log('✅ Profile already exists');
+
+          // If profile was found by email but has different ID, we need to create a new profile entry for the OAuth user
+          if (existingProfile.id !== user.id) {
+            console.log('🔄 Profile found by email but different ID - creating OAuth profile entry');
+            console.log('📝 Original profile ID:', existingProfile.id, 'OAuth user ID:', user.id);
+
+            try {
+              // Create a new profile entry for the OAuth user with the same data
+              const oauthProfileData = {
+                id: user.id,
+                email: existingProfile.email,
+                phone: existingProfile.phone,
+                first_name: existingProfile.first_name,
+                middle_name: existingProfile.middle_name,
+                last_name: existingProfile.last_name,
+                barangay: existingProfile.barangay,
+                user_type: existingProfile.user_type,
+                farm_name: existingProfile.farm_name,
+                farm_location: existingProfile.farm_location,
+                farm_size: existingProfile.farm_size,
+                crop_types: existingProfile.crop_types,
+                company_name: existingProfile.company_name,
+                business_type: existingProfile.business_type,
+                business_location: existingProfile.business_location,
+              };
+
+              const { error: insertError } = await supabase
+                .from('profiles')
+                .insert(oauthProfileData);
+
+              if (insertError) {
+                console.error('❌ Error creating OAuth profile:', insertError);
+                console.log('⚠️ OAuth profile creation failed, but continuing with existing profile data');
+              } else {
+                console.log('✅ OAuth profile created successfully');
+                // Update the existingProfile object to reflect the new OAuth profile
+                existingProfile = { ...existingProfile, id: user.id };
+              }
+            } catch (insertError) {
+              console.error('❌ Exception creating OAuth profile:', insertError);
+              // Continue with existing profile anyway
+            }
+          }
 
           // Clean up storage
           await AsyncStorage.removeItem('oauth_user_type');
@@ -199,14 +262,19 @@ export default function AuthCallback() {
             // Regular sign-in flow or existing user
             console.log('✅ Sign-in successful, redirecting to dashboard');
             const profile = existingProfile as any;
+            console.log('👤 User type from profile:', profile.user_type);
+
             switch (profile.user_type) {
               case 'farmer':
+                console.log('🚜 Redirecting to farmer dashboard');
                 router.replace('/farmer/my-products');
                 break;
               case 'buyer':
+                console.log('🛒 Redirecting to buyer marketplace');
                 router.replace('/buyer/marketplace');
                 break;
               default:
+                console.log('❓ Unknown user type, defaulting to buyer marketplace');
                 router.replace('/buyer/marketplace');
             }
             return;
