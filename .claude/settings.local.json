@@ -8,7 +8,8 @@
       "Bash(npx tsc:*)",
       "Bash(git commit:*)",
       "Bash(git push:*)",
-      "Bash(npm run:*)"
+      "Bash(npm run:*)",
+      "Read(//c/Users/KID/Pictures/**)"
     ],
     "deny": [],
     "ask": []

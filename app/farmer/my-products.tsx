@@ -237,7 +237,6 @@ export default function MyProductsScreen() {
       <View style={styles.header}>
         <View style={styles.headerTop}>
           <View style={styles.userInfo}>
-            <Text style={styles.welcomeText}>Welcome back!</Text>
             <Text style={styles.farmerName}>
               {profile?.first_name} {profile?.last_name}
             </Text>
@@ -303,7 +302,7 @@ export default function MyProductsScreen() {
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionTitle}>My Products ({products.length})</Text>
             {products.length > 0 && (
-              <TouchableOpacity onPress={() => router.push('/farmer/products')}>
+              <TouchableOpacity onPress={() => router.push('/farmer/inventory')}>
                 <Text style={styles.viewAllText}>View All</Text>
               </TouchableOpacity>
             )}
