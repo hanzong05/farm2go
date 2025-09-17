@@ -28,6 +28,29 @@ export default function LoginScreen() {
     }
   }, [info, error]);
 
+  // Clear any stale OAuth state when login page loads
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const clearStaleOAuthState = () => {
+        const timestamp = localStorage.getItem('oauth_timestamp');
+        if (timestamp) {
+          const storedTime = parseInt(timestamp);
+          const currentTime = Date.now();
+          const tenMinutesAgo = currentTime - (10 * 60 * 1000);
+
+          if (storedTime < tenMinutesAgo) {
+            console.log('🧹 Clearing stale OAuth state from localStorage');
+            localStorage.removeItem('oauth_user_type');
+            localStorage.removeItem('oauth_intent');
+            localStorage.removeItem('oauth_timestamp');
+          }
+        }
+      };
+
+      clearStaleOAuthState();
+    }
+  }, []);
+
   const handleInputChange = (field: string, value: string) => {
     setFormData(prev => ({ ...prev, [field]: value }));
   };
@@ -87,6 +110,12 @@ export default function LoginScreen() {
       // Store a flag to indicate this is a sign-in attempt, not registration
       await AsyncStorage.setItem('oauth_intent', 'signin');
 
+      // Also store in localStorage for web compatibility with timestamp
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('oauth_intent', 'signin');
+        localStorage.setItem('oauth_timestamp', Date.now().toString());
+      }
+
       await signInWithGoogle(false); // false indicates this is not registration
 
       // OAuth will redirect, so this code won't execute immediately
@@ -97,6 +126,12 @@ export default function LoginScreen() {
 
       // Clean up the intent flag on error
       await AsyncStorage.removeItem('oauth_intent');
+
+      // Also clean up localStorage
+      if (typeof window !== 'undefined') {
+        localStorage.removeItem('oauth_intent');
+        localStorage.removeItem('oauth_timestamp');
+      }
 
       Alert.alert(
         'Google Sign In Failed',

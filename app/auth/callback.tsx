@@ -17,15 +17,28 @@ export default function AuthCallback() {
       try {
         console.log('🔄 OAuth callback screen loaded!');
         console.log('🔄 Processing OAuth callback...');
-        // Only log platform info on client side to avoid hydration issues
+
+        // Clear any stale localStorage state first (Chrome desktop fix)
         if (typeof window !== 'undefined') {
+          console.log('🧹 Clearing any stale localStorage state...');
+          // Check if we have stale data from previous sessions
+          const storedTimestamp = localStorage.getItem('oauth_timestamp');
+          const currentTime = Date.now();
+          const fiveMinutesAgo = currentTime - (5 * 60 * 1000);
+
+          if (storedTimestamp && parseInt(storedTimestamp) < fiveMinutesAgo) {
+            console.log('🧹 Found stale localStorage data, clearing...');
+            localStorage.removeItem('oauth_user_type');
+            localStorage.removeItem('oauth_intent');
+            localStorage.removeItem('oauth_timestamp');
+          }
+
           console.log('🌐 Platform info:', {
             userAgent: navigator.userAgent,
             url: window.location.href,
             hash: window.location.hash
           });
         }
-
 
         // Get the stored user type from AsyncStorage and localStorage (for web compatibility)
         console.log('📱 Checking storage for user type...');
@@ -167,10 +180,11 @@ export default function AuthCallback() {
           await AsyncStorage.removeItem('oauth_user_type');
           await AsyncStorage.removeItem('oauth_intent');
 
-          // Also clean up localStorage
+          // Also clean up localStorage completely
           if (typeof window !== 'undefined') {
             localStorage.removeItem('oauth_user_type');
             localStorage.removeItem('oauth_intent');
+            localStorage.removeItem('oauth_timestamp');
           }
 
           // Check if this was a registration attempt
@@ -212,10 +226,11 @@ export default function AuthCallback() {
         await AsyncStorage.removeItem('oauth_user_type');
         await AsyncStorage.removeItem('oauth_intent');
 
-        // Also clean up localStorage
+        // Also clean up localStorage completely
         if (typeof window !== 'undefined') {
           localStorage.removeItem('oauth_user_type');
           localStorage.removeItem('oauth_intent');
+          localStorage.removeItem('oauth_timestamp');
         }
 
         // Redirect back to register with error
