@@ -357,8 +357,9 @@ export default function RegisterScreen() {
       console.log('🔄 Initiating OAuth to check for existing user...');
 
       if (provider === 'google') {
-        // Store the user type for this registration attempt
+        // Store the user type and intent for this registration attempt
         await AsyncStorage.setItem('oauth_user_type', userType);
+        await AsyncStorage.setItem('oauth_intent', 'registration');
         console.log('💾 Stored user type in AsyncStorage:', userType);
 
         const storedType = await AsyncStorage.getItem('oauth_user_type');
@@ -368,8 +369,9 @@ export default function RegisterScreen() {
         const result = await signInWithGoogle(true);
         console.log('📤 Google OAuth result:', result);
       } else {
-        // Store the user type for this registration attempt
+        // Store the user type and intent for this registration attempt
         await AsyncStorage.setItem('oauth_user_type', userType);
+        await AsyncStorage.setItem('oauth_intent', 'registration');
         console.log('💾 Stored user type in AsyncStorage:', userType);
 
         const storedType = await AsyncStorage.getItem('oauth_user_type');
@@ -385,6 +387,7 @@ export default function RegisterScreen() {
     } catch (error: any) {
       console.error(`❌ ${provider} registration error:`, error);
       await AsyncStorage.removeItem('oauth_user_type');
+      await AsyncStorage.removeItem('oauth_intent');
 
       setErrorTitle(`${provider === 'google' ? 'Google' : 'Facebook'} Registration Failed`);
       setErrorMessage(error.message || 'Please try again.');

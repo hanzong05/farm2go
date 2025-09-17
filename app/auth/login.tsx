@@ -1,6 +1,7 @@
 import { Link, router, useLocalSearchParams } from 'expo-router';
 import { useState, useEffect } from 'react';
 import { Alert, Dimensions, StyleSheet, Text, TextInput, TouchableOpacity, View, KeyboardAvoidingView, ScrollView, Platform, Modal } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { getUserWithProfile, loginUser, signInWithGoogle } from '../../services/auth';
 import { supabase } from '../../lib/supabase';
 
@@ -82,13 +83,21 @@ export default function LoginScreen() {
 
     try {
       console.log('🚀 Starting Google sign in...');
-      await signInWithGoogle();
+
+      // Store a flag to indicate this is a sign-in attempt, not registration
+      await AsyncStorage.setItem('oauth_intent', 'signin');
+
+      await signInWithGoogle(false); // false indicates this is not registration
 
       // OAuth will redirect, so this code won't execute immediately
       console.log('🔄 Google OAuth initiated...');
 
     } catch (error: any) {
       console.error('Google sign in error:', error);
+
+      // Clean up the intent flag on error
+      await AsyncStorage.removeItem('oauth_intent');
+
       Alert.alert(
         'Google Sign In Failed',
         error.message || 'Please try again.'
