@@ -73,13 +73,38 @@ export default function AuthCallback() {
           console.log('📱 This is a sign-in attempt - looking up user type from database');
 
           // First get the OAuth user to check their email
+          console.log('🔐 Getting OAuth user...');
           const { data: { user: oauthUser }, error: userError } = await supabase.auth.getUser();
 
+          console.log('🔐 OAuth user result:', {
+            hasUser: !!oauthUser,
+            email: oauthUser?.email,
+            id: oauthUser?.id,
+            error: userError
+          });
+
+          if (userError) {
+            console.error('❌ Error getting OAuth user:', userError);
+            router.replace('/auth/register?error=' + encodeURIComponent('Failed to get user information. Please try again.'));
+            return;
+          }
+
           if (oauthUser && oauthUser.email) {
-            console.log('🔍 Checking database for existing profile with email:', oauthUser.email);
+            console.log('🔍 OAuth user found with email:', oauthUser.email);
+            console.log('🔍 Checking database for existing profile...');
 
             try {
+              // First, test database connection with a simple query
+              console.log('🧪 Testing database connection...');
+              const { data: testData, error: testError } = await supabase
+                .from('profiles')
+                .select('count')
+                .limit(1);
+
+              console.log('🧪 Database connection test:', { testData, testError });
+
               // Direct database query to check for existing profile
+              console.log('🔍 Executing profile query for email:', oauthUser.email);
               const { data: existingProfile, error: profileError } = await supabase
                 .from('profiles')
                 .select('user_type, email, id, first_name, last_name')
@@ -89,6 +114,15 @@ export default function AuthCallback() {
               console.log('🔍 Profile query result:', { existingProfile, profileError });
               console.log('🔍 Profile data details:', existingProfile);
               console.log('🔍 Looking for email:', oauthUser.email);
+
+              // Also try a broader search to see if there are any profiles
+              console.log('🔍 Checking if any profiles exist...');
+              const { data: allProfiles, error: allError } = await supabase
+                .from('profiles')
+                .select('email, user_type')
+                .limit(5);
+
+              console.log('🔍 Sample profiles in database:', { allProfiles, allError });
 
               if (existingProfile && (existingProfile as any).user_type) {
                 console.log('✅ Found existing profile for sign-in with user type:', (existingProfile as any).user_type);
