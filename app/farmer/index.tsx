@@ -132,5 +132,6 @@ export default function FarmerDashboard() {
         </View>
       </View>
     </ScrollView>
+    </View>
   );
 }
