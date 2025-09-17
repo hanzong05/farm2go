@@ -60,66 +60,95 @@ export default function AuthCallback() {
         console.log('📱 Final stored user type:', storedUserType);
         console.log('📱 OAuth intent:', oauthIntent);
 
-        // Handle cases where there's no stored user type
-        if (!storedUserType) {
-          // Check if this is a sign-in intent
-          if (oauthIntent === 'signin') {
-            console.log('📱 This is a sign-in attempt');
+        // Debug: Log all localStorage OAuth-related keys
+        if (typeof window !== 'undefined') {
+          console.log('🔍 All localStorage OAuth keys:');
+          console.log('  - oauth_user_type:', localStorage.getItem('oauth_user_type'));
+          console.log('  - oauth_intent:', localStorage.getItem('oauth_intent'));
+          console.log('  - oauth_timestamp:', localStorage.getItem('oauth_timestamp'));
+        }
 
-            // First get the OAuth user to check their email
-            const { data: { user: oauthUser }, error: userError } = await supabase.auth.getUser();
+        // For sign-in attempts, always look up user type from database rather than relying on storage
+        if (oauthIntent === 'signin') {
+          console.log('📱 This is a sign-in attempt - looking up user type from database');
 
-            if (oauthUser && oauthUser.email) {
-              console.log('🔍 Checking database for existing profile with email:', oauthUser.email);
+          // First get the OAuth user to check their email
+          const { data: { user: oauthUser }, error: userError } = await supabase.auth.getUser();
 
-              try {
-                // Direct database query to check for existing profile
-                const { data: existingProfile, error: profileError } = await supabase
-                  .from('profiles')
-                  .select('user_type, email, id')
-                  .eq('email', oauthUser.email)
-                  .single();
+          if (oauthUser && oauthUser.email) {
+            console.log('🔍 Checking database for existing profile with email:', oauthUser.email);
 
-                console.log('🔍 Profile query result:', { existingProfile, profileError });
+            try {
+              // Direct database query to check for existing profile
+              const { data: existingProfile, error: profileError } = await supabase
+                .from('profiles')
+                .select('user_type, email, id, first_name, last_name')
+                .eq('email', oauthUser.email)
+                .single();
 
-                if (existingProfile && (existingProfile as any).user_type) {
-                  console.log('✅ Found existing profile for sign-in with user type:', (existingProfile as any).user_type);
-                  storedUserType = (existingProfile as any).user_type;
+              console.log('🔍 Profile query result:', { existingProfile, profileError });
+              console.log('🔍 Profile data details:', existingProfile);
+              console.log('🔍 Looking for email:', oauthUser.email);
 
-                  // Store it for future reference
-                  await AsyncStorage.setItem('oauth_user_type', (existingProfile as any).user_type);
-                  if (typeof window !== 'undefined') {
-                    localStorage.setItem('oauth_user_type', (existingProfile as any).user_type);
-                  }
+              if (existingProfile && (existingProfile as any).user_type) {
+                console.log('✅ Found existing profile for sign-in with user type:', (existingProfile as any).user_type);
+                storedUserType = (existingProfile as any).user_type;
 
-                  // Clean up the intent flag
-                  await AsyncStorage.removeItem('oauth_intent');
-                  if (typeof window !== 'undefined') {
-                    localStorage.removeItem('oauth_intent');
-                  }
-                } else {
-                  console.log('ℹ️ No existing profile found for email:', oauthUser.email);
-                  console.log('⚠️ User trying to sign in with Google but no account exists');
-
-                  // Clean up the intent flag
-                  await AsyncStorage.removeItem('oauth_intent');
-                  if (typeof window !== 'undefined') {
-                    localStorage.removeItem('oauth_intent');
-                  }
-
-                  // Redirect to register page with error message
-                  router.replace('/auth/register?error=' + encodeURIComponent('No account found with this email. Please register first or use a different sign-in method.'));
-                  return;
+                // Store it for future reference (but don't rely on it)
+                await AsyncStorage.setItem('oauth_user_type', (existingProfile as any).user_type);
+                if (typeof window !== 'undefined') {
+                  localStorage.setItem('oauth_user_type', (existingProfile as any).user_type);
+                  localStorage.setItem('oauth_timestamp', Date.now().toString());
                 }
-              } catch (error) {
-                console.error('❌ Error checking for existing profile:', error);
+
+                // Clean up the intent flag
+                await AsyncStorage.removeItem('oauth_intent');
+                if (typeof window !== 'undefined') {
+                  localStorage.removeItem('oauth_intent');
+                }
+
+                console.log('✅ Sign-in user type resolved from database:', storedUserType);
+              } else {
+                console.log('ℹ️ No existing profile found for email:', oauthUser.email);
+                console.log('⚠️ User trying to sign in with Google but no account exists');
+
+                // Clean up the intent flag
+                await AsyncStorage.removeItem('oauth_intent');
+                if (typeof window !== 'undefined') {
+                  localStorage.removeItem('oauth_intent');
+                }
+
+                // Redirect to register page with error message
+                router.replace('/auth/register?error=' + encodeURIComponent('No account found with this email. Please register first or use a different sign-in method.'));
+                return;
               }
+            } catch (error) {
+              console.error('❌ Error checking for existing profile:', error);
+              // Clean up and redirect to register
+              await AsyncStorage.removeItem('oauth_intent');
+              if (typeof window !== 'undefined') {
+                localStorage.removeItem('oauth_intent');
+              }
+              router.replace('/auth/register?error=' + encodeURIComponent('Error checking account. Please try again.'));
+              return;
             }
           } else {
-            console.log('📱 No stored user type and no sign-in intent - treating as registration attempt');
-            // This handles the case where someone might access the callback directly
-            // without going through proper registration or sign-in flow
+            console.log('❌ No OAuth user email found');
+            // Clean up and redirect
+            await AsyncStorage.removeItem('oauth_intent');
+            if (typeof window !== 'undefined') {
+              localStorage.removeItem('oauth_intent');
+            }
+            router.replace('/auth/register?error=' + encodeURIComponent('Could not get email from Google. Please try again.'));
+            return;
           }
+        }
+
+        // Handle cases where there's no stored user type for non-signin attempts
+        if (!storedUserType && oauthIntent !== 'signin') {
+          console.log('📱 No stored user type and not a sign-in intent - treating as registration attempt');
+          // This handles the case where someone might access the callback directly
+          // without going through proper registration or sign-in flow
         }
 
         if (!storedUserType) {
