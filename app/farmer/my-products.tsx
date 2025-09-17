@@ -1,4 +1,5 @@
 import { router } from 'expo-router';
+import { Head } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import {
   Alert,
@@ -231,6 +232,9 @@ export default function MyProductsScreen() {
 
   return (
     <View style={styles.container}>
+      <Head>
+        <title></title>
+      </Head>
       <StatusBar barStyle="light-content" backgroundColor="#10b981" />
 
       {/* Header */}

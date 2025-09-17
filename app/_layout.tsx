@@ -54,11 +54,11 @@ export default function RootLayout() {
           <Stack.Screen name="admin/users" options={{ headerShown: false }} />
           <Stack.Screen name="admin/products" options={{ headerShown: false }} />
           <Stack.Screen name="admin/settings" options={{ headerShown: false }} />
-          <Stack.Screen name="farmer/my-products" options={{ headerShown: false }} />
-          <Stack.Screen name="farmer/orders" options={{ headerShown: false }} />
-          <Stack.Screen name="farmer/inventory" options={{ headerShown: false }} />
-          <Stack.Screen name="farmer/sales-history" options={{ headerShown: false }} />
-          <Stack.Screen name="farmer/settings" options={{ headerShown: false }} />
+          <Stack.Screen name="farmer/my-products" options={{ headerShown: false, title: '' }} />
+          <Stack.Screen name="farmer/orders" options={{ headerShown: false, title: '' }} />
+          <Stack.Screen name="farmer/inventory" options={{ headerShown: false, title: '' }} />
+          <Stack.Screen name="farmer/sales-history" options={{ headerShown: false, title: '' }} />
+          <Stack.Screen name="farmer/settings" options={{ headerShown: false, title: '' }} />
           <Stack.Screen name="buyer/marketplace" options={{ headerShown: false }} />
           <Stack.Screen name="buyer/search" options={{ headerShown: false }} />
           <Stack.Screen name="buyer/my-orders" options={{ headerShown: false }} />
