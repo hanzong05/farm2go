@@ -1,10 +1,10 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, RefreshControl, Alert, Dimensions, TextInput } from 'react-native';
 import { router } from 'expo-router';
-import { supabase } from '../../lib/supabase';
-import { getUserWithProfile, logoutUser } from '../../services/auth';
-import { Database } from '../../types/database';
+import React, { useEffect, useState } from 'react';
+import { ActivityIndicator, Alert, Dimensions, RefreshControl, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import NavBar from '../../components/NavBar';
+import { supabase } from '../../lib/supabase';
+import { getUserWithProfile } from '../../services/auth';
+import { Database } from '../../types/database';
 
 const { width } = Dimensions.get('window');
 
@@ -119,15 +119,6 @@ export default function MarketplaceScreen() {
     setRefreshing(false);
   };
 
-  const handleLogout = async () => {
-    try {
-      await logoutUser();
-      router.replace('/auth/login');
-    } catch (error) {
-      console.error('Logout error:', error);
-    }
-  };
-
   const formatPrice = (price: number) => {
     return new Intl.NumberFormat('en-PH', {
       style: 'currency',
@@ -135,31 +126,93 @@ export default function MarketplaceScreen() {
     }).format(price);
   };
 
-  const renderCategoryFilter = () => (
-    <ScrollView
-      horizontal
-      showsHorizontalScrollIndicator={false}
-      style={styles.categoryContainer}
-      contentContainerStyle={styles.categoryContent}
-    >
-      {categories.map((category) => (
-        <TouchableOpacity
-          key={category}
-          style={[
-            styles.categoryButton,
-            selectedCategory === category && styles.categoryButtonActive
-          ]}
-          onPress={() => setSelectedCategory(category)}
-        >
-          <Text style={[
-            styles.categoryButtonText,
-            selectedCategory === category && styles.categoryButtonTextActive
-          ]}>
-            {category}
+  const renderWelcomeHeader = () => (
+    <View style={styles.welcomeContainer}>
+      <View style={styles.welcomeContent}>
+        <View style={styles.welcomeText}>
+          <Text style={styles.welcomeGreeting}>Fresh from the Farm</Text>
+          <Text style={styles.welcomeTitle}>Marketplace</Text>
+          <Text style={styles.welcomeSubtitle}>
+            {profile?.company_name || 
+             `${profile?.first_name || ''} ${profile?.last_name || ''}`.trim() ||
+             'Welcome'}
           </Text>
+          <Text style={styles.welcomeDescription}>
+            Discover premium agricultural products directly from verified farmers
+          </Text>
+        </View>
+        <View style={styles.welcomeIconContainer}>
+          <Text style={styles.welcomeIcon}>🛒</Text>
+        </View>
+      </View>
+    </View>
+  );
+
+  const renderCategoryFilter = () => (
+    <View style={styles.categorySection}>
+      <Text style={styles.sectionTitle}>Categories</Text>
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={styles.categoryContainer}
+      >
+        {categories.map((category) => (
+          <TouchableOpacity
+            key={category}
+            style={[
+              styles.categoryButton,
+              selectedCategory === category && styles.categoryButtonActive
+            ]}
+            onPress={() => setSelectedCategory(category)}
+            activeOpacity={0.7}
+          >
+            <Text style={[
+              styles.categoryButtonText,
+              selectedCategory === category && styles.categoryButtonTextActive
+            ]}>
+              {category}
+            </Text>
+          </TouchableOpacity>
+        ))}
+      </ScrollView>
+    </View>
+  );
+
+  const renderQuickActions = () => (
+    <View style={styles.actionsSection}>
+      <Text style={styles.sectionTitle}>Quick Actions</Text>
+      <View style={styles.actionsGrid}>
+        <TouchableOpacity
+          style={styles.primaryActionCard}
+          onPress={() => router.push('/buyer/my-orders')}
+          activeOpacity={0.8}
+        >
+          <Text style={styles.primaryActionIcon}>📋</Text>
+          <Text style={styles.primaryActionTitle}>My Orders</Text>
+          <Text style={styles.primaryActionSubtitle}>Track purchases</Text>
         </TouchableOpacity>
-      ))}
-    </ScrollView>
+
+        <TouchableOpacity
+          style={styles.secondaryActionCard}
+          onPress={() => router.push('/buyer/purchase-history')}
+          activeOpacity={0.8}
+        >
+          <Text style={styles.secondaryActionIcon}>📋</Text>
+          <Text style={styles.secondaryActionTitle}>History</Text>
+          <Text style={styles.secondaryActionSubtitle}>Past orders</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={styles.secondaryActionCard}
+          onPress={() => router.push('/buyer/settings')}
+          activeOpacity={0.8}
+        >
+          <Text style={styles.secondaryActionIcon}>⚙️</Text>
+          <Text style={styles.secondaryActionTitle}>Settings</Text>
+          <Text style={styles.secondaryActionSubtitle}>Account</Text>
+        </TouchableOpacity>
+      </View>
+    </View>
   );
 
   const renderProduct = (product: Product) => (
@@ -167,15 +220,21 @@ export default function MarketplaceScreen() {
       key={product.id}
       style={styles.productCard}
       onPress={() => router.push(`/buyer/products/${product.id}` as any)}
+      activeOpacity={0.7}
     >
       <View style={styles.productHeader}>
-        <View style={styles.productInfo}>
+        <View style={styles.productMainInfo}>
           <Text style={styles.productName}>{product.name}</Text>
-          <Text style={styles.productCategory}>{product.category}</Text>
+          <View style={styles.categoryBadge}>
+            <Text style={styles.categoryBadgeText}>{product.category}</Text>
+          </View>
         </View>
-        <View style={styles.farmerInfo}>
-          <Text style={styles.farmerName}>{product.profiles?.farm_name}</Text>
-          <Text style={styles.farmerLocation}>{product.profiles?.farm_location}</Text>
+        <View style={styles.farmerCard}>
+          <Text style={styles.farmerIcon}>🏡</Text>
+          <View style={styles.farmerInfo}>
+            <Text style={styles.farmerName}>{product.profiles?.farm_name || 'Farm'}</Text>
+            <Text style={styles.farmerLocation}>{product.profiles?.farm_location}</Text>
+          </View>
         </View>
       </View>
 
@@ -183,27 +242,40 @@ export default function MarketplaceScreen() {
         {product.description}
       </Text>
 
-      <View style={styles.productDetails}>
-        <View style={styles.priceContainer}>
-          <Text style={styles.price}>{formatPrice(product.price)}</Text>
-          <Text style={styles.unit}>per {product.unit}</Text>
+      <View style={styles.productMetrics}>
+        <View style={styles.priceSection}>
+          <Text style={styles.priceLabel}>Price</Text>
+          <Text style={styles.priceValue}>{formatPrice(product.price)}</Text>
+          <Text style={styles.priceUnit}>per {product.unit}</Text>
         </View>
-        <View style={styles.quantityContainer}>
-          <Text style={styles.quantity}>{product.quantity_available}</Text>
-          <Text style={styles.quantityLabel}>{product.unit} available</Text>
+        
+        <View style={styles.metricsVerticalDivider} />
+        
+        <View style={styles.stockSection}>
+          <Text style={styles.stockLabel}>Available</Text>
+          <Text style={styles.stockValue}>{product.quantity_available}</Text>
+          <Text style={styles.stockUnit}>{product.unit}</Text>
         </View>
       </View>
 
       <View style={styles.productFooter}>
         <TouchableOpacity
           style={styles.contactButton}
-          onPress={() => router.push(`/buyer/contact-farmer/${product.farmer_id}` as any)}
+          onPress={(e) => {
+            e.stopPropagation();
+            router.push(`/buyer/contact-farmer/${product.farmer_id}` as any);
+          }}
+          activeOpacity={0.7}
         >
-          <Text style={styles.contactButtonText}>Contact Farmer</Text>
+          <Text style={styles.contactButtonText}>Contact</Text>
         </TouchableOpacity>
         <TouchableOpacity
           style={styles.orderButton}
-          onPress={() => router.push(`/buyer/order/${product.id}` as any)}
+          onPress={(e) => {
+            e.stopPropagation();
+            router.push(`/buyer/order/${product.id}` as any);
+          }}
+          activeOpacity={0.7}
         >
           <Text style={styles.orderButtonText}>Order Now</Text>
         </TouchableOpacity>
@@ -211,10 +283,43 @@ export default function MarketplaceScreen() {
     </TouchableOpacity>
   );
 
+  const renderEmptyState = () => (
+    <View style={styles.emptyContainer}>
+      <View style={styles.emptyIllustration}>
+        <View style={styles.emptyIconContainer}>
+          <Text style={styles.emptyIcon}>🛒</Text>
+        </View>
+      </View>
+      
+      <Text style={styles.emptyTitle}>No Products Found</Text>
+      <Text style={styles.emptyDescription}>
+        {searchQuery
+          ? `No products match "${searchQuery}"`
+          : selectedCategory !== 'All'
+          ? `No products available in ${selectedCategory} category`
+          : 'No products available at the moment'}
+      </Text>
+
+      {(searchQuery || selectedCategory !== 'All') && (
+        <TouchableOpacity
+          style={styles.ctaButton}
+          onPress={() => {
+            setSearchQuery('');
+            setSelectedCategory('All');
+          }}
+          activeOpacity={0.8}
+        >
+          <Text style={styles.ctaText}>Clear Filters</Text>
+        </TouchableOpacity>
+      )}
+    </View>
+  );
+
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
-        <Text style={styles.loadingText}>Loading marketplace...</Text>
+        <ActivityIndicator size="large" color="#10b981" />
+        <Text style={styles.loadingText}>Loading fresh products...</Text>
       </View>
     );
   }
@@ -224,82 +329,62 @@ export default function MarketplaceScreen() {
       <NavBar currentRoute="/buyer/marketplace" />
 
       <ScrollView
-        style={styles.content}
+        style={styles.scrollView}
+        contentContainerStyle={styles.scrollContent}
         refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            tintColor="#10b981"
+            colors={['#10b981']}
+          />
         }
         showsVerticalScrollIndicator={false}
       >
-        {/* Search Bar */}
-        <View style={styles.searchContainer}>
-          <TextInput
-            style={styles.searchInput}
-            placeholder="Search products, farms, categories..."
-            value={searchQuery}
-            onChangeText={setSearchQuery}
-            placeholderTextColor="#9ca3af"
-          />
+        {renderWelcomeHeader()}
+
+        {/* Enhanced Search */}
+        <View style={styles.searchSection}>
+          <Text style={styles.sectionTitle}>Search Products</Text>
+          <View style={styles.searchContainer}>
+            <Text style={styles.searchIcon}>🔍</Text>
+            <TextInput
+              style={styles.searchInput}
+              placeholder="Search products, farms, categories..."
+              value={searchQuery}
+              onChangeText={setSearchQuery}
+              placeholderTextColor="#9ca3af"
+            />
+            {searchQuery.length > 0 && (
+              <TouchableOpacity
+                style={styles.clearSearchButton}
+                onPress={() => setSearchQuery('')}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.clearSearchText}>✕</Text>
+              </TouchableOpacity>
+            )}
+          </View>
         </View>
 
-        {/* Category Filter */}
         {renderCategoryFilter()}
+        {renderQuickActions()}
 
-        {/* Quick Actions */}
-        <View style={styles.actionsContainer}>
-          <TouchableOpacity
-            style={styles.actionButton}
-            onPress={() => router.push('/buyer/orders')}
-          >
-            <Text style={styles.actionButtonText}>My Orders</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={styles.actionButton}
-            onPress={() => router.push('/buyer/favorites')}
-          >
-            <Text style={styles.actionButtonText}>Favorites</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={styles.actionButton}
-            onPress={() => router.push('/buyer/farmers')}
-          >
-            <Text style={styles.actionButtonText}>Find Farmers</Text>
-          </TouchableOpacity>
-        </View>
-
-        {/* Products List */}
+        {/* Products Section */}
         <View style={styles.productsSection}>
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionTitle}>
-              {selectedCategory === 'All' ? 'All Products' : selectedCategory}
+              {selectedCategory === 'All' ? 'Fresh Products' : selectedCategory}
             </Text>
-            <Text style={styles.productCount}>
-              {filteredProducts.length} products
-            </Text>
+            <View style={styles.productCount}>
+              <Text style={styles.productCountText}>
+                {filteredProducts.length} products
+              </Text>
+            </View>
           </View>
 
           {filteredProducts.length === 0 ? (
-            <View style={styles.emptyState}>
-              <Text style={styles.emptyTitle}>No products found</Text>
-              <Text style={styles.emptyText}>
-                {searchQuery
-                  ? `No products match "${searchQuery}"`
-                  : selectedCategory !== 'All'
-                  ? `No products in ${selectedCategory} category`
-                  : 'No products available at the moment'
-                }
-              </Text>
-              {(searchQuery || selectedCategory !== 'All') && (
-                <TouchableOpacity
-                  style={styles.clearFiltersButton}
-                  onPress={() => {
-                    setSearchQuery('');
-                    setSelectedCategory('All');
-                  }}
-                >
-                  <Text style={styles.clearFiltersText}>Clear Filters</Text>
-                </TouchableOpacity>
-              )}
-            </View>
+            renderEmptyState()
           ) : (
             <View style={styles.productsList}>
               {filteredProducts.map(renderProduct)}
@@ -314,172 +399,276 @@ export default function MarketplaceScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f8fafc',
+    backgroundColor: '#f1f5f9',
   },
+
+  // Loading
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#f8fafc',
+    backgroundColor: '#f1f5f9',
   },
   loadingText: {
+    marginTop: 20,
     fontSize: 16,
-    color: '#6b7280',
-  },
-  header: {
-    backgroundColor: '#1f2937',
-    paddingTop: 60,
-    paddingBottom: 30,
-    paddingHorizontal: 24,
-  },
-  headerContent: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-  },
-  headerLeft: {
-    flex: 1,
-  },
-  welcomeText: {
-    fontSize: 16,
-    color: '#d1d5db',
-    marginBottom: 8,
+    color: '#64748b',
     fontWeight: '500',
   },
-  appName: {
-    fontSize: 32,
-    fontWeight: '700',
-    color: '#ffffff',
-    marginBottom: 8,
-    letterSpacing: -0.5,
-  },
-  buyerName: {
-    fontSize: 18,
-    color: '#10b981',
-    fontWeight: '600',
-  },
-  logoutButton: {
-    backgroundColor: 'rgba(16, 185, 129, 0.2)',
-    paddingHorizontal: 20,
-    paddingVertical: 12,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: 'rgba(16, 185, 129, 0.3)',
-  },
-  logoutText: {
-    color: '#ffffff',
-    fontWeight: '600',
-    fontSize: 15,
-  },
-  content: {
+
+  // Scroll View
+  scrollView: {
     flex: 1,
-    backgroundColor: '#ffffff',
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    marginTop: -15,
-    paddingTop: 24,
+  },
+  scrollContent: {
+    paddingBottom: 40,
+  },
+
+  // Welcome Header
+  welcomeContainer: {
+    backgroundColor: '#10b981',
+    margin: 20,
+    marginBottom: 32,
+    borderRadius: 20,
+    overflow: 'hidden',
+    elevation: 12,
+    shadowColor: '#10b981',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.3,
+    shadowRadius: 16,
+  },
+  welcomeContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: 28,
+  },
+  welcomeText: {
+    flex: 1,
+  },
+  welcomeGreeting: {
+    fontSize: 14,
+    color: 'rgba(255, 255, 255, 0.9)',
+    fontWeight: '500',
+    marginBottom: 4,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  welcomeTitle: {
+    fontSize: 28,
+    color: '#ffffff',
+    fontWeight: 'bold',
+    marginBottom: 6,
+  },
+  welcomeSubtitle: {
+    fontSize: 16,
+    color: '#ffffff',
+    fontWeight: '600',
+    marginBottom: 8,
+  },
+  welcomeDescription: {
+    fontSize: 13,
+    color: 'rgba(255, 255, 255, 0.8)',
+    fontWeight: '400',
+    lineHeight: 18,
+  },
+  welcomeIconContainer: {
+    width: 70,
+    height: 70,
+    borderRadius: 35,
+    backgroundColor: 'rgba(255, 255, 255, 0.15)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginLeft: 20,
+  },
+  welcomeIcon: {
+    fontSize: 32,
+  },
+
+  // Section Titles
+  sectionTitle: {
+    fontSize: 22,
+    fontWeight: 'bold',
+    color: '#0f172a',
+    marginBottom: 20,
+  },
+
+  // Search Section
+  searchSection: {
+    paddingHorizontal: 20,
+    marginBottom: 36,
   },
   searchContainer: {
-    paddingHorizontal: 24,
-    paddingBottom: 16,
-  },
-  searchInput: {
-    backgroundColor: '#f9fafb',
-    borderRadius: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#ffffff',
+    borderRadius: 16,
     paddingHorizontal: 20,
     paddingVertical: 16,
-    fontSize: 16,
-    borderWidth: 1,
-    borderColor: '#d1d5db',
+    elevation: 4,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
-    elevation: 2,
-    color: '#111827',
+    shadowOpacity: 0.08,
+    shadowRadius: 12,
+    borderWidth: 2,
+    borderColor: '#e2e8f0',
+  },
+  searchIcon: {
+    fontSize: 20,
+    marginRight: 12,
+    color: '#64748b',
+  },
+  searchInput: {
+    flex: 1,
+    fontSize: 16,
+    color: '#0f172a',
+    fontWeight: '500',
+  },
+  clearSearchButton: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: '#f1f5f9',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  clearSearchText: {
+    fontSize: 14,
+    color: '#64748b',
+    fontWeight: 'bold',
+  },
+
+  // Category Section
+  categorySection: {
+    paddingHorizontal: 20,
+    marginBottom: 36,
   },
   categoryContainer: {
-    paddingHorizontal: 24,
-    marginBottom: 24,
-  },
-  categoryContent: {
-    paddingRight: 24,
+    paddingRight: 20,
+    gap: 12,
   },
   categoryButton: {
-    backgroundColor: '#ffffff',
     paddingHorizontal: 20,
     paddingVertical: 12,
     borderRadius: 24,
-    marginRight: 12,
-    borderWidth: 1,
-    borderColor: '#d1d5db',
+    backgroundColor: '#ffffff',
+    borderWidth: 2,
+    borderColor: '#e2e8f0',
+    elevation: 2,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.05,
     shadowRadius: 2,
-    elevation: 1,
   },
   categoryButtonActive: {
     backgroundColor: '#10b981',
     borderColor: '#10b981',
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 2,
+    elevation: 4,
+    shadowOpacity: 0.15,
   },
   categoryButtonText: {
     fontSize: 15,
     fontWeight: '600',
-    color: '#4b5563',
+    color: '#64748b',
   },
   categoryButtonTextActive: {
     color: '#ffffff',
   },
-  actionsContainer: {
-    flexDirection: 'row',
-    paddingHorizontal: 24,
-    gap: 16,
-    marginBottom: 32,
+
+  // Actions Section
+  actionsSection: {
+    paddingHorizontal: 20,
+    marginBottom: 36,
   },
-  actionButton: {
+  actionsGrid: {
+    flexDirection: 'row',
+    gap: 16,
+  },
+  primaryActionCard: {
+    flex: 2,
+    backgroundColor: '#3b82f6',
+    borderRadius: 18,
+    padding: 24,
+    alignItems: 'center',
+    elevation: 8,
+    shadowColor: '#3b82f6',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.25,
+    shadowRadius: 16,
+  },
+  primaryActionIcon: {
+    fontSize: 32,
+    color: '#ffffff',
+    marginBottom: 12,
+    fontWeight: 'bold',
+  },
+  primaryActionTitle: {
+    fontSize: 16,
+    color: '#ffffff',
+    fontWeight: 'bold',
+    marginBottom: 4,
+  },
+  primaryActionSubtitle: {
+    fontSize: 12,
+    color: 'rgba(255, 255, 255, 0.8)',
+    fontWeight: '500',
+  },
+  secondaryActionCard: {
     flex: 1,
     backgroundColor: '#ffffff',
-    paddingVertical: 16,
-    borderRadius: 12,
+    borderRadius: 18,
+    padding: 20,
     alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#d1d5db',
+    elevation: 4,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-    elevation: 2,
+    shadowOpacity: 0.08,
+    shadowRadius: 12,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
   },
-  actionButtonText: {
-    color: '#374151',
-    fontWeight: '600',
-    fontSize: 15,
+  secondaryActionIcon: {
+    fontSize: 24,
+    marginBottom: 8,
   },
+  secondaryActionTitle: {
+    fontSize: 12,
+    color: '#0f172a',
+    fontWeight: 'bold',
+    marginBottom: 4,
+    textAlign: 'center',
+  },
+  secondaryActionSubtitle: {
+    fontSize: 10,
+    color: '#64748b',
+    fontWeight: '500',
+    textAlign: 'center',
+  },
+
+  // Products Section
   productsSection: {
-    paddingHorizontal: 24,
-    paddingBottom: 40,
+    paddingHorizontal: 20,
   },
   sectionHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 20,
+    marginBottom: 24,
     paddingBottom: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#e5e7eb',
-  },
-  sectionTitle: {
-    fontSize: 24,
-    fontWeight: '700',
-    color: '#111827',
+    borderBottomWidth: 2,
+    borderBottomColor: '#e2e8f0',
   },
   productCount: {
-    fontSize: 15,
-    color: '#10b981',
+    backgroundColor: '#ecfdf5',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: '#bbf7d0',
+  },
+  productCountText: {
+    fontSize: 14,
+    color: '#059669',
     fontWeight: '600',
   },
   productsList: {
@@ -487,105 +676,144 @@ const styles = StyleSheet.create({
   },
   productCard: {
     backgroundColor: '#ffffff',
-    borderRadius: 16,
-    padding: 20,
+    borderRadius: 20,
+    padding: 24,
+    elevation: 6,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.08,
     shadowRadius: 12,
-    elevation: 4,
     borderWidth: 1,
-    borderColor: '#f3f4f6',
+    borderColor: '#f1f5f9',
   },
   productHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
-    marginBottom: 12,
+    marginBottom: 16,
   },
-  productInfo: {
+  productMainInfo: {
     flex: 1,
+    marginRight: 16,
   },
   productName: {
     fontSize: 20,
-    fontWeight: '700',
-    color: '#111827',
-    marginBottom: 6,
-    lineHeight: 28,
+    fontWeight: 'bold',
+    color: '#0f172a',
+    marginBottom: 8,
+    lineHeight: 26,
   },
-  productCategory: {
-    fontSize: 14,
-    color: '#10b981',
+  categoryBadge: {
+    backgroundColor: '#ecfdf5',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+    alignSelf: 'flex-start',
+    borderWidth: 1,
+    borderColor: '#bbf7d0',
+  },
+  categoryBadgeText: {
+    fontSize: 12,
+    color: '#059669',
     fontWeight: '600',
     textTransform: 'uppercase',
     letterSpacing: 0.5,
   },
-  farmerInfo: {
-    alignItems: 'flex-end',
-    backgroundColor: '#f9fafb',
+  farmerCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#f8fafc',
     paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 8,
+    paddingVertical: 10,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+  },
+  farmerIcon: {
+    fontSize: 16,
+    marginRight: 8,
+  },
+  farmerInfo: {
+    alignItems: 'flex-start',
   },
   farmerName: {
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '600',
-    color: '#111827',
+    color: '#0f172a',
+    marginBottom: 2,
   },
   farmerLocation: {
-    fontSize: 12,
-    color: '#6b7280',
-    marginTop: 2,
+    fontSize: 11,
+    color: '#64748b',
+    fontWeight: '500',
   },
   productDescription: {
     fontSize: 15,
-    color: '#4b5563',
+    color: '#64748b',
     lineHeight: 22,
-    marginBottom: 16,
-  },
-  productDetails: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
     marginBottom: 20,
-    backgroundColor: '#f9fafb',
-    padding: 16,
-    borderRadius: 12,
   },
-  priceContainer: {
+  productMetrics: {
     flexDirection: 'row',
-    alignItems: 'baseline',
-  },
-  price: {
-    fontSize: 24,
-    fontWeight: '700',
-    color: '#10b981',
-  },
-  unit: {
-    fontSize: 16,
-    color: '#6b7280',
-    marginLeft: 6,
-    fontWeight: '500',
-  },
-  quantityContainer: {
-    alignItems: 'flex-end',
-    backgroundColor: '#ffffff',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 8,
+    alignItems: 'center',
+    backgroundColor: '#f8fafc',
+    borderRadius: 16,
+    padding: 20,
+    marginBottom: 20,
     borderWidth: 1,
-    borderColor: '#e5e7eb',
+    borderColor: '#e2e8f0',
   },
-  quantity: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: '#111827',
+  priceSection: {
+    flex: 1,
+    alignItems: 'center',
   },
-  quantityLabel: {
+  stockSection: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  priceLabel: {
     fontSize: 12,
-    color: '#6b7280',
-    marginTop: 2,
+    color: '#64748b',
+    fontWeight: '600',
+    marginBottom: 6,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  stockLabel: {
+    fontSize: 12,
+    color: '#64748b',
+    fontWeight: '600',
+    marginBottom: 6,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  priceValue: {
+    fontSize: 22,
+    fontWeight: 'bold',
+    color: '#059669',
+    marginBottom: 4,
+  },
+  stockValue: {
+    fontSize: 22,
+    fontWeight: 'bold',
+    color: '#0f172a',
+    marginBottom: 4,
+  },
+  priceUnit: {
+    fontSize: 12,
+    color: '#64748b',
     fontWeight: '500',
+  },
+  stockUnit: {
+    fontSize: 12,
+    color: '#64748b',
+    fontWeight: '500',
+  },
+  metricsVerticalDivider: {
+    width: 1,
+    height: 48,
+    backgroundColor: '#e2e8f0',
+    marginHorizontal: 20,
   },
   productFooter: {
     flexDirection: 'row',
@@ -599,11 +827,17 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     borderWidth: 2,
     borderColor: '#10b981',
+    elevation: 2,
+    shadowColor: '#10b981',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
   },
   contactButtonText: {
     color: '#10b981',
     fontWeight: '600',
     fontSize: 15,
+    letterSpacing: 0.3,
   },
   orderButton: {
     flex: 1,
@@ -611,52 +845,69 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     borderRadius: 12,
     alignItems: 'center',
+    elevation: 4,
     shadowColor: '#10b981',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.2,
     shadowRadius: 4,
-    elevation: 3,
   },
   orderButtonText: {
     color: '#ffffff',
     fontWeight: '600',
     fontSize: 15,
+    letterSpacing: 0.3,
   },
-  emptyState: {
+
+  // Empty State
+  emptyContainer: {
     alignItems: 'center',
-    paddingVertical: 80,
-    backgroundColor: '#f9fafb',
-    borderRadius: 16,
-    marginTop: 20,
+    paddingVertical: 48,
+  },
+  emptyIllustration: {
+    marginBottom: 32,
+  },
+  emptyIconContainer: {
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    backgroundColor: '#ecfdf5',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 3,
+    borderColor: '#bbf7d0',
+  },
+  emptyIcon: {
+    fontSize: 60,
   },
   emptyTitle: {
-    fontSize: 24,
-    fontWeight: '700',
-    color: '#111827',
-    marginBottom: 12,
-  },
-  emptyText: {
-    fontSize: 16,
-    color: '#6b7280',
+    fontSize: 28,
+    fontWeight: 'bold',
+    color: '#0f172a',
+    marginBottom: 16,
     textAlign: 'center',
-    marginBottom: 32,
-    lineHeight: 24,
-    maxWidth: 280,
   },
-  clearFiltersButton: {
-    backgroundColor: '#10b981',
-    paddingHorizontal: 32,
-    paddingVertical: 16,
-    borderRadius: 12,
-    shadowColor: '#10b981',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  clearFiltersText: {
-    color: '#ffffff',
-    fontWeight: '600',
+  emptyDescription: {
     fontSize: 16,
+    color: '#64748b',
+    textAlign: 'center',
+    marginBottom: 40,
+    lineHeight: 24,
+    paddingHorizontal: 20,
+  },
+  ctaButton: {
+    backgroundColor: '#10b981',
+    paddingHorizontal: 36,
+    paddingVertical: 16,
+    borderRadius: 16,
+    elevation: 8,
+    shadowColor: '#10b981',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.25,
+    shadowRadius: 16,
+  },
+  ctaText: {
+    fontSize: 16,
+    color: '#ffffff',
+    fontWeight: 'bold',
   },
 });

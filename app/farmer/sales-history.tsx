@@ -4,13 +4,12 @@ import {
   ActivityIndicator,
   Alert,
   Dimensions,
-  FlatList,
   RefreshControl,
   ScrollView,
   StyleSheet,
   Text,
   TouchableOpacity,
-  View,
+  View
 } from 'react-native';
 import NavBar from '../../components/NavBar';
 import StatCard from '../../components/StatCard';
@@ -21,6 +20,32 @@ import { Database } from '../../types/database';
 const { width } = Dimensions.get('window');
 
 type Profile = Database['public']['Tables']['profiles']['Row'];
+
+// Database response types
+interface DatabaseOrderItem {
+  order_id: string;
+  quantity: number;
+  unit_price: number;
+  products: {
+    farmer_id: string;
+    name: string;
+    unit: string;
+  } | null;
+}
+
+interface DatabaseOrder {
+  id: string;
+  buyer_id: string;
+  total_amount: number;
+  status: string;
+  created_at: string;
+  delivery_date: string | null;
+  profiles: {
+    first_name: string | null;
+    last_name: string | null;
+    company_name: string | null;
+  } | null;
+}
 
 interface Sale {
   id: string;
@@ -35,7 +60,7 @@ interface Sale {
     company_name: string | null;
   };
   order_items?: Array<{
-    id: string;
+    order_id: string;
     quantity: number;
     unit_price: number;
     total_price: number;
@@ -100,7 +125,7 @@ export default function FarmerSalesHistoryScreen() {
   const loadSales = async (farmerId: string) => {
     try {
       // Get completed orders with items from this farmer's products
-      const { data: orderItems, error: itemsError } = await (supabase as any)
+      const { data: orderItems, error: itemsError } = await supabase
         .from('order_items')
         .select(`
           order_id,
@@ -116,8 +141,10 @@ export default function FarmerSalesHistoryScreen() {
 
       if (itemsError) throw itemsError;
 
+      const typedOrderItems = orderItems as DatabaseOrderItem[] | null;
+
       // Get unique order IDs
-      const orderIds = [...new Set(orderItems?.map((item: any) => item.order_id) || [])];
+      const orderIds = [...new Set(typedOrderItems?.map(item => item.order_id) || [])];
 
       if (orderIds.length === 0) {
         setSales([]);
@@ -125,7 +152,7 @@ export default function FarmerSalesHistoryScreen() {
       }
 
       // Get completed orders only
-      const { data: ordersData, error: ordersError } = await (supabase as any)
+      const { data: ordersData, error: ordersError } = await supabase
         .from('orders')
         .select(`
           id,
@@ -146,10 +173,12 @@ export default function FarmerSalesHistoryScreen() {
 
       if (ordersError) throw ordersError;
 
+      const typedOrdersData = ordersData as DatabaseOrder[] | null;
+
       // Combine orders with their items and calculate totals
-      const salesWithItems = ordersData?.map((order: any) => {
-        const items = orderItems?.filter((item: any) => item.order_id === order.id).map((item: any) => ({
-          id: item.order_id,
+      const salesWithItems: Sale[] = typedOrdersData?.map(order => {
+        const items = typedOrderItems?.filter(item => item.order_id === order.id).map(item => ({
+          order_id: item.order_id,
           quantity: item.quantity,
           unit_price: item.unit_price,
           total_price: item.quantity * item.unit_price,
@@ -166,10 +195,14 @@ export default function FarmerSalesHistoryScreen() {
           id: order.id,
           buyer_id: order.buyer_id,
           total_amount: farmerRevenue, // Override with farmer's actual revenue
-          status: order.status as 'completed',
+          status: 'completed' as const,
           created_at: order.created_at,
           delivery_date: order.delivery_date,
-          buyer_profile: order.profiles,
+          buyer_profile: order.profiles ? {
+            first_name: order.profiles.first_name,
+            last_name: order.profiles.last_name,
+            company_name: order.profiles.company_name,
+          } : undefined,
           order_items: items,
         };
       }) || [];
@@ -286,54 +319,101 @@ export default function FarmerSalesHistoryScreen() {
     return ((current - previous) / previous) * 100;
   };
 
+  const renderWelcomeHeader = () => (
+    <View style={styles.welcomeContainer}>
+      <View style={styles.welcomeContent}>
+        <View style={styles.welcomeText}>
+          <Text style={styles.welcomeTitle}>Sales Analytics</Text>
+          <Text style={styles.welcomeSubtitle}>
+            Track your performance and revenue growth over time
+          </Text>
+        </View>
+        <View style={styles.welcomeIconContainer}>
+          <Text style={styles.welcomeIcon}>📈</Text>
+        </View>
+      </View>
+    </View>
+  );
 
   const renderSaleCard = ({ item: sale }: { item: Sale }) => (
     <View style={styles.saleCard}>
       <View style={styles.saleHeader}>
-        <View style={styles.saleInfo}>
+        <View style={styles.saleMainInfo}>
           <Text style={styles.saleId}>Sale #{sale.id.slice(-8)}</Text>
           <Text style={styles.saleDate}>{formatDate(sale.created_at)}</Text>
         </View>
-        <Text style={styles.saleAmount}>{formatPrice(sale.total_amount)}</Text>
+        <View style={styles.saleAmountContainer}>
+          <Text style={styles.saleAmount}>{formatPrice(sale.total_amount)}</Text>
+          <View style={styles.completedBadge}>
+            <Text style={styles.completedText}>COMPLETED</Text>
+          </View>
+        </View>
       </View>
 
-      <View style={styles.buyerInfo}>
-        <Text style={styles.buyerName}>
-          {sale.buyer_profile?.company_name ||
-           `${sale.buyer_profile?.first_name || ''} ${sale.buyer_profile?.last_name || ''}`.trim() ||
-           'Unknown Buyer'}
-        </Text>
+      <View style={styles.buyerSection}>
+        <Text style={styles.buyerIcon}>👤</Text>
+        <View style={styles.buyerInfo}>
+          <Text style={styles.buyerName}>
+            {sale.buyer_profile?.company_name ||
+             `${sale.buyer_profile?.first_name || ''} ${sale.buyer_profile?.last_name || ''}`.trim() ||
+             'Unknown Buyer'}
+          </Text>
+        </View>
       </View>
 
       <View style={styles.saleItems}>
-        <Text style={styles.itemsTitle}>Items Sold:</Text>
+        <Text style={styles.itemsTitle}>Items Sold</Text>
         {sale.order_items?.map((item, index) => (
           <View key={index} style={styles.saleItem}>
-            <Text style={styles.itemName}>
-              {item.quantity} {item.product.unit} of {item.product.name}
-            </Text>
+            <View style={styles.itemInfo}>
+              <Text style={styles.itemQuantity}>{item.quantity} {item.product.unit}</Text>
+              <Text style={styles.itemName}>{item.product.name}</Text>
+            </View>
             <Text style={styles.itemPrice}>{formatPrice(item.total_price)}</Text>
           </View>
-        ))}
+        )) || null}
+      </View>
+
+      <View style={styles.saleFooter}>
+        <View style={styles.saleMetrics}>
+          <View style={styles.metricItem}>
+            <Text style={styles.metricLabel}>Items</Text>
+            <Text style={styles.metricValue}>
+              {sale.order_items?.reduce((sum, item) => sum + item.quantity, 0) || 0}
+            </Text>
+          </View>
+          <View style={styles.metricItem}>
+            <Text style={styles.metricLabel}>Revenue</Text>
+            <Text style={styles.metricValue}>{formatPrice(sale.total_amount)}</Text>
+          </View>
+        </View>
       </View>
     </View>
   );
 
   const renderEmptyState = () => (
     <View style={styles.emptyContainer}>
-      <Text style={styles.emptyIcon}>=�</Text>
+      <View style={styles.emptyIllustration}>
+        <View style={styles.emptyIconContainer}>
+          <Text style={styles.emptyIcon}>📈</Text>
+        </View>
+      </View>
+      
       <Text style={styles.emptyTitle}>No Sales Data</Text>
       <Text style={styles.emptyDescription}>
         {selectedPeriod === 'all'
           ? 'You haven\'t made any sales yet. Start by adding products and promoting your farm!'
           : `No sales found for the selected time period.`}
       </Text>
+
       {selectedPeriod === 'all' && (
         <TouchableOpacity
-          style={styles.addButton}
+          style={styles.ctaButton}
           onPress={() => router.push('/farmer/products/add')}
+          activeOpacity={0.8}
         >
-          <Text style={styles.addButtonText}>Add Products</Text>
+          <Text style={styles.ctaIcon}>+</Text>
+          <Text style={styles.ctaText}>Add Products</Text>
         </TouchableOpacity>
       )}
     </View>
@@ -344,8 +424,8 @@ export default function FarmerSalesHistoryScreen() {
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#16a34a" />
-        <Text style={styles.loadingText}>Loading sales history...</Text>
+        <ActivityIndicator size="large" color="#10b981" />
+        <Text style={styles.loadingText}>Loading sales analytics...</Text>
       </View>
     );
   }
@@ -355,106 +435,113 @@ export default function FarmerSalesHistoryScreen() {
       <NavBar currentRoute="/farmer/sales-history" />
 
       <ScrollView
-        style={styles.content}
+        style={styles.scrollView}
+        contentContainerStyle={styles.scrollContent}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
             onRefresh={onRefresh}
-            tintColor="#16a34a"
-            colors={['#16a34a']}
+            tintColor="#10b981"
+            colors={['#10b981']}
           />
         }
         showsVerticalScrollIndicator={false}
       >
-        {/* Stats Cards */}
-        <View style={styles.statsContainer}>
-          <View style={styles.statsRow}>
-            <StatCard
-              title="Total Sales"
-              value={stats.totalSales}
-              color="#3b82f6"
-              icon="📊"
-              variant="bordered"
-            />
-            <StatCard
-              title="Total Revenue"
-              value={formatPrice(stats.totalRevenue)}
-              color="#16a34a"
-              icon="💰"
-              variant="bordered"
-            />
-          </View>
-          <View style={styles.statsRow}>
-            <StatCard
-              title="Average Order"
-              value={formatPrice(stats.averageOrderValue)}
-              color="#8b5cf6"
-              icon="📊"
-              variant="bordered"
-            />
-            <StatCard
-              title="Top Product"
-              value={stats.topProduct}
-              color="#f59e0b"
-              icon="🏆"
-              variant="bordered"
-            />
-          </View>
-          <View style={styles.statsRow}>
-            <StatCard
-              title="This Month"
-              value={formatPrice(stats.thisMonthRevenue)}
-              color="#10b981"
+        {renderWelcomeHeader()}
+
+        {/* Enhanced Stats */}
+        <View style={styles.statsSection}>
+          <Text style={styles.sectionTitle}>Performance Overview</Text>
+          <View style={styles.statsGrid}>
+            <StatCard title="Total Sales" value={stats.totalSales} color="#3b82f6" backgroundColor="#f0f0ff" icon="📊" />
+            <StatCard title="Total Revenue" value={formatPrice(stats.totalRevenue)} color="#10b981" backgroundColor="#ecfdf5" icon="💰" />
+            <StatCard title="Average Order" value={formatPrice(stats.averageOrderValue)} color="#8b5cf6" backgroundColor="#f3f0ff" icon="📋" />
+            <StatCard title="Top Product" value={stats.topProduct} color="#f59e0b" backgroundColor="#fffbeb" icon="🏆" />
+            <StatCard 
+              title="This Month" 
+              value={formatPrice(stats.thisMonthRevenue)} 
+              color="#06b6d4" 
+              backgroundColor="#ecfeff" 
               icon="📈"
               subtitle="Revenue"
               growth={getGrowthPercentage(stats.thisMonthRevenue, stats.lastMonthRevenue)}
-              variant="bordered"
             />
           </View>
         </View>
 
-        {/* Time Period Filter */}
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          style={styles.filterContainer}
-          contentContainerStyle={styles.filterContent}
-        >
-          {TIME_PERIODS.map((period) => (
+        {/* Quick Actions */}
+        <View style={styles.actionsSection}>
+          <Text style={styles.sectionTitle}>Quick Actions</Text>
+          <View style={styles.actionsGrid}>
             <TouchableOpacity
-              key={period.key}
-              style={[
-                styles.filterButton,
-                selectedPeriod === period.key && styles.filterButtonActive
-              ]}
-              onPress={() => setSelectedPeriod(period.key)}
+              style={styles.primaryActionCard}
+              onPress={() => router.push('/farmer/orders')}
+              activeOpacity={0.8}
             >
-              <Text style={[
-                styles.filterButtonText,
-                selectedPeriod === period.key && styles.filterButtonTextActive
-              ]}>
-                {period.label}
-              </Text>
+              <Text style={styles.primaryActionIcon}>📋</Text>
+              <Text style={styles.primaryActionTitle}>View Orders</Text>
+              <Text style={styles.primaryActionSubtitle}>Manage current orders</Text>
             </TouchableOpacity>
-          ))}
-        </ScrollView>
+
+            <TouchableOpacity
+              style={styles.secondaryActionCard}
+              onPress={() => router.push('/farmer/my-products')}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.secondaryActionIcon}>📦</Text>
+              <Text style={styles.secondaryActionTitle}>My Products</Text>
+              <Text style={styles.secondaryActionSubtitle}>Update inventory</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        {/* Enhanced Filter */}
+        <View style={styles.filterSection}>
+          <Text style={styles.sectionTitle}>Time Period</Text>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.filterContainer}
+          >
+            {TIME_PERIODS.map((period) => (
+              <TouchableOpacity
+                key={period.key}
+                style={[
+                  styles.filterButton,
+                  selectedPeriod === period.key && styles.filterButtonActive
+                ]}
+                onPress={() => setSelectedPeriod(period.key)}
+                activeOpacity={0.7}
+              >
+                <Text style={[
+                  styles.filterButtonText,
+                  selectedPeriod === period.key && styles.filterButtonTextActive
+                ]}>
+                  {period.label}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+        </View>
 
         {/* Sales List */}
-        <View style={styles.salesContainer}>
-          <Text style={styles.sectionTitle}>
-            Sales History ({filteredSales.length} sales)
-          </Text>
+        <View style={styles.salesSection}>
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>
+              Sales History {filteredSales.length > 0 && `(${filteredSales.length})`}
+            </Text>
+          </View>
 
           {filteredSales.length === 0 ? (
             renderEmptyState()
           ) : (
-            <FlatList
-              data={filteredSales}
-              renderItem={renderSaleCard}
-              keyExtractor={(item) => item.id}
-              scrollEnabled={false}
-              contentContainerStyle={styles.salesList}
-            />
+            <View style={styles.salesList}>
+              {filteredSales.map((sale) => (
+                <View key={sale.id}>
+                  {renderSaleCard({ item: sale })}
+                </View>
+              ))}
+            </View>
           )}
         </View>
 
@@ -467,183 +554,414 @@ export default function FarmerSalesHistoryScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f8fafc',
+    backgroundColor: '#f1f5f9',
   },
-  content: {
-    flex: 1,
-    paddingTop: 16,
-  },
+
+  // Loading
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#f8fafc',
+    backgroundColor: '#f1f5f9',
   },
   loadingText: {
-    marginTop: 16,
+    marginTop: 20,
     fontSize: 16,
     color: '#64748b',
+    fontWeight: '500',
   },
 
-  // Stats
-  statsContainer: {
-    paddingHorizontal: 16,
-    marginBottom: 24,
+  // Scroll View
+  scrollView: {
+    flex: 1,
   },
-  statsRow: {
+  scrollContent: {
+    paddingBottom: 40,
+  },
+
+  // Welcome Header
+  welcomeContainer: {
+    backgroundColor: '#10b981',
+    margin: 20,
+    marginBottom: 32,
+    borderRadius: 20,
+    overflow: 'hidden',
+    elevation: 12,
+    shadowColor: '#10b981',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.3,
+    shadowRadius: 16,
+  },
+  welcomeContent: {
     flexDirection: 'row',
-    gap: 12,
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: 28,
+  },
+  welcomeText: {
+    flex: 1,
+  },
+  welcomeTitle: {
+    fontSize: 26,
+    color: '#ffffff',
+    fontWeight: 'bold',
+    marginBottom: 6,
+  },
+  welcomeSubtitle: {
+    fontSize: 14,
+    color: 'rgba(255, 255, 255, 0.8)',
+    fontWeight: '400',
+    lineHeight: 20,
+  },
+  welcomeIconContainer: {
+    width: 70,
+    height: 70,
+    borderRadius: 35,
+    backgroundColor: 'rgba(255, 255, 255, 0.15)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginLeft: 20,
+  },
+  welcomeIcon: {
+    fontSize: 32,
+  },
+
+  // Section Titles
+  sectionTitle: {
+    fontSize: 22,
+    fontWeight: 'bold',
+    color: '#0f172a',
+    marginBottom: 20,
+  },
+
+  // Stats Section
+  statsSection: {
+    paddingHorizontal: 20,
+    marginBottom: 36,
+  },
+  statsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 16,
+  },
+
+  // Actions Section
+  actionsSection: {
+    paddingHorizontal: 20,
+    marginBottom: 36,
+  },
+  actionsGrid: {
+    flexDirection: 'row',
+    gap: 16,
+  },
+  primaryActionCard: {
+    flex: 2,
+    backgroundColor: '#3b82f6',
+    borderRadius: 18,
+    padding: 24,
+    alignItems: 'center',
+    elevation: 8,
+    shadowColor: '#3b82f6',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.25,
+    shadowRadius: 16,
+  },
+  primaryActionIcon: {
+    fontSize: 32,
+    color: '#ffffff',
+    marginBottom: 12,
+    fontWeight: 'bold',
+  },
+  primaryActionTitle: {
+    fontSize: 16,
+    color: '#ffffff',
+    fontWeight: 'bold',
+    marginBottom: 4,
+  },
+  primaryActionSubtitle: {
+    fontSize: 12,
+    color: 'rgba(255, 255, 255, 0.8)',
+    fontWeight: '500',
+  },
+  secondaryActionCard: {
+    flex: 1,
+    backgroundColor: '#ffffff',
+    borderRadius: 18,
+    padding: 24,
+    alignItems: 'center',
+    elevation: 4,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 12,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+  },
+  secondaryActionIcon: {
+    fontSize: 28,
     marginBottom: 12,
   },
-
-  // Filter
-  filterContainer: {
-    paddingVertical: 8,
-    marginBottom: 16,
+  secondaryActionTitle: {
+    fontSize: 14,
+    color: '#0f172a',
+    fontWeight: 'bold',
+    marginBottom: 4,
   },
-  filterContent: {
-    paddingHorizontal: 16,
-    gap: 8,
+  secondaryActionSubtitle: {
+    fontSize: 11,
+    color: '#64748b',
+    fontWeight: '500',
+  },
+
+  // Filter Section
+  filterSection: {
+    paddingHorizontal: 20,
+    marginBottom: 36,
+  },
+  filterContainer: {
+    paddingRight: 20,
+    gap: 12,
   },
   filterButton: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 20,
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderRadius: 24,
     backgroundColor: '#ffffff',
-    borderWidth: 1,
-    borderColor: '#e5e7eb',
+    borderWidth: 2,
+    borderColor: '#e2e8f0',
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
   },
   filterButtonActive: {
-    backgroundColor: '#16a34a',
-    borderColor: '#16a34a',
+    backgroundColor: '#10b981',
+    borderColor: '#10b981',
+    elevation: 4,
+    shadowOpacity: 0.15,
   },
   filterButtonText: {
-    fontSize: 14,
+    fontSize: 15,
     fontWeight: '600',
-    color: '#6b7280',
+    color: '#64748b',
   },
   filterButtonTextActive: {
     color: '#ffffff',
   },
 
-  // Sales
-  salesContainer: {
-    paddingHorizontal: 16,
+  // Sales Section
+  salesSection: {
+    paddingHorizontal: 20,
   },
-  sectionTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#111827',
-    marginBottom: 16,
+  sectionHeader: {
+    marginBottom: 24,
   },
   salesList: {
-    gap: 16,
+    gap: 20,
   },
   saleCard: {
     backgroundColor: '#ffffff',
-    borderRadius: 12,
-    padding: 16,
+    borderRadius: 20,
+    padding: 24,
+    elevation: 6,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-    elevation: 2,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.08,
+    shadowRadius: 12,
+    borderWidth: 1,
+    borderColor: '#f1f5f9',
   },
   saleHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 12,
+    alignItems: 'flex-start',
+    marginBottom: 20,
   },
-  saleInfo: {
+  saleMainInfo: {
     flex: 1,
+    marginRight: 16,
   },
   saleId: {
-    fontSize: 16,
+    fontSize: 20,
     fontWeight: 'bold',
-    color: '#111827',
+    color: '#0f172a',
+    marginBottom: 6,
+    lineHeight: 26,
   },
   saleDate: {
     fontSize: 14,
-    color: '#6b7280',
-    marginTop: 2,
+    color: '#64748b',
+    fontWeight: '500',
+  },
+  saleAmountContainer: {
+    alignItems: 'flex-end',
   },
   saleAmount: {
-    fontSize: 18,
+    fontSize: 22,
     fontWeight: 'bold',
-    color: '#16a34a',
+    color: '#059669',
+    marginBottom: 8,
+  },
+  completedBadge: {
+    backgroundColor: '#059669',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+  },
+  completedText: {
+    fontSize: 10,
+    color: '#ffffff',
+    fontWeight: 'bold',
+    letterSpacing: 0.8,
+  },
+  buyerSection: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#f8fafc',
+    padding: 16,
+    borderRadius: 12,
+    marginBottom: 20,
+  },
+  buyerIcon: {
+    fontSize: 20,
+    marginRight: 12,
   },
   buyerInfo: {
-    marginBottom: 12,
-    paddingBottom: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#f3f4f6',
+    flex: 1,
   },
   buyerName: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#111827',
+    color: '#0f172a',
   },
   saleItems: {
-    gap: 8,
+    marginBottom: 20,
   },
   itemsTitle: {
-    fontSize: 14,
+    fontSize: 16,
     fontWeight: '600',
-    color: '#111827',
-    marginBottom: 8,
+    color: '#0f172a',
+    marginBottom: 12,
   },
   saleItem: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingVertical: 4,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    backgroundColor: '#f1f5f9',
+    borderRadius: 10,
+    marginBottom: 8,
+  },
+  itemInfo: {
+    flex: 1,
+  },
+  itemQuantity: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#059669',
+    marginBottom: 2,
   },
   itemName: {
     fontSize: 14,
-    color: '#6b7280',
-    flex: 1,
+    color: '#0f172a',
+    fontWeight: '500',
   },
   itemPrice: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#16a34a',
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#059669',
+  },
+  saleFooter: {
+    borderTopWidth: 1,
+    borderTopColor: '#f1f5f9',
+    paddingTop: 16,
+  },
+  saleMetrics: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+  },
+  metricItem: {
+    alignItems: 'center',
+    flex: 1,
+  },
+  metricLabel: {
+    fontSize: 12,
+    color: '#64748b',
+    fontWeight: '500',
+    marginBottom: 4,
+  },
+  metricValue: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#0f172a',
   },
 
   // Empty State
   emptyContainer: {
     alignItems: 'center',
-    paddingVertical: 40,
-    paddingHorizontal: 24,
+    paddingVertical: 48,
+  },
+  emptyIllustration: {
+    marginBottom: 32,
+  },
+  emptyIconContainer: {
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    backgroundColor: '#ecfdf5',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 3,
+    borderColor: '#bbf7d0',
   },
   emptyIcon: {
-    fontSize: 48,
-    marginBottom: 16,
+    fontSize: 60,
   },
   emptyTitle: {
-    fontSize: 20,
+    fontSize: 28,
     fontWeight: 'bold',
-    color: '#111827',
-    marginBottom: 8,
+    color: '#0f172a',
+    marginBottom: 16,
     textAlign: 'center',
   },
   emptyDescription: {
     fontSize: 16,
-    color: '#6b7280',
+    color: '#64748b',
     textAlign: 'center',
-    marginBottom: 24,
+    marginBottom: 40,
     lineHeight: 24,
+    paddingHorizontal: 20,
   },
-  addButton: {
-    backgroundColor: '#16a34a',
-    paddingHorizontal: 24,
-    paddingVertical: 12,
-    borderRadius: 8,
+  ctaButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#10b981',
+    paddingHorizontal: 36,
+    paddingVertical: 20,
+    borderRadius: 16,
+    elevation: 8,
+    shadowColor: '#10b981',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.25,
+    shadowRadius: 16,
   },
-  addButtonText: {
+  ctaIcon: {
+    fontSize: 22,
     color: '#ffffff',
+    marginRight: 12,
+    fontWeight: 'bold',
+  },
+  ctaText: {
     fontSize: 16,
-    fontWeight: '600',
+    color: '#ffffff',
+    fontWeight: 'bold',
   },
   bottomSpacing: {
     height: 40,

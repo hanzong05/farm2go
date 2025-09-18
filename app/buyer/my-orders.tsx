@@ -1,0 +1,1055 @@
+import { router } from 'expo-router';
+import React, { useEffect, useState } from 'react';
+import {
+    ActivityIndicator,
+    Alert,
+    Dimensions,
+    RefreshControl,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TouchableOpacity,
+    View,
+} from 'react-native';
+import NavBar from '../../components/NavBar';
+import StatCard from '../../components/StatCard';
+import { supabase } from '../../lib/supabase';
+import { getUserWithProfile } from '../../services/auth';
+import { Database } from '../../types/database';
+
+const { width } = Dimensions.get('window');
+
+type Profile = Database['public']['Tables']['profiles']['Row'];
+
+// Database response types
+interface DatabaseOrderItem {
+  order_id: string;
+  quantity: number;
+  unit_price: number;
+  products: {
+    farmer_id: string;
+    name: string;
+    unit: string;
+  } | null;
+}
+
+interface DatabaseOrder {
+  id: string;
+  buyer_id: string;
+  total_amount: number;
+  status: string;
+  created_at: string;
+  delivery_date: string | null;
+  delivery_address: string | null;
+  notes: string | null;
+  profiles: {
+    first_name: string | null;
+    last_name: string | null;
+    farm_name: string | null;
+    farm_location: string | null;
+  } | null;
+}
+
+interface Order {
+  id: string;
+  buyer_id: string;
+  total_amount: number;
+  status: 'pending' | 'confirmed' | 'preparing' | 'ready' | 'completed' | 'cancelled';
+  created_at: string;
+  delivery_date: string | null;
+  delivery_address: string | null;
+  notes: string | null;
+  farmer_profile?: {
+    first_name: string | null;
+    last_name: string | null;
+    farm_name: string | null;
+    farm_location: string | null;
+  };
+  order_items?: Array<{
+    order_id: string;
+    quantity: number;
+    unit_price: number;
+    product: {
+      name: string;
+      unit: string;
+    };
+  }>;
+}
+
+const ORDER_STATUSES = [
+  { key: 'all', label: 'All Orders', color: '#6b7280', bgColor: '#f3f4f6' },
+  { key: 'pending', label: 'Pending', color: '#f59e0b', bgColor: '#fffbeb' },
+  { key: 'confirmed', label: 'Confirmed', color: '#3b82f6', bgColor: '#eff6ff' },
+  { key: 'preparing', label: 'Preparing', color: '#8b5cf6', bgColor: '#f3f0ff' },
+  { key: 'ready', label: 'Ready', color: '#10b981', bgColor: '#ecfdf5' },
+  { key: 'completed', label: 'Completed', color: '#059669', bgColor: '#ecfdf5' },
+  { key: 'cancelled', label: 'Cancelled', color: '#dc2626', bgColor: '#fef2f2' },
+];
+
+export default function BuyerMyOrdersScreen() {
+  const [orders, setOrders] = useState<Order[]>([]);
+  const [filteredOrders, setFilteredOrders] = useState<Order[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [selectedStatus, setSelectedStatus] = useState('all');
+  const [profile, setProfile] = useState<Profile | null>(null);
+
+  useEffect(() => {
+    loadData();
+  }, []);
+
+  useEffect(() => {
+    filterOrders();
+  }, [orders, selectedStatus]);
+
+  const loadData = async () => {
+    try {
+      const userData = await getUserWithProfile();
+      if (!userData?.profile) {
+        router.replace('/auth/login');
+        return;
+      }
+
+      setProfile(userData.profile);
+      await loadOrders(userData.user.id);
+    } catch (error) {
+      console.error('Error loading data:', error);
+      Alert.alert('Error', 'Failed to load orders');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const loadOrders = async (buyerId: string) => {
+    try {
+      // Get orders for this buyer
+      const { data: ordersData, error: ordersError } = await supabase
+        .from('orders')
+        .select(`
+          id,
+          buyer_id,
+          total_amount,
+          status,
+          created_at,
+          delivery_date,
+          delivery_address,
+          notes,
+          profiles!orders_buyer_id_fkey (
+            first_name,
+            last_name,
+            farm_name,
+            farm_location
+          )
+        `)
+        .eq('buyer_id', buyerId)
+        .order('created_at', { ascending: false });
+
+      if (ordersError) throw ordersError;
+
+      const typedOrdersData = ordersData as DatabaseOrder[] | null;
+
+      if (!typedOrdersData || typedOrdersData.length === 0) {
+        setOrders([]);
+        return;
+      }
+
+      // Get order items for these orders
+      const orderIds = typedOrdersData.map(order => order.id);
+
+      const { data: orderItems, error: itemsError } = await supabase
+        .from('order_items')
+        .select(`
+          order_id,
+          quantity,
+          unit_price,
+          products (
+            farmer_id,
+            name,
+            unit
+          )
+        `)
+        .in('order_id', orderIds);
+
+      if (itemsError) throw itemsError;
+
+      const typedOrderItems = orderItems as DatabaseOrderItem[] | null;
+
+      // Combine orders with their items
+      const ordersWithItems: Order[] = typedOrdersData.map(order => ({
+        id: order.id,
+        buyer_id: order.buyer_id,
+        total_amount: order.total_amount,
+        status: order.status as Order['status'],
+        created_at: order.created_at,
+        delivery_date: order.delivery_date,
+        delivery_address: order.delivery_address,
+        notes: order.notes,
+        farmer_profile: order.profiles ? {
+          first_name: order.profiles.first_name,
+          last_name: order.profiles.last_name,
+          farm_name: order.profiles.farm_name,
+          farm_location: order.profiles.farm_location,
+        } : undefined,
+        order_items: typedOrderItems?.filter(item => item.order_id === order.id).map(item => ({
+          order_id: item.order_id,
+          quantity: item.quantity,
+          unit_price: item.unit_price,
+          product: {
+            name: item.products?.name || '',
+            unit: item.products?.unit || '',
+          },
+        })),
+      }));
+
+      setOrders(ordersWithItems);
+    } catch (error) {
+      console.error('Error loading orders:', error);
+      throw error;
+    }
+  };
+
+  const filterOrders = () => {
+    if (selectedStatus === 'all') {
+      setFilteredOrders(orders);
+    } else {
+      setFilteredOrders(orders.filter(order => order.status === selectedStatus));
+    }
+  };
+
+  const onRefresh = async () => {
+    if (!profile) return;
+    setRefreshing(true);
+    try {
+      const userData = await getUserWithProfile();
+      if (userData?.user) {
+        await loadOrders(userData.user.id);
+      }
+    } catch (error) {
+      console.error('Error refreshing:', error);
+    } finally {
+      setRefreshing(false);
+    }
+  };
+
+  const formatDate = (dateString: string) => {
+    return new Date(dateString).toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+  };
+
+  const formatPrice = (price: number) => {
+    return new Intl.NumberFormat('en-PH', {
+      style: 'currency',
+      currency: 'PHP'
+    }).format(price);
+  };
+
+  const getStatusConfig = (status: string) => {
+    const statusObj = ORDER_STATUSES.find(s => s.key === status);
+    return statusObj || { color: '#6b7280', bgColor: '#f3f4f6' };
+  };
+
+  const getOrderStats = () => {
+    const pending = orders.filter(o => o.status === 'pending').length;
+    const active = orders.filter(o => ['confirmed', 'preparing', 'ready'].includes(o.status)).length;
+    const completed = orders.filter(o => o.status === 'completed').length;
+    const totalSpent = orders
+      .filter(o => o.status === 'completed')
+      .reduce((sum, o) => sum + o.total_amount, 0);
+
+    return { pending, active, completed, totalSpent };
+  };
+
+  const renderWelcomeHeader = () => (
+    <View style={styles.welcomeContainer}>
+      <View style={styles.welcomeContent}>
+        <View style={styles.welcomeText}>
+          <Text style={styles.welcomeTitle}>My Orders</Text>
+          <Text style={styles.welcomeSubtitle}>
+            Track your purchases and delivery status
+          </Text>
+        </View>
+        <View style={styles.welcomeIconContainer}>
+          <Text style={styles.welcomeIcon}>📦</Text>
+        </View>
+      </View>
+    </View>
+  );
+
+  const renderOrderCard = ({ item: order }: { item: Order }) => {
+    const statusConfig = getStatusConfig(order.status);
+    
+    return (
+      <View style={styles.orderCard}>
+        <View style={styles.orderHeader}>
+          <View style={styles.orderMainInfo}>
+            <Text style={styles.orderId}>Order #{order.id.slice(-8)}</Text>
+            <Text style={styles.orderDate}>{formatDate(order.created_at)}</Text>
+          </View>
+          <View style={[styles.statusBadge, { backgroundColor: statusConfig.color }]}>
+            <Text style={styles.statusText}>
+              {order.status.toUpperCase()}
+            </Text>
+          </View>
+        </View>
+
+        <View style={styles.farmerSection}>
+          <Text style={styles.farmerIcon}>🏡</Text>
+          <View style={styles.farmerInfo}>
+            <Text style={styles.farmerName}>
+              {order.farmer_profile?.farm_name ||
+               `${order.farmer_profile?.first_name || ''} ${order.farmer_profile?.last_name || ''}`.trim() ||
+               'Farm'}
+            </Text>
+            {order.farmer_profile?.farm_location && (
+              <Text style={styles.farmerLocation}>{order.farmer_profile.farm_location}</Text>
+            )}
+          </View>
+        </View>
+
+        <View style={styles.orderDetails}>
+          <View style={styles.orderItems}>
+            <Text style={styles.itemsTitle}>Items Ordered</Text>
+            {order.order_items?.map((item, index) => (
+              <View key={index} style={styles.orderItem}>
+                <Text style={styles.itemQuantity}>{item.quantity} {item.product.unit}</Text>
+                <Text style={styles.itemName}>{item.product.name}</Text>
+                <Text style={styles.itemPrice}>{formatPrice(item.unit_price)}</Text>
+              </View>
+            )) || null}
+          </View>
+
+          <View style={styles.orderAmount}>
+            <Text style={styles.amountLabel}>Total Amount</Text>
+            <Text style={styles.amountValue}>{formatPrice(order.total_amount)}</Text>
+          </View>
+        </View>
+
+        {/* Status Timeline */}
+        <View style={styles.statusTimeline}>
+          <Text style={styles.timelineTitle}>Order Progress</Text>
+          <View style={styles.timelineContainer}>
+            {['pending', 'confirmed', 'preparing', 'ready', 'completed'].map((status, index) => {
+              const isActive = ['pending', 'confirmed', 'preparing', 'ready', 'completed'].indexOf(order.status) >= index;
+              const isCurrent = order.status === status;
+              
+              return (
+                <View key={status} style={styles.timelineStep}>
+                  <View style={[
+                    styles.timelineNode,
+                    isActive && styles.timelineNodeActive,
+                    isCurrent && styles.timelineNodeCurrent
+                  ]}>
+                    <Text style={[
+                      styles.timelineNodeText,
+                      isActive && styles.timelineNodeTextActive
+                    ]}>
+                      {index + 1}
+                    </Text>
+                  </View>
+                  {index < 4 && (
+                    <View style={[
+                      styles.timelineLine,
+                      isActive && styles.timelineLineActive
+                    ]} />
+                  )}
+                </View>
+              );
+            })}
+          </View>
+          <View style={styles.timelineLabels}>
+            <Text style={styles.timelineLabel}>Placed</Text>
+            <Text style={styles.timelineLabel}>Confirmed</Text>
+            <Text style={styles.timelineLabel}>Preparing</Text>
+            <Text style={styles.timelineLabel}>Ready</Text>
+            <Text style={styles.timelineLabel}>Completed</Text>
+          </View>
+        </View>
+
+        {/* Additional Info */}
+        {order.delivery_address && (
+          <View style={styles.additionalInfo}>
+            <View style={styles.infoRow}>
+              <Text style={styles.infoIcon}>📍</Text>
+              <View style={styles.infoContent}>
+                <Text style={styles.infoLabel}>Delivery Address</Text>
+                <Text style={styles.infoText}>{order.delivery_address}</Text>
+              </View>
+            </View>
+          </View>
+        )}
+
+        {order.notes && (
+          <View style={styles.additionalInfo}>
+            <View style={styles.infoRow}>
+              <Text style={styles.infoIcon}>📝</Text>
+              <View style={styles.infoContent}>
+                <Text style={styles.infoLabel}>Notes</Text>
+                <Text style={styles.infoText}>{order.notes}</Text>
+              </View>
+            </View>
+          </View>
+        )}
+      </View>
+    );
+  };
+
+  const renderEmptyState = () => (
+    <View style={styles.emptyContainer}>
+      <View style={styles.emptyIllustration}>
+        <View style={styles.emptyIconContainer}>
+          <Text style={styles.emptyIcon}>📦</Text>
+        </View>
+      </View>
+      
+      <Text style={styles.emptyTitle}>No Orders Yet</Text>
+      <Text style={styles.emptyDescription}>
+        {selectedStatus === 'all'
+          ? 'Start shopping to see your orders here. Browse fresh products from local farmers!'
+          : `No ${selectedStatus} orders at the moment.`}
+      </Text>
+
+      {selectedStatus === 'all' && (
+        <TouchableOpacity
+          style={styles.ctaButton}
+          onPress={() => router.push('/buyer/marketplace')}
+          activeOpacity={0.8}
+        >
+          <Text style={styles.ctaIcon}>🛒</Text>
+          <Text style={styles.ctaText}>Start Shopping</Text>
+        </TouchableOpacity>
+      )}
+    </View>
+  );
+
+  const stats = getOrderStats();
+
+  if (loading) {
+    return (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color="#10b981" />
+        <Text style={styles.loadingText}>Loading your orders...</Text>
+      </View>
+    );
+  }
+
+  return (
+    <View style={styles.container}>
+      <NavBar currentRoute="/buyer/my-orders" />
+
+      <ScrollView
+        style={styles.scrollView}
+        contentContainerStyle={styles.scrollContent}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            tintColor="#10b981"
+            colors={['#10b981']}
+          />
+        }
+        showsVerticalScrollIndicator={false}
+      >
+        {renderWelcomeHeader()}
+
+        {/* Enhanced Stats */}
+        <View style={styles.statsSection}>
+          <Text style={styles.sectionTitle}>Order Summary</Text>
+          <View style={styles.statsGrid}>
+            <StatCard title="Pending" value={stats.pending} color="#f59e0b" backgroundColor="#fffbeb" icon="⏳" />
+            <StatCard title="Active" value={stats.active} color="#3b82f6" backgroundColor="#eff6ff" icon="🔄" />
+            <StatCard title="Completed" value={stats.completed} color="#10b981" backgroundColor="#ecfdf5" icon="✅" />
+            <StatCard title="Total Spent" value={formatPrice(stats.totalSpent)} color="#8b5cf6" backgroundColor="#f3f0ff" icon="💰" />
+          </View>
+        </View>
+
+        {/* Quick Actions */}
+        <View style={styles.actionsSection}>
+          <Text style={styles.sectionTitle}>Quick Actions</Text>
+          <View style={styles.actionsGrid}>
+            <TouchableOpacity
+              style={styles.primaryActionCard}
+              onPress={() => router.push('/buyer/marketplace')}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.primaryActionIcon}>🛒</Text>
+              <Text style={styles.primaryActionTitle}>Shop More</Text>
+              <Text style={styles.primaryActionSubtitle}>Browse products</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.secondaryActionCard}
+              onPress={() => router.push('/buyer/purchase-history')}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.secondaryActionIcon}>📋</Text>
+              <Text style={styles.secondaryActionTitle}>History</Text>
+              <Text style={styles.secondaryActionSubtitle}>Past orders</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        {/* Enhanced Filter */}
+        <View style={styles.filterSection}>
+          <Text style={styles.sectionTitle}>Filter Orders</Text>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.filterContainer}
+          >
+            {ORDER_STATUSES.map((status) => (
+              <TouchableOpacity
+                key={status.key}
+                style={[
+                  styles.filterButton,
+                  selectedStatus === status.key && [
+                    styles.filterButtonActive,
+                    { backgroundColor: status.color }
+                  ]
+                ]}
+                onPress={() => setSelectedStatus(status.key)}
+                activeOpacity={0.7}
+              >
+                <Text style={[
+                  styles.filterButtonText,
+                  selectedStatus === status.key && styles.filterButtonTextActive
+                ]}>
+                  {status.label}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+        </View>
+
+        {/* Orders List */}
+        <View style={styles.ordersSection}>
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>
+              Your Orders {filteredOrders.length > 0 && `(${filteredOrders.length})`}
+            </Text>
+          </View>
+
+          {filteredOrders.length === 0 ? (
+            renderEmptyState()
+          ) : (
+            <View style={styles.ordersList}>
+              {filteredOrders.map((order) => (
+                <View key={order.id}>
+                  {renderOrderCard({ item: order })}
+                </View>
+              ))}
+            </View>
+          )}
+        </View>
+      </ScrollView>
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: '#f1f5f9',
+  },
+
+  // Loading
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#f1f5f9',
+  },
+  loadingText: {
+    marginTop: 20,
+    fontSize: 16,
+    color: '#64748b',
+    fontWeight: '500',
+  },
+
+  // Scroll View
+  scrollView: {
+    flex: 1,
+  },
+  scrollContent: {
+    paddingBottom: 40,
+  },
+
+  // Welcome Header
+  welcomeContainer: {
+    backgroundColor: '#3b82f6',
+    margin: 20,
+    marginBottom: 32,
+    borderRadius: 20,
+    overflow: 'hidden',
+    elevation: 12,
+    shadowColor: '#3b82f6',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.3,
+    shadowRadius: 16,
+  },
+  welcomeContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: 28,
+  },
+  welcomeText: {
+    flex: 1,
+  },
+  welcomeTitle: {
+    fontSize: 26,
+    color: '#ffffff',
+    fontWeight: 'bold',
+    marginBottom: 6,
+  },
+  welcomeSubtitle: {
+    fontSize: 14,
+    color: 'rgba(255, 255, 255, 0.8)',
+    fontWeight: '400',
+    lineHeight: 20,
+  },
+  welcomeIconContainer: {
+    width: 70,
+    height: 70,
+    borderRadius: 35,
+    backgroundColor: 'rgba(255, 255, 255, 0.15)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginLeft: 20,
+  },
+  welcomeIcon: {
+    fontSize: 32,
+  },
+
+  // Section Titles
+  sectionTitle: {
+    fontSize: 22,
+    fontWeight: 'bold',
+    color: '#0f172a',
+    marginBottom: 20,
+  },
+
+  // Stats Section
+  statsSection: {
+    paddingHorizontal: 20,
+    marginBottom: 36,
+  },
+  statsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 16,
+  },
+
+  // Actions Section
+  actionsSection: {
+    paddingHorizontal: 20,
+    marginBottom: 36,
+  },
+  actionsGrid: {
+    flexDirection: 'row',
+    gap: 16,
+  },
+  primaryActionCard: {
+    flex: 2,
+    backgroundColor: '#10b981',
+    borderRadius: 18,
+    padding: 24,
+    alignItems: 'center',
+    elevation: 8,
+    shadowColor: '#10b981',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.25,
+    shadowRadius: 16,
+  },
+  primaryActionIcon: {
+    fontSize: 32,
+    color: '#ffffff',
+    marginBottom: 12,
+    fontWeight: 'bold',
+  },
+  primaryActionTitle: {
+    fontSize: 16,
+    color: '#ffffff',
+    fontWeight: 'bold',
+    marginBottom: 4,
+  },
+  primaryActionSubtitle: {
+    fontSize: 12,
+    color: 'rgba(255, 255, 255, 0.8)',
+    fontWeight: '500',
+  },
+  secondaryActionCard: {
+    flex: 1,
+    backgroundColor: '#ffffff',
+    borderRadius: 18,
+    padding: 24,
+    alignItems: 'center',
+    elevation: 4,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 12,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+  },
+  secondaryActionIcon: {
+    fontSize: 28,
+    marginBottom: 12,
+  },
+  secondaryActionTitle: {
+    fontSize: 14,
+    color: '#0f172a',
+    fontWeight: 'bold',
+    marginBottom: 4,
+  },
+  secondaryActionSubtitle: {
+    fontSize: 11,
+    color: '#64748b',
+    fontWeight: '500',
+  },
+
+  // Filter Section
+  filterSection: {
+    paddingHorizontal: 20,
+    marginBottom: 36,
+  },
+  filterContainer: {
+    paddingRight: 20,
+    gap: 12,
+  },
+  filterButton: {
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderRadius: 24,
+    backgroundColor: '#ffffff',
+    borderWidth: 2,
+    borderColor: '#e2e8f0',
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+  },
+  filterButtonActive: {
+    borderColor: 'transparent',
+    elevation: 4,
+    shadowOpacity: 0.15,
+  },
+  filterButtonText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#64748b',
+  },
+  filterButtonTextActive: {
+    color: '#ffffff',
+  },
+
+  // Orders Section
+  ordersSection: {
+    paddingHorizontal: 20,
+  },
+  sectionHeader: {
+    marginBottom: 24,
+  },
+  ordersList: {
+    gap: 20,
+  },
+  orderCard: {
+    backgroundColor: '#ffffff',
+    borderRadius: 20,
+    padding: 24,
+    elevation: 6,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.08,
+    shadowRadius: 12,
+    borderWidth: 1,
+    borderColor: '#f1f5f9',
+  },
+  orderHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: 20,
+  },
+  orderMainInfo: {
+    flex: 1,
+    marginRight: 16,
+  },
+  orderId: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#0f172a',
+    marginBottom: 6,
+    lineHeight: 26,
+  },
+  orderDate: {
+    fontSize: 14,
+    color: '#64748b',
+    fontWeight: '500',
+  },
+  statusBadge: {
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 20,
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+  },
+  statusText: {
+    fontSize: 11,
+    color: '#ffffff',
+    fontWeight: 'bold',
+    letterSpacing: 0.8,
+  },
+  farmerSection: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#f8fafc',
+    padding: 16,
+    borderRadius: 12,
+    marginBottom: 20,
+  },
+  farmerIcon: {
+    fontSize: 20,
+    marginRight: 12,
+  },
+  farmerInfo: {
+    flex: 1,
+  },
+  farmerName: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#0f172a',
+    marginBottom: 2,
+  },
+  farmerLocation: {
+    fontSize: 14,
+    color: '#64748b',
+    fontWeight: '500',
+  },
+  orderDetails: {
+    marginBottom: 20,
+  },
+  orderItems: {
+    marginBottom: 20,
+  },
+  itemsTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#0f172a',
+    marginBottom: 12,
+  },
+  orderItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    backgroundColor: '#f1f5f9',
+    borderRadius: 8,
+    marginBottom: 8,
+  },
+  itemQuantity: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#059669',
+    width: 80,
+  },
+  itemName: {
+    fontSize: 14,
+    color: '#0f172a',
+    flex: 1,
+    fontWeight: '500',
+  },
+  itemPrice: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#374151',
+  },
+  orderAmount: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    backgroundColor: '#ecfdf5',
+    padding: 16,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#bbf7d0',
+  },
+  amountLabel: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#059669',
+  },
+  amountValue: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#059669',
+  },
+  
+  // Status Timeline
+  statusTimeline: {
+    marginTop: 20,
+    paddingTop: 20,
+    borderTopWidth: 1,
+    borderTopColor: '#f1f5f9',
+  },
+  timelineTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#0f172a',
+    marginBottom: 16,
+  },
+  timelineContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  timelineStep: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  timelineNode: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: '#e2e8f0',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: '#e2e8f0',
+  },
+  timelineNodeActive: {
+    backgroundColor: '#10b981',
+    borderColor: '#10b981',
+  },
+  timelineNodeText: {
+    fontSize: 10,
+    fontWeight: 'bold',
+    color: '#64748b',
+  },
+  timelineNodeTextActive: {
+    color: '#ffffff',
+  },
+  timelineLine: {
+    flex: 1,
+    height: 2,
+    backgroundColor: '#e2e8f0',
+    marginHorizontal: 8,
+  },
+  timelineLineActive: {
+    backgroundColor: '#10b981',
+  },
+  timelineLabels: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingHorizontal: 0,
+  },
+  timelineLabel: {
+    fontSize: 11,
+    color: '#64748b',
+    fontWeight: '500',
+    flex: 1,
+    textAlign: 'center',
+  },
+
+  // Additional Info
+  additionalInfo: {
+    marginTop: 16,
+    paddingTop: 16,
+    borderTopWidth: 1,
+    borderTopColor: '#f1f5f9',
+  },
+  infoRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    marginBottom: 8,
+  },
+  infoIcon: {
+    fontSize: 16,
+    marginRight: 12,
+    marginTop: 2,
+  },
+  infoContent: {
+    flex: 1,
+  },
+  infoLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#374151',
+    marginBottom: 4,
+  },
+  infoText: {
+    fontSize: 14,
+    color: '#64748b',
+    lineHeight: 20,
+  },
+
+  // Empty State
+  emptyContainer: {
+    alignItems: 'center',
+    paddingVertical: 48,
+  },
+  emptyIllustration: {
+    marginBottom: 32,
+  },
+  emptyIconContainer: {
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    backgroundColor: '#ecfdf5',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 3,
+    borderColor: '#bbf7d0',
+  },
+  emptyIcon: {
+    fontSize: 60,
+  },
+  emptyTitle: {
+    fontSize: 28,
+    fontWeight: 'bold',
+    color: '#0f172a',
+    marginBottom: 16,
+    textAlign: 'center',
+  },
+  emptyDescription: {
+    fontSize: 16,
+    color: '#64748b',
+    textAlign: 'center',
+    marginBottom: 40,
+    lineHeight: 24,
+    paddingHorizontal: 20,
+  },
+  ctaButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#10b981',
+    paddingHorizontal: 36,
+    paddingVertical: 20,
+    borderRadius: 16,
+    elevation: 8,
+    shadowColor: '#10b981',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.25,
+    shadowRadius: 16,
+  },
+  ctaIcon: {
+    fontSize: 22,
+    color: '#ffffff',
+    marginRight: 12,
+    fontWeight: 'bold',
+  },
+  ctaText: {
+    fontSize: 16,
+    color: '#ffffff',
+    fontWeight: 'bold',
+  },
+});
