@@ -1,6 +1,6 @@
 import React from 'react';
 import { TouchableOpacity, Text, StyleSheet } from 'react-native';
-import { Theme, ComponentStyles } from '../constants/Theme';
+import { Theme, ComponentStyles } from '../constants/theme';
 
 interface CategoryChipProps {
   label: string;

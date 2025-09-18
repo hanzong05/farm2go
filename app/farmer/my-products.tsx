@@ -15,7 +15,7 @@ import NavBar from '../../components/NavBar';
 import ProductCard from '../../components/ProductCard';
 import SearchBar from '../../components/SearchBar';
 import StatCard from '../../components/StatCard';
-import { Theme } from '../../constants/Theme';
+import { Theme } from '../../constants/theme';
 import { supabase } from '../../lib/supabase';
 import { getUserWithProfile } from '../../services/auth';
 import { Database } from '../../types/database';

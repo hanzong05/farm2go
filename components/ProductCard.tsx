@@ -1,6 +1,6 @@
 import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Image } from 'react-native';
-import { Theme } from '../constants/Theme';
+import { Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Theme } from '../constants/theme';
 
 interface ProductCardProps {
   id: string;

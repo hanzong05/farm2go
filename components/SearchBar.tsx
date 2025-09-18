@@ -1,6 +1,6 @@
 import React from 'react';
 import { View, TextInput, TouchableOpacity, StyleSheet } from 'react-native';
-import { Theme } from '../constants/Theme';
+import { Theme } from '../constants/theme';
 
 interface SearchBarProps {
   placeholder?: string;
