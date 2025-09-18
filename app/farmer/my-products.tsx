@@ -12,6 +12,7 @@ import {
   View
 } from 'react-native';
 import NavBar from '../../components/NavBar';
+import StatCard from '../../components/StatCard';
 import { supabase } from '../../lib/supabase';
 import { getUserWithProfile, logoutUser } from '../../services/auth';
 import { Database } from '../../types/database';
@@ -121,19 +122,6 @@ export default function MyProductsScreen() {
 
   const stats = getStats();
 
-  const renderStatCard = (title: string, value: string | number, color: string, backgroundColor: string, icon: string) => (
-    <View style={[styles.statCard, { backgroundColor }]}>
-      <View style={styles.statHeader}>
-        <View style={[styles.statIconContainer, { backgroundColor: color }]}>
-          <Text style={styles.statIcon}>{icon}</Text>
-        </View>
-        <View style={styles.statContent}>
-          <Text style={[styles.statValue, { color }]}>{value}</Text>
-          <Text style={styles.statTitle}>{title}</Text>
-        </View>
-      </View>
-    </View>
-  );
 
   const renderWelcomeHeader = () => (
     <View style={styles.welcomeContainer}>
@@ -303,10 +291,10 @@ export default function MyProductsScreen() {
         <View style={styles.statsSection}>
           <Text style={styles.sectionTitle}>Dashboard Overview</Text>
           <View style={styles.statsGrid}>
-            {renderStatCard('Total Products', stats.total, '#6366f1', '#f0f0ff', '📊')}
-            {renderStatCard('Live Products', stats.approved, '#10b981', '#ecfdf5', '✅')}
-            {renderStatCard('Under Review', stats.pending, '#f59e0b', '#fffbeb', '⏳')}
-            {renderStatCard('Total Value', formatPrice(stats.totalValue), '#06b6d4', '#ecfeff', '💰')}
+            <StatCard title="Total Products" value={stats.total} color="#6366f1" backgroundColor="#f0f0ff" icon="📊" />
+            <StatCard title="Live Products" value={stats.approved} color="#10b981" backgroundColor="#ecfdf5" icon="✅" />
+            <StatCard title="Under Review" value={stats.pending} color="#f59e0b" backgroundColor="#fffbeb" icon="⏳" />
+            <StatCard title="Total Value" value={formatPrice(stats.totalValue)} color="#06b6d4" backgroundColor="#ecfeff" icon="💰" />
           </View>
         </View>
 
@@ -464,46 +452,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 16,
-  },
-  statCard: {
-    width: (width - 56) / 2,
-    borderRadius: 18,
-    padding: 20,
-    elevation: 6,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.08,
-    shadowRadius: 12,
-  },
-  statHeader: {
-    alignItems: 'center',
-  },
-  statIconContainer: {
-    width: 52,
-    height: 52,
-    borderRadius: 26,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 16,
-  },
-  statIcon: {
-    fontSize: 24,
-    color: '#ffffff',
-  },
-  statContent: {
-    alignItems: 'center',
-  },
-  statValue: {
-    fontSize: 26,
-    fontWeight: 'bold',
-    marginBottom: 6,
-  },
-  statTitle: {
-    fontSize: 13,
-    color: '#64748b',
-    fontWeight: '600',
-    textTransform: 'uppercase',
-    letterSpacing: 0.8,
   },
 
   // Actions Section

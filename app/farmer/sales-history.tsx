@@ -16,6 +16,7 @@ import { supabase } from '../../lib/supabase';
 import { getUserWithProfile } from '../../services/auth';
 import { Database } from '../../types/database';
 import NavBar from '../../components/NavBar';
+import StatCard from '../../components/StatCard';
 
 const { width } = Dimensions.get('window');
 
@@ -285,31 +286,6 @@ export default function FarmerSalesHistoryScreen() {
     return ((current - previous) / previous) * 100;
   };
 
-  const renderStatsCard = (
-    title: string,
-    value: string | number,
-    color: string,
-    icon: string,
-    subtitle?: string,
-    growth?: number
-  ) => (
-    <View style={[styles.statCard, { borderLeftColor: color }]}>
-      <View style={styles.statHeader}>
-        <Text style={[styles.statIcon, { color }]}>{icon}</Text>
-        <Text style={[styles.statValue, { color }]}>{value}</Text>
-      </View>
-      <Text style={styles.statTitle}>{title}</Text>
-      {subtitle && <Text style={styles.statSubtitle}>{subtitle}</Text>}
-      {growth !== undefined && (
-        <Text style={[
-          styles.growthText,
-          { color: growth >= 0 ? '#16a34a' : '#dc2626' }
-        ]}>
-          {growth >= 0 ? '�' : '�'} {Math.abs(growth).toFixed(1)}%
-        </Text>
-      )}
-    </View>
-  );
 
   const renderSaleCard = ({ item: sale }: { item: Sale }) => (
     <View style={styles.saleCard}>
@@ -393,42 +369,47 @@ export default function FarmerSalesHistoryScreen() {
         {/* Stats Cards */}
         <View style={styles.statsContainer}>
           <View style={styles.statsRow}>
-            {renderStatsCard(
-              'Total Sales',
-              stats.totalSales,
-              '#3b82f6',
-              '=�'
-            )}
-            {renderStatsCard(
-              'Total Revenue',
-              formatPrice(stats.totalRevenue),
-              '#16a34a',
-              '=�'
-            )}
+            <StatCard
+              title="Total Sales"
+              value={stats.totalSales}
+              color="#3b82f6"
+              icon="📊"
+              variant="bordered"
+            />
+            <StatCard
+              title="Total Revenue"
+              value={formatPrice(stats.totalRevenue)}
+              color="#16a34a"
+              icon="💰"
+              variant="bordered"
+            />
           </View>
           <View style={styles.statsRow}>
-            {renderStatsCard(
-              'Average Order',
-              formatPrice(stats.averageOrderValue),
-              '#8b5cf6',
-              '=�'
-            )}
-            {renderStatsCard(
-              'Top Product',
-              stats.topProduct,
-              '#f59e0b',
-              '<�'
-            )}
+            <StatCard
+              title="Average Order"
+              value={formatPrice(stats.averageOrderValue)}
+              color="#8b5cf6"
+              icon="📊"
+              variant="bordered"
+            />
+            <StatCard
+              title="Top Product"
+              value={stats.topProduct}
+              color="#f59e0b"
+              icon="🏆"
+              variant="bordered"
+            />
           </View>
           <View style={styles.statsRow}>
-            {renderStatsCard(
-              'This Month',
-              formatPrice(stats.thisMonthRevenue),
-              '#10b981',
-              '=�',
-              'Revenue',
-              getGrowthPercentage(stats.thisMonthRevenue, stats.lastMonthRevenue)
-            )}
+            <StatCard
+              title="This Month"
+              value={formatPrice(stats.thisMonthRevenue)}
+              color="#10b981"
+              icon="📈"
+              subtitle="Revenue"
+              growth={getGrowthPercentage(stats.thisMonthRevenue, stats.lastMonthRevenue)}
+              variant="bordered"
+            />
           </View>
         </View>
 
@@ -513,47 +494,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: 12,
     marginBottom: 12,
-  },
-  statCard: {
-    flex: 1,
-    backgroundColor: '#ffffff',
-    padding: 16,
-    borderRadius: 12,
-    borderLeftWidth: 4,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-    elevation: 2,
-  },
-  statHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 4,
-  },
-  statIcon: {
-    fontSize: 20,
-    marginRight: 8,
-  },
-  statValue: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    flex: 1,
-  },
-  statTitle: {
-    fontSize: 12,
-    color: '#64748b',
-    fontWeight: '500',
-  },
-  statSubtitle: {
-    fontSize: 10,
-    color: '#9ca3af',
-    marginTop: 2,
-  },
-  growthText: {
-    fontSize: 12,
-    fontWeight: '600',
-    marginTop: 4,
   },
 
   // Filter

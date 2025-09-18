@@ -1,20 +1,20 @@
-import React, { useState, useEffect } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  ScrollView,
-  TouchableOpacity,
-  Alert,
-  ActivityIndicator,
-  RefreshControl,
-  FlatList,
-} from 'react-native';
 import { router } from 'expo-router';
+import React, { useEffect, useState } from 'react';
+import {
+  ActivityIndicator,
+  Alert,
+  FlatList,
+  RefreshControl,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from 'react-native';
+import NavBar from '../../components/NavBar';
 import { supabase } from '../../lib/supabase';
 import { getUserWithProfile } from '../../services/auth';
 import { Database } from '../../types/database';
-import NavBar from '../../components/NavBar';
 
 type Profile = Database['public']['Tables']['profiles']['Row'];
 
@@ -327,7 +327,7 @@ export default function FarmerOrdersScreen() {
 
   const renderEmptyState = () => (
     <View style={styles.emptyContainer}>
-      <Text style={styles.emptyIcon}>=æ</Text>
+      <Text style={styles.emptyIcon}>=ï¿½</Text>
       <Text style={styles.emptyTitle}>No Orders Found</Text>
       <Text style={styles.emptyDescription}>
         {selectedStatus === 'all'
