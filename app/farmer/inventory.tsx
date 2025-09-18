@@ -1,35 +1,29 @@
-import React, { useState, useEffect } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  ScrollView,
-  TouchableOpacity,
-  Alert,
-  ActivityIndicator,
-  RefreshControl,
-  Modal,
-  TextInput,
-  FlatList,
-} from 'react-native';
 import { router } from 'expo-router';
+import React, { useEffect, useState } from 'react';
+import {
+  ActivityIndicator,
+  Alert,
+  Dimensions,
+  Modal,
+  RefreshControl,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View
+} from 'react-native';
+import NavBar from '../../components/NavBar';
 import { supabase } from '../../lib/supabase';
 import { getUserWithProfile } from '../../services/auth';
 import { Database } from '../../types/database';
-import NavBar from '../../components/NavBar';
+
+const { width } = Dimensions.get('window');
 
 type Profile = Database['public']['Tables']['profiles']['Row'];
+type DatabaseProduct = Database['public']['Tables']['products']['Row'];
 
-interface Product {
-  id: string;
-  name: string;
-  description: string;
-  price: number;
-  unit: string;
-  quantity_available: number;
-  category: string;
-  status: 'pending' | 'approved' | 'rejected';
-  created_at: string;
+interface Product extends Omit<DatabaseProduct, 'low_stock_threshold'> {
   low_stock_threshold?: number;
 }
 
@@ -99,10 +93,16 @@ export default function FarmerInventoryScreen() {
 
       if (error) throw error;
 
-      const productsWithThreshold = data?.map(product => ({
-        ...product,
+      if (!data) {
+        setProducts([]);
+        return;
+      }
+
+      // Properly type the products with threshold
+      const productsWithThreshold: Product[] = data.map((product): Product => ({
+        ...product as DatabaseProduct,
         low_stock_threshold: 10, // Default threshold, could be customizable
-      })) || [];
+      }));
 
       setProducts(productsWithThreshold);
     } catch (error) {
@@ -144,20 +144,21 @@ export default function FarmerInventoryScreen() {
     }
 
     try {
-      const { error } = await supabase
+      const { error } = await (supabase as any)
         .from('products')
         .update({ quantity_available: stockValue })
         .eq('id', selectedProduct.id);
 
       if (error) throw error;
 
-      // Update local state
+      // Update local state with proper type casting
       setProducts(prevProducts =>
-        prevProducts.map(product =>
-          product.id === selectedProduct.id
-            ? { ...product, quantity_available: stockValue }
-            : product
-        )
+        prevProducts.map((product) => {
+          if (product.id === selectedProduct.id) {
+            return { ...product, quantity_available: stockValue } as Product;
+          }
+          return product;
+        })
       );
 
       setShowStockModal(false);
@@ -188,8 +189,9 @@ export default function FarmerInventoryScreen() {
 
               if (error) throw error;
 
+              // Update local state with proper typing
               setProducts(prevProducts =>
-                prevProducts.filter(product => product.id !== productId)
+                prevProducts.filter((product) => product.id !== productId)
               );
 
               Alert.alert('Success', 'Product deleted successfully');
@@ -239,34 +241,54 @@ export default function FarmerInventoryScreen() {
 
   const getStockStatus = (product: Product) => {
     if (product.quantity_available === 0) {
-      return { status: 'Out of Stock', color: '#dc2626', bgColor: '#fecaca' };
+      return { status: 'Out of Stock', color: '#dc2626', bgColor: '#fee2e2' };
     } else if (product.quantity_available <= (product.low_stock_threshold || 10)) {
-      return { status: 'Low Stock', color: '#f59e0b', bgColor: '#fef3c7' };
+      return { status: 'Low Stock', color: '#d97706', bgColor: '#fef3c7' };
     } else {
-      return { status: 'In Stock', color: '#16a34a', bgColor: '#dcfce7' };
+      return { status: 'In Stock', color: '#059669', bgColor: '#ecfdf5' };
     }
   };
 
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'approved':
-        return { color: '#16a34a', bgColor: '#dcfce7' };
+        return { color: '#059669', bgColor: '#ecfdf5' };
       case 'pending':
-        return { color: '#f59e0b', bgColor: '#fef3c7' };
+        return { color: '#d97706', bgColor: '#fffbeb' };
       case 'rejected':
-        return { color: '#dc2626', bgColor: '#fecaca' };
+        return { color: '#dc2626', bgColor: '#fee2e2' };
       default:
-        return { color: '#6b7280', bgColor: '#f3f4f6' };
+        return { color: '#64748b', bgColor: '#f1f5f9' };
     }
   };
 
-  const renderStatsCard = (title: string, value: string | number, color: string, icon: string) => (
-    <View style={[styles.statCard, { borderLeftColor: color }]}>
-      <View style={styles.statHeader}>
-        <Text style={[styles.statIcon, { color }]}>{icon}</Text>
-        <Text style={[styles.statValue, { color }]}>{value}</Text>
+  const renderWelcomeHeader = () => (
+    <View style={styles.welcomeContainer}>
+      <View style={styles.welcomeContent}>
+        <View style={styles.welcomeTextContainer}>
+          <Text style={styles.welcomeTitle}>Inventory Management</Text>
+          <Text style={styles.welcomeSubtitle}>
+            Track your products, manage stock levels, and monitor inventory performance
+          </Text>
+        </View>
+        <View style={styles.welcomeIconContainer}>
+          <Text style={styles.welcomeIcon}>üì¶</Text>
+        </View>
       </View>
-      <Text style={styles.statTitle}>{title}</Text>
+    </View>
+  );
+
+  const renderStatsCard = (title: string, value: string | number, color: string, backgroundColor: string, icon: string) => (
+    <View style={[styles.statCard, { backgroundColor }]}>
+      <View style={styles.statContent}>
+        <View style={[styles.statIconContainer, { backgroundColor: color }]}>
+          <Text style={styles.statIcon}>{icon}</Text>
+        </View>
+        <View style={styles.statTextContainer}>
+          <Text style={[styles.statValue, { color }]}>{value}</Text>
+          <Text style={styles.statTitle}>{title}</Text>
+        </View>
+      </View>
     </View>
   );
 
@@ -275,79 +297,108 @@ export default function FarmerInventoryScreen() {
     const statusColor = getStatusColor(product.status);
 
     return (
-      <View style={styles.productCard}>
+      <TouchableOpacity 
+        style={styles.productCard}
+        onPress={() => router.push(`/farmer/products/${product.id}` as any)}
+        activeOpacity={0.7}
+      >
         <View style={styles.productHeader}>
-          <View style={styles.productInfo}>
+          <View style={styles.productMainInfo}>
             <Text style={styles.productName}>{product.name}</Text>
             <Text style={styles.productCategory}>{product.category}</Text>
           </View>
           <View style={[styles.statusBadge, { backgroundColor: statusColor.bgColor }]}>
             <Text style={[styles.statusText, { color: statusColor.color }]}>
-              {product.status.toUpperCase()}
+              {product.status === 'approved' ? 'LIVE' :
+               product.status === 'pending' ? 'REVIEW' : 'REJECTED'}
             </Text>
           </View>
         </View>
 
-        <View style={styles.productDetails}>
-          <Text style={styles.productPrice}>{formatPrice(product.price)} per {product.unit}</Text>
-          <View style={[styles.stockBadge, { backgroundColor: stockStatus.bgColor }]}>
-            <Text style={[styles.stockText, { color: stockStatus.color }]}>
-              {stockStatus.status}
-            </Text>
+        <View style={styles.productMetrics}>
+          <View style={styles.priceSection}>
+            <Text style={styles.metricLabel}>Price</Text>
+            <Text style={styles.priceValue}>{formatPrice(product.price)}</Text>
+            <Text style={styles.metricUnit}>per {product.unit}</Text>
+          </View>
+          
+          <View style={styles.metricsVerticalDivider} />
+          
+          <View style={styles.stockSection}>
+            <Text style={styles.metricLabel}>Stock</Text>
+            <Text style={styles.stockValue}>{product.quantity_available}</Text>
+            <Text style={styles.metricUnit}>{product.unit}</Text>
           </View>
         </View>
 
-        <View style={styles.quantityRow}>
-          <Text style={styles.quantityLabel}>Available:</Text>
-          <Text style={styles.quantityValue}>
-            {product.quantity_available} {product.unit}
+        <View style={[styles.stockStatusContainer, { backgroundColor: stockStatus.bgColor }]}>
+          <Text style={[styles.stockStatusText, { color: stockStatus.color }]}>
+            {stockStatus.status}
           </Text>
         </View>
 
         <View style={styles.productActions}>
           <TouchableOpacity
-            style={[styles.actionButton, styles.editButton]}
-            onPress={() => router.push(`/farmer/products/edit/${product.id}` as any)}
+            style={styles.editActionButton}
+            onPress={(e) => {
+              e.stopPropagation();
+              router.push(`/farmer/products/edit/${product.id}` as any);
+            }}
+            activeOpacity={0.7}
           >
-            <Text style={styles.actionButtonText}>Edit</Text>
+            <Text style={styles.editActionText}>Edit</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
-            style={[styles.actionButton, styles.stockButton]}
-            onPress={() => {
+            style={styles.stockActionButton}
+            onPress={(e) => {
+              e.stopPropagation();
               setSelectedProduct(product);
               setNewStock(product.quantity_available.toString());
               setShowStockModal(true);
             }}
+            activeOpacity={0.7}
           >
-            <Text style={styles.actionButtonText}>Update Stock</Text>
+            <Text style={styles.stockActionText}>Update Stock</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
-            style={[styles.actionButton, styles.deleteButton]}
-            onPress={() => deleteProduct(product.id)}
+            style={styles.deleteActionButton}
+            onPress={(e) => {
+              e.stopPropagation();
+              deleteProduct(product.id);
+            }}
+            activeOpacity={0.7}
           >
-            <Text style={styles.actionButtonText}>Delete</Text>
+            <Text style={styles.deleteActionText}>Delete</Text>
           </TouchableOpacity>
         </View>
-      </View>
+      </TouchableOpacity>
     );
   };
 
   const renderEmptyState = () => (
     <View style={styles.emptyContainer}>
-      <Text style={styles.emptyIcon}>=Ê</Text>
+      <View style={styles.emptyIllustration}>
+        <View style={styles.emptyIconContainer}>
+          <Text style={styles.emptyIcon}>üì¶</Text>
+        </View>
+      </View>
+      
       <Text style={styles.emptyTitle}>No Products Found</Text>
       <Text style={styles.emptyDescription}>
         {selectedCategory === 'All'
           ? 'Start by adding your first product to manage your inventory.'
           : `No products found in the ${selectedCategory} category.`}
       </Text>
+
       <TouchableOpacity
-        style={styles.addButton}
+        style={styles.ctaButton}
         onPress={() => router.push('/farmer/products/add')}
+        activeOpacity={0.8}
       >
-        <Text style={styles.addButtonText}>Add Product</Text>
+        <Text style={styles.ctaIcon}>+</Text>
+        <Text style={styles.ctaText}>Add Product</Text>
       </TouchableOpacity>
     </View>
   );
@@ -357,8 +408,8 @@ export default function FarmerInventoryScreen() {
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#16a34a" />
-        <Text style={styles.loadingText}>Loading inventory...</Text>
+        <ActivityIndicator size="large" color="#10b981" />
+        <Text style={styles.loadingText}>Loading inventory dashboard...</Text>
       </View>
     );
   }
@@ -368,131 +419,161 @@ export default function FarmerInventoryScreen() {
       <NavBar currentRoute="/farmer/inventory" />
 
       <ScrollView
-        style={styles.content}
+        style={styles.scrollView}
+        contentContainerStyle={styles.scrollContent}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
             onRefresh={onRefresh}
-            tintColor="#16a34a"
-            colors={['#16a34a']}
+            tintColor="#10b981"
+            colors={['#10b981']}
           />
         }
         showsVerticalScrollIndicator={false}
       >
-        {/* Stats Cards */}
-        <View style={styles.statsContainer}>
-          <View style={styles.statsRow}>
-            {renderStatsCard('Total Products', stats.totalProducts, '#3b82f6', '= ')}
-            {renderStatsCard('Approved', stats.approvedProducts, '#16a34a', '')}
-          </View>
-          <View style={styles.statsRow}>
-            {renderStatsCard('Low Stock', stats.lowStockProducts, '#f59e0b', '†')}
-            {renderStatsCard('Total Value', formatPrice(stats.totalValue), '#8b5cf6', '=∞')}
+        {renderWelcomeHeader()}
+
+        {/* Enhanced Stats */}
+        <View style={styles.statsSection}>
+          <Text style={styles.sectionTitle}>Inventory Overview</Text>
+          <View style={styles.statsGrid}>
+            {renderStatsCard('Total Products', stats.totalProducts, '#6366f1', '#f0f0ff', 'üìä')}
+            {renderStatsCard('Live Products', stats.approvedProducts, '#10b981', '#ecfdf5', '‚úÖ')}
+            {renderStatsCard('Low Stock', stats.lowStockProducts, '#f59e0b', '#fffbeb', '‚ö†Ô∏è')}
+            {renderStatsCard('Total Value', formatPrice(stats.totalValue), '#06b6d4', '#ecfeff', 'üí∞')}
           </View>
         </View>
 
         {/* Quick Actions */}
-        <View style={styles.actionsContainer}>
-          <TouchableOpacity
-            style={styles.primaryAction}
-            onPress={() => router.push('/farmer/products/add')}
-          >
-            <Text style={styles.primaryActionText}>+ Add New Product</Text>
-          </TouchableOpacity>
-
-          {stats.lowStockProducts > 0 && (
+        <View style={styles.actionsSection}>
+          <Text style={styles.sectionTitle}>Quick Actions</Text>
+          <View style={styles.actionsGrid}>
             <TouchableOpacity
-              style={styles.warningAction}
-              onPress={() => setSelectedCategory('All')} // Could filter to show only low stock
+              style={styles.primaryActionCard}
+              onPress={() => router.push('/farmer/products/add')}
+              activeOpacity={0.8}
             >
-              <Text style={styles.warningActionText}>† {stats.lowStockProducts} Low Stock Items</Text>
+              <Text style={styles.primaryActionIcon}>+</Text>
+              <Text style={styles.primaryActionTitle}>Add Product</Text>
+              <Text style={styles.primaryActionSubtitle}>List new produce</Text>
             </TouchableOpacity>
-          )}
+
+            {stats.lowStockProducts > 0 && (
+              <TouchableOpacity
+                style={styles.warningActionCard}
+                onPress={() => setSelectedCategory('All')}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.warningActionIcon}>‚ö†Ô∏è</Text>
+                <Text style={styles.warningActionTitle}>{stats.lowStockProducts} Low Stock</Text>
+                <Text style={styles.warningActionSubtitle}>Need attention</Text>
+              </TouchableOpacity>
+            )}
+          </View>
         </View>
 
-        {/* Category Filter */}
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          style={styles.filterContainer}
-          contentContainerStyle={styles.filterContent}
-        >
-          {CATEGORIES.map((category) => (
-            <TouchableOpacity
-              key={category}
-              style={[
-                styles.filterButton,
-                selectedCategory === category && styles.filterButtonActive
-              ]}
-              onPress={() => setSelectedCategory(category)}
-            >
-              <Text style={[
-                styles.filterButtonText,
-                selectedCategory === category && styles.filterButtonTextActive
-              ]}>
-                {category}
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </ScrollView>
+        {/* Enhanced Category Filter */}
+        <View style={styles.filterSection}>
+          <Text style={styles.sectionTitle}>Filter by Category</Text>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.filterContainer}
+          >
+            {CATEGORIES.map((category) => (
+              <TouchableOpacity
+                key={category}
+                style={[
+                  styles.filterButton,
+                  selectedCategory === category && styles.filterButtonActive
+                ]}
+                onPress={() => setSelectedCategory(category)}
+                activeOpacity={0.7}
+              >
+                <Text style={[
+                  styles.filterButtonText,
+                  selectedCategory === category && styles.filterButtonTextActive
+                ]}>
+                  {category}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+        </View>
 
         {/* Products List */}
-        <View style={styles.productsContainer}>
-          <Text style={styles.sectionTitle}>
-            Inventory ({filteredProducts.length} items)
-          </Text>
+        <View style={styles.productsSection}>
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>
+              Inventory {filteredProducts.length > 0 && `(${filteredProducts.length})`}
+            </Text>
+          </View>
 
           {filteredProducts.length === 0 ? (
             renderEmptyState()
           ) : (
-            <FlatList
-              data={filteredProducts}
-              renderItem={renderProductCard}
-              keyExtractor={(item) => item.id}
-              scrollEnabled={false}
-              contentContainerStyle={styles.productsList}
-            />
+            <View style={styles.productsList}>
+              {filteredProducts.map((product) => (
+                <View key={product.id}>
+                  {renderProductCard({ item: product })}
+                </View>
+              ))}
+            </View>
           )}
         </View>
       </ScrollView>
 
-      {/* Update Stock Modal */}
+      {/* Enhanced Stock Update Modal */}
       <Modal
         visible={showStockModal}
         transparent
-        animationType="slide"
+        animationType="fade"
         onRequestClose={() => setShowStockModal(false)}
       >
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>Update Stock</Text>
-            {selectedProduct && (
-              <Text style={styles.modalSubtitle}>{selectedProduct.name}</Text>
-            )}
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Update Stock</Text>
+              {selectedProduct && (
+                <Text style={styles.modalSubtitle}>{selectedProduct.name}</Text>
+              )}
+            </View>
 
-            <View style={styles.inputContainer}>
-              <Text style={styles.inputLabel}>Quantity Available</Text>
-              <TextInput
-                style={styles.input}
-                value={newStock}
-                onChangeText={setNewStock}
-                placeholder="Enter quantity"
-                keyboardType="numeric"
-              />
+            <View style={styles.modalBody}>
+              <View style={styles.inputContainer}>
+                <Text style={styles.inputLabel}>
+                  Quantity Available <Text style={styles.required}>*</Text>
+                </Text>
+                <View style={styles.inputWrapper}>
+                  <TextInput
+                    style={styles.input}
+                    value={newStock}
+                    onChangeText={setNewStock}
+                    placeholder="Enter quantity"
+                    placeholderTextColor="#9ca3af"
+                    keyboardType="numeric"
+                  />
+                  <Text style={styles.inputUnit}>
+                    {selectedProduct?.unit || 'units'}
+                  </Text>
+                </View>
+              </View>
             </View>
 
             <View style={styles.modalActions}>
               <TouchableOpacity
-                style={[styles.modalButton, styles.cancelButton]}
+                style={styles.cancelModalButton}
                 onPress={() => setShowStockModal(false)}
+                activeOpacity={0.7}
               >
-                <Text style={styles.cancelButtonText}>Cancel</Text>
+                <Text style={styles.cancelModalText}>Cancel</Text>
               </TouchableOpacity>
               <TouchableOpacity
-                style={[styles.modalButton, styles.updateButton]}
+                style={styles.updateModalButton}
                 onPress={updateStock}
+                activeOpacity={0.7}
               >
-                <Text style={styles.updateButtonText}>Update</Text>
+                <Text style={styles.updateModalText}>Update Stock</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -505,346 +586,577 @@ export default function FarmerInventoryScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f8fafc',
+    backgroundColor: '#f1f5f9',
   },
-  content: {
-    flex: 1,
-    paddingTop: 16,
-  },
+
+  // Loading
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#f8fafc',
+    backgroundColor: '#f1f5f9',
   },
   loadingText: {
-    marginTop: 16,
+    marginTop: 20,
     fontSize: 16,
-    color: '#64748b',
-  },
-
-  // Stats
-  statsContainer: {
-    paddingHorizontal: 16,
-    marginBottom: 24,
-  },
-  statsRow: {
-    flexDirection: 'row',
-    gap: 12,
-    marginBottom: 12,
-  },
-  statCard: {
-    flex: 1,
-    backgroundColor: '#ffffff',
-    padding: 16,
-    borderRadius: 12,
-    borderLeftWidth: 4,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-    elevation: 2,
-  },
-  statHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 4,
-  },
-  statIcon: {
-    fontSize: 20,
-    marginRight: 8,
-  },
-  statValue: {
-    fontSize: 20,
-    fontWeight: 'bold',
-  },
-  statTitle: {
-    fontSize: 12,
     color: '#64748b',
     fontWeight: '500',
   },
 
-  // Actions
-  actionsContainer: {
-    paddingHorizontal: 16,
-    marginBottom: 24,
-    gap: 12,
+  // Scroll View
+  scrollView: {
+    flex: 1,
   },
-  primaryAction: {
-    backgroundColor: '#16a34a',
-    paddingVertical: 16,
-    paddingHorizontal: 24,
-    borderRadius: 12,
-    alignItems: 'center',
-  },
-  primaryActionText: {
-    color: '#ffffff',
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  warningAction: {
-    backgroundColor: '#fef3c7',
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    borderRadius: 8,
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#f59e0b',
-  },
-  warningActionText: {
-    color: '#f59e0b',
-    fontSize: 14,
-    fontWeight: '600',
+  scrollContent: {
+    paddingBottom: 40,
   },
 
-  // Filter
-  filterContainer: {
-    paddingVertical: 8,
+  // Welcome Header
+  welcomeContainer: {
+    backgroundColor: '#10b981',
+    margin: 20,
+    marginBottom: 32,
+    borderRadius: 20,
+    overflow: 'hidden',
+    elevation: 12,
+    shadowColor: '#10b981',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.3,
+    shadowRadius: 16,
+  },
+  welcomeContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: 28,
+  },
+  welcomeTextContainer: {
+    flex: 1,
+  },
+  welcomeTitle: {
+    fontSize: 26,
+    color: '#ffffff',
+    fontWeight: 'bold',
+    marginBottom: 6,
+  },
+  welcomeSubtitle: {
+    fontSize: 14,
+    color: 'rgba(255, 255, 255, 0.8)',
+    fontWeight: '400',
+    lineHeight: 20,
+  },
+  welcomeIconContainer: {
+    width: 70,
+    height: 70,
+    borderRadius: 35,
+    backgroundColor: 'rgba(255, 255, 255, 0.15)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginLeft: 20,
+  },
+  welcomeIcon: {
+    fontSize: 32,
+  },
+
+  // Section Titles
+  sectionTitle: {
+    fontSize: 22,
+    fontWeight: 'bold',
+    color: '#0f172a',
+    marginBottom: 20,
+  },
+
+  // Stats Section
+  statsSection: {
+    paddingHorizontal: 20,
+    marginBottom: 36,
+  },
+  statsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 16,
+  },
+  statCard: {
+    width: (width - 56) / 2,
+    borderRadius: 18,
+    padding: 20,
+    elevation: 6,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.08,
+    shadowRadius: 12,
+  },
+  statContent: {
+    alignItems: 'center',
+  },
+  statIconContainer: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    alignItems: 'center',
+    justifyContent: 'center',
     marginBottom: 16,
   },
-  filterContent: {
-    paddingHorizontal: 16,
-    gap: 8,
+  statIcon: {
+    fontSize: 24,
+    color: '#ffffff',
+  },
+  statTextContainer: {
+    alignItems: 'center',
+  },
+  statValue: {
+    fontSize: 26,
+    fontWeight: 'bold',
+    marginBottom: 6,
+  },
+  statTitle: {
+    fontSize: 13,
+    color: '#64748b',
+    fontWeight: '600',
+    textTransform: 'uppercase',
+    letterSpacing: 0.8,
+  },
+
+  // Actions Section
+  actionsSection: {
+    paddingHorizontal: 20,
+    marginBottom: 36,
+  },
+  actionsGrid: {
+    flexDirection: 'row',
+    gap: 16,
+  },
+  primaryActionCard: {
+    flex: 2,
+    backgroundColor: '#10b981',
+    borderRadius: 18,
+    padding: 24,
+    alignItems: 'center',
+    elevation: 8,
+    shadowColor: '#10b981',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.25,
+    shadowRadius: 16,
+  },
+  primaryActionIcon: {
+    fontSize: 32,
+    color: '#ffffff',
+    marginBottom: 12,
+    fontWeight: 'bold',
+  },
+  primaryActionTitle: {
+    fontSize: 16,
+    color: '#ffffff',
+    fontWeight: 'bold',
+    marginBottom: 4,
+  },
+  primaryActionSubtitle: {
+    fontSize: 12,
+    color: 'rgba(255, 255, 255, 0.8)',
+    fontWeight: '500',
+  },
+  warningActionCard: {
+    flex: 1,
+    backgroundColor: '#ffffff',
+    borderRadius: 18,
+    padding: 24,
+    alignItems: 'center',
+    elevation: 4,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 12,
+    borderWidth: 2,
+    borderColor: '#f59e0b',
+  },
+  warningActionIcon: {
+    fontSize: 28,
+    marginBottom: 12,
+  },
+  warningActionTitle: {
+    fontSize: 14,
+    color: '#d97706',
+    fontWeight: 'bold',
+    marginBottom: 4,
+  },
+  warningActionSubtitle: {
+    fontSize: 11,
+    color: '#d97706',
+    fontWeight: '500',
+  },
+
+  // Filter Section
+  filterSection: {
+    paddingHorizontal: 20,
+    marginBottom: 36,
+  },
+  filterContainer: {
+    paddingRight: 20,
+    gap: 12,
   },
   filterButton: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 20,
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderRadius: 24,
     backgroundColor: '#ffffff',
-    borderWidth: 1,
-    borderColor: '#e5e7eb',
+    borderWidth: 2,
+    borderColor: '#e2e8f0',
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
   },
   filterButtonActive: {
-    backgroundColor: '#16a34a',
-    borderColor: '#16a34a',
+    backgroundColor: '#10b981',
+    borderColor: '#10b981',
+    elevation: 4,
+    shadowOpacity: 0.15,
   },
   filterButtonText: {
-    fontSize: 14,
+    fontSize: 15,
     fontWeight: '600',
-    color: '#6b7280',
+    color: '#64748b',
   },
   filterButtonTextActive: {
     color: '#ffffff',
   },
 
-  // Products
-  productsContainer: {
-    paddingHorizontal: 16,
+  // Products Section
+  productsSection: {
+    paddingHorizontal: 20,
   },
-  sectionTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#111827',
-    marginBottom: 16,
+  sectionHeader: {
+    marginBottom: 24,
   },
   productsList: {
-    gap: 16,
+    gap: 20,
   },
   productCard: {
     backgroundColor: '#ffffff',
-    borderRadius: 12,
-    padding: 16,
+    borderRadius: 20,
+    padding: 24,
+    elevation: 6,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-    elevation: 2,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.08,
+    shadowRadius: 12,
+    borderWidth: 1,
+    borderColor: '#f1f5f9',
   },
   productHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
-    marginBottom: 12,
+    marginBottom: 20,
   },
-  productInfo: {
+  productMainInfo: {
     flex: 1,
+    marginRight: 16,
   },
   productName: {
-    fontSize: 18,
+    fontSize: 20,
     fontWeight: 'bold',
-    color: '#111827',
-    marginBottom: 4,
+    color: '#0f172a',
+    marginBottom: 6,
+    lineHeight: 26,
   },
   productCategory: {
     fontSize: 14,
-    color: '#6b7280',
+    color: '#64748b',
+    fontWeight: '500',
+    textTransform: 'capitalize',
   },
   statusBadge: {
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 20,
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
   },
   statusText: {
-    fontSize: 12,
-    fontWeight: '600',
+    fontSize: 11,
+    fontWeight: 'bold',
+    letterSpacing: 0.8,
   },
-  productDetails: {
+  productMetrics: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 8,
-  },
-  productPrice: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#111827',
-  },
-  stockBadge: {
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 8,
-  },
-  stockText: {
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  quantityRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    backgroundColor: '#f8fafc',
+    borderRadius: 16,
+    padding: 20,
     marginBottom: 16,
-    paddingBottom: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#f3f4f6',
   },
-  quantityLabel: {
-    fontSize: 14,
-    color: '#6b7280',
+  priceSection: {
+    flex: 1,
+    alignItems: 'center',
   },
-  quantityValue: {
-    fontSize: 16,
+  stockSection: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  metricLabel: {
+    fontSize: 12,
+    color: '#64748b',
     fontWeight: '600',
-    color: '#111827',
+    marginBottom: 6,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  priceValue: {
+    fontSize: 22,
+    fontWeight: 'bold',
+    color: '#059669',
+    marginBottom: 4,
+  },
+  stockValue: {
+    fontSize: 22,
+    fontWeight: 'bold',
+    color: '#0f172a',
+    marginBottom: 4,
+  },
+  metricUnit: {
+    fontSize: 12,
+    color: '#64748b',
+    fontWeight: '500',
+  },
+  metricsVerticalDivider: {
+    width: 1,
+    height: 48,
+    backgroundColor: '#e2e8f0',
+    marginHorizontal: 20,
+  },
+  stockStatusContainer: {
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 12,
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  stockStatusText: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    letterSpacing: 0.5,
   },
   productActions: {
     flexDirection: 'row',
-    gap: 8,
+    gap: 12,
   },
-  actionButton: {
+  editActionButton: {
     flex: 1,
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    borderRadius: 6,
+    backgroundColor: '#f1f5f9',
+    paddingVertical: 12,
+    borderRadius: 12,
     alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
   },
-  editButton: {
-    backgroundColor: '#3b82f6',
+  stockActionButton: {
+    flex: 1,
+    backgroundColor: '#f1f5f9',
+    paddingVertical: 12,
+    borderRadius: 12,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
   },
-  stockButton: {
-    backgroundColor: '#8b5cf6',
+  deleteActionButton: {
+    flex: 1,
+    backgroundColor: '#fee2e2',
+    paddingVertical: 12,
+    borderRadius: 12,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#fecaca',
   },
-  deleteButton: {
-    backgroundColor: '#dc2626',
-  },
-  actionButtonText: {
+  editActionText: {
     fontSize: 12,
+    color: '#475569',
     fontWeight: '600',
-    color: '#ffffff',
+  },
+  stockActionText: {
+    fontSize: 12,
+    color: '#475569',
+    fontWeight: '600',
+  },
+  deleteActionText: {
+    fontSize: 12,
+    color: '#dc2626',
+    fontWeight: '600',
   },
 
   // Empty State
   emptyContainer: {
     alignItems: 'center',
-    paddingVertical: 40,
-    paddingHorizontal: 24,
+    paddingVertical: 48,
+  },
+  emptyIllustration: {
+    marginBottom: 32,
+  },
+  emptyIconContainer: {
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    backgroundColor: '#ecfdf5',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 3,
+    borderColor: '#bbf7d0',
   },
   emptyIcon: {
-    fontSize: 48,
-    marginBottom: 16,
+    fontSize: 60,
   },
   emptyTitle: {
-    fontSize: 20,
+    fontSize: 28,
     fontWeight: 'bold',
-    color: '#111827',
-    marginBottom: 8,
+    color: '#0f172a',
+    marginBottom: 16,
     textAlign: 'center',
   },
   emptyDescription: {
     fontSize: 16,
-    color: '#6b7280',
+    color: '#64748b',
     textAlign: 'center',
-    marginBottom: 24,
+    marginBottom: 40,
     lineHeight: 24,
+    paddingHorizontal: 20,
   },
-  addButton: {
-    backgroundColor: '#16a34a',
-    paddingHorizontal: 24,
-    paddingVertical: 12,
-    borderRadius: 8,
+  ctaButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#10b981',
+    paddingHorizontal: 36,
+    paddingVertical: 20,
+    borderRadius: 16,
+    elevation: 8,
+    shadowColor: '#10b981',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.25,
+    shadowRadius: 16,
   },
-  addButtonText: {
+  ctaIcon: {
+    fontSize: 22,
     color: '#ffffff',
+    marginRight: 12,
+    fontWeight: 'bold',
+  },
+  ctaText: {
     fontSize: 16,
-    fontWeight: '600',
+    color: '#ffffff',
+    fontWeight: 'bold',
   },
 
-  // Modal
+  // Enhanced Modal Styles
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
     justifyContent: 'center',
     alignItems: 'center',
-    paddingHorizontal: 16,
+    paddingHorizontal: 24,
   },
   modalContent: {
     backgroundColor: '#ffffff',
-    borderRadius: 12,
-    padding: 24,
+    borderRadius: 20,
     width: '100%',
     maxWidth: 400,
+    elevation: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.3,
+    shadowRadius: 20,
+  },
+  modalHeader: {
+    padding: 24,
+    paddingBottom: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f1f5f9',
   },
   modalTitle: {
-    fontSize: 20,
+    fontSize: 22,
     fontWeight: 'bold',
-    color: '#111827',
-    marginBottom: 8,
+    color: '#0f172a',
+    marginBottom: 6,
   },
   modalSubtitle: {
     fontSize: 16,
-    color: '#6b7280',
-    marginBottom: 20,
+    color: '#64748b',
+    fontWeight: '500',
+  },
+  modalBody: {
+    padding: 24,
   },
   inputContainer: {
-    marginBottom: 24,
+    marginBottom: 4,
   },
   inputLabel: {
-    fontSize: 14,
+    fontSize: 16,
     fontWeight: '600',
     color: '#374151',
     marginBottom: 8,
   },
+  required: {
+    color: '#dc2626',
+  },
+  inputWrapper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: '#e2e8f0',
+    borderRadius: 12,
+    backgroundColor: '#ffffff',
+  },
   input: {
-    borderWidth: 1,
-    borderColor: '#d1d5db',
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 12,
+    flex: 1,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
     fontSize: 16,
+    color: '#0f172a',
+  },
+  inputUnit: {
+    paddingRight: 16,
+    fontSize: 14,
+    color: '#64748b',
+    fontWeight: '500',
   },
   modalActions: {
     flexDirection: 'row',
-    gap: 12,
+    padding: 24,
+    paddingTop: 16,
+    gap: 16,
   },
-  modalButton: {
+  cancelModalButton: {
     flex: 1,
-    paddingVertical: 12,
-    borderRadius: 8,
+    paddingVertical: 16,
+    borderRadius: 12,
     alignItems: 'center',
+    backgroundColor: '#f8fafc',
+    borderWidth: 2,
+    borderColor: '#e2e8f0',
   },
-  cancelButton: {
-    backgroundColor: '#f3f4f6',
+  updateModalButton: {
+    flex: 2,
+    paddingVertical: 16,
+    borderRadius: 12,
+    alignItems: 'center',
+    backgroundColor: '#10b981',
+    elevation: 4,
+    shadowColor: '#10b981',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
   },
-  updateButton: {
-    backgroundColor: '#16a34a',
-  },
-  cancelButtonText: {
+  cancelModalText: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#6b7280',
+    color: '#64748b',
   },
-  updateButtonText: {
+  updateModalText: {
     fontSize: 16,
-    fontWeight: '600',
+    fontWeight: '700',
     color: '#ffffff',
+    letterSpacing: 0.5,
   },
 });

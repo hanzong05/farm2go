@@ -99,7 +99,7 @@ export default function FarmerSalesHistoryScreen() {
   const loadSales = async (farmerId: string) => {
     try {
       // Get completed orders with items from this farmer's products
-      const { data: orderItems, error: itemsError } = await supabase
+      const { data: orderItems, error: itemsError } = await (supabase as any)
         .from('order_items')
         .select(`
           order_id,
@@ -116,7 +116,7 @@ export default function FarmerSalesHistoryScreen() {
       if (itemsError) throw itemsError;
 
       // Get unique order IDs
-      const orderIds = [...new Set(orderItems?.map(item => item.order_id) || [])];
+      const orderIds = [...new Set(orderItems?.map((item: any) => item.order_id) || [])];
 
       if (orderIds.length === 0) {
         setSales([]);
@@ -124,7 +124,7 @@ export default function FarmerSalesHistoryScreen() {
       }
 
       // Get completed orders only
-      const { data: ordersData, error: ordersError } = await supabase
+      const { data: ordersData, error: ordersError } = await (supabase as any)
         .from('orders')
         .select(`
           id,
@@ -146,8 +146,8 @@ export default function FarmerSalesHistoryScreen() {
       if (ordersError) throw ordersError;
 
       // Combine orders with their items and calculate totals
-      const salesWithItems = ordersData?.map(order => {
-        const items = orderItems?.filter(item => item.order_id === order.id).map(item => ({
+      const salesWithItems = ordersData?.map((order: any) => {
+        const items = orderItems?.filter((item: any) => item.order_id === order.id).map((item: any) => ({
           id: item.order_id,
           quantity: item.quantity,
           unit_price: item.unit_price,
@@ -162,8 +162,12 @@ export default function FarmerSalesHistoryScreen() {
         const farmerRevenue = items.reduce((sum, item) => sum + item.total_price, 0);
 
         return {
-          ...order,
+          id: order.id,
+          buyer_id: order.buyer_id,
           total_amount: farmerRevenue, // Override with farmer's actual revenue
+          status: order.status as 'completed',
+          created_at: order.created_at,
+          delivery_date: order.delivery_date,
           buyer_profile: order.profiles,
           order_items: items,
         };
@@ -301,7 +305,7 @@ export default function FarmerSalesHistoryScreen() {
           styles.growthText,
           { color: growth >= 0 ? '#16a34a' : '#dc2626' }
         ]}>
-          {growth >= 0 ? '—' : '˜'} {Math.abs(growth).toFixed(1)}%
+          {growth >= 0 ? 'ï¿½' : 'ï¿½'} {Math.abs(growth).toFixed(1)}%
         </Text>
       )}
     </View>
@@ -341,7 +345,7 @@ export default function FarmerSalesHistoryScreen() {
 
   const renderEmptyState = () => (
     <View style={styles.emptyContainer}>
-      <Text style={styles.emptyIcon}>=Ê</Text>
+      <Text style={styles.emptyIcon}>=ï¿½</Text>
       <Text style={styles.emptyTitle}>No Sales Data</Text>
       <Text style={styles.emptyDescription}>
         {selectedPeriod === 'all'
@@ -393,13 +397,13 @@ export default function FarmerSalesHistoryScreen() {
               'Total Sales',
               stats.totalSales,
               '#3b82f6',
-              '=Ê'
+              '=ï¿½'
             )}
             {renderStatsCard(
               'Total Revenue',
               formatPrice(stats.totalRevenue),
               '#16a34a',
-              '=°'
+              '=ï¿½'
             )}
           </View>
           <View style={styles.statsRow}>
@@ -407,13 +411,13 @@ export default function FarmerSalesHistoryScreen() {
               'Average Order',
               formatPrice(stats.averageOrderValue),
               '#8b5cf6',
-              '=È'
+              '=ï¿½'
             )}
             {renderStatsCard(
               'Top Product',
               stats.topProduct,
               '#f59e0b',
-              '<Æ'
+              '<ï¿½'
             )}
           </View>
           <View style={styles.statsRow}>
@@ -421,7 +425,7 @@ export default function FarmerSalesHistoryScreen() {
               'This Month',
               formatPrice(stats.thisMonthRevenue),
               '#10b981',
-              '=Å',
+              '=ï¿½',
               'Revenue',
               getGrowthPercentage(stats.thisMonthRevenue, stats.lastMonthRevenue)
             )}
