@@ -1,45 +1,50 @@
+import { router } from 'expo-router';
 import React from 'react';
 import {
-  View,
-  Text,
-  StyleSheet,
-  TouchableOpacity,
   Dimensions,
-  StatusBar,
   Platform,
+  StatusBar,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
 } from 'react-native';
-import { router } from 'expo-router';
 import { useAuth } from '../contexts/AuthContext';
 import { logoutUser } from '../services/auth';
 
-// Professional icon component
-const Icon = ({ name, size = 20, color = '#ffffff' }: { name: string; size?: number; color?: string }) => {
+// Enhanced icon component with better styling
+const Icon = ({ name, size = 20, color = '#ffffff', style }: { 
+  name: string; 
+  size?: number; 
+  color?: string;
+  style?: any;
+}) => {
   const iconMap: { [key: string]: string } = {
     // Admin icons
-    'users': '👤',
+    'users': '👥',
     'clipboard': '📋',
-    'settings': '⚙',
+    'settings': '⚙️',
     // Farmer icons
     'leaf': '🌿',
     'package': '📦',
     'bar-chart': '📊',
-    'clock': '🕒',
+    'clock': '🕐',
     // Buyer icons
     'shopping-cart': '🛒',
     'search': '🔍',
     'history': '📋',
     // Common icons
-    'log-out': '⤴',
+    'log-out': '↗️',
     'user': '👤',
   };
 
   return (
-    <Text style={{
+    <Text style={[{
       fontSize: size,
       color,
-      fontFamily: Platform.OS === 'ios' ? 'SF Pro Display' : 'Roboto',
       textAlign: 'center',
-    }}>
+      fontWeight: '500',
+    }, style]}>
       {iconMap[name] || '●'}
     </Text>
   );
@@ -56,7 +61,7 @@ interface NavItem {
 }
 
 const NAV_ITEMS: NavItem[] = [
-  // Admin Navigation - 1.1 Admin
+  // Admin Navigation
   {
     id: 'admin-users',
     title: 'Users',
@@ -79,7 +84,7 @@ const NAV_ITEMS: NavItem[] = [
     userTypes: ['admin'],
   },
 
-  // Farmer Navigation - 1.2.1 Farmer
+  // Farmer Navigation
   {
     id: 'farmer-products',
     title: 'Products',
@@ -116,7 +121,7 @@ const NAV_ITEMS: NavItem[] = [
     userTypes: ['farmer'],
   },
 
-  // Buyer Navigation - 1.2.2 Buyer
+  // Buyer Navigation
   {
     id: 'buyer-marketplace',
     title: 'Marketplace',
@@ -165,41 +170,51 @@ export default function NavBar({ currentRoute = '', showUserInfo = true }: NavBa
   };
 
   const handleNavigation = (route: string) => {
-    router.push(route);
+    router.push(route as any);
   };
 
-  const getUserTypeColor = () => {
+  const getUserTypeTheme = () => {
     switch (profile?.user_type) {
       case 'farmer':
         return {
-          primary: '#16a34a',
-          gradient: ['#16a34a', '#15803d'],
-          light: 'rgba(22, 163, 74, 0.1)',
+          primary: '#059669',
+          secondary: '#10b981',
+          accent: '#34d399',
+          background: '#ecfdf5',
+          text: '#064e3b',
         };
       case 'buyer':
         return {
-          primary: '#2563eb',
-          gradient: ['#2563eb', '#1d4ed8'],
-          light: 'rgba(37, 99, 235, 0.1)',
+          primary: '#1d4ed8',
+          secondary: '#2563eb',
+          accent: '#60a5fa',
+          background: '#eff6ff',
+          text: '#1e3a8a',
         };
       case 'admin':
         return {
-          primary: '#7c3aed',
-          gradient: ['#7c3aed', '#6d28d9'],
-          light: 'rgba(124, 58, 237, 0.1)',
+          primary: '#6d28d9',
+          secondary: '#7c3aed',
+          accent: '#a78bfa',
+          background: '#f3e8ff',
+          text: '#581c87',
         };
       default:
         return {
-          primary: '#6b7280',
-          gradient: ['#6b7280', '#4b5563'],
-          light: 'rgba(107, 114, 128, 0.1)',
+          primary: '#374151',
+          secondary: '#4b5563',
+          accent: '#6b7280',
+          background: '#f9fafb',
+          text: '#1f2937',
         };
     }
   };
 
   const getUserDisplayName = () => {
-    if (profile) {
+    if (profile?.first_name && profile?.last_name) {
       return `${profile.first_name} ${profile.last_name}`;
+    } else if (profile?.first_name) {
+      return profile.first_name;
     }
     return 'User';
   };
@@ -231,30 +246,30 @@ export default function NavBar({ currentRoute = '', showUserInfo = true }: NavBa
   }
 
   const filteredNavItems = getFilteredNavItems();
-  const userTypeColors = getUserTypeColor();
+  const theme = getUserTypeTheme();
 
   return (
     <View style={styles.container}>
-      <StatusBar barStyle="light-content" backgroundColor={userTypeColors.primary} />
+      <StatusBar barStyle="light-content" backgroundColor={theme.primary} />
 
-      <View style={[styles.navbar, { backgroundColor: userTypeColors.primary }]}>
-        {/* Brand Section */}
+      <View style={[styles.navbar, { backgroundColor: theme.primary }]}>
+        {/* Enhanced Brand Section */}
         <View style={styles.brandSection}>
           <View style={styles.logoContainer}>
-            <View style={[styles.logo, { backgroundColor: 'rgba(255, 255, 255, 0.15)' }]}>
+            <View style={styles.logoWrapper}>
               <Text style={styles.logoText}>F2G</Text>
             </View>
-            <View style={styles.brandTextContainer}>
+            <View style={styles.brandInfo}>
               <Text style={styles.brandName}>Farm2Go</Text>
               <Text style={styles.brandTagline}>
-                {profile?.user_type === 'admin' ? 'Admin Panel' :
-                 profile?.user_type === 'farmer' ? 'Producer' : 'Marketplace'}
+                {profile?.user_type === 'admin' ? 'Admin Dashboard' :
+                 profile?.user_type === 'farmer' ? 'Producer Portal' : 'Marketplace Hub'}
               </Text>
             </View>
           </View>
         </View>
 
-        {/* Navigation Items */}
+        {/* Enhanced Navigation Items */}
         <View style={styles.navItems}>
           {filteredNavItems.map((item) => {
             const isActive = isCurrentRoute(item.route);
@@ -264,18 +279,18 @@ export default function NavBar({ currentRoute = '', showUserInfo = true }: NavBa
                 key={item.id}
                 style={[
                   styles.navItem,
-                  isActive && [styles.navItemActive, { backgroundColor: 'rgba(255, 255, 255, 0.15)' }],
+                  isActive && styles.navItemActive,
                 ]}
                 onPress={() => handleNavigation(item.route)}
                 activeOpacity={0.7}
               >
                 <View style={[
-                  styles.navItemIconContainer,
-                  isActive && styles.navItemIconContainerActive,
+                  styles.navIconContainer,
+                  isActive && [styles.navIconContainerActive, { backgroundColor: theme.accent }],
                 ]}>
                   <Icon
                     name={item.iconName}
-                    size={16}
+                    size={18}
                     color={isActive ? '#ffffff' : 'rgba(255, 255, 255, 0.8)'}
                   />
                 </View>
@@ -285,41 +300,47 @@ export default function NavBar({ currentRoute = '', showUserInfo = true }: NavBa
                 ]}>
                   {item.title}
                 </Text>
+                {isActive && <View style={[styles.activeIndicator, { backgroundColor: theme.accent }]} />}
               </TouchableOpacity>
             );
           })}
         </View>
 
-        {/* User Section */}
+        {/* Enhanced User Section */}
         {showUserInfo && (
           <View style={styles.userSection}>
-            <TouchableOpacity style={styles.userInfo} activeOpacity={0.7}>
-              <View style={[styles.userAvatar, { backgroundColor: 'rgba(255, 255, 255, 0.15)' }]}>
-                <Icon name="user" size={14} color="#ffffff" />
+            <TouchableOpacity style={styles.userInfo} activeOpacity={0.8}>
+              <View style={styles.userAvatarContainer}>
+                <View style={styles.userAvatar}>
+                  <Text style={styles.userInitial}>
+                    {getUserDisplayName().charAt(0).toUpperCase()}
+                  </Text>
+                </View>
+                <View style={styles.statusIndicator} />
               </View>
               <View style={styles.userDetails}>
                 <Text style={styles.userName} numberOfLines={1}>
                   {getUserDisplayName()}
                 </Text>
-                <Text style={styles.userSubtitle} numberOfLines={1}>
+                <Text style={styles.userRole} numberOfLines={1}>
                   {getUserSubtitle()}
                 </Text>
               </View>
             </TouchableOpacity>
 
             <TouchableOpacity
-              style={[styles.logoutButton, { borderColor: 'rgba(255, 255, 255, 0.2)' }]}
+              style={styles.logoutButton}
               onPress={handleLogout}
-              activeOpacity={0.7}
+              activeOpacity={0.8}
             >
-              <Icon name="log-out" size={14} color="#ffffff" />
+              <Icon name="log-out" size={16} color="#ffffff" />
             </TouchableOpacity>
           </View>
         )}
       </View>
 
-      {/* Subtle bottom border */}
-      <View style={[styles.bottomBorder, { backgroundColor: userTypeColors.light }]} />
+      {/* Enhanced bottom shadow */}
+      <View style={styles.bottomShadow} />
     </View>
   );
 }
@@ -327,190 +348,270 @@ export default function NavBar({ currentRoute = '', showUserInfo = true }: NavBa
 const styles = StyleSheet.create({
   container: {
     zIndex: 1000,
+    elevation: 10,
   },
   navbar: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingTop: Platform.OS === 'ios' ? 50 : StatusBar.currentHeight || 20,
-    paddingBottom: 16,
-    paddingHorizontal: 20,
+    paddingTop: Platform.OS === 'ios' ? 55 : (StatusBar.currentHeight || 0) + 15,
+    paddingBottom: 20,
+    paddingHorizontal: 24,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
+    shadowOffset: { width: 0, height: 6 },
     shadowOpacity: 0.15,
-    shadowRadius: 8,
-    elevation: 8,
+    shadowRadius: 12,
+    elevation: 12,
   },
-  bottomBorder: {
-    height: 1,
-    opacity: 0.3,
+  bottomShadow: {
+    height: 3,
+    backgroundColor: 'rgba(0, 0, 0, 0.08)',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 4,
   },
 
-  // Brand Section
+  // Enhanced Brand Section
   brandSection: {
     flex: 1,
-    minWidth: 120,
+    minWidth: 140,
   },
   logoContainer: {
     flexDirection: 'row',
     alignItems: 'center',
   },
-  logo: {
-    width: 36,
-    height: 36,
-    borderRadius: 8,
+  logoWrapper: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    backgroundColor: 'rgba(255, 255, 255, 0.15)',
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: 12,
+    marginRight: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
   },
   logoText: {
-    fontSize: 14,
-    fontWeight: '800',
+    fontSize: 16,
+    fontWeight: '900',
     color: '#ffffff',
-    letterSpacing: -0.5,
+    letterSpacing: -0.8,
+    textShadowColor: 'rgba(0, 0, 0, 0.2)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 2,
   },
-  brandTextContainer: {
+  brandInfo: {
     flex: 1,
   },
   brandName: {
-    fontSize: 18,
-    fontWeight: '700',
+    fontSize: 22,
+    fontWeight: '800',
     color: '#ffffff',
-    letterSpacing: -0.3,
-    lineHeight: 22,
+    letterSpacing: -0.5,
+    lineHeight: 26,
+    textShadowColor: 'rgba(0, 0, 0, 0.2)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 2,
   },
   brandTagline: {
-    fontSize: 11,
-    color: 'rgba(255, 255, 255, 0.7)',
-    fontWeight: '500',
+    fontSize: 12,
+    color: 'rgba(255, 255, 255, 0.85)',
+    fontWeight: '600',
     textTransform: 'uppercase',
-    letterSpacing: 0.5,
-    marginTop: 1,
+    letterSpacing: 1,
+    marginTop: 2,
   },
 
-  // Navigation Items
+  // Enhanced Navigation Items
   navItems: {
     flexDirection: 'row',
     alignItems: 'center',
     flex: 2,
     justifyContent: 'center',
-    gap: 6,
-    paddingHorizontal: 8,
+    gap: 8,
+    paddingHorizontal: 12,
   },
   navItem: {
     flexDirection: 'column',
     alignItems: 'center',
-    paddingHorizontal: 10,
-    paddingVertical: 8,
-    borderRadius: 12,
-    minWidth: 60,
-    maxWidth: 80,
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+    borderRadius: 16,
+    minWidth: 68,
+    maxWidth: 85,
+    position: 'relative',
   },
   navItemActive: {
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
     transform: [{ scale: 1.05 }],
   },
-  navItemIconContainer: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
+  navIconContainer: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     backgroundColor: 'rgba(255, 255, 255, 0.1)',
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 4,
+    marginBottom: 6,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
   },
-  navItemIconContainerActive: {
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+  navIconContainerActive: {
+    backgroundColor: 'rgba(255, 255, 255, 0.25)',
     transform: [{ scale: 1.1 }],
+    shadowOpacity: 0.2,
+    shadowRadius: 6,
+    elevation: 4,
   },
   navItemText: {
-    fontSize: 10,
+    fontSize: 11,
     color: 'rgba(255, 255, 255, 0.8)',
     fontWeight: '600',
     textAlign: 'center',
-    lineHeight: 12,
+    lineHeight: 13,
   },
   navItemTextActive: {
     color: '#ffffff',
     fontWeight: '700',
   },
+  activeIndicator: {
+    position: 'absolute',
+    bottom: -2,
+    width: 24,
+    height: 3,
+    borderRadius: 2,
+  },
 
-  // User Section
+  // Enhanced User Section
   userSection: {
     flexDirection: 'row',
     alignItems: 'center',
     flex: 1,
     justifyContent: 'flex-end',
-    minWidth: 120,
+    minWidth: 140,
   },
   userInfo: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginRight: 12,
+    marginRight: 16,
     flex: 1,
     justifyContent: 'flex-end',
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 12,
+    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+  },
+  userAvatarContainer: {
+    position: 'relative',
+    marginRight: 12,
   },
   userAvatar: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: 8,
+    borderWidth: 2,
+    borderColor: 'rgba(255, 255, 255, 0.3)',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  userInitial: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#ffffff',
+    textShadowColor: 'rgba(0, 0, 0, 0.3)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 2,
+  },
+  statusIndicator: {
+    position: 'absolute',
+    bottom: 2,
+    right: 2,
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: '#22c55e',
+    borderWidth: 2,
+    borderColor: '#ffffff',
   },
   userDetails: {
     alignItems: 'flex-end',
-    maxWidth: 100,
+    maxWidth: 110,
   },
   userName: {
-    fontSize: 13,
-    fontWeight: '600',
+    fontSize: 14,
+    fontWeight: '700',
     color: '#ffffff',
     textAlign: 'right',
-    lineHeight: 16,
+    lineHeight: 17,
+    textShadowColor: 'rgba(0, 0, 0, 0.2)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 2,
   },
-  userSubtitle: {
-    fontSize: 10,
-    color: 'rgba(255, 255, 255, 0.7)',
+  userRole: {
+    fontSize: 11,
+    color: 'rgba(255, 255, 255, 0.8)',
     textAlign: 'right',
     marginTop: 1,
-    fontWeight: '500',
+    fontWeight: '600',
+    textTransform: 'capitalize',
   },
   logoutButton: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+    width: 38,
+    height: 38,
+    borderRadius: 19,
     backgroundColor: 'rgba(255, 255, 255, 0.1)',
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.2)',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
   },
 });
 
-// Responsive styles for larger screens
+// Enhanced responsive styles for larger screens
 if (width > 768) {
   Object.assign(styles, {
     navbar: {
       ...styles.navbar,
-      paddingHorizontal: 40,
-      paddingBottom: 20,
+      paddingHorizontal: 32,
+      paddingBottom: 24,
     },
-    logo: {
-      ...styles.logo,
-      width: 40,
-      height: 40,
-      borderRadius: 10,
+    logoWrapper: {
+      ...styles.logoWrapper,
+      width: 48,
+      height: 48,
+      borderRadius: 14,
+      marginRight: 18,
     },
     logoText: {
       ...styles.logoText,
-      fontSize: 16,
+      fontSize: 18,
     },
     brandName: {
       ...styles.brandName,
-      fontSize: 22,
+      fontSize: 24,
     },
     brandTagline: {
       ...styles.brandTagline,
-      fontSize: 12,
+      fontSize: 13,
     },
     navItems: {
       ...styles.navItems,
@@ -519,40 +620,40 @@ if (width > 768) {
     },
     navItem: {
       ...styles.navItem,
-      paddingHorizontal: 14,
-      paddingVertical: 10,
-      minWidth: 70,
-      maxWidth: 90,
+      paddingHorizontal: 16,
+      paddingVertical: 14,
+      minWidth: 75,
+      maxWidth: 95,
     },
-    navItemIconContainer: {
-      ...styles.navItemIconContainer,
-      width: 32,
-      height: 32,
-      borderRadius: 16,
+    navIconContainer: {
+      ...styles.navIconContainer,
+      width: 40,
+      height: 40,
+      borderRadius: 20,
     },
     navItemText: {
       ...styles.navItemText,
-      fontSize: 11,
+      fontSize: 12,
     },
     userAvatar: {
       ...styles.userAvatar,
-      width: 36,
-      height: 36,
-      borderRadius: 18,
+      width: 42,
+      height: 42,
+      borderRadius: 21,
     },
     userName: {
       ...styles.userName,
-      fontSize: 14,
+      fontSize: 15,
     },
-    userSubtitle: {
-      ...styles.userSubtitle,
-      fontSize: 11,
+    userRole: {
+      ...styles.userRole,
+      fontSize: 12,
     },
     logoutButton: {
       ...styles.logoutButton,
-      width: 36,
-      height: 36,
-      borderRadius: 18,
+      width: 42,
+      height: 42,
+      borderRadius: 21,
     },
   });
 }
