@@ -8,6 +8,7 @@ import {
   TouchableOpacity,
   View
 } from 'react-native';
+import Icon from 'react-native-vector-icons/FontAwesome5';
 import { Database } from '../types/database';
 
 type Profile = Database['public']['Tables']['profiles']['Row'];
@@ -47,6 +48,11 @@ interface HeaderComponentProps {
   // Filter button
   showFilterButton?: boolean;
   onFilterPress?: () => void;
+
+  // Notifications
+  showNotifications?: boolean;
+  notificationCount?: number;
+  onNotificationPress?: () => void;
 }
 
 // Farm2Go green color scheme
@@ -92,6 +98,9 @@ export default function HeaderComponent({
   onAddButtonPress,
   showFilterButton = false,
   onFilterPress,
+  showNotifications = false,
+  notificationCount = 0,
+  onNotificationPress,
 }: HeaderComponentProps) {
 
   const handleAddPress = () => {
@@ -114,6 +123,26 @@ export default function HeaderComponent({
         </View>
 
         <View style={styles.headerActions}>
+          {showNotifications && (
+            <TouchableOpacity
+              style={styles.notificationButton}
+              onPress={onNotificationPress}
+            >
+              <Icon
+                name="bell"
+                size={18}
+                color={colors.white}
+              />
+              {notificationCount && notificationCount > 0 && (
+                <View style={styles.notificationBadge}>
+                  <Text style={styles.notificationBadgeText}>
+                    {notificationCount > 99 ? '99+' : notificationCount}
+                  </Text>
+                </View>
+              )}
+            </TouchableOpacity>
+          )}
+
           {showAddButton && (
             <TouchableOpacity
               style={styles.headerButton}
@@ -138,7 +167,12 @@ export default function HeaderComponent({
         <View style={styles.searchSection}>
           <View style={styles.searchContainer}>
             <View style={styles.searchInputContainer}>
-              <Text style={styles.searchIcon}>🔍</Text>
+              <Icon
+                name="search"
+                size={16}
+                color={colors.textSecondary}
+                style={styles.searchIcon}
+              />
               <TextInput
                 style={styles.searchInput}
                 placeholder={searchPlaceholder}
@@ -149,7 +183,11 @@ export default function HeaderComponent({
             </View>
             {showFilterButton && (
               <TouchableOpacity style={styles.filterButton} onPress={onFilterPress}>
-                <Text style={styles.filterIcon}>⚙️</Text>
+                <Icon
+                  name="cog"
+                  size={16}
+                  color={colors.white}
+                />
               </TouchableOpacity>
             )}
           </View>
@@ -294,6 +332,39 @@ const styles = StyleSheet.create({
     color: colors.primary,
   },
 
+  // Notification Styles
+  notificationButton: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    position: 'relative',
+  },
+
+  notificationBadge: {
+    position: 'absolute',
+    top: -2,
+    right: -2,
+    backgroundColor: colors.danger,
+    borderRadius: 10,
+    minWidth: 20,
+    height: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 4,
+    borderWidth: 2,
+    borderColor: colors.white,
+  },
+
+  notificationBadgeText: {
+    color: colors.white,
+    fontSize: 10,
+    fontWeight: 'bold',
+    textAlign: 'center',
+  },
+
   // Search Section
   searchSection: {
     paddingHorizontal: 16,
@@ -317,7 +388,6 @@ const styles = StyleSheet.create({
   },
 
   searchIcon: {
-    fontSize: 16,
     marginRight: 8,
   },
 
@@ -336,9 +406,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
 
-  filterIcon: {
-    fontSize: 16,
-  },
 
   // Categories
   categorySection: {

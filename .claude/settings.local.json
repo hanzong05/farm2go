@@ -11,7 +11,9 @@
       "Bash(npm run:*)",
       "Read(//c/Users/KID/Pictures/**)",
       "Bash(cat:*)",
-      "Bash(code --version)"
+      "Bash(code --version)",
+      "Bash(npm uninstall:*)",
+      "Bash(npm install:*)"
     ],
     "deny": [],
     "ask": []

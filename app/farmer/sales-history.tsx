@@ -11,8 +11,7 @@ import {
   TouchableOpacity,
   View
 } from 'react-native';
-import NavBar from '../../components/NavBar';
-import StatCard from '../../components/StatCard';
+import HeaderComponent from '../../components/HeaderComponent';
 import { supabase } from '../../lib/supabase';
 import { getUserWithProfile } from '../../services/auth';
 import { Database } from '../../types/database';
@@ -417,7 +416,16 @@ export default function FarmerSalesHistoryScreen() {
 
   return (
     <View style={styles.container}>
-      <NavBar currentRoute="/farmer/sales-history" />
+      <HeaderComponent
+        profile={profile}
+        showStats={true}
+        stats={[
+          { number: stats.totalSales, label: 'Total Sales' },
+          { number: formatPrice(stats.totalRevenue), label: 'Revenue' },
+          { number: formatPrice(stats.averageOrderValue), label: 'Avg Order' },
+          { number: stats.topProduct, label: 'Top Product' }
+        ]}
+      />
 
       <ScrollView
         style={styles.scrollView}
@@ -432,25 +440,6 @@ export default function FarmerSalesHistoryScreen() {
         }
         showsVerticalScrollIndicator={false}
       >
-        {/* Enhanced Stats */}
-        <View style={styles.statsSection}>
-          <Text style={styles.sectionTitle}>Performance Overview</Text>
-          <View style={styles.statsGrid}>
-            <StatCard title="Total Sales" value={stats.totalSales} color="#3b82f6" backgroundColor="#f0f0ff" icon="📊" />
-            <StatCard title="Total Revenue" value={formatPrice(stats.totalRevenue)} color="#10b981" backgroundColor="#ecfdf5" icon="💰" />
-            <StatCard title="Average Order" value={formatPrice(stats.averageOrderValue)} color="#8b5cf6" backgroundColor="#f3f0ff" icon="📋" />
-            <StatCard title="Top Product" value={stats.topProduct} color="#f59e0b" backgroundColor="#fffbeb" icon="🏆" />
-            <StatCard 
-              title="This Month" 
-              value={formatPrice(stats.thisMonthRevenue)} 
-              color="#06b6d4" 
-              backgroundColor="#ecfeff" 
-              icon="📈"
-              subtitle="Revenue"
-              growth={getGrowthPercentage(stats.thisMonthRevenue, stats.lastMonthRevenue)}
-            />
-          </View>
-        </View>
 
 
         {/* Enhanced Filter */}
@@ -546,16 +535,6 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
 
-  // Stats Section
-  statsSection: {
-    paddingHorizontal: 20,
-    marginBottom: 36,
-  },
-  statsGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 16,
-  },
 
 
   // Filter Section

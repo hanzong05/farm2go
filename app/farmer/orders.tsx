@@ -12,6 +12,7 @@ import {
   TouchableOpacity,
   View
 } from 'react-native';
+import Icon from 'react-native-vector-icons/FontAwesome5';
 import HeaderComponent from '../../components/HeaderComponent';
 import StatCard from '../../components/StatCard';
 import { supabase } from '../../lib/supabase';
@@ -366,10 +367,13 @@ export default function FarmerOrdersScreen() {
              'Unknown Buyer'}
           </Text>
           {order.buyer_profile?.phone && (
-            <Text style={[
-              styles.buyerPhone,
-              isCompact && styles.buyerPhoneCompact
-            ]}>📞 {order.buyer_profile.phone}</Text>
+            <View style={styles.buyerPhoneContainer}>
+              <Icon name="phone" size={12} color="#64748b" style={{marginRight: 6}} />
+              <Text style={[
+                styles.buyerPhone,
+                isCompact && styles.buyerPhoneCompact
+              ]}>{order.buyer_profile.phone}</Text>
+            </View>
           )}
         </View>
 
@@ -433,14 +437,20 @@ export default function FarmerOrdersScreen() {
                 onPress={() => updateOrderStatus(order.id, 'confirmed')}
                 activeOpacity={0.8}
               >
-                <Text style={styles.actionButtonText}>✓ Accept</Text>
+                <View style={styles.actionButtonContent}>
+                <Icon name="check" size={14} color="#ffffff" style={{marginRight: 6}} />
+                <Text style={styles.actionButtonText}>Accept</Text>
+              </View>
               </TouchableOpacity>
               <TouchableOpacity
                 style={[styles.actionButton, styles.cancelButton]}
                 onPress={() => updateOrderStatus(order.id, 'cancelled')}
                 activeOpacity={0.8}
               >
-                <Text style={styles.actionButtonText}>✕ Decline</Text>
+                <View style={styles.actionButtonContent}>
+                  <Icon name="times" size={14} color="#ffffff" style={{marginRight: 6}} />
+                  <Text style={styles.actionButtonText}>Decline</Text>
+                </View>
               </TouchableOpacity>
             </View>
           )}
@@ -451,7 +461,10 @@ export default function FarmerOrdersScreen() {
               onPress={() => updateOrderStatus(order.id, 'preparing')}
               activeOpacity={0.8}
             >
-              <Text style={styles.actionButtonText}>👨‍🍳 Start Preparing</Text>
+              <View style={styles.actionButtonContent}>
+                <Icon name="utensils" size={14} color="#ffffff" style={{marginRight: 6}} />
+                <Text style={styles.actionButtonText}>Start Preparing</Text>
+              </View>
             </TouchableOpacity>
           )}
 
@@ -461,7 +474,10 @@ export default function FarmerOrdersScreen() {
               onPress={() => updateOrderStatus(order.id, 'ready')}
               activeOpacity={0.8}
             >
-              <Text style={styles.actionButtonText}>✅ Mark Ready</Text>
+              <View style={styles.actionButtonContent}>
+                <Icon name="check-circle" size={14} color="#ffffff" style={{marginRight: 6}} />
+                <Text style={styles.actionButtonText}>Mark Ready</Text>
+              </View>
             </TouchableOpacity>
           )}
 
@@ -471,7 +487,10 @@ export default function FarmerOrdersScreen() {
               onPress={() => updateOrderStatus(order.id, 'completed')}
               activeOpacity={0.8}
             >
-              <Text style={styles.actionButtonText}>🚚 Complete Delivery</Text>
+              <View style={styles.actionButtonContent}>
+                <Icon name="truck" size={14} color="#ffffff" style={{marginRight: 6}} />
+                <Text style={styles.actionButtonText}>Complete Delivery</Text>
+              </View>
             </TouchableOpacity>
           )}
         </View>
@@ -480,7 +499,7 @@ export default function FarmerOrdersScreen() {
         {order.delivery_address && (
           <View style={styles.additionalInfo}>
             <View style={styles.infoRow}>
-              <Text style={styles.infoIcon}>📍</Text>
+              <Icon name="map-marker-alt" size={16} color="#64748b" style={styles.infoIcon} />
               <View style={styles.infoContent}>
                 <Text style={styles.infoLabel}>Delivery Address</Text>
                 <Text style={styles.infoText}>{order.delivery_address}</Text>
@@ -492,7 +511,7 @@ export default function FarmerOrdersScreen() {
         {order.notes && (
           <View style={styles.additionalInfo}>
             <View style={styles.infoRow}>
-              <Text style={styles.infoIcon}>📝</Text>
+              <Icon name="file-text" size={16} color="#64748b" style={styles.infoIcon} />
               <View style={styles.infoContent}>
                 <Text style={styles.infoLabel}>Special Notes</Text>
                 <Text style={styles.infoText}>{order.notes}</Text>
@@ -511,7 +530,7 @@ export default function FarmerOrdersScreen() {
     ]}>
       <View style={styles.emptyIllustration}>
         <View style={styles.emptyIconContainer}>
-          <Text style={styles.emptyIcon}>📋</Text>
+          <Icon name="file-text" size={60} color="#10b981" />
         </View>
       </View>
       
@@ -573,7 +592,7 @@ export default function FarmerOrdersScreen() {
                   value={stats.pending} 
                   color="#f59e0b" 
                   backgroundColor="#fffbeb" 
-                  icon="⏳" 
+                  icon="hourglass" 
                   variant="bordered"
                 />
                 <StatCard 
@@ -581,7 +600,7 @@ export default function FarmerOrdersScreen() {
                   value={stats.preparing} 
                   color="#8b5cf6" 
                   backgroundColor="#f3f0ff" 
-                  icon="👨‍🍳" 
+                  icon="utensils" 
                   variant="bordered"
                 />
                 <StatCard 
@@ -589,7 +608,7 @@ export default function FarmerOrdersScreen() {
                   value={stats.ready} 
                   color="#10b981" 
                   backgroundColor="#ecfdf5" 
-                  icon="✅" 
+                  icon="check-circle" 
                   variant="bordered"
                 />
                 <StatCard 
@@ -608,7 +627,7 @@ export default function FarmerOrdersScreen() {
                   value={formatPrice(stats.totalRevenue)} 
                   color="#06b6d4" 
                   backgroundColor="#ecfeff" 
-                  icon="💰" 
+                  icon="dollar-sign" 
                   variant="bordered"
                 />
               </View>
@@ -726,14 +745,14 @@ export default function FarmerOrdersScreen() {
               value={stats.pending} 
               color="#f59e0b" 
               backgroundColor="#fffbeb" 
-              icon="⏳" 
+              icon="hourglass" 
             />
             <StatCard 
               title="In Progress" 
               value={stats.preparing} 
               color="#8b5cf6" 
               backgroundColor="#f3f0ff" 
-              icon="👨‍🍳" 
+              icon="utensils" 
             />
             <StatCard 
               title="Ready" 
@@ -754,7 +773,7 @@ export default function FarmerOrdersScreen() {
               value={formatPrice(stats.totalRevenue)} 
               color="#06b6d4" 
               backgroundColor="#ecfeff" 
-              icon="💰" 
+              icon="dollar-sign" 
             />
           </View>
         </View>
@@ -1331,11 +1350,22 @@ const styles = StyleSheet.create({
     backgroundColor: '#059669',
   },
 
+  actionButtonContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
   actionButtonText: {
     fontSize: 14,
     fontWeight: '600',
     color: '#ffffff',
     letterSpacing: 0.3,
+  },
+
+  buyerPhoneContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
   },
 
   additionalInfo: {
@@ -1352,7 +1382,6 @@ const styles = StyleSheet.create({
   },
 
   infoIcon: {
-    fontSize: 16,
     marginRight: 12,
     marginTop: 2,
   },
