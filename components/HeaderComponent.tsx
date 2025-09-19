@@ -9,10 +9,10 @@ import {
   View
 } from 'react-native';
 import Icon from 'react-native-vector-icons/FontAwesome5';
+import { logoutUser } from '../services/auth';
 import { Database } from '../types/database';
 import MessageComponent, { Conversation } from './MessageComponent';
 import NotificationComponent, { Notification } from './NotificationComponent';
-import { logoutUser } from '../services/auth';
 
 type Profile = Database['public']['Tables']['profiles']['Row'];
 
@@ -205,7 +205,7 @@ const colors = {
 
 export default function HeaderComponent({
   profile,
-  userType = 'buyer',
+  userType, // Remove default value here
   currentRoute = '',
   showSearch = false,
   searchQuery = '',
@@ -237,6 +237,9 @@ export default function HeaderComponent({
   onNewConversation,
 }: HeaderComponentProps) {
 
+  // Determine user type from profile if not explicitly passed
+  const resolvedUserType = userType || profile?.user_type || 'buyer';
+
   const handleAddPress = () => {
     if (onAddButtonPress) {
       onAddButtonPress();
@@ -259,11 +262,11 @@ export default function HeaderComponent({
   };
 
   const filteredNavItems = NAV_ITEMS.filter(item =>
-    item.userTypes.includes(userType)
+    item.userTypes.includes(resolvedUserType)
   );
 
   const getUserTypeColor = () => {
-    switch (userType) {
+    switch (resolvedUserType) {
       case 'farmer':
         return '#10b981';
       case 'buyer':
@@ -287,25 +290,22 @@ export default function HeaderComponent({
         </View>
 
         <View style={styles.headerActions}>
-          {showMessages && (
-            <MessageComponent
-              conversations={conversations}
-              onConversationPress={onConversationPress}
-              onSendMessage={onSendMessage}
-              onMarkAsRead={onMarkMessageAsRead}
-              onNewConversation={onNewConversation}
-            />
-          )}
+          {/* Always show Messages and Notifications */}
+          <MessageComponent
+            conversations={conversations}
+            onConversationPress={onConversationPress}
+            onSendMessage={onSendMessage}
+            onMarkAsRead={onMarkMessageAsRead}
+            onNewConversation={onNewConversation}
+          />
 
-          {showNotifications && (
-            <NotificationComponent
-              notifications={notifications}
-              onNotificationPress={onNotificationPress}
-              onMarkAsRead={onMarkNotificationAsRead}
-              onMarkAllAsRead={onMarkAllNotificationsAsRead}
-              onClearAll={onClearAllNotifications}
-            />
-          )}
+          <NotificationComponent
+            notifications={notifications}
+            onNotificationPress={onNotificationPress}
+            onMarkAsRead={onMarkNotificationAsRead}
+            onMarkAllAsRead={onMarkAllNotificationsAsRead}
+            onClearAll={onClearAllNotifications}
+          />
 
           {showAddButton && (
             <TouchableOpacity
