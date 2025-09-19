@@ -14,7 +14,6 @@ import {
 } from 'react-native';
 import Icon from 'react-native-vector-icons/FontAwesome5';
 import HeaderComponent from '../../components/HeaderComponent';
-import StatCard from '../../components/StatCard';
 import { supabase } from '../../lib/supabase';
 import { getUserWithProfile } from '../../services/auth';
 import { Database } from '../../types/database';
@@ -584,54 +583,7 @@ export default function FarmerOrdersScreen() {
           {/* Left Sidebar */}
           <View style={styles.sidebar}>
             {/* Stats */}
-            <View style={styles.sidebarSection}>
-              <Text style={styles.sidebarTitle}>Order Overview</Text>
-              <View style={styles.sidebarStats}>
-                <StatCard 
-                  title="Pending Orders" 
-                  value={stats.pending} 
-                  color="#f59e0b" 
-                  backgroundColor="#fffbeb" 
-                  icon="hourglass" 
-                  variant="bordered"
-                />
-                <StatCard 
-                  title="In Progress" 
-                  value={stats.preparing} 
-                  color="#8b5cf6" 
-                  backgroundColor="#f3f0ff" 
-                  icon="utensils" 
-                  variant="bordered"
-                />
-                <StatCard 
-                  title="Ready" 
-                  value={stats.ready} 
-                  color="#10b981" 
-                  backgroundColor="#ecfdf5" 
-                  icon="check-circle" 
-                  variant="bordered"
-                />
-                <StatCard 
-                  title="Completed" 
-                  value={stats.completed} 
-                  color="#059669" 
-                  backgroundColor="#ecfdf5" 
-                  icon="🎉" 
-                  variant="bordered"
-                />
-              </View>
-              
-              <View style={styles.revenueCard}>
-                <StatCard 
-                  title="Total Revenue" 
-                  value={formatPrice(stats.totalRevenue)} 
-                  color="#06b6d4" 
-                  backgroundColor="#ecfeff" 
-                  icon="dollar-sign" 
-                  variant="bordered"
-                />
-              </View>
-            </View>
+           
 
             {/* Filter */}
             <View style={styles.sidebarSection}>
@@ -730,53 +682,7 @@ export default function FarmerOrdersScreen() {
         }
         showsVerticalScrollIndicator={false}
       >
-        {/* Stats */}
-        <View style={[
-          styles.statsSection,
-          isTablet && styles.statsSectionTablet
-        ]}>
-          <Text style={styles.sectionTitle}>Order Overview</Text>
-          <View style={[
-            styles.statsGrid,
-            isTablet && styles.statsGridTablet
-          ]}>
-            <StatCard 
-              title="Pending Orders" 
-              value={stats.pending} 
-              color="#f59e0b" 
-              backgroundColor="#fffbeb" 
-              icon="hourglass" 
-            />
-            <StatCard 
-              title="In Progress" 
-              value={stats.preparing} 
-              color="#8b5cf6" 
-              backgroundColor="#f3f0ff" 
-              icon="utensils" 
-            />
-            <StatCard 
-              title="Ready" 
-              value={stats.ready} 
-              color="#10b981" 
-              backgroundColor="#ecfdf5" 
-              icon="✅" 
-            />
-            <StatCard 
-              title="Completed" 
-              value={stats.completed} 
-              color="#059669" 
-              backgroundColor="#ecfdf5" 
-              icon="🎉" 
-            />
-            <StatCard 
-              title="Total Revenue" 
-              value={formatPrice(stats.totalRevenue)} 
-              color="#06b6d4" 
-              backgroundColor="#ecfeff" 
-              icon="dollar-sign" 
-            />
-          </View>
-        </View>
+       
 
         {/* Filter */}
         <View style={[
