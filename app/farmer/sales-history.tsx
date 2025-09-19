@@ -11,7 +11,6 @@ import {
   TouchableOpacity,
   View
 } from 'react-native';
-import HeaderComponent from '../../components/HeaderComponent';
 import { supabase } from '../../lib/supabase';
 import { getUserWithProfile } from '../../services/auth';
 import { Database } from '../../types/database';
@@ -416,16 +415,7 @@ export default function FarmerSalesHistoryScreen() {
 
   return (
     <View style={styles.container}>
-      <HeaderComponent
-        profile={profile}
-        showStats={true}
-        stats={[
-          { number: stats.totalSales, label: 'Total Sales' },
-          { number: formatPrice(stats.totalRevenue), label: 'Revenue' },
-          { number: formatPrice(stats.averageOrderValue), label: 'Avg Order' },
-          { number: stats.topProduct, label: 'Top Product' }
-        ]}
-      />
+   
 
       <ScrollView
         style={styles.scrollView}
@@ -440,7 +430,8 @@ export default function FarmerSalesHistoryScreen() {
         }
         showsVerticalScrollIndicator={false}
       >
-
+        {/* Enhanced Stats */}
+       
 
         {/* Enhanced Filter */}
         <View style={styles.filterSection}>
@@ -535,6 +526,16 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
 
+  // Stats Section
+  statsSection: {
+    paddingHorizontal: 20,
+    marginBottom: 36,
+  },
+  statsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 16,
+  },
 
 
   // Filter Section

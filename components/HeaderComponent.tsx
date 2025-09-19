@@ -10,6 +10,8 @@ import {
 } from 'react-native';
 import Icon from 'react-native-vector-icons/FontAwesome5';
 import { Database } from '../types/database';
+import MessageComponent, { Conversation } from './MessageComponent';
+import NotificationComponent, { Notification } from './NotificationComponent';
 
 type Profile = Database['public']['Tables']['profiles']['Row'];
 
@@ -51,8 +53,19 @@ interface HeaderComponentProps {
 
   // Notifications
   showNotifications?: boolean;
-  notificationCount?: number;
-  onNotificationPress?: () => void;
+  notifications?: Notification[];
+  onNotificationPress?: (notification: Notification) => void;
+  onMarkNotificationAsRead?: (notificationId: string) => void;
+  onMarkAllNotificationsAsRead?: () => void;
+  onClearAllNotifications?: () => void;
+
+  // Messages
+  showMessages?: boolean;
+  conversations?: Conversation[];
+  onConversationPress?: (conversation: Conversation) => void;
+  onSendMessage?: (conversationId: string, content: string) => void;
+  onMarkMessageAsRead?: (conversationId: string) => void;
+  onNewConversation?: () => void;
 }
 
 // Farm2Go green color scheme
@@ -99,8 +112,17 @@ export default function HeaderComponent({
   showFilterButton = false,
   onFilterPress,
   showNotifications = false,
-  notificationCount = 0,
+  notifications = [],
   onNotificationPress,
+  onMarkNotificationAsRead,
+  onMarkAllNotificationsAsRead,
+  onClearAllNotifications,
+  showMessages = false,
+  conversations = [],
+  onConversationPress,
+  onSendMessage,
+  onMarkMessageAsRead,
+  onNewConversation,
 }: HeaderComponentProps) {
 
   const handleAddPress = () => {
@@ -123,24 +145,24 @@ export default function HeaderComponent({
         </View>
 
         <View style={styles.headerActions}>
+          {showMessages && (
+            <MessageComponent
+              conversations={conversations}
+              onConversationPress={onConversationPress}
+              onSendMessage={onSendMessage}
+              onMarkAsRead={onMarkMessageAsRead}
+              onNewConversation={onNewConversation}
+            />
+          )}
+
           {showNotifications && (
-            <TouchableOpacity
-              style={styles.notificationButton}
-              onPress={onNotificationPress}
-            >
-              <Icon
-                name="bell"
-                size={18}
-                color={colors.white}
-              />
-              {notificationCount && notificationCount > 0 && (
-                <View style={styles.notificationBadge}>
-                  <Text style={styles.notificationBadgeText}>
-                    {notificationCount > 99 ? '99+' : notificationCount}
-                  </Text>
-                </View>
-              )}
-            </TouchableOpacity>
+            <NotificationComponent
+              notifications={notifications}
+              onNotificationPress={onNotificationPress}
+              onMarkAsRead={onMarkNotificationAsRead}
+              onMarkAllAsRead={onMarkAllNotificationsAsRead}
+              onClearAll={onClearAllNotifications}
+            />
           )}
 
           {showAddButton && (
@@ -332,38 +354,6 @@ const styles = StyleSheet.create({
     color: colors.primary,
   },
 
-  // Notification Styles
-  notificationButton: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: 'rgba(255,255,255,0.2)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    position: 'relative',
-  },
-
-  notificationBadge: {
-    position: 'absolute',
-    top: -2,
-    right: -2,
-    backgroundColor: colors.danger,
-    borderRadius: 10,
-    minWidth: 20,
-    height: 20,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 4,
-    borderWidth: 2,
-    borderColor: colors.white,
-  },
-
-  notificationBadgeText: {
-    color: colors.white,
-    fontSize: 10,
-    fontWeight: 'bold',
-    textAlign: 'center',
-  },
 
   // Search Section
   searchSection: {
