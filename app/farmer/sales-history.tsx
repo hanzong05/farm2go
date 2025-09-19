@@ -11,6 +11,7 @@ import {
   TouchableOpacity,
   View
 } from 'react-native';
+import HeaderComponent from '../../components/HeaderComponent';
 import { supabase } from '../../lib/supabase';
 import { getUserWithProfile } from '../../services/auth';
 import { Database } from '../../types/database';
@@ -415,7 +416,13 @@ export default function FarmerSalesHistoryScreen() {
 
   return (
     <View style={styles.container}>
-   
+      <HeaderComponent
+        profile={profile}
+        userType="farmer"
+        currentRoute="/farmer/sales-history"
+        showMessages={true}
+        showNotifications={true}
+      />
 
       <ScrollView
         style={styles.scrollView}

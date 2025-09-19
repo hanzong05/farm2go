@@ -185,50 +185,16 @@ export default function Farm2GoFarmerProducts() {
     }
   };
 
-  const renderHeader = () => (
-    <HeaderComponent
-      profile={profile}
-      showSearch={true}
-      searchQuery={searchQuery}
-      onSearchChange={setSearchQuery}
-      searchPlaceholder="Search your products..."
-      showCategories={true}
-      categories={categories}
-      selectedCategory={selectedCategory}
-      onCategoryChange={setSelectedCategory}
-      showStats={true}
-      stats={[
-        { number: products.length, label: 'Total Products' },
-        { number: products.filter(p => p.status === 'approved').length, label: 'Live Products' },
-        { number: formatPrice(products.reduce((sum, p) => sum + (p.price * p.quantity_available), 0)), label: 'Total Value' }
-      ]}
-      showAddButton={true}
-      addButtonText="+ Add Product"
-      addButtonRoute="/farmer/products/add"
-      showFilterButton={true}
-    />
-  );
 
   const renderProductItem = ({ item, index }: { item: Product; index: number }) => {
     const itemWidth = getItemWidth(numColumns);
     const isDesktop = width >= 1024;
     const isTablet = width >= 768;
     const isMobile = width < 768;
-    
-    // Calculate margin for proper spacing
-    const gap = 12;
-    const marginRight = (index + 1) % numColumns === 0 ? 0 : gap;
-    
+
     return (
       <TouchableOpacity
-        style={[
-          styles.productCard,
-          { 
-            width: itemWidth,
-            marginRight: marginRight,
-            marginBottom: isDesktop ? 16 : isMobile ? 12 : 14,
-          }
-        ]}
+        style={[styles.productCard, { width: itemWidth }]}
         onPress={() => router.push(`/farmer/products/${item.id}` as any)}
         activeOpacity={0.8}
       >
@@ -365,13 +331,32 @@ export default function Farm2GoFarmerProducts() {
 
   return (
     <View style={styles.container}>
+      <HeaderComponent
+        profile={profile}
+        userType="farmer"
+        currentRoute="/farmer/my-products"
+        showSearch={true}
+        searchQuery={searchQuery}
+        onSearchChange={setSearchQuery}
+        searchPlaceholder="Search your products..."
+        showCategories={true}
+        categories={categories}
+        selectedCategory={selectedCategory}
+        onCategoryChange={setSelectedCategory}
+        showAddButton={true}
+        addButtonText="+ Add Product"
+        addButtonRoute="/farmer/products/add"
+        showFilterButton={true}
+        showMessages={true}
+        showNotifications={true}
+      />
+
       <FlatList
         data={filteredProducts}
         renderItem={renderProductItem}
         keyExtractor={(item) => item.id}
         key={numColumns} // Force re-render when columns change
         numColumns={numColumns}
-        ListHeaderComponent={renderHeader}
         ListEmptyComponent={renderEmptyState}
         refreshControl={
           <RefreshControl
@@ -417,7 +402,7 @@ const styles = StyleSheet.create({
   },
   
   row: {
-    justifyContent: 'flex-start',
+    justifyContent: 'space-between',
     paddingHorizontal: 0,
   },
 
@@ -430,6 +415,7 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 4,
     overflow: 'hidden',
+    marginBottom: 12,
   },
   
   imageContainer: {
