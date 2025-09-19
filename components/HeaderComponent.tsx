@@ -30,7 +30,7 @@ const NAV_ITEMS: NavItem[] = [
     id: 'farmer-dashboard',
     title: 'Dashboard',
     icon: 'chart-bar',
-    route: '/farmer/index',
+    route: '/farmer',
     userTypes: ['farmer'],
   },
   {
@@ -42,11 +42,11 @@ const NAV_ITEMS: NavItem[] = [
   },
   {
     id: 'farmer-add-product',
-    title: 'Add Product',
+  title: 'Add Product',
     icon: 'plus',
     route: '/farmer/products/add',
     userTypes: ['farmer'],
-  },
+},
   {
     id: 'farmer-orders',
     title: 'Orders',

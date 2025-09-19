@@ -123,9 +123,13 @@ export default function FarmerDashboard() {
     <ResponsivePage backgroundColor={colors.background}>
       <HeaderComponent
         profile={profile}
+        userType="farmer"
+        currentRoute="/farmer"
         showAddButton={true}
         addButtonText="+ Quick Add"
         addButtonRoute="/farmer/products/add"
+        showMessages={true}
+        showNotifications={true}
       />
       <View style={styles.container}>
         {/* Welcome Section */}
