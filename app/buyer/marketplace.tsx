@@ -1,6 +1,6 @@
 import { router } from 'expo-router';
 import React, { useEffect, useState } from 'react';
-import { ActivityIndicator, Alert, Dimensions, RefreshControl, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Alert, Dimensions, RefreshControl, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View, Image, FlatList } from 'react-native';
 import NavBar from '../../components/NavBar';
 import { supabase } from '../../lib/supabase';
 import { getUserWithProfile } from '../../services/auth';
@@ -224,6 +224,65 @@ export default function MarketplaceScreen() {
     </TouchableOpacity>
   );
 
+  const renderGridProduct = (product: Product) => (
+    <TouchableOpacity
+      style={styles.gridProductCard}
+      onPress={() => router.push(`/buyer/products/${product.id}` as any)}
+      activeOpacity={0.8}
+    >
+      {/* Product Image */}
+      <View style={styles.gridImageContainer}>
+        {product.image_url ? (
+          <Image source={{ uri: product.image_url }} style={styles.gridProductImage} />
+        ) : (
+          <View style={styles.gridPlaceholderImage}>
+            <Text style={styles.gridPlaceholderIcon}>🥬</Text>
+          </View>
+        )}
+
+        {/* Category Badge */}
+        <View style={styles.gridCategoryBadge}>
+          <Text style={styles.gridCategoryText}>{product.category}</Text>
+        </View>
+      </View>
+
+      {/* Product Info */}
+      <View style={styles.gridProductInfo}>
+        <Text style={styles.gridProductName} numberOfLines={2}>
+          {product.name}
+        </Text>
+
+        <View style={styles.gridPriceContainer}>
+          <Text style={styles.gridPrice}>{formatPrice(product.price)}</Text>
+          <Text style={styles.gridUnit}>/{product.unit}</Text>
+        </View>
+
+        <View style={styles.gridProductMeta}>
+          <View style={styles.gridFarmerInfo}>
+            <Text style={styles.gridFarmerText} numberOfLines={1}>
+              🏡 {product.profiles?.farm_name || 'Farm'}
+            </Text>
+          </View>
+
+          <View style={styles.gridStockInfo}>
+            <Text style={styles.gridStockText}>{product.quantity_available} {product.unit}</Text>
+          </View>
+        </View>
+
+        <TouchableOpacity
+          style={styles.gridOrderButton}
+          onPress={(e) => {
+            e.stopPropagation();
+            router.push(`/buyer/order/${product.id}` as any);
+          }}
+          activeOpacity={0.7}
+        >
+          <Text style={styles.gridOrderButtonText}>Order Now</Text>
+        </TouchableOpacity>
+      </View>
+    </TouchableOpacity>
+  );
+
   const renderEmptyState = () => (
     <View style={styles.emptyContainer}>
       <View style={styles.emptyIllustration}>
@@ -326,9 +385,15 @@ export default function MarketplaceScreen() {
           {filteredProducts.length === 0 ? (
             renderEmptyState()
           ) : (
-            <View style={styles.productsList}>
-              {filteredProducts.map(renderProduct)}
-            </View>
+            <FlatList
+              data={filteredProducts}
+              renderItem={({ item }) => renderGridProduct(item)}
+              keyExtractor={(item) => item.id}
+              numColumns={2}
+              columnWrapperStyle={styles.gridRow}
+              showsVerticalScrollIndicator={false}
+              scrollEnabled={false}
+            />
           )}
         </View>
       </ScrollView>
@@ -720,5 +785,115 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#ffffff',
     fontWeight: 'bold',
+  },
+
+  // Grid Layout Styles
+  gridRow: {
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    marginBottom: 16,
+  },
+  gridProductCard: {
+    backgroundColor: '#ffffff',
+    borderRadius: 16,
+    width: '48%',
+    elevation: 4,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    borderWidth: 1,
+    borderColor: '#f1f5f9',
+    overflow: 'hidden',
+  },
+  gridImageContainer: {
+    position: 'relative',
+    aspectRatio: 1,
+    backgroundColor: '#f8fafc',
+  },
+  gridProductImage: {
+    width: '100%',
+    height: '100%',
+    resizeMode: 'cover',
+  },
+  gridPlaceholderImage: {
+    width: '100%',
+    height: '100%',
+    backgroundColor: '#f1f5f9',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  gridPlaceholderIcon: {
+    fontSize: 32,
+  },
+  gridCategoryBadge: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    backgroundColor: '#10b981',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  gridCategoryText: {
+    fontSize: 10,
+    color: '#ffffff',
+    fontWeight: '600',
+    textTransform: 'uppercase',
+  },
+  gridProductInfo: {
+    padding: 12,
+  },
+  gridProductName: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#0f172a',
+    marginBottom: 8,
+    lineHeight: 18,
+  },
+  gridPriceContainer: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    marginBottom: 8,
+  },
+  gridPrice: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#059669',
+  },
+  gridUnit: {
+    fontSize: 11,
+    color: '#64748b',
+    marginLeft: 2,
+  },
+  gridProductMeta: {
+    marginBottom: 12,
+  },
+  gridFarmerInfo: {
+    marginBottom: 4,
+  },
+  gridFarmerText: {
+    fontSize: 11,
+    color: '#64748b',
+    fontWeight: '500',
+  },
+  gridStockInfo: {
+    alignItems: 'flex-start',
+  },
+  gridStockText: {
+    fontSize: 11,
+    color: '#6b7280',
+    fontWeight: '500',
+  },
+  gridOrderButton: {
+    backgroundColor: '#10b981',
+    paddingVertical: 8,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  gridOrderButtonText: {
+    color: '#ffffff',
+    fontSize: 12,
+    fontWeight: '600',
   },
 });

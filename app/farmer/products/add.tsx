@@ -10,8 +10,11 @@ import {
   KeyboardAvoidingView,
   Platform,
   Dimensions,
+  Image,
+  ActivityIndicator,
 } from 'react-native';
 import { router } from 'expo-router';
+import * as ImagePicker from 'expo-image-picker';
 import { supabase } from '../../../lib/supabase';
 import { getUserWithProfile } from '../../../services/auth';
 
@@ -49,6 +52,8 @@ export default function AddProductScreen() {
   const [errors, setErrors] = useState<{[key: string]: string}>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [focusedInput, setFocusedInput] = useState<string | null>(null);
+  const [selectedImage, setSelectedImage] = useState<string | null>(null);
+  const [uploadingImage, setUploadingImage] = useState(false);
 
   const validateForm = () => {
     const newErrors: {[key: string]: string} = {};
@@ -73,6 +78,103 @@ export default function AddProductScreen() {
     return Object.keys(newErrors).length === 0;
   };
 
+  const pickImage = async () => {
+    try {
+      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert('Permission needed', 'Sorry, we need camera roll permissions to add product images.');
+        return;
+      }
+
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.8,
+      });
+
+      if (!result.canceled && result.assets[0]) {
+        setSelectedImage(result.assets[0].uri);
+      }
+    } catch (error) {
+      console.error('Error picking image:', error);
+      Alert.alert('Error', 'Failed to select image');
+    }
+  };
+
+  const takePhoto = async () => {
+    try {
+      const { status } = await ImagePicker.requestCameraPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert('Permission needed', 'Sorry, we need camera permissions to take product photos.');
+        return;
+      }
+
+      const result = await ImagePicker.launchCameraAsync({
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.8,
+      });
+
+      if (!result.canceled && result.assets[0]) {
+        setSelectedImage(result.assets[0].uri);
+      }
+    } catch (error) {
+      console.error('Error taking photo:', error);
+      Alert.alert('Error', 'Failed to take photo');
+    }
+  };
+
+  const uploadImage = async (imageUri: string): Promise<string | null> => {
+    try {
+      setUploadingImage(true);
+
+      // Create a unique filename
+      const filename = `product_${Date.now()}_${Math.random().toString(36).substring(7)}.jpg`;
+
+      // Convert image to blob
+      const response = await fetch(imageUri);
+      const blob = await response.blob();
+
+      // Upload to Supabase storage
+      const { data, error } = await supabase.storage
+        .from('product-images')
+        .upload(filename, blob, {
+          contentType: 'image/jpeg',
+          upsert: false
+        });
+
+      if (error) {
+        throw error;
+      }
+
+      // Get public URL
+      const { data: { publicUrl } } = supabase.storage
+        .from('product-images')
+        .getPublicUrl(data.path);
+
+      return publicUrl;
+    } catch (error) {
+      console.error('Error uploading image:', error);
+      Alert.alert('Error', 'Failed to upload image');
+      return null;
+    } finally {
+      setUploadingImage(false);
+    }
+  };
+
+  const showImageOptions = () => {
+    Alert.alert(
+      'Add Product Image',
+      'Choose how you want to add a product image',
+      [
+        { text: 'Camera', onPress: takePhoto },
+        { text: 'Photo Library', onPress: pickImage },
+        { text: 'Cancel', style: 'cancel' },
+      ]
+    );
+  };
+
   const handleSubmit = async () => {
     if (!validateForm()) {
       return;
@@ -86,6 +188,14 @@ export default function AddProductScreen() {
         throw new Error('User not authenticated');
       }
 
+      let imageUrl = null;
+      if (selectedImage) {
+        imageUrl = await uploadImage(selectedImage);
+        if (!imageUrl) {
+          throw new Error('Failed to upload image');
+        }
+      }
+
       const productData = {
         farmer_id: userData.user.id,
         name: formData.name.trim(),
@@ -95,6 +205,7 @@ export default function AddProductScreen() {
         quantity_available: parseInt(formData.quantity_available),
         category: formData.category,
         status: 'pending' as const,
+        image_url: imageUrl,
       };
 
       const { error } = await supabase
@@ -227,6 +338,37 @@ export default function AddProductScreen() {
           <Text style={styles.formSubtitle}>
             Add details about your product. All fields marked with * are required.
           </Text>
+
+          {/* Image Section */}
+          <View style={styles.inputContainer}>
+            <Text style={styles.inputLabel}>Product Image</Text>
+            <TouchableOpacity
+              style={styles.imagePickerButton}
+              onPress={showImageOptions}
+              disabled={uploadingImage}
+            >
+              {selectedImage ? (
+                <View style={styles.imagePreviewContainer}>
+                  <Image source={{ uri: selectedImage }} style={styles.imagePreview} />
+                  <View style={styles.imageOverlay}>
+                    <Text style={styles.changeImageText}>Tap to change</Text>
+                  </View>
+                </View>
+              ) : (
+                <View style={styles.imagePlaceholder}>
+                  <Text style={styles.imagePlaceholderIcon}>📷</Text>
+                  <Text style={styles.imagePlaceholderText}>Add Product Photo</Text>
+                  <Text style={styles.imagePlaceholderSubtext}>Tap to select from gallery or take photo</Text>
+                </View>
+              )}
+              {uploadingImage && (
+                <View style={styles.uploadingOverlay}>
+                  <ActivityIndicator size="large" color="#10b981" />
+                  <Text style={styles.uploadingText}>Uploading...</Text>
+                </View>
+              )}
+            </TouchableOpacity>
+          </View>
 
           {renderInput('name', 'Product Name')}
           {renderInput('description', 'Description', {
@@ -523,5 +665,76 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#ffffff',
     letterSpacing: 0.5,
+  },
+  // Image Picker Styles
+  imagePickerButton: {
+    borderWidth: 2,
+    borderColor: '#e5e7eb',
+    borderRadius: 12,
+    borderStyle: 'dashed',
+    backgroundColor: '#ffffff',
+    overflow: 'hidden',
+  },
+  imagePlaceholder: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 48,
+    paddingHorizontal: 24,
+  },
+  imagePlaceholderIcon: {
+    fontSize: 48,
+    marginBottom: 16,
+  },
+  imagePlaceholderText: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#374151',
+    marginBottom: 8,
+  },
+  imagePlaceholderSubtext: {
+    fontSize: 14,
+    color: '#6b7280',
+    textAlign: 'center',
+    lineHeight: 20,
+  },
+  imagePreviewContainer: {
+    position: 'relative',
+    aspectRatio: 1,
+    width: '100%',
+  },
+  imagePreview: {
+    width: '100%',
+    height: '100%',
+    resizeMode: 'cover',
+  },
+  imageOverlay: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    paddingVertical: 12,
+    alignItems: 'center',
+  },
+  changeImageText: {
+    color: '#ffffff',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  uploadingOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(255, 255, 255, 0.9)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  uploadingText: {
+    marginTop: 12,
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#10b981',
   },
 });
