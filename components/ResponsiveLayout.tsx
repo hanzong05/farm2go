@@ -1,15 +1,14 @@
-import React, { useState, useEffect } from 'react';
-import {
-  View,
-  StyleSheet,
-  Dimensions,
-  TouchableOpacity,
-  Text,
-  ScrollView,
-  Platform,
-} from 'react-native';
 import { router, useSegments } from 'expo-router';
-import NavBar from './NavBar';
+import React, { useEffect, useState } from 'react';
+import {
+  Dimensions,
+  Platform,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from 'react-native';
 
 const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
 
@@ -256,7 +255,7 @@ export default function ResponsiveLayout({ children, userRole }: ResponsiveLayou
   return (
     <View style={styles.mobileContainer}>
       {children}
-      <NavBar currentRoute={getCurrentRoute()} />
+    
     </View>
   );
 }
