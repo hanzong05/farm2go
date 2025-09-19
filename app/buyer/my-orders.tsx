@@ -264,21 +264,6 @@ export default function BuyerMyOrdersScreen() {
     return { pending, active, completed, totalSpent };
   };
 
-  const renderWelcomeHeader = () => (
-    <View style={styles.welcomeContainer}>
-      <View style={styles.welcomeContent}>
-        <View style={styles.welcomeText}>
-          <Text style={styles.welcomeTitle}>My Orders</Text>
-          <Text style={styles.welcomeSubtitle}>
-            Track your purchases and delivery status
-          </Text>
-        </View>
-        <View style={styles.welcomeIconContainer}>
-          <Text style={styles.welcomeIcon}>📦</Text>
-        </View>
-      </View>
-    </View>
-  );
 
   const renderOrderCard = ({ item: order }: { item: Order }) => {
     const statusConfig = getStatusConfig(order.status);
@@ -454,8 +439,6 @@ export default function BuyerMyOrdersScreen() {
         }
         showsVerticalScrollIndicator={false}
       >
-        {renderWelcomeHeader()}
-
         {/* Enhanced Stats */}
         <View style={styles.statsSection}>
           <Text style={styles.sectionTitle}>Order Summary</Text>
@@ -579,51 +562,6 @@ const styles = StyleSheet.create({
   },
 
   // Welcome Header
-  welcomeContainer: {
-    backgroundColor: '#3b82f6',
-    margin: 20,
-    marginBottom: 32,
-    borderRadius: 20,
-    overflow: 'hidden',
-    elevation: 12,
-    shadowColor: '#3b82f6',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.3,
-    shadowRadius: 16,
-  },
-  welcomeContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    padding: 28,
-  },
-  welcomeText: {
-    flex: 1,
-  },
-  welcomeTitle: {
-    fontSize: 26,
-    color: '#ffffff',
-    fontWeight: 'bold',
-    marginBottom: 6,
-  },
-  welcomeSubtitle: {
-    fontSize: 14,
-    color: 'rgba(255, 255, 255, 0.8)',
-    fontWeight: '400',
-    lineHeight: 20,
-  },
-  welcomeIconContainer: {
-    width: 70,
-    height: 70,
-    borderRadius: 35,
-    backgroundColor: 'rgba(255, 255, 255, 0.15)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginLeft: 20,
-  },
-  welcomeIcon: {
-    fontSize: 32,
-  },
 
   // Section Titles
   sectionTitle: {

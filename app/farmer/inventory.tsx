@@ -263,21 +263,6 @@ export default function FarmerInventoryScreen() {
     }
   };
 
-  const renderWelcomeHeader = () => (
-    <View style={styles.welcomeContainer}>
-      <View style={styles.welcomeContent}>
-        <View style={styles.welcomeTextContainer}>
-          <Text style={styles.welcomeTitle}>Inventory Management</Text>
-          <Text style={styles.welcomeSubtitle}>
-            Track your products, manage stock levels, and monitor inventory performance
-          </Text>
-        </View>
-        <View style={styles.welcomeIconContainer}>
-          <Text style={styles.welcomeIcon}>📦</Text>
-        </View>
-      </View>
-    </View>
-  );
 
 
   const renderProductCard = ({ item: product }: { item: Product }) => {
@@ -419,8 +404,6 @@ export default function FarmerInventoryScreen() {
         }
         showsVerticalScrollIndicator={false}
       >
-        {renderWelcomeHeader()}
-
         {/* Enhanced Stats */}
         <View style={styles.statsSection}>
           <Text style={styles.sectionTitle}>Inventory Overview</Text>
@@ -599,52 +582,6 @@ const styles = StyleSheet.create({
     paddingBottom: 40,
   },
 
-  // Welcome Header
-  welcomeContainer: {
-    backgroundColor: '#10b981',
-    margin: 20,
-    marginBottom: 32,
-    borderRadius: 20,
-    overflow: 'hidden',
-    elevation: 12,
-    shadowColor: '#10b981',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.3,
-    shadowRadius: 16,
-  },
-  welcomeContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    padding: 28,
-  },
-  welcomeTextContainer: {
-    flex: 1,
-  },
-  welcomeTitle: {
-    fontSize: 26,
-    color: '#ffffff',
-    fontWeight: 'bold',
-    marginBottom: 6,
-  },
-  welcomeSubtitle: {
-    fontSize: 14,
-    color: 'rgba(255, 255, 255, 0.8)',
-    fontWeight: '400',
-    lineHeight: 20,
-  },
-  welcomeIconContainer: {
-    width: 70,
-    height: 70,
-    borderRadius: 35,
-    backgroundColor: 'rgba(255, 255, 255, 0.15)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginLeft: 20,
-  },
-  welcomeIcon: {
-    fontSize: 32,
-  },
 
   // Section Titles
   sectionTitle: {

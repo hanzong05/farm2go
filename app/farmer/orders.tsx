@@ -289,21 +289,6 @@ export default function FarmerOrdersScreen() {
     return { pending, preparing, ready, completed, totalRevenue };
   };
 
-  const renderWelcomeHeader = () => (
-    <View style={styles.welcomeContainer}>
-      <View style={styles.welcomeContent}>
-        <View style={styles.welcomeText}>
-          <Text style={styles.welcomeTitle}>Order Management</Text>
-          <Text style={styles.welcomeSubtitle}>
-            Track and manage customer orders from pending to completion
-          </Text>
-        </View>
-        <View style={styles.welcomeIconContainer}>
-          <Text style={styles.welcomeIcon}>📋</Text>
-        </View>
-      </View>
-    </View>
-  );
 
   const renderOrderCard = ({ item: order }: { item: Order }) => {
     const statusColor = getStatusColor(order.status);
@@ -491,8 +476,6 @@ export default function FarmerOrdersScreen() {
         }
         showsVerticalScrollIndicator={false}
       >
-        {renderWelcomeHeader()}
-
         {/* Enhanced Stats */}
         <View style={styles.statsSection}>
           <Text style={styles.sectionTitle}>Order Overview</Text>
@@ -616,52 +599,6 @@ const styles = StyleSheet.create({
     paddingBottom: 40,
   },
 
-  // Welcome Header
-  welcomeContainer: {
-    backgroundColor: '#10b981',
-    margin: 20,
-    marginBottom: 32,
-    borderRadius: 20,
-    overflow: 'hidden',
-    elevation: 12,
-    shadowColor: '#10b981',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.3,
-    shadowRadius: 16,
-  },
-  welcomeContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    padding: 28,
-  },
-  welcomeText: {
-    flex: 1,
-  },
-  welcomeTitle: {
-    fontSize: 26,
-    color: '#ffffff',
-    fontWeight: 'bold',
-    marginBottom: 6,
-  },
-  welcomeSubtitle: {
-    fontSize: 14,
-    color: 'rgba(255, 255, 255, 0.8)',
-    fontWeight: '400',
-    lineHeight: 20,
-  },
-  welcomeIconContainer: {
-    width: 70,
-    height: 70,
-    borderRadius: 35,
-    backgroundColor: 'rgba(255, 255, 255, 0.15)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginLeft: 20,
-  },
-  welcomeIcon: {
-    fontSize: 32,
-  },
 
   // Section Titles
   sectionTitle: {

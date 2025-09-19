@@ -192,23 +192,6 @@ export default function MyProductsScreenNew() {
     <View style={styles.container}>
       <NavBar currentRoute="/farmer/my-products" />
 
-      {/* Header */}
-      <View style={styles.header}>
-        <View style={styles.headerContent}>
-          <Text style={styles.headerTitle}>My Products</Text>
-          <Text style={styles.headerSubtitle}>
-            Manage your farm's inventory
-          </Text>
-        </View>
-        <TouchableOpacity
-          style={styles.addButton}
-          onPress={() => router.push('/farmer/products/add')}
-          activeOpacity={0.8}
-        >
-          <Text style={styles.addButtonText}>+</Text>
-        </TouchableOpacity>
-      </View>
-
       {/* Search Bar */}
       <SearchBar
         placeholder="Search your products..."
@@ -335,46 +318,6 @@ const styles = StyleSheet.create({
     color: Theme.colors.text.secondary,
   },
 
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: Theme.spacing.md,
-    paddingVertical: Theme.spacing.lg,
-    backgroundColor: Theme.colors.primary,
-  },
-
-  headerContent: {
-    flex: 1,
-  },
-
-  headerTitle: {
-    ...Theme.typography.h3,
-    color: Theme.colors.text.inverse,
-    marginBottom: Theme.spacing.xs,
-  },
-
-  headerSubtitle: {
-    ...Theme.typography.body2,
-    color: Theme.colors.text.inverse,
-    opacity: 0.8,
-  },
-
-  addButton: {
-    width: 48,
-    height: 48,
-    borderRadius: Theme.borderRadius.full,
-    backgroundColor: Theme.colors.text.inverse,
-    justifyContent: 'center',
-    alignItems: 'center',
-    ...Theme.shadows.md,
-  },
-
-  addButtonText: {
-    ...Theme.typography.h3,
-    color: Theme.colors.primary,
-    fontWeight: 'bold',
-  },
 
   scrollView: {
     flex: 1,
