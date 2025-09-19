@@ -21,7 +21,7 @@ interface NavItem {
   title: string;
   icon: string;
   route: string;
-  userTypes: ('farmer' | 'buyer' | 'admin')[];
+  userTypes: ('farmer' | 'buyer' | 'admin' | 'super-admin')[];
 }
 
 const NAV_ITEMS: NavItem[] = [
@@ -121,11 +121,27 @@ const NAV_ITEMS: NavItem[] = [
     route: '/admin/settings',
     userTypes: ['admin'],
   },
+
+  // Super Admin items
+  {
+    id: 'super-admin-dashboard',
+    title: 'Super Admin',
+    icon: 'crown',
+    route: '/super-admin',
+    userTypes: ['super-admin'],
+  },
+  {
+    id: 'super-admin-users',
+    title: 'Manage Users',
+    icon: 'users-cog',
+    route: '/super-admin/users',
+    userTypes: ['super-admin'],
+  },
 ];
 
 interface HeaderComponentProps {
   profile?: Profile | null;
-  userType?: 'farmer' | 'buyer' | 'admin';
+  userType?: 'farmer' | 'buyer' | 'admin' | 'super-admin';
   currentRoute?: string;
 
   // Search functionality

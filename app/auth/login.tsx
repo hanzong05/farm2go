@@ -73,6 +73,9 @@ export default function LoginScreen() {
         if (userData?.profile) {
           // Redirect based on user type
           switch (userData.profile.user_type) {
+            case 'super-admin':
+              router.replace('/super-admin');
+              break;
             case 'admin':
               router.replace('/admin/users');
               break;
@@ -152,6 +155,9 @@ export default function LoginScreen() {
         if (userData?.profile) {
           // Redirect based on user type
           switch (userData.profile.user_type) {
+            case 'super-admin':
+              router.replace('/super-admin');
+              break;
             case 'admin':
               router.replace('/admin/users');
               break;
