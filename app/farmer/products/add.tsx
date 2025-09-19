@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -15,8 +15,12 @@ import {
 } from 'react-native';
 import { router } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
+import HeaderComponent from '../../../components/HeaderComponent';
 import { supabase } from '../../../lib/supabase';
 import { getUserWithProfile } from '../../../services/auth';
+import { Database } from '../../../types/database';
+
+type Profile = Database['public']['Tables']['profiles']['Row'];
 
 const { width } = Dimensions.get('window');
 
@@ -41,6 +45,7 @@ const UNITS = [
 ];
 
 export default function AddProductScreen() {
+  const [profile, setProfile] = useState<Profile | null>(null);
   const [formData, setFormData] = useState({
     name: '',
     description: '',
@@ -51,6 +56,21 @@ export default function AddProductScreen() {
   });
   const [errors, setErrors] = useState<{[key: string]: string}>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  useEffect(() => {
+    loadProfile();
+  }, []);
+
+  const loadProfile = async () => {
+    try {
+      const userData = await getUserWithProfile();
+      if (userData?.profile) {
+        setProfile(userData.profile);
+      }
+    } catch (error) {
+      console.error('Error loading profile:', error);
+    }
+  };
   const [focusedInput, setFocusedInput] = useState<string | null>(null);
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const [uploadingImage, setUploadingImage] = useState(false);
@@ -317,16 +337,10 @@ export default function AddProductScreen() {
       style={styles.container}
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
-      <View style={styles.header}>
-        <TouchableOpacity
-          style={styles.backButton}
-          onPress={() => router.back()}
-        >
-          <Text style={styles.backButtonText}>← Back</Text>
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Add New Product</Text>
-        <View style={styles.headerSpacer} />
-      </View>
+      <HeaderComponent
+        profile={profile}
+        showAddButton={false}
+      />
 
       <ScrollView
         style={styles.content}

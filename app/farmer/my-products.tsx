@@ -7,16 +7,15 @@ import {
   FlatList,
   Image,
   RefreshControl,
-  ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   TouchableOpacity,
   View
 } from 'react-native';
 import { supabase } from '../../lib/supabase';
 import { getUserWithProfile } from '../../services/auth';
 import { Database } from '../../types/database';
+import HeaderComponent from '../../components/HeaderComponent';
 
 interface Product {
   id: string;
@@ -187,106 +186,27 @@ export default function Farm2GoFarmerProducts() {
   };
 
   const renderHeader = () => (
-    <View style={styles.header}>
-      {/* Top Navigation Bar */}
-      <View style={styles.topBar}>
-        <View style={styles.logoSection}>
-          <View style={styles.logo}>
-            <Text style={styles.logoText}>F2G</Text>
-          </View>
-          <Text style={styles.brandText}>Farm2Go</Text>
-        </View>
-        
-        <View style={styles.headerActions}>
-          <TouchableOpacity 
-            style={styles.headerButton}
-            onPress={() => router.push('/farmer/products/add')}
-          >
-            <Text style={styles.headerButtonText}>+ Add Product</Text>
-          </TouchableOpacity>
-          
-          <TouchableOpacity style={styles.profileButton}>
-            <View style={styles.profileAvatar}>
-              <Text style={styles.avatarText}>
-                {profile?.first_name?.charAt(0)?.toUpperCase() || 'F'}
-              </Text>
-            </View>
-          </TouchableOpacity>
-        </View>
-      </View>
-
-      {/* Search Bar */}
-      <View style={styles.searchSection}>
-        <View style={styles.searchContainer}>
-          <View style={styles.searchInputContainer}>
-            <Text style={styles.searchIcon}>🔍</Text>
-            <TextInput
-              style={styles.searchInput}
-              placeholder="Search your products..."
-              value={searchQuery}
-              onChangeText={setSearchQuery}
-              placeholderTextColor={colors.textSecondary}
-            />
-          </View>
-          <TouchableOpacity style={styles.filterButton}>
-            <Text style={styles.filterIcon}>⚙️</Text>
-          </TouchableOpacity>
-        </View>
-      </View>
-
-      {/* Category Tabs */}
-      <ScrollView 
-        horizontal 
-        showsHorizontalScrollIndicator={false}
-        style={styles.categorySection}
-        contentContainerStyle={styles.categoryContainer}
-      >
-        {categories.map((category) => (
-          <TouchableOpacity
-            key={category.key}
-            style={[
-              styles.categoryTab,
-              selectedCategory === category.key && styles.categoryTabActive
-            ]}
-            onPress={() => setSelectedCategory(category.key)}
-          >
-            <Text style={[
-              styles.categoryText,
-              selectedCategory === category.key && styles.categoryTextActive
-            ]}>
-              {category.label}
-            </Text>
-            {selectedCategory === category.key && (
-              <View style={[styles.categoryIndicator, { backgroundColor: category.color }]} />
-            )}
-          </TouchableOpacity>
-        ))}
-      </ScrollView>
-
-      {/* Stats Banner */}
-      <View style={styles.statsBanner}>
-        <View style={styles.statsGrid}>
-          <View style={styles.statItem}>
-            <Text style={styles.statNumber}>{products.length}</Text>
-            <Text style={styles.statLabel}>Total Products</Text>
-          </View>
-          <View style={styles.statDivider} />
-          <View style={styles.statItem}>
-            <Text style={styles.statNumber}>
-              {products.filter(p => p.status === 'approved').length}
-            </Text>
-            <Text style={styles.statLabel}>Live Products</Text>
-          </View>
-          <View style={styles.statDivider} />
-          <View style={styles.statItem}>
-            <Text style={styles.statNumber}>
-              {formatPrice(products.reduce((sum, p) => sum + (p.price * p.quantity_available), 0))}
-            </Text>
-            <Text style={styles.statLabel}>Total Value</Text>
-          </View>
-        </View>
-      </View>
-    </View>
+    <HeaderComponent
+      profile={profile}
+      showSearch={true}
+      searchQuery={searchQuery}
+      onSearchChange={setSearchQuery}
+      searchPlaceholder="Search your products..."
+      showCategories={true}
+      categories={categories}
+      selectedCategory={selectedCategory}
+      onCategoryChange={setSelectedCategory}
+      showStats={true}
+      stats={[
+        { number: products.length, label: 'Total Products' },
+        { number: products.filter(p => p.status === 'approved').length, label: 'Live Products' },
+        { number: formatPrice(products.reduce((sum, p) => sum + (p.price * p.quantity_available), 0)), label: 'Total Value' }
+      ]}
+      showAddButton={true}
+      addButtonText="+ Add Product"
+      addButtonRoute="/farmer/products/add"
+      showFilterButton={true}
+    />
   );
 
   const renderProductItem = ({ item, index }: { item: Product; index: number }) => {
@@ -489,224 +409,6 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
   },
 
-  // Header Styles
-  header: {
-    backgroundColor: colors.white,
-    marginBottom: 8,
-  },
-  
-  topBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    paddingTop: 50, // Account for status bar
-    backgroundColor: colors.primary,
-  },
-  
-  logoSection: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  
-  logo: {
-    width: 32,
-    height: 32,
-    borderRadius: 8,
-    backgroundColor: colors.white,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 8,
-  },
-  
-  logoText: {
-    fontSize: 14,
-    fontWeight: 'bold',
-    color: colors.primary,
-  },
-  
-  brandText: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: colors.white,
-  },
-  
-  headerActions: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-  
-  headerButton: {
-    backgroundColor: colors.white,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 6,
-  },
-  
-  headerButtonText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: colors.primary,
-  },
-  
-  profileButton: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: 'rgba(255,255,255,0.2)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  
-  profileAvatar: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: colors.white,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  
-  avatarText: {
-    fontSize: 12,
-    fontWeight: 'bold',
-    color: colors.primary,
-  },
-
-  // Search Section
-  searchSection: {
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    backgroundColor: colors.primary,
-  },
-  
-  searchContainer: {
-    flexDirection: 'row',
-    gap: 8,
-  },
-  
-  searchInputContainer: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: colors.white,
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    height: 40,
-  },
-  
-  searchIcon: {
-    fontSize: 16,
-    marginRight: 8,
-  },
-  
-  searchInput: {
-    flex: 1,
-    fontSize: 14,
-    color: colors.text,
-  },
-  
-  filterButton: {
-    width: 40,
-    height: 40,
-    backgroundColor: 'rgba(255,255,255,0.2)',
-    borderRadius: 8,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  
-  filterIcon: {
-    fontSize: 16,
-  },
-
-  // Categories
-  categorySection: {
-    backgroundColor: colors.white,
-  },
-  
-  categoryContainer: {
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-  },
-  
-  categoryTab: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    marginRight: 12,
-    borderRadius: 20,
-    backgroundColor: colors.gray100,
-    position: 'relative',
-  },
-  
-  categoryTabActive: {
-    backgroundColor: colors.primary + '20',
-  },
-  
-  categoryText: {
-    fontSize: 12,
-    fontWeight: '500',
-    color: colors.textSecondary,
-  },
-  
-  categoryTextActive: {
-    color: colors.primary,
-    fontWeight: '600',
-  },
-  
-  categoryIndicator: {
-    position: 'absolute',
-    bottom: -2,
-    left: '50%',
-    transform: [{ translateX: -6 }],
-    width: 12,
-    height: 2,
-    borderRadius: 1,
-  },
-
-  // Stats Banner
-  statsBanner: {
-    backgroundColor: colors.white,
-    marginHorizontal: 16,
-    marginVertical: 8,
-    borderRadius: 8,
-    elevation: 2,
-    shadowColor: colors.shadow,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-  },
-  
-  statsGrid: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 16,
-  },
-  
-  statItem: {
-    flex: 1,
-    alignItems: 'center',
-  },
-  
-  statNumber: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: colors.text,
-    marginBottom: 4,
-  },
-  
-  statLabel: {
-    fontSize: 10,
-    color: colors.textSecondary,
-    textTransform: 'uppercase',
-  },
-  
-  statDivider: {
-    width: 1,
-    height: 30,
-    backgroundColor: colors.border,
-  },
 
   // Product List
   listContent: {

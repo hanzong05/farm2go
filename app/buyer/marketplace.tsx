@@ -2,6 +2,7 @@ import { router } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import { ActivityIndicator, Alert, Dimensions, RefreshControl, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View, Image, FlatList } from 'react-native';
 import NavBar from '../../components/NavBar';
+import HeaderComponent from '../../components/HeaderComponent';
 import { supabase } from '../../lib/supabase';
 import { getUserWithProfile } from '../../services/auth';
 import { Database } from '../../types/database';
@@ -327,8 +328,27 @@ export default function MarketplaceScreen() {
     );
   }
 
+  // Convert categories to match header component format
+  const headerCategories = categories.map(cat => ({
+    key: cat.toLowerCase(),
+    label: cat,
+    color: '#059669'
+  }));
+
   return (
     <View style={styles.container}>
+      <HeaderComponent
+        profile={profile}
+        showSearch={true}
+        searchQuery={searchQuery}
+        onSearchChange={setSearchQuery}
+        searchPlaceholder="Search fresh products..."
+        showCategories={true}
+        categories={headerCategories}
+        selectedCategory={selectedCategory.toLowerCase()}
+        onCategoryChange={(category) => setSelectedCategory(category === 'all' ? 'All' : category.charAt(0).toUpperCase() + category.slice(1))}
+        showFilterButton={true}
+      />
       <NavBar currentRoute="/buyer/marketplace" />
 
       <ScrollView

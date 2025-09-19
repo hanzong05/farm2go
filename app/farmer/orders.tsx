@@ -14,6 +14,7 @@ import {
 } from 'react-native';
 import NavBar from '../../components/NavBar';
 import StatCard from '../../components/StatCard';
+import HeaderComponent from '../../components/HeaderComponent';
 import { supabase } from '../../lib/supabase';
 import { getUserWithProfile } from '../../services/auth';
 import { Database } from '../../types/database';
@@ -526,6 +527,14 @@ export default function FarmerOrdersScreen() {
   if (isDesktop) {
     return (
       <View style={styles.container}>
+        <HeaderComponent
+          profile={profile}
+          showSearch={true}
+          searchPlaceholder="Search orders..."
+          showAddButton={true}
+          addButtonText="+ Add Product"
+          addButtonRoute="/farmer/products/add"
+        />
         <NavBar currentRoute="/farmer/orders" />
 
         <View style={styles.desktopLayout}>
@@ -651,6 +660,14 @@ export default function FarmerOrdersScreen() {
   // Mobile/Tablet Layout
   return (
     <View style={styles.container}>
+      <HeaderComponent
+        profile={profile}
+        showSearch={true}
+        searchPlaceholder="Search orders..."
+        showAddButton={true}
+        addButtonText="+ Add Product"
+        addButtonRoute="/farmer/products/add"
+      />
       <NavBar currentRoute="/farmer/orders" />
 
       <ScrollView

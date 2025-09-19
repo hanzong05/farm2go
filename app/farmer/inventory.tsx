@@ -15,6 +15,7 @@ import {
   TouchableOpacity,
   View
 } from 'react-native';
+import HeaderComponent from '../../components/HeaderComponent';
 import { supabase } from '../../lib/supabase';
 import { getUserWithProfile } from '../../services/auth';
 import { Database } from '../../types/database';
@@ -72,6 +73,7 @@ export default function Farm2GoInventoryScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState('all');
+  const [searchQuery, setSearchQuery] = useState('');
   const [showStockModal, setShowStockModal] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [newStock, setNewStock] = useState('');
@@ -83,7 +85,7 @@ export default function Farm2GoInventoryScreen() {
 
   useEffect(() => {
     filterProducts();
-  }, [products, selectedCategory]);
+  }, [products, selectedCategory, searchQuery]);
 
   const loadData = async () => {
     try {
@@ -131,13 +133,25 @@ export default function Farm2GoInventoryScreen() {
   };
 
   const filterProducts = () => {
-    if (selectedCategory === 'all') {
-      setFilteredProducts(products);
-    } else {
-      setFilteredProducts(products.filter(product => 
+    let filtered = products;
+
+    // Filter by category
+    if (selectedCategory !== 'all') {
+      filtered = filtered.filter(product =>
         product.category.toLowerCase() === selectedCategory.toLowerCase()
-      ));
+      );
     }
+
+    // Filter by search query
+    if (searchQuery.trim()) {
+      filtered = filtered.filter(product =>
+        product.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        (product.description?.toLowerCase().includes(searchQuery.toLowerCase()) ?? false) ||
+        product.category.toLowerCase().includes(searchQuery.toLowerCase())
+      );
+    }
+
+    setFilteredProducts(filtered);
   };
 
   const onRefresh = async () => {
@@ -514,6 +528,17 @@ export default function Farm2GoInventoryScreen() {
 
   return (
     <View style={styles.container}>
+      <HeaderComponent
+        profile={profile}
+        showSearch={true}
+        searchQuery={searchQuery}
+        onSearchChange={setSearchQuery}
+        searchPlaceholder="Search inventory..."
+        showAddButton={true}
+        addButtonText="+ Add Product"
+        addButtonRoute="/farmer/products/add"
+        showFilterButton={true}
+      />
       <ScrollView
         style={styles.scrollContainer}
         refreshControl={

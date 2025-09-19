@@ -1,7 +1,12 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { View, Text, Pressable, StyleSheet } from 'react-native';
 import { router } from 'expo-router';
 import ResponsivePage, { ResponsiveGrid, ResponsiveCard, useResponsiveValue } from '../../components/ResponsivePage';
+import HeaderComponent from '../../components/HeaderComponent';
+import { getUserWithProfile } from '../../services/auth';
+import { Database } from '../../types/database';
+
+type Profile = Database['public']['Tables']['profiles']['Row'];
 
 // Farm2Go color scheme
 const colors = {
@@ -17,6 +22,23 @@ const colors = {
 };
 
 export default function FarmerDashboard() {
+  const [profile, setProfile] = useState<Profile | null>(null);
+
+  useEffect(() => {
+    loadProfile();
+  }, []);
+
+  const loadProfile = async () => {
+    try {
+      const userData = await getUserWithProfile();
+      if (userData?.profile) {
+        setProfile(userData.profile);
+      }
+    } catch (error) {
+      console.error('Error loading profile:', error);
+    }
+  };
+
   // Responsive grid columns
   const cardColumns = useResponsiveValue({
     mobile: 1,
@@ -99,6 +121,12 @@ export default function FarmerDashboard() {
 
   return (
     <ResponsivePage backgroundColor={colors.background}>
+      <HeaderComponent
+        profile={profile}
+        showAddButton={true}
+        addButtonText="+ Quick Add"
+        addButtonRoute="/farmer/products/add"
+      />
       <View style={styles.container}>
         {/* Welcome Section */}
         <ResponsiveCard style={styles.welcomeCard}>

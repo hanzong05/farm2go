@@ -1,7 +1,30 @@
 import { View, Text, Pressable, ScrollView } from 'react-native';
 import { Link } from 'expo-router';
+import React, { useEffect, useState } from 'react';
+import HeaderComponent from '../../components/HeaderComponent';
+import { getUserWithProfile } from '../../services/auth';
+import { Database } from '../../types/database';
+
+type Profile = Database['public']['Tables']['profiles']['Row'];
 
 export default function BuyerDashboard() {
+  const [profile, setProfile] = useState<Profile | null>(null);
+
+  useEffect(() => {
+    loadProfile();
+  }, []);
+
+  const loadProfile = async () => {
+    try {
+      const userData = await getUserWithProfile();
+      if (userData?.profile) {
+        setProfile(userData.profile);
+      }
+    } catch (error) {
+      console.error('Error loading profile:', error);
+    }
+  };
+
   const buyerFeatures = [
     { title: 'Browse Products', route: '/buyer/marketplace' as const, icon: '🛒', description: 'Find fresh produce from local farms' },
     { title: 'Shopping Cart', route: '/' as const, icon: '🛍️', description: 'Review items before checkout' },
@@ -18,30 +41,14 @@ export default function BuyerDashboard() {
 
   return (
     <ScrollView style={{ flex: 1, backgroundColor: '#f8f8f8' }}>
-      {/* Header */}
-      <View style={{
-        backgroundColor: '#4CAF50',
-        padding: 20,
-        paddingTop: 60,
-      }}>
-        <Text style={{
-          fontSize: 24,
-          fontWeight: 'bold',
-          color: 'white',
-          textAlign: 'center'
-        }}>
-          Welcome Back! 🛒
-        </Text>
-        <Text style={{
-          fontSize: 16,
-          color: 'white',
-          textAlign: 'center',
-          marginTop: 8,
-          opacity: 0.9
-        }}>
-          Discover Fresh Local Produce
-        </Text>
-      </View>
+      <HeaderComponent
+        profile={profile}
+        showSearch={true}
+        searchPlaceholder="Search products..."
+        showAddButton={true}
+        addButtonText="🛒 Browse"
+        addButtonRoute="/buyer/marketplace"
+      />
 
       {/* Quick Actions */}
       <View style={{ padding: 20 }}>

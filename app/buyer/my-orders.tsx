@@ -13,6 +13,7 @@ import {
 } from 'react-native';
 import NavBar from '../../components/NavBar';
 import StatCard from '../../components/StatCard';
+import HeaderComponent from '../../components/HeaderComponent';
 import { supabase } from '../../lib/supabase';
 import { getUserWithProfile } from '../../services/auth';
 import { Database } from '../../types/database';
@@ -424,6 +425,11 @@ export default function BuyerMyOrdersScreen() {
 
   return (
     <View style={styles.container}>
+      <HeaderComponent
+        profile={profile}
+        showSearch={true}
+        searchPlaceholder="Search your orders..."
+      />
       <NavBar currentRoute="/buyer/my-orders" />
 
       <ScrollView
