@@ -12,11 +12,121 @@ import Icon from 'react-native-vector-icons/FontAwesome5';
 import { Database } from '../types/database';
 import MessageComponent, { Conversation } from './MessageComponent';
 import NotificationComponent, { Notification } from './NotificationComponent';
+import { logoutUser } from '../services/auth';
 
 type Profile = Database['public']['Tables']['profiles']['Row'];
 
+interface NavItem {
+  id: string;
+  title: string;
+  icon: string;
+  route: string;
+  userTypes: ('farmer' | 'buyer' | 'admin')[];
+}
+
+const NAV_ITEMS: NavItem[] = [
+  // Farmer items
+  {
+    id: 'farmer-dashboard',
+    title: 'Dashboard',
+    icon: 'chart-bar',
+    route: '/farmer/my-products',
+    userTypes: ['farmer'],
+  },
+  {
+    id: 'farmer-products',
+    title: 'Products',
+    icon: 'seedling',
+    route: '/farmer/my-products',
+    userTypes: ['farmer'],
+  },
+  {
+    id: 'farmer-add-product',
+    title: 'Add Product',
+    icon: 'plus',
+    route: '/farmer/products/add',
+    userTypes: ['farmer'],
+  },
+  {
+    id: 'farmer-orders',
+    title: 'Orders',
+    icon: 'box',
+    route: '/farmer/orders',
+    userTypes: ['farmer'],
+  },
+  {
+    id: 'farmer-inventory',
+    title: 'Inventory',
+    icon: 'clipboard-list',
+    route: '/farmer/inventory',
+    userTypes: ['farmer'],
+  },
+  {
+    id: 'farmer-sales',
+    title: 'Sales',
+    icon: 'dollar-sign',
+    route: '/farmer/sales-history',
+    userTypes: ['farmer'],
+  },
+
+  // Buyer items
+  {
+    id: 'buyer-marketplace',
+    title: 'Marketplace',
+    icon: 'store',
+    route: '/buyer/marketplace',
+    userTypes: ['buyer'],
+  },
+  {
+    id: 'buyer-search',
+    title: 'Search',
+    icon: 'search',
+    route: '/buyer/search',
+    userTypes: ['buyer'],
+  },
+  {
+    id: 'buyer-orders',
+    title: 'My Orders',
+    icon: 'shopping-bag',
+    route: '/buyer/my-orders',
+    userTypes: ['buyer'],
+  },
+  {
+    id: 'buyer-history',
+    title: 'History',
+    icon: 'history',
+    route: '/buyer/purchase-history',
+    userTypes: ['buyer'],
+  },
+
+  // Admin items
+  {
+    id: 'admin-users',
+    title: 'Users',
+    icon: 'users',
+    route: '/admin/users',
+    userTypes: ['admin'],
+  },
+  {
+    id: 'admin-products',
+    title: 'Products',
+    icon: 'check-circle',
+    route: '/admin/products',
+    userTypes: ['admin'],
+  },
+  {
+    id: 'admin-settings',
+    title: 'Settings',
+    icon: 'cog',
+    route: '/admin/settings',
+    userTypes: ['admin'],
+  },
+];
+
 interface HeaderComponentProps {
   profile?: Profile | null;
+  userType?: 'farmer' | 'buyer' | 'admin';
+  currentRoute?: string;
 
   // Search functionality
   showSearch?: boolean;
@@ -95,6 +205,8 @@ const colors = {
 
 export default function HeaderComponent({
   profile,
+  userType = 'buyer',
+  currentRoute = '',
   showSearch = false,
   searchQuery = '',
   onSearchChange,
@@ -130,6 +242,36 @@ export default function HeaderComponent({
       onAddButtonPress();
     } else if (addButtonRoute) {
       router.push(addButtonRoute as any);
+    }
+  };
+
+  const handleNavigation = (route: string) => {
+    router.push(route as any);
+  };
+
+  const handleLogout = async () => {
+    try {
+      await logoutUser();
+      router.replace('/auth/login');
+    } catch (error) {
+      console.error('Logout error:', error);
+    }
+  };
+
+  const filteredNavItems = NAV_ITEMS.filter(item =>
+    item.userTypes.includes(userType)
+  );
+
+  const getUserTypeColor = () => {
+    switch (userType) {
+      case 'farmer':
+        return '#10b981';
+      case 'buyer':
+        return '#3b82f6';
+      case 'admin':
+        return '#8b5cf6';
+      default:
+        return '#6b7280';
     }
   };
 
@@ -174,15 +316,49 @@ export default function HeaderComponent({
             </TouchableOpacity>
           )}
 
-          <TouchableOpacity style={styles.profileButton}>
+          <TouchableOpacity style={styles.profileButton} onPress={handleLogout}>
             <View style={styles.profileAvatar}>
-              <Text style={styles.avatarText}>
-                {profile?.first_name?.charAt(0)?.toUpperCase() ?? 'F'}
-              </Text>
+              <Icon name="sign-out-alt" size={14} color={colors.primary} />
             </View>
           </TouchableOpacity>
         </View>
       </View>
+
+      {/* Navigation Bar */}
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        style={styles.navBar}
+        contentContainerStyle={styles.navBarContent}
+      >
+        {filteredNavItems.map((item) => {
+          const isActive = currentRoute === item.route;
+
+          return (
+            <TouchableOpacity
+              key={item.id}
+              style={[
+                styles.navItem,
+                isActive && styles.navItemActive
+              ]}
+              onPress={() => handleNavigation(item.route)}
+            >
+              <Icon
+                name={item.icon}
+                size={16}
+                color={isActive ? colors.white : colors.gray400}
+                style={styles.navIcon}
+              />
+              <Text style={[
+                styles.navText,
+                isActive && styles.navTextActive
+              ]}>
+                {item.title}
+              </Text>
+            </TouchableOpacity>
+          );
+        })}
+      </ScrollView>
 
       {/* Search Bar */}
       {showSearch && (
@@ -354,6 +530,45 @@ const styles = StyleSheet.create({
     color: colors.primary,
   },
 
+  // Navigation Bar
+  navBar: {
+    backgroundColor: colors.gray700,
+    paddingHorizontal: 16,
+  },
+
+  navBarContent: {
+    paddingVertical: 8,
+    gap: 8,
+  },
+
+  navItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 6,
+    backgroundColor: 'transparent',
+    marginRight: 8,
+  },
+
+  navItemActive: {
+    backgroundColor: colors.primary,
+  },
+
+  navIcon: {
+    marginRight: 6,
+  },
+
+  navText: {
+    fontSize: 12,
+    fontWeight: '500',
+    color: colors.gray400,
+  },
+
+  navTextActive: {
+    color: colors.white,
+    fontWeight: '600',
+  },
 
   // Search Section
   searchSection: {
