@@ -11,6 +11,7 @@ import {
     TouchableOpacity,
     View,
 } from 'react-native';
+import HeaderComponent from '../../components/HeaderComponent';
 import { supabase } from '../../lib/supabase';
 import { getUserWithProfile } from '../../services/auth';
 import { Database } from '../../types/database';
@@ -394,15 +395,31 @@ export default function BuyerPurchaseHistoryScreen() {
 
   if (loading) {
     return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#10b981" />
-        <Text style={styles.loadingText}>Loading purchase history...</Text>
+      <View style={styles.container}>
+        <HeaderComponent
+          profile={profile}
+          userType="buyer"
+          currentRoute="/buyer/purchase-history"
+          showMessages={true}
+          showNotifications={true}
+        />
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color="#10b981" />
+          <Text style={styles.loadingText}>Loading purchase history...</Text>
+        </View>
       </View>
     );
   }
 
   return (
     <View style={styles.container}>
+      <HeaderComponent
+        profile={profile}
+        userType="buyer"
+        currentRoute="/buyer/purchase-history"
+        showMessages={true}
+        showNotifications={true}
+      />
 
       <ScrollView
         style={styles.scrollView}
