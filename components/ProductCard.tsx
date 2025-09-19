@@ -115,7 +115,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: Theme.colors.border,
     overflow: 'hidden',
-    width: '48%', // Shopee-style 2-column grid
+    width: '48%', // Farm2Go-style 2-column grid
     marginBottom: Theme.spacing.md,
   },
 

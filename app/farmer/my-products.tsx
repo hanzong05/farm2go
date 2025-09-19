@@ -36,41 +36,41 @@ type Profile = Database['public']['Tables']['profiles']['Row'];
 const { width } = Dimensions.get('window');
 const ITEM_WIDTH = (width - 48) / 2; // 2 columns with margins
 
-// Enhanced color scheme matching Shopee
+// Farm2Go green color scheme
 const colors = {
-  primary: '#ff4500', // Shopee orange
-  secondary: '#ff6b35',
-  success: '#00c851',
-  warning: '#ffbb33',
-  danger: '#ff4444',
+  primary: '#059669', // Farm green
+  secondary: '#10b981',
+  success: '#10b981',
+  warning: '#f59e0b',
+  danger: '#ef4444',
   white: '#ffffff',
   black: '#000000',
-  gray100: '#f8f9fa',
-  gray200: '#e9ecef',
-  gray300: '#dee2e6',
-  gray400: '#ced4da',
-  gray500: '#6c757d',
-  gray600: '#495057',
-  gray700: '#343a40',
-  gray800: '#212529',
-  background: '#f5f5f5',
+  gray100: '#f9fafb',
+  gray200: '#e5e7eb',
+  gray300: '#d1d5db',
+  gray400: '#9ca3af',
+  gray500: '#6b7280',
+  gray600: '#4b5563',
+  gray700: '#374151',
+  gray800: '#1f2937',
+  background: '#f0f9f4',
   surface: '#ffffff',
-  text: '#212529',
-  textSecondary: '#6c757d',
-  border: '#e9ecef',
+  text: '#0f172a',
+  textSecondary: '#6b7280',
+  border: '#d1fae5',
   shadow: 'rgba(0,0,0,0.1)',
 };
 
 const categories = [
   { key: 'all', label: 'All Products', color: colors.primary },
-  { key: 'vegetables', label: 'Vegetables', color: '#28a745' },
-  { key: 'fruits', label: 'Fruits', color: '#ffc107' },
-  { key: 'grains', label: 'Grains', color: '#6f4e37' },
-  { key: 'herbs', label: 'Herbs', color: '#20c997' },
-  { key: 'dairy', label: 'Dairy', color: '#17a2b8' },
+  { key: 'vegetables', label: 'Vegetables', color: '#059669' },
+  { key: 'fruits', label: 'Fruits', color: '#16a34a' },
+  { key: 'grains', label: 'Grains', color: '#ca8a04' },
+  { key: 'herbs', label: 'Herbs', color: '#10b981' },
+  { key: 'dairy', label: 'Dairy', color: '#0891b2' },
 ];
 
-export default function ShopeeStyleFarmerProducts() {
+export default function Farm2GoFarmerProducts() {
   const [products, setProducts] = useState<Product[]>([]);
   const [filteredProducts, setFilteredProducts] = useState<Product[]>([]);
   const [profile, setProfile] = useState<Profile | null>(null);

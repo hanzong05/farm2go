@@ -14,20 +14,20 @@ import { logoutUser } from '../services/auth';
 
 const { width } = Dimensions.get('window');
 
-// Shopee-inspired color scheme
+// Farm2Go green color scheme
 const colors = {
-  primary: '#ff4500',
-  secondary: '#ff6b35',
+  primary: '#059669',
+  secondary: '#10b981',
   white: '#ffffff',
-  background: '#f5f5f5',
-  text: '#212529',
-  textSecondary: '#6c757d',
-  success: '#00c851',
-  warning: '#ffbb33',
-  danger: '#ff4444',
-  gray100: '#f8f9fa',
-  gray200: '#e9ecef',
-  gray300: '#dee2e6',
+  background: '#f0f9f4',
+  text: '#0f172a',
+  textSecondary: '#6b7280',
+  success: '#10b981',
+  warning: '#f59e0b',
+  danger: '#ef4444',
+  gray100: '#f9fafb',
+  gray200: '#e5e7eb',
+  gray300: '#d1d5db',
   shadow: 'rgba(0,0,0,0.1)',
 };
 
@@ -132,15 +132,15 @@ const NAV_ITEMS: NavItem[] = [
   },
 ];
 
-interface ShopeeNavBarProps {
+interface Farm2GoNavBarProps {
   currentRoute?: string;
   showNotifications?: boolean;
 }
 
-export default function ShopeeNavBar({ 
-  currentRoute = '', 
-  showNotifications = true 
-}: ShopeeNavBarProps) {
+export default function Farm2GoNavBar({
+  currentRoute = '',
+  showNotifications = true
+}: Farm2GoNavBarProps) {
   const { user, profile, signOut } = useAuth();
 
   const handleLogout = async () => {

@@ -3,9 +3,9 @@ export const Theme = {
   // Primary Farm Colors (replacing Shopee's orange/red)
   colors: {
     // Primary Brand Colors
-    primary: '#22c55e',          // Fresh green (like Shopee's primary orange)
-    primaryDark: '#16a34a',      // Darker green
-    primaryLight: '#86efac',     // Light green
+    primary: '#059669',          // Farm green (consistent with app)
+    primaryDark: '#047857',      // Darker green
+    primaryLight: '#10b981',     // Light green
 
     // Secondary Colors
     secondary: '#f59e0b',        // Golden harvest yellow
@@ -17,10 +17,10 @@ export const Theme = {
     earthLight: '#d97706',       // Light brown
     soil: '#78716c',             // Soil gray-brown
 
-    // Neutral Colors (Shopee-style grays)
-    background: '#f8fafc',       // Light background
+    // Neutral Colors (Farm2Go-style grays)
+    background: '#f0f9f4',       // Light green background
     surface: '#ffffff',          // Card surfaces
-    surfaceVariant: '#f1f5f9',   // Alternative surface
+    surfaceVariant: '#f9fafb',   // Alternative surface
 
     // Text Colors
     text: {
@@ -31,14 +31,14 @@ export const Theme = {
     },
 
     // Status Colors
-    success: '#22c55e',
+    success: '#10b981',
     warning: '#f59e0b',
     error: '#ef4444',
     info: '#06b6d4',
 
     // Border & Divider
-    border: '#e2e8f0',
-    divider: '#f1f5f9',
+    border: '#d1fae5',
+    divider: '#ecfdf5',
 
     // Shadows
     shadow: '#000000',

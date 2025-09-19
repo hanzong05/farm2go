@@ -9,34 +9,34 @@ import { useColorScheme } from '@/hooks/use-color-scheme';
 import { AuthProvider } from '../contexts/AuthContext';
 import { SessionProvider } from '../contexts/SessionContext';
 
-// Shopee-inspired theme with orange primary colors
-const ShopeeTheme = {
+// Farm2Go green theme
+const Farm2GoTheme = {
   ...DefaultTheme,
   colors: {
     ...DefaultTheme.colors,
-    primary: '#ff4500', // Shopee orange
-    background: '#f5f5f5', // Light gray background
+    primary: '#059669', // Farm green
+    background: '#f0f9f4', // Light green background
     card: '#ffffff',
-    text: '#212529',
-    border: '#e9ecef',
-    notification: '#ff4500',
+    text: '#0f172a',
+    border: '#d1fae5',
+    notification: '#059669',
   },
 };
 
-const ShopeeDarkTheme = {
+const Farm2GoDarkTheme = {
   ...DarkTheme,
   colors: {
     ...DarkTheme.colors,
-    primary: '#ff6b35', // Lighter orange for dark mode
-    background: '#1a1a1a',
-    card: '#2d2d2d',
+    primary: '#10b981', // Lighter green for dark mode
+    background: '#0f1419',
+    card: '#1f2937',
     text: '#ffffff',
-    border: '#404040',
-    notification: '#ff6b35',
+    border: '#374151',
+    notification: '#10b981',
   },
 };
 
-// Enhanced screen options for Shopee-style appearance
+// Enhanced screen options for Farm2Go-style appearance
 const getScreenOptions = (title?: string) => ({
   headerShown: false,
   title: title || '',
@@ -51,7 +51,7 @@ const getScreenOptions = (title?: string) => ({
   }),
 });
 
-// Auth screen options with Shopee styling
+// Auth screen options with Farm2Go styling
 const getAuthScreenOptions = (title?: string) => ({
   ...getScreenOptions(title),
   animation: 'fade' as const,
@@ -65,7 +65,7 @@ const getDashboardScreenOptions = (title?: string) => ({
   ...getScreenOptions(title),
   animation: 'slide_from_bottom' as const,
   contentStyle: {
-    backgroundColor: '#f5f5f5', // Shopee background color
+    backgroundColor: '#f0f9f4', // Farm2Go background color
   },
 });
 
@@ -133,14 +133,14 @@ export default function RootLayout() {
     <SessionProvider>
       <AuthProvider>
         <ThemeProvider
-          value={colorScheme === 'dark' ? ShopeeDarkTheme : ShopeeTheme}
+          value={colorScheme === 'dark' ? Farm2GoDarkTheme : Farm2GoTheme}
         >
         <Stack
           screenOptions={{
             headerShown: false,
             animation: 'slide_from_right',
             contentStyle: {
-              backgroundColor: colorScheme === 'dark' ? '#1a1a1a' : '#f5f5f5',
+              backgroundColor: colorScheme === 'dark' ? '#0f1419' : '#f0f9f4',
             },
           }}
         >
@@ -411,9 +411,9 @@ export default function RootLayout() {
         </Stack>
 
         {/* Enhanced status bar with marketplace styling */}
-        <StatusBar 
-          style={colorScheme === 'dark' ? 'light' : 'dark'}
-          backgroundColor={colorScheme === 'dark' ? '#1a1a1a' : '#ff4500'}
+        <StatusBar
+          style={colorScheme === 'dark' ? 'light' : 'light'}
+          backgroundColor={colorScheme === 'dark' ? '#0f1419' : '#059669'}
           translucent={Platform.OS === 'android'}
         />
         </ThemeProvider>

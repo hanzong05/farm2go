@@ -21,23 +21,23 @@ import { Database } from '../../types/database';
 
 const { width } = Dimensions.get('window');
 
-// Shopee-inspired color palette
+// Farm2Go green color palette
 const colors = {
-  primary: '#ff4500',
-  secondary: '#ff6b35',
-  success: '#00c851',
-  warning: '#ffbb33',
-  danger: '#ff4444',
+  primary: '#059669',
+  secondary: '#10b981',
+  success: '#10b981',
+  warning: '#f59e0b',
+  danger: '#ef4444',
   white: '#ffffff',
-  background: '#f5f5f5',
+  background: '#f0f9f4',
   surface: '#ffffff',
-  text: '#212529',
-  textSecondary: '#6c757d',
-  border: '#e9ecef',
+  text: '#0f172a',
+  textSecondary: '#6b7280',
+  border: '#d1fae5',
   shadow: 'rgba(0,0,0,0.1)',
-  gray100: '#f8f9fa',
-  gray200: '#e9ecef',
-  gray300: '#dee2e6',
+  gray100: '#f9fafb',
+  gray200: '#e5e7eb',
+  gray300: '#d1d5db',
 };
 
 type Profile = Database['public']['Tables']['profiles']['Row'];
@@ -66,7 +66,7 @@ const CATEGORIES = [
   { key: 'other', label: 'Other', icon: '📦' },
 ];
 
-export default function ShopeeStyleInventoryScreen() {
+export default function Farm2GoInventoryScreen() {
   const [products, setProducts] = useState<Product[]>([]);
   const [filteredProducts, setFilteredProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);

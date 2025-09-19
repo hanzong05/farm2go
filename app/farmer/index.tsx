@@ -11,7 +11,7 @@ export default function FarmerDashboard() {
   ];
 
   return (
-    <View style={{ flex: 1, backgroundColor: '#f8f8f8' }}>
+    <View style={{ flex: 1, backgroundColor: '#f0f9f4' }}>
       <NavBar currentRoute="/farmer" />
 
       <ScrollView style={{ flex: 1 }}>
@@ -27,7 +27,7 @@ export default function FarmerDashboard() {
         </Text>
 
         <Pressable style={{
-          backgroundColor: '#4CAF50',
+          backgroundColor: '#059669',
           padding: 15,
           borderRadius: 10,
           marginBottom: 20,
@@ -77,7 +77,7 @@ export default function FarmerDashboard() {
                   {feature.description}
                 </Text>
               </View>
-              <Text style={{ color: '#4CAF50', fontSize: 20 }}>→</Text>
+              <Text style={{ color: '#059669', fontSize: 20 }}>→</Text>
             </Pressable>
           </Link>
         ))}
@@ -116,7 +116,7 @@ export default function FarmerDashboard() {
               <Text style={{
                 fontSize: 20,
                 fontWeight: 'bold',
-                color: '#4CAF50'
+                color: '#059669'
               }}>
                 {stat.value}
               </Text>
