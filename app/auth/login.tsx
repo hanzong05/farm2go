@@ -70,25 +70,35 @@ export default function LoginScreen() {
         // Get user profile to determine user type
         const userData = await getUserWithProfile();
 
+        console.log('Login Debug - User Data:', userData);
+        console.log('Login Debug - Profile:', userData?.profile);
+        console.log('Login Debug - User Type:', userData?.profile?.user_type);
+
         if (userData?.profile) {
           // Redirect based on user type
           switch (userData.profile.user_type) {
             case 'super-admin':
+              console.log('Redirecting to super-admin dashboard');
               router.replace('/super-admin');
               break;
             case 'admin':
+              console.log('Redirecting to admin dashboard');
               router.replace('/admin/users');
               break;
             case 'farmer':
+              console.log('Redirecting to farmer dashboard');
               router.replace('/farmer/my-products');
               break;
             case 'buyer':
+              console.log('Redirecting to buyer dashboard');
               router.replace('/buyer/marketplace');
               break;
             default:
+              console.log('Default redirect to buyer dashboard, user_type:', userData.profile.user_type);
               router.replace('/buyer/marketplace');
           }
         } else {
+          console.log('No profile found, redirecting to buyer marketplace');
           // Fallback to buyer dashboard if profile not found
           router.replace('/buyer/marketplace');
         }
