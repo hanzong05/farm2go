@@ -289,11 +289,15 @@ export default function Farm2GoFarmerProducts() {
     </View>
   );
 
-  const renderProductItem = ({ item }: { item: Product }) => {
+  const renderProductItem = ({ item, index }: { item: Product; index: number }) => {
     const itemWidth = getItemWidth(numColumns);
     const isDesktop = width >= 1024;
     const isTablet = width >= 768;
     const isMobile = width < 768;
+    
+    // Calculate margin for proper spacing
+    const gap = 12;
+    const marginRight = (index + 1) % numColumns === 0 ? 0 : gap;
     
     return (
       <TouchableOpacity
@@ -301,6 +305,7 @@ export default function Farm2GoFarmerProducts() {
           styles.productCard,
           { 
             width: itemWidth,
+            marginRight: marginRight,
             marginBottom: isDesktop ? 16 : isMobile ? 12 : 14,
           }
         ]}
@@ -710,7 +715,8 @@ const styles = StyleSheet.create({
   },
   
   row: {
-    justifyContent: 'space-between',
+    justifyContent: 'flex-start',
+    paddingHorizontal: 0,
   },
 
   productCard: {
