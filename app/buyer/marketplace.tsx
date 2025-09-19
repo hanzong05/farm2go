@@ -126,31 +126,8 @@ export default function MarketplaceScreen() {
     }).format(price);
   };
 
-  const renderWelcomeHeader = () => (
-    <View style={styles.welcomeContainer}>
-      <View style={styles.welcomeContent}>
-        <View style={styles.welcomeText}>
-          <Text style={styles.welcomeGreeting}>Fresh from the Farm</Text>
-          <Text style={styles.welcomeTitle}>Marketplace</Text>
-          <Text style={styles.welcomeSubtitle}>
-            {profile?.company_name || 
-             `${profile?.first_name || ''} ${profile?.last_name || ''}`.trim() ||
-             'Welcome'}
-          </Text>
-          <Text style={styles.welcomeDescription}>
-            Discover premium agricultural products directly from verified farmers
-          </Text>
-        </View>
-        <View style={styles.welcomeIconContainer}>
-          <Text style={styles.welcomeIcon}>🛒</Text>
-        </View>
-      </View>
-    </View>
-  );
-
   const renderCategoryFilter = () => (
     <View style={styles.categorySection}>
-      <Text style={styles.sectionTitle}>Categories</Text>
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
@@ -180,7 +157,6 @@ export default function MarketplaceScreen() {
 
   const renderQuickActions = () => (
     <View style={styles.actionsSection}>
-      <Text style={styles.sectionTitle}>Quick Actions</Text>
       <View style={styles.actionsGrid}>
         <TouchableOpacity
           style={styles.primaryActionCard}
@@ -318,8 +294,11 @@ export default function MarketplaceScreen() {
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#10b981" />
-        <Text style={styles.loadingText}>Loading fresh products...</Text>
+        <NavBar currentRoute="/buyer/marketplace" />
+        <View style={styles.loadingContent}>
+          <ActivityIndicator size="large" color="#10b981" />
+          <Text style={styles.loadingText}>Loading fresh products...</Text>
+        </View>
       </View>
     );
   }
@@ -341,11 +320,8 @@ export default function MarketplaceScreen() {
         }
         showsVerticalScrollIndicator={false}
       >
-        {renderWelcomeHeader()}
-
         {/* Enhanced Search */}
         <View style={styles.searchSection}>
-          <Text style={styles.sectionTitle}>Search Products</Text>
           <View style={styles.searchContainer}>
             <Text style={styles.searchIcon}>🔍</Text>
             <TextInput
@@ -405,9 +381,12 @@ const styles = StyleSheet.create({
   // Loading
   loadingContainer: {
     flex: 1,
+    backgroundColor: '#f1f5f9',
+  },
+  loadingContent: {
+    flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#f1f5f9',
   },
   loadingText: {
     marginTop: 20,
@@ -424,79 +403,11 @@ const styles = StyleSheet.create({
     paddingBottom: 40,
   },
 
-  // Welcome Header
-  welcomeContainer: {
-    backgroundColor: '#10b981',
-    margin: 20,
-    marginBottom: 32,
-    borderRadius: 20,
-    overflow: 'hidden',
-    elevation: 12,
-    shadowColor: '#10b981',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.3,
-    shadowRadius: 16,
-  },
-  welcomeContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    padding: 28,
-  },
-  welcomeText: {
-    flex: 1,
-  },
-  welcomeGreeting: {
-    fontSize: 14,
-    color: 'rgba(255, 255, 255, 0.9)',
-    fontWeight: '500',
-    marginBottom: 4,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-  },
-  welcomeTitle: {
-    fontSize: 28,
-    color: '#ffffff',
-    fontWeight: 'bold',
-    marginBottom: 6,
-  },
-  welcomeSubtitle: {
-    fontSize: 16,
-    color: '#ffffff',
-    fontWeight: '600',
-    marginBottom: 8,
-  },
-  welcomeDescription: {
-    fontSize: 13,
-    color: 'rgba(255, 255, 255, 0.8)',
-    fontWeight: '400',
-    lineHeight: 18,
-  },
-  welcomeIconContainer: {
-    width: 70,
-    height: 70,
-    borderRadius: 35,
-    backgroundColor: 'rgba(255, 255, 255, 0.15)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginLeft: 20,
-  },
-  welcomeIcon: {
-    fontSize: 32,
-  },
-
-  // Section Titles
-  sectionTitle: {
-    fontSize: 22,
-    fontWeight: 'bold',
-    color: '#0f172a',
-    marginBottom: 20,
-  },
-
   // Search Section
   searchSection: {
     paddingHorizontal: 20,
-    marginBottom: 36,
+    paddingTop: 20,
+    paddingBottom: 16,
   },
   searchContainer: {
     flexDirection: 'row',
@@ -541,7 +452,7 @@ const styles = StyleSheet.create({
   // Category Section
   categorySection: {
     paddingHorizontal: 20,
-    marginBottom: 36,
+    marginBottom: 24,
   },
   categoryContainer: {
     paddingRight: 20,
@@ -578,7 +489,7 @@ const styles = StyleSheet.create({
   // Actions Section
   actionsSection: {
     paddingHorizontal: 20,
-    marginBottom: 36,
+    marginBottom: 32,
   },
   actionsGrid: {
     flexDirection: 'row',
@@ -657,6 +568,11 @@ const styles = StyleSheet.create({
     paddingBottom: 12,
     borderBottomWidth: 2,
     borderBottomColor: '#e2e8f0',
+  },
+  sectionTitle: {
+    fontSize: 22,
+    fontWeight: 'bold',
+    color: '#0f172a',
   },
   productCount: {
     backgroundColor: '#ecfdf5',

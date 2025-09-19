@@ -107,14 +107,13 @@ export default function LoginScreen() {
     try {
       console.log('🚀 Starting Google sign in...');
 
-      // Store a flag to indicate this is a sign-in attempt, not registration
-      await AsyncStorage.setItem('oauth_intent', 'signin');
-
-      // Also store in localStorage for web compatibility with timestamp
-      if (typeof window !== 'undefined') {
-        localStorage.setItem('oauth_intent', 'signin');
-        localStorage.setItem('oauth_timestamp', Date.now().toString());
-      }
+      // Store OAuth state using session manager
+      const { sessionManager } = await import('../../services/sessionManager');
+      await sessionManager.storeOAuthState({
+        intent: 'signin',
+        userType: null,
+        source: 'login_page'
+      });
 
       await signInWithGoogle(false); // false indicates this is not registration
 
@@ -124,14 +123,9 @@ export default function LoginScreen() {
     } catch (error: any) {
       console.error('Google sign in error:', error);
 
-      // Clean up the intent flag on error
-      await AsyncStorage.removeItem('oauth_intent');
-
-      // Also clean up localStorage
-      if (typeof window !== 'undefined') {
-        localStorage.removeItem('oauth_intent');
-        localStorage.removeItem('oauth_timestamp');
-      }
+      // Clean up OAuth state on error
+      const { sessionManager } = await import('../../services/sessionManager');
+      await sessionManager.clearOAuthState();
 
       Alert.alert(
         'Google Sign In Failed',

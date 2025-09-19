@@ -356,27 +356,20 @@ export default function RegisterScreen() {
       // First, check if user already exists by initiating OAuth to get email
       console.log('🔄 Initiating OAuth to check for existing user...');
 
+      // Store OAuth state using session manager
+      const { sessionManager } = await import('../../services/sessionManager');
+      await sessionManager.storeOAuthState({
+        intent: 'registration',
+        userType: userType,
+        source: 'register_page'
+      });
+      console.log('💾 Stored OAuth state for registration:', userType);
+
       if (provider === 'google') {
-        // Store the user type and intent for this registration attempt
-        await AsyncStorage.setItem('oauth_user_type', userType);
-        await AsyncStorage.setItem('oauth_intent', 'registration');
-        console.log('💾 Stored user type in AsyncStorage:', userType);
-
-        const storedType = await AsyncStorage.getItem('oauth_user_type');
-        console.log('✅ Verified stored type:', storedType);
-
         console.log('🔄 Initiating Google OAuth...');
         const result = await signInWithGoogle(true);
         console.log('📤 Google OAuth result:', result);
       } else {
-        // Store the user type and intent for this registration attempt
-        await AsyncStorage.setItem('oauth_user_type', userType);
-        await AsyncStorage.setItem('oauth_intent', 'registration');
-        console.log('💾 Stored user type in AsyncStorage:', userType);
-
-        const storedType = await AsyncStorage.getItem('oauth_user_type');
-        console.log('✅ Verified stored type:', storedType);
-
         console.log('🔄 Initiating Facebook OAuth...');
         const result = await signInWithFacebook();
         console.log('📤 Facebook OAuth result:', result);
@@ -386,8 +379,10 @@ export default function RegisterScreen() {
 
     } catch (error: any) {
       console.error(`❌ ${provider} registration error:`, error);
-      await AsyncStorage.removeItem('oauth_user_type');
-      await AsyncStorage.removeItem('oauth_intent');
+
+      // Clean up OAuth state on error
+      const { sessionManager } = await import('../../services/sessionManager');
+      await sessionManager.clearOAuthState();
 
       setErrorTitle(`${provider === 'google' ? 'Google' : 'Facebook'} Registration Failed`);
       setErrorMessage(error.message || 'Please try again.');

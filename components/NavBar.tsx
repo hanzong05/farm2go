@@ -29,10 +29,14 @@ const Icon = ({ name, size = 20, color = '#ffffff', style }: {
     'package': '📦',
     'bar-chart': '📊',
     'clock': '🕐',
+    'plus': '+',
+    'inventory': '📦',
+    'history': '📈',
     // Buyer icons
     'shopping-cart': '🛒',
     'search': '🔍',
-    'history': '📋',
+    'orders': '📋',
+    'purchase-history': '📋',
     // Common icons
     'log-out': '↗️',
     'user': '👤',
@@ -102,14 +106,14 @@ const NAV_ITEMS: NavItem[] = [
   {
     id: 'farmer-inventory',
     title: 'Inventory',
-    iconName: 'bar-chart',
+    iconName: 'inventory',
     route: '/farmer/inventory',
     userTypes: ['farmer'],
   },
   {
     id: 'farmer-history',
     title: 'History',
-    iconName: 'clock',
+    iconName: 'history',
     route: '/farmer/sales-history',
     userTypes: ['farmer'],
   },
@@ -124,22 +128,22 @@ const NAV_ITEMS: NavItem[] = [
   // Buyer Navigation
   {
     id: 'buyer-marketplace',
-    title: 'Marketplace',
+    title: 'Market',
     iconName: 'shopping-cart',
     route: '/buyer/marketplace',
     userTypes: ['buyer'],
   },
   {
-    id: 'buyer-search',
-    title: 'Search',
-    iconName: 'search',
-    route: '/buyer/search',
+    id: 'buyer-orders',
+    title: 'Orders',
+    iconName: 'orders',
+    route: '/buyer/my-orders',
     userTypes: ['buyer'],
   },
   {
     id: 'buyer-history',
     title: 'History',
-    iconName: 'history',
+    iconName: 'purchase-history',
     route: '/buyer/purchase-history',
     userTypes: ['buyer'],
   },
@@ -151,6 +155,68 @@ const NAV_ITEMS: NavItem[] = [
     userTypes: ['buyer'],
   },
 ];
+
+// Page title and subtitle mapping
+const PAGE_INFO: { [key: string]: { title: string; subtitle: string; showActions?: boolean } } = {
+  // Farmer pages
+  '/farmer/my-products': {
+    title: 'My Products',
+    subtitle: 'Manage your farm\'s inventory',
+    showActions: true,
+  },
+  '/farmer/orders': {
+    title: 'Order Management',
+    subtitle: 'Track and manage customer orders',
+  },
+  '/farmer/inventory': {
+    title: 'Inventory Management',
+    subtitle: 'Track stock levels and performance',
+  },
+  '/farmer/sales-history': {
+    title: 'Sales Analytics',
+    subtitle: 'Track performance and revenue growth',
+  },
+  '/farmer/settings': {
+    title: 'Farm Settings',
+    subtitle: 'Manage your profile and preferences',
+  },
+  '/farmer/products/add': {
+    title: 'Add Product',
+    subtitle: 'List new produce for sale',
+  },
+
+  // Buyer pages
+  '/buyer/marketplace': {
+    title: 'Fresh Marketplace',
+    subtitle: 'Discover premium agricultural products',
+  },
+  '/buyer/my-orders': {
+    title: 'My Orders',
+    subtitle: 'Track purchases and delivery status',
+  },
+  '/buyer/purchase-history': {
+    title: 'Purchase History',
+    subtitle: 'Analyze spending patterns and favorites',
+  },
+  '/buyer/settings': {
+    title: 'Account Settings',
+    subtitle: 'Manage your profile and preferences',
+  },
+
+  // Admin pages
+  '/admin/users': {
+    title: 'User Management',
+    subtitle: 'Manage platform users and permissions',
+  },
+  '/admin/products': {
+    title: 'Product Management',
+    subtitle: 'Review and approve product listings',
+  },
+  '/admin/settings': {
+    title: 'System Settings',
+    subtitle: 'Configure platform settings',
+  },
+};
 
 interface NavBarProps {
   currentRoute?: string;
@@ -173,6 +239,10 @@ export default function NavBar({ currentRoute = '', showUserInfo = true }: NavBa
     router.push(route as any);
   };
 
+  const handleAddProduct = () => {
+    router.push('/farmer/products/add');
+  };
+
   const getUserTypeTheme = () => {
     switch (profile?.user_type) {
       case 'farmer':
@@ -182,6 +252,7 @@ export default function NavBar({ currentRoute = '', showUserInfo = true }: NavBa
           accent: '#34d399',
           background: '#ecfdf5',
           text: '#064e3b',
+          gradient: ['#059669', '#10b981'],
         };
       case 'buyer':
         return {
@@ -190,6 +261,7 @@ export default function NavBar({ currentRoute = '', showUserInfo = true }: NavBa
           accent: '#60a5fa',
           background: '#eff6ff',
           text: '#1e3a8a',
+          gradient: ['#1d4ed8', '#2563eb'],
         };
       case 'admin':
         return {
@@ -198,6 +270,7 @@ export default function NavBar({ currentRoute = '', showUserInfo = true }: NavBa
           accent: '#a78bfa',
           background: '#f3e8ff',
           text: '#581c87',
+          gradient: ['#6d28d9', '#7c3aed'],
         };
       default:
         return {
@@ -206,6 +279,7 @@ export default function NavBar({ currentRoute = '', showUserInfo = true }: NavBa
           accent: '#6b7280',
           background: '#f9fafb',
           text: '#1f2937',
+          gradient: ['#374151', '#4b5563'],
         };
     }
   };
@@ -241,19 +315,25 @@ export default function NavBar({ currentRoute = '', showUserInfo = true }: NavBa
     return currentRoute === route || currentRoute.startsWith(route);
   };
 
+  const getCurrentPageInfo = () => {
+    return PAGE_INFO[currentRoute] || { title: 'Dashboard', subtitle: 'Welcome back' };
+  };
+
   if (!user || !profile) {
     return null;
   }
 
   const filteredNavItems = getFilteredNavItems();
   const theme = getUserTypeTheme();
+  const pageInfo = getCurrentPageInfo();
 
   return (
     <View style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor={theme.primary} />
 
+      {/* Main Navigation Bar */}
       <View style={[styles.navbar, { backgroundColor: theme.primary }]}>
-        {/* Enhanced Brand Section */}
+        {/* Brand Section */}
         <View style={styles.brandSection}>
           <View style={styles.logoContainer}>
             <View style={styles.logoWrapper}>
@@ -262,16 +342,16 @@ export default function NavBar({ currentRoute = '', showUserInfo = true }: NavBa
             <View style={styles.brandInfo}>
               <Text style={styles.brandName}>Farm2Go</Text>
               <Text style={styles.brandTagline}>
-                {profile?.user_type === 'admin' ? 'Admin Dashboard' :
-                 profile?.user_type === 'farmer' ? 'Producer Portal' : 'Marketplace Hub'}
+                {profile?.user_type === 'admin' ? 'Admin Portal' :
+                 profile?.user_type === 'farmer' ? 'Producer Hub' : 'Marketplace'}
               </Text>
             </View>
           </View>
         </View>
 
-        {/* Enhanced Navigation Items */}
+        {/* Navigation Items */}
         <View style={styles.navItems}>
-          {filteredNavItems.map((item) => {
+          {filteredNavItems.slice(0, 4).map((item) => {
             const isActive = isCurrentRoute(item.route);
 
             return (
@@ -290,7 +370,7 @@ export default function NavBar({ currentRoute = '', showUserInfo = true }: NavBa
                 ]}>
                   <Icon
                     name={item.iconName}
-                    size={18}
+                    size={16}
                     color={isActive ? '#ffffff' : 'rgba(255, 255, 255, 0.8)'}
                   />
                 </View>
@@ -306,7 +386,7 @@ export default function NavBar({ currentRoute = '', showUserInfo = true }: NavBa
           })}
         </View>
 
-        {/* Enhanced User Section */}
+        {/* User Section */}
         {showUserInfo && (
           <View style={styles.userSection}>
             <TouchableOpacity style={styles.userInfo} activeOpacity={0.8}>
@@ -333,10 +413,32 @@ export default function NavBar({ currentRoute = '', showUserInfo = true }: NavBa
               onPress={handleLogout}
               activeOpacity={0.8}
             >
-              <Icon name="log-out" size={16} color="#ffffff" />
+              <Icon name="log-out" size={14} color="#ffffff" />
             </TouchableOpacity>
           </View>
         )}
+      </View>
+
+      {/* Page Header Section */}
+      <View style={[styles.pageHeader, { backgroundColor: theme.primary }]}>
+        <View style={styles.pageHeaderContent}>
+          <View style={styles.pageInfo}>
+            <Text style={styles.pageTitle}>{pageInfo.title}</Text>
+            <Text style={styles.pageSubtitle}>{pageInfo.subtitle}</Text>
+          </View>
+
+          {/* Action Buttons */}
+          {pageInfo.showActions && profile?.user_type === 'farmer' && (
+            <TouchableOpacity
+              style={styles.actionButton}
+              onPress={handleAddProduct}
+              activeOpacity={0.8}
+            >
+              <Icon name="plus" size={18} color={theme.primary} />
+              <Text style={[styles.actionButtonText, { color: theme.primary }]}>Add Product</Text>
+            </TouchableOpacity>
+          )}
+        </View>
       </View>
 
       {/* Enhanced bottom shadow */}
@@ -348,135 +450,162 @@ export default function NavBar({ currentRoute = '', showUserInfo = true }: NavBa
 const styles = StyleSheet.create({
   container: {
     zIndex: 1000,
-    elevation: 10,
+    elevation: 15,
   },
   navbar: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingTop: Platform.OS === 'ios' ? 55 : (StatusBar.currentHeight || 0) + 15,
-    paddingBottom: 20,
-    paddingHorizontal: 24,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.15,
-    shadowRadius: 12,
-    elevation: 12,
-  },
-  bottomShadow: {
-    height: 3,
-    backgroundColor: 'rgba(0, 0, 0, 0.08)',
+    paddingTop: Platform.OS === 'ios' ? 50 : (StatusBar.currentHeight || 0) + 10,
+    paddingBottom: 12,
+    paddingHorizontal: 20,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 4,
-    elevation: 4,
+    elevation: 8,
   },
 
-  // Enhanced Brand Section
-  brandSection: {
-    flex: 1,
-    minWidth: 140,
+  // Page Header Section
+  pageHeader: {
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    borderBottomLeftRadius: 20,
+    borderBottomRightRadius: 20,
   },
-  logoContainer: {
+  pageHeaderContent: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-between',
   },
-  logoWrapper: {
-    width: 44,
-    height: 44,
-    borderRadius: 12,
-    backgroundColor: 'rgba(255, 255, 255, 0.15)',
+  pageInfo: {
+    flex: 1,
+  },
+  pageTitle: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#ffffff',
+    marginBottom: 4,
+    letterSpacing: -0.3,
+  },
+  pageSubtitle: {
+    fontSize: 14,
+    color: 'rgba(255, 255, 255, 0.85)',
+    fontWeight: '500',
+  },
+  actionButton: {
+    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 16,
+    backgroundColor: '#ffffff',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 12,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 4,
     elevation: 3,
   },
+  actionButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+    marginLeft: 6,
+  },
+
+  bottomShadow: {
+    height: 4,
+    backgroundColor: 'rgba(0, 0, 0, 0.06)',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 6,
+    elevation: 6,
+  },
+
+  // Brand Section
+  brandSection: {
+    flex: 1,
+    minWidth: 120,
+  },
+  logoContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  logoWrapper: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    backgroundColor: 'rgba(255, 255, 255, 0.15)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+  },
   logoText: {
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: '900',
     color: '#ffffff',
-    letterSpacing: -0.8,
-    textShadowColor: 'rgba(0, 0, 0, 0.2)',
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 2,
+    letterSpacing: -0.5,
   },
   brandInfo: {
     flex: 1,
   },
   brandName: {
-    fontSize: 22,
+    fontSize: 18,
     fontWeight: '800',
     color: '#ffffff',
-    letterSpacing: -0.5,
-    lineHeight: 26,
-    textShadowColor: 'rgba(0, 0, 0, 0.2)',
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 2,
+    letterSpacing: -0.3,
+    lineHeight: 20,
   },
   brandTagline: {
-    fontSize: 12,
-    color: 'rgba(255, 255, 255, 0.85)',
-    fontWeight: '600',
+    fontSize: 11,
+    color: 'rgba(255, 255, 255, 0.8)',
+    fontWeight: '500',
     textTransform: 'uppercase',
-    letterSpacing: 1,
-    marginTop: 2,
+    letterSpacing: 0.8,
+    marginTop: 1,
   },
 
-  // Enhanced Navigation Items
+  // Navigation Items
   navItems: {
     flexDirection: 'row',
     alignItems: 'center',
     flex: 2,
     justifyContent: 'center',
-    gap: 8,
-    paddingHorizontal: 12,
+    gap: 6,
+    paddingHorizontal: 8,
   },
   navItem: {
     flexDirection: 'column',
     alignItems: 'center',
-    paddingHorizontal: 12,
-    paddingVertical: 12,
-    borderRadius: 16,
-    minWidth: 68,
-    maxWidth: 85,
+    paddingHorizontal: 10,
+    paddingVertical: 10,
+    borderRadius: 14,
+    minWidth: 60,
     position: 'relative',
   },
   navItemActive: {
     backgroundColor: 'rgba(255, 255, 255, 0.1)',
-    transform: [{ scale: 1.05 }],
+    transform: [{ scale: 1.02 }],
   },
   navIconContainer: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    width: 30,
+    height: 30,
+    borderRadius: 15,
     backgroundColor: 'rgba(255, 255, 255, 0.1)',
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 6,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 2,
+    marginBottom: 4,
   },
   navIconContainerActive: {
     backgroundColor: 'rgba(255, 255, 255, 0.25)',
-    transform: [{ scale: 1.1 }],
-    shadowOpacity: 0.2,
-    shadowRadius: 6,
-    elevation: 4,
+    transform: [{ scale: 1.05 }],
   },
   navItemText: {
-    fontSize: 11,
+    fontSize: 10,
     color: 'rgba(255, 255, 255, 0.8)',
     fontWeight: '600',
     textAlign: 'center',
-    lineHeight: 13,
+    lineHeight: 12,
   },
   navItemTextActive: {
     color: '#ffffff',
@@ -485,175 +614,171 @@ const styles = StyleSheet.create({
   activeIndicator: {
     position: 'absolute',
     bottom: -2,
-    width: 24,
-    height: 3,
-    borderRadius: 2,
+    width: 18,
+    height: 2,
+    borderRadius: 1,
   },
 
-  // Enhanced User Section
+  // User Section
   userSection: {
     flexDirection: 'row',
     alignItems: 'center',
     flex: 1,
     justifyContent: 'flex-end',
-    minWidth: 140,
+    minWidth: 120,
   },
   userInfo: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginRight: 16,
+    marginRight: 12,
     flex: 1,
     justifyContent: 'flex-end',
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    borderRadius: 12,
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    borderRadius: 10,
     backgroundColor: 'rgba(255, 255, 255, 0.08)',
   },
   userAvatarContainer: {
     position: 'relative',
-    marginRight: 12,
+    marginRight: 10,
   },
   userAvatar: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
     backgroundColor: 'rgba(255, 255, 255, 0.2)',
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 2,
+    borderWidth: 1.5,
     borderColor: 'rgba(255, 255, 255, 0.3)',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
   },
   userInitial: {
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: '700',
     color: '#ffffff',
-    textShadowColor: 'rgba(0, 0, 0, 0.3)',
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 2,
   },
   statusIndicator: {
     position: 'absolute',
-    bottom: 2,
-    right: 2,
-    width: 10,
-    height: 10,
-    borderRadius: 5,
+    bottom: 1,
+    right: 1,
+    width: 8,
+    height: 8,
+    borderRadius: 4,
     backgroundColor: '#22c55e',
-    borderWidth: 2,
+    borderWidth: 1.5,
     borderColor: '#ffffff',
   },
   userDetails: {
     alignItems: 'flex-end',
-    maxWidth: 110,
+    maxWidth: 90,
   },
   userName: {
-    fontSize: 14,
+    fontSize: 12,
     fontWeight: '700',
     color: '#ffffff',
     textAlign: 'right',
-    lineHeight: 17,
-    textShadowColor: 'rgba(0, 0, 0, 0.2)',
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 2,
+    lineHeight: 15,
   },
   userRole: {
-    fontSize: 11,
+    fontSize: 10,
     color: 'rgba(255, 255, 255, 0.8)',
     textAlign: 'right',
     marginTop: 1,
-    fontWeight: '600',
+    fontWeight: '500',
     textTransform: 'capitalize',
   },
   logoutButton: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
     backgroundColor: 'rgba(255, 255, 255, 0.1)',
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.2)',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
   },
 });
 
-// Enhanced responsive styles for larger screens
+// Responsive styles for larger screens
 if (width > 768) {
   Object.assign(styles, {
     navbar: {
       ...styles.navbar,
       paddingHorizontal: 32,
-      paddingBottom: 24,
+      paddingBottom: 16,
+    },
+    pageHeader: {
+      ...styles.pageHeader,
+      paddingHorizontal: 32,
+      paddingVertical: 20,
     },
     logoWrapper: {
       ...styles.logoWrapper,
-      width: 48,
-      height: 48,
-      borderRadius: 14,
-      marginRight: 18,
+      width: 40,
+      height: 40,
+      borderRadius: 12,
+      marginRight: 14,
     },
     logoText: {
       ...styles.logoText,
-      fontSize: 18,
+      fontSize: 16,
     },
     brandName: {
       ...styles.brandName,
-      fontSize: 24,
+      fontSize: 20,
     },
     brandTagline: {
       ...styles.brandTagline,
-      fontSize: 13,
+      fontSize: 12,
     },
     navItems: {
       ...styles.navItems,
-      gap: 12,
-      paddingHorizontal: 16,
+      gap: 8,
+      paddingHorizontal: 12,
     },
     navItem: {
       ...styles.navItem,
-      paddingHorizontal: 16,
-      paddingVertical: 14,
-      minWidth: 75,
-      maxWidth: 95,
+      paddingHorizontal: 12,
+      paddingVertical: 12,
+      minWidth: 66,
     },
     navIconContainer: {
       ...styles.navIconContainer,
-      width: 40,
-      height: 40,
-      borderRadius: 20,
+      width: 34,
+      height: 34,
+      borderRadius: 17,
     },
     navItemText: {
       ...styles.navItemText,
-      fontSize: 12,
+      fontSize: 11,
+    },
+    pageTitle: {
+      ...styles.pageTitle,
+      fontSize: 26,
+    },
+    pageSubtitle: {
+      ...styles.pageSubtitle,
+      fontSize: 15,
     },
     userAvatar: {
       ...styles.userAvatar,
-      width: 42,
-      height: 42,
-      borderRadius: 21,
+      width: 36,
+      height: 36,
+      borderRadius: 18,
     },
     userName: {
       ...styles.userName,
-      fontSize: 15,
+      fontSize: 13,
     },
     userRole: {
       ...styles.userRole,
-      fontSize: 12,
+      fontSize: 11,
     },
     logoutButton: {
       ...styles.logoutButton,
-      width: 42,
-      height: 42,
-      borderRadius: 21,
+      width: 36,
+      height: 36,
+      borderRadius: 18,
     },
   });
 }

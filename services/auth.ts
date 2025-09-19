@@ -256,12 +256,17 @@ export const loginUser = async (data: LoginData) => {
 // Logout user
 export const logoutUser = async () => {
   try {
-    const { error } = await supabase.auth.signOut();
-    if (error) {
-      throw error;
-    }
+    // Use session manager for logout to ensure proper cleanup
+    const { sessionManager } = await import('./sessionManager');
+    await sessionManager.clearSession();
   } catch (error) {
     console.error('Logout error:', error);
+    // Fallback to direct Supabase logout
+    try {
+      await supabase.auth.signOut();
+    } catch (fallbackError) {
+      console.error('Fallback logout error:', fallbackError);
+    }
     throw error;
   }
 };
@@ -569,6 +574,20 @@ export const handleOAuthCallback = async (userType: 'farmer' | 'buyer') => {
 // Get user profile with auth user
 export const getUserWithProfile = async (): Promise<{ user: any; profile: Profile | null } | null> => {
   try {
+    // Try to get from session manager first
+    const { sessionManager } = await import('./sessionManager');
+    const sessionState = sessionManager.getSessionState();
+
+    if (sessionState.isAuthenticated && sessionState.user && sessionState.profile) {
+      console.log('📦 Using cached session data');
+      return {
+        user: sessionState.user,
+        profile: sessionState.profile
+      };
+    }
+
+    // Fallback to direct Supabase query
+    console.log('🔄 Fetching fresh user data from Supabase');
     const { data: { user }, error: userError } = await supabase.auth.getUser();
 
     if (userError || !user) {

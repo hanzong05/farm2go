@@ -7,6 +7,7 @@ import 'react-native-reanimated';
 
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { AuthProvider } from '../contexts/AuthContext';
+import { SessionProvider } from '../contexts/SessionContext';
 
 // Professional custom theme with modern colors
 const ProfessionalTheme = {
@@ -35,7 +36,7 @@ const ProfessionalDarkTheme = {
   },
 };
 
-// Enhanced screen options for consistent professional appearance
+// Enhanced screen options for consistent professional appearance 
 const getScreenOptions = (title?: string) => ({
   headerShown: false,
   title: title || '',
@@ -105,10 +106,11 @@ export default function RootLayout() {
   }, []);
 
   return (
-    <AuthProvider>
-      <ThemeProvider 
-        value={colorScheme === 'dark' ? ProfessionalDarkTheme : ProfessionalTheme}
-      >
+    <SessionProvider>
+      <AuthProvider>
+        <ThemeProvider
+          value={colorScheme === 'dark' ? ProfessionalDarkTheme : ProfessionalTheme}
+        >
         <Stack
           screenOptions={{
             headerShown: false,
@@ -356,7 +358,8 @@ export default function RootLayout() {
           backgroundColor={colorScheme === 'dark' ? '#0f172a' : '#ffffff'}
           translucent={Platform.OS === 'android'}
         />
-      </ThemeProvider>
-    </AuthProvider>
+        </ThemeProvider>
+      </AuthProvider>
+    </SessionProvider>
   );
 }
