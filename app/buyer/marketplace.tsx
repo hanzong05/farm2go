@@ -155,41 +155,6 @@ export default function MarketplaceScreen() {
     </View>
   );
 
-  const renderQuickActions = () => (
-    <View style={styles.actionsSection}>
-      <View style={styles.actionsGrid}>
-        <TouchableOpacity
-          style={styles.primaryActionCard}
-          onPress={() => router.push('/buyer/my-orders')}
-          activeOpacity={0.8}
-        >
-          <Text style={styles.primaryActionIcon}>📋</Text>
-          <Text style={styles.primaryActionTitle}>My Orders</Text>
-          <Text style={styles.primaryActionSubtitle}>Track purchases</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={styles.secondaryActionCard}
-          onPress={() => router.push('/buyer/purchase-history')}
-          activeOpacity={0.8}
-        >
-          <Text style={styles.secondaryActionIcon}>📋</Text>
-          <Text style={styles.secondaryActionTitle}>History</Text>
-          <Text style={styles.secondaryActionSubtitle}>Past orders</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={styles.secondaryActionCard}
-          onPress={() => router.push('/buyer/settings')}
-          activeOpacity={0.8}
-        >
-          <Text style={styles.secondaryActionIcon}>⚙️</Text>
-          <Text style={styles.secondaryActionTitle}>Settings</Text>
-          <Text style={styles.secondaryActionSubtitle}>Account</Text>
-        </TouchableOpacity>
-      </View>
-    </View>
-  );
 
   const renderProduct = (product: Product) => (
     <TouchableOpacity
@@ -344,7 +309,6 @@ export default function MarketplaceScreen() {
         </View>
 
         {renderCategoryFilter()}
-        {renderQuickActions()}
 
         {/* Products Section */}
         <View style={styles.productsSection}>
@@ -486,75 +450,6 @@ const styles = StyleSheet.create({
     color: '#ffffff',
   },
 
-  // Actions Section
-  actionsSection: {
-    paddingHorizontal: 20,
-    marginBottom: 32,
-  },
-  actionsGrid: {
-    flexDirection: 'row',
-    gap: 16,
-  },
-  primaryActionCard: {
-    flex: 2,
-    backgroundColor: '#3b82f6',
-    borderRadius: 18,
-    padding: 24,
-    alignItems: 'center',
-    elevation: 8,
-    shadowColor: '#3b82f6',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.25,
-    shadowRadius: 16,
-  },
-  primaryActionIcon: {
-    fontSize: 32,
-    color: '#ffffff',
-    marginBottom: 12,
-    fontWeight: 'bold',
-  },
-  primaryActionTitle: {
-    fontSize: 16,
-    color: '#ffffff',
-    fontWeight: 'bold',
-    marginBottom: 4,
-  },
-  primaryActionSubtitle: {
-    fontSize: 12,
-    color: 'rgba(255, 255, 255, 0.8)',
-    fontWeight: '500',
-  },
-  secondaryActionCard: {
-    flex: 1,
-    backgroundColor: '#ffffff',
-    borderRadius: 18,
-    padding: 20,
-    alignItems: 'center',
-    elevation: 4,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 12,
-    borderWidth: 1,
-    borderColor: '#e2e8f0',
-  },
-  secondaryActionIcon: {
-    fontSize: 24,
-    marginBottom: 8,
-  },
-  secondaryActionTitle: {
-    fontSize: 12,
-    color: '#0f172a',
-    fontWeight: 'bold',
-    marginBottom: 4,
-    textAlign: 'center',
-  },
-  secondaryActionSubtitle: {
-    fontSize: 10,
-    color: '#64748b',
-    fontWeight: '500',
-    textAlign: 'center',
-  },
 
   // Products Section
   productsSection: {

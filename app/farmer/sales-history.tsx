@@ -452,31 +452,6 @@ export default function FarmerSalesHistoryScreen() {
           </View>
         </View>
 
-        {/* Quick Actions */}
-        <View style={styles.actionsSection}>
-          <Text style={styles.sectionTitle}>Quick Actions</Text>
-          <View style={styles.actionsGrid}>
-            <TouchableOpacity
-              style={styles.primaryActionCard}
-              onPress={() => router.push('/farmer/orders')}
-              activeOpacity={0.8}
-            >
-              <Text style={styles.primaryActionIcon}>📋</Text>
-              <Text style={styles.primaryActionTitle}>View Orders</Text>
-              <Text style={styles.primaryActionSubtitle}>Manage current orders</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={styles.secondaryActionCard}
-              onPress={() => router.push('/farmer/my-products')}
-              activeOpacity={0.8}
-            >
-              <Text style={styles.secondaryActionIcon}>📦</Text>
-              <Text style={styles.secondaryActionTitle}>My Products</Text>
-              <Text style={styles.secondaryActionSubtitle}>Update inventory</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
 
         {/* Enhanced Filter */}
         <View style={styles.filterSection}>
@@ -582,73 +557,6 @@ const styles = StyleSheet.create({
     gap: 16,
   },
 
-  // Actions Section
-  actionsSection: {
-    paddingHorizontal: 20,
-    marginBottom: 36,
-  },
-  actionsGrid: {
-    flexDirection: 'row',
-    gap: 16,
-  },
-  primaryActionCard: {
-    flex: 2,
-    backgroundColor: '#3b82f6',
-    borderRadius: 18,
-    padding: 24,
-    alignItems: 'center',
-    elevation: 8,
-    shadowColor: '#3b82f6',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.25,
-    shadowRadius: 16,
-  },
-  primaryActionIcon: {
-    fontSize: 32,
-    color: '#ffffff',
-    marginBottom: 12,
-    fontWeight: 'bold',
-  },
-  primaryActionTitle: {
-    fontSize: 16,
-    color: '#ffffff',
-    fontWeight: 'bold',
-    marginBottom: 4,
-  },
-  primaryActionSubtitle: {
-    fontSize: 12,
-    color: 'rgba(255, 255, 255, 0.8)',
-    fontWeight: '500',
-  },
-  secondaryActionCard: {
-    flex: 1,
-    backgroundColor: '#ffffff',
-    borderRadius: 18,
-    padding: 24,
-    alignItems: 'center',
-    elevation: 4,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 12,
-    borderWidth: 1,
-    borderColor: '#e2e8f0',
-  },
-  secondaryActionIcon: {
-    fontSize: 28,
-    marginBottom: 12,
-  },
-  secondaryActionTitle: {
-    fontSize: 14,
-    color: '#0f172a',
-    fontWeight: 'bold',
-    marginBottom: 4,
-  },
-  secondaryActionSubtitle: {
-    fontSize: 11,
-    color: '#64748b',
-    fontWeight: '500',
-  },
 
   // Filter Section
   filterSection: {

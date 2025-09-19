@@ -415,33 +415,6 @@ export default function FarmerInventoryScreen() {
           </View>
         </View>
 
-        {/* Quick Actions */}
-        <View style={styles.actionsSection}>
-          <Text style={styles.sectionTitle}>Quick Actions</Text>
-          <View style={styles.actionsGrid}>
-            <TouchableOpacity
-              style={styles.primaryActionCard}
-              onPress={() => router.push('/farmer/products/add')}
-              activeOpacity={0.8}
-            >
-              <Text style={styles.primaryActionIcon}>+</Text>
-              <Text style={styles.primaryActionTitle}>Add Product</Text>
-              <Text style={styles.primaryActionSubtitle}>List new produce</Text>
-            </TouchableOpacity>
-
-            {stats.lowStockProducts > 0 && (
-              <TouchableOpacity
-                style={styles.warningActionCard}
-                onPress={() => setSelectedCategory('All')}
-                activeOpacity={0.8}
-              >
-                <Text style={styles.warningActionIcon}>⚠️</Text>
-                <Text style={styles.warningActionTitle}>{stats.lowStockProducts} Low Stock</Text>
-                <Text style={styles.warningActionSubtitle}>Need attention</Text>
-              </TouchableOpacity>
-            )}
-          </View>
-        </View>
 
         {/* Enhanced Category Filter */}
         <View style={styles.filterSection}>
@@ -602,73 +575,6 @@ const styles = StyleSheet.create({
     gap: 16,
   },
 
-  // Actions Section
-  actionsSection: {
-    paddingHorizontal: 20,
-    marginBottom: 36,
-  },
-  actionsGrid: {
-    flexDirection: 'row',
-    gap: 16,
-  },
-  primaryActionCard: {
-    flex: 2,
-    backgroundColor: '#10b981',
-    borderRadius: 18,
-    padding: 24,
-    alignItems: 'center',
-    elevation: 8,
-    shadowColor: '#10b981',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.25,
-    shadowRadius: 16,
-  },
-  primaryActionIcon: {
-    fontSize: 32,
-    color: '#ffffff',
-    marginBottom: 12,
-    fontWeight: 'bold',
-  },
-  primaryActionTitle: {
-    fontSize: 16,
-    color: '#ffffff',
-    fontWeight: 'bold',
-    marginBottom: 4,
-  },
-  primaryActionSubtitle: {
-    fontSize: 12,
-    color: 'rgba(255, 255, 255, 0.8)',
-    fontWeight: '500',
-  },
-  warningActionCard: {
-    flex: 1,
-    backgroundColor: '#ffffff',
-    borderRadius: 18,
-    padding: 24,
-    alignItems: 'center',
-    elevation: 4,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 12,
-    borderWidth: 2,
-    borderColor: '#f59e0b',
-  },
-  warningActionIcon: {
-    fontSize: 28,
-    marginBottom: 12,
-  },
-  warningActionTitle: {
-    fontSize: 14,
-    color: '#d97706',
-    fontWeight: 'bold',
-    marginBottom: 4,
-  },
-  warningActionSubtitle: {
-    fontSize: 11,
-    color: '#d97706',
-    fontWeight: '500',
-  },
 
   // Filter Section
   filterSection: {
