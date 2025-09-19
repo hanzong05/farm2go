@@ -205,7 +205,7 @@ const colors = {
 
 export default function HeaderComponent({
   profile,
-  userType, // Remove default value here
+  userType,
   currentRoute = '',
   showSearch = false,
   searchQuery = '',
@@ -280,7 +280,7 @@ export default function HeaderComponent({
 
   return (
     <View style={styles.header}>
-      {/* Top Navigation Bar */}
+      {/* Top Navigation Bar - Now with navigation items */}
       <View style={styles.topBar}>
         <View style={styles.logoSection}>
           <View style={styles.logo}>
@@ -289,8 +289,44 @@ export default function HeaderComponent({
           <Text style={styles.brandText}>Farm2Go</Text>
         </View>
 
+        {/* Navigation Items in Top Bar */}
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          style={styles.topNavScroll}
+          contentContainerStyle={styles.topNavContent}
+        >
+          {filteredNavItems.map((item) => {
+            const isActive = currentRoute === item.route;
+
+            return (
+              <TouchableOpacity
+                key={item.id}
+                style={[
+                  styles.topNavItem,
+                  isActive && styles.topNavItemActive
+                ]}
+                onPress={() => handleNavigation(item.route)}
+              >
+                <Icon
+                  name={item.icon}
+                  size={14}
+                  color={isActive ? colors.primary : colors.white}
+                  style={styles.topNavIcon}
+                />
+                <Text style={[
+                  styles.topNavText,
+                  isActive && styles.topNavTextActive
+                ]}>
+                  {item.title}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
+        </ScrollView>
+
         <View style={styles.headerActions}>
-          {/* Always show Messages and Notifications */}
+          {/* Messages and Notifications */}
           <MessageComponent
             conversations={conversations}
             onConversationPress={onConversationPress}
@@ -318,47 +354,11 @@ export default function HeaderComponent({
 
           <TouchableOpacity style={styles.profileButton} onPress={handleLogout}>
             <View style={styles.profileAvatar}>
-              <Icon name="sign-out-alt" size={14} color={colors.primary} />
+              <Icon name="sign-out-alt" size={12} color={colors.primary} />
             </View>
           </TouchableOpacity>
         </View>
       </View>
-
-      {/* Navigation Bar */}
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        style={styles.navBar}
-        contentContainerStyle={styles.navBarContent}
-      >
-        {filteredNavItems.map((item) => {
-          const isActive = currentRoute === item.route;
-
-          return (
-            <TouchableOpacity
-              key={item.id}
-              style={[
-                styles.navItem,
-                isActive && styles.navItemActive
-              ]}
-              onPress={() => handleNavigation(item.route)}
-            >
-              <Icon
-                name={item.icon}
-                size={16}
-                color={isActive ? colors.white : colors.gray400}
-                style={styles.navIcon}
-              />
-              <Text style={[
-                styles.navText,
-                isActive && styles.navTextActive
-              ]}>
-                {item.title}
-              </Text>
-            </TouchableOpacity>
-          );
-        })}
-      </ScrollView>
 
       {/* Search Bar */}
       {showSearch && (
@@ -455,20 +455,22 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 16,
-    paddingVertical: 12,
-    paddingTop: 50,
+    paddingVertical: 8,
+    paddingTop: 44, // Reduced from 50
     backgroundColor: colors.primary,
+    height: 70, // Fixed height for consistency
   },
 
   logoSection: {
     flexDirection: 'row',
     alignItems: 'center',
+    minWidth: 120, // Ensure logo section has minimum width
   },
 
   logo: {
-    width: 32,
-    height: 32,
-    borderRadius: 8,
+    width: 28, // Slightly smaller
+    height: 28,
+    borderRadius: 6,
     backgroundColor: colors.white,
     alignItems: 'center',
     justifyContent: 'center',
@@ -476,98 +478,100 @@ const styles = StyleSheet.create({
   },
 
   logoText: {
-    fontSize: 14,
+    fontSize: 12, // Slightly smaller
     fontWeight: 'bold',
     color: colors.primary,
   },
 
   brandText: {
-    fontSize: 18,
+    fontSize: 16, // Slightly smaller
     fontWeight: 'bold',
     color: colors.white,
+  },
+
+  // Top Navigation in Header
+  topNavScroll: {
+    flex: 1,
+    marginHorizontal: 16,
+  },
+
+  topNavContent: {
+    alignItems: 'center',
+    paddingHorizontal: 8,
+  },
+
+  topNavItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 4,
+    backgroundColor: 'transparent',
+    marginRight: 8,
+    minHeight: 32,
+  },
+
+  topNavItemActive: {
+    backgroundColor: colors.white,
+  },
+
+  topNavIcon: {
+    marginRight: 4,
+  },
+
+  topNavText: {
+    fontSize: 11,
+    fontWeight: '500',
+    color: colors.white,
+  },
+
+  topNavTextActive: {
+    color: colors.primary,
+    fontWeight: '600',
   },
 
   headerActions: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
+    gap: 8, // Reduced gap
+    minWidth: 120, // Ensure actions section has minimum width
   },
 
   headerButton: {
     backgroundColor: colors.white,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 4,
   },
 
   headerButtonText: {
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '600',
     color: colors.primary,
   },
 
   profileButton: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+    width: 28, // Smaller
+    height: 28,
+    borderRadius: 14,
     backgroundColor: 'rgba(255,255,255,0.2)',
     alignItems: 'center',
     justifyContent: 'center',
   },
 
   profileAvatar: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
+    width: 24,
+    height: 24,
+    borderRadius: 12,
     backgroundColor: colors.white,
     alignItems: 'center',
     justifyContent: 'center',
   },
 
   avatarText: {
-    fontSize: 12,
+    fontSize: 10,
     fontWeight: 'bold',
     color: colors.primary,
-  },
-
-  // Navigation Bar
-  navBar: {
-    backgroundColor: colors.gray700,
-    paddingHorizontal: 16,
-  },
-
-  navBarContent: {
-    paddingVertical: 8,
-    gap: 8,
-  },
-
-  navItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 6,
-    backgroundColor: 'transparent',
-    marginRight: 8,
-  },
-
-  navItemActive: {
-    backgroundColor: colors.primary,
-  },
-
-  navIcon: {
-    marginRight: 6,
-  },
-
-  navText: {
-    fontSize: 12,
-    fontWeight: '500',
-    color: colors.gray400,
-  },
-
-  navTextActive: {
-    color: colors.white,
-    fontWeight: '600',
   },
 
   // Search Section
@@ -610,7 +614,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-
 
   // Categories
   categorySection: {
