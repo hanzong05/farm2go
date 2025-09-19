@@ -390,7 +390,7 @@ export default function HeaderComponent({
             )}
           </View>
           
-          {/* Category Tabs under search */}
+          {/* Simple Category Tabs under search */}
           {showCategories && categories.length > 0 && (
             <ScrollView
               horizontal
@@ -398,47 +398,29 @@ export default function HeaderComponent({
               style={styles.categoryScrollView}
               contentContainerStyle={styles.categoryContainer}
             >
-              {categories.map((category) => (
-                <TouchableOpacity
-                  key={category.key}
-                  style={[
-                    styles.categoryTab,
-                    selectedCategory === category.key && styles.categoryTabActive
-                  ]}
-                  onPress={() => onCategoryChange?.(category.key)}
-                >
-                  <Text style={[
-                    styles.categoryText,
-                    selectedCategory === category.key && styles.categoryTextActive
-                  ]}>
-                    {category.label}
-                  </Text>
-                  {selectedCategory === category.key && (
-                    <View style={[styles.categoryIndicator, { backgroundColor: category.color }]} />
+              {categories.map((category, index) => (
+                <React.Fragment key={category.key}>
+                  <TouchableOpacity
+                    style={styles.simpleCategoryTab}
+                    onPress={() => onCategoryChange?.(category.key)}
+                  >
+                    <Text style={[
+                      styles.simpleCategoryText,
+                      selectedCategory === category.key && styles.simpleCategoryTextActive
+                    ]}>
+                      {category.label}
+                    </Text>
+                  </TouchableOpacity>
+                  {index < categories.length - 1 && (
+                    <View style={styles.categoryDivider} />
                   )}
-                </TouchableOpacity>
+                </React.Fragment>
               ))}
             </ScrollView>
           )}
         </View>
       )}
 
-      {/* Stats Banner */}
-      {showStats && stats.length > 0 && (
-        <View style={styles.statsBanner}>
-          <View style={styles.statsGrid}>
-            {stats.map((stat, index) => (
-              <React.Fragment key={index}>
-                <View style={styles.statItem}>
-                  <Text style={styles.statNumber}>{stat.number}</Text>
-                  <Text style={styles.statLabel}>{stat.label}</Text>
-                </View>
-                {index < stats.length - 1 && <View style={styles.statDivider} />}
-              </React.Fragment>
-            ))}
-          </View>
-        </View>
-      )}
     </View>
   );
 }
@@ -615,90 +597,37 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
 
-  // Categories within search section
+  // Simple categories within search section
   categoryScrollView: {
-    marginTop: 12,
+    marginTop: 8,
   },
 
   categoryContainer: {
     paddingHorizontal: 0,
-    paddingVertical: 0,
-  },
-
-  categoryTab: {
-    paddingHorizontal: 16,
     paddingVertical: 8,
-    marginRight: 12,
-    borderRadius: 20,
-    backgroundColor: colors.gray100,
-    position: 'relative',
   },
 
-  categoryTabActive: {
-    backgroundColor: colors.primary + '20',
+  simpleCategoryTab: {
+    paddingHorizontal: 0,
+    paddingVertical: 4,
   },
 
-  categoryText: {
-    fontSize: 12,
+  simpleCategoryText: {
+    fontSize: 13,
+    fontWeight: '400',
+    color: 'rgba(255,255,255,0.8)',
+  },
+
+  simpleCategoryTextActive: {
+    color: colors.white,
     fontWeight: '500',
-    color: colors.textSecondary,
   },
 
-  categoryTextActive: {
-    color: colors.primary,
-    fontWeight: '600',
-  },
-
-  categoryIndicator: {
-    position: 'absolute',
-    bottom: -2,
-    left: '50%',
-    transform: [{ translateX: -6 }],
-    width: 12,
-    height: 2,
-    borderRadius: 1,
-  },
-
-  // Stats Banner
-  statsBanner: {
-    backgroundColor: colors.white,
-    marginHorizontal: 16,
-    marginVertical: 8,
-    borderRadius: 8,
-    elevation: 2,
-    shadowColor: colors.shadow,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-  },
-
-  statsGrid: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 16,
-  },
-
-  statItem: {
-    flex: 1,
-    alignItems: 'center',
-  },
-
-  statNumber: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: colors.text,
-    marginBottom: 4,
-  },
-
-  statLabel: {
-    fontSize: 10,
-    color: colors.textSecondary,
-    textTransform: 'uppercase',
-  },
-
-  statDivider: {
+  categoryDivider: {
     width: 1,
-    height: 30,
-    backgroundColor: colors.border,
+    height: 12,
+    backgroundColor: 'rgba(255,255,255,0.3)',
+    marginHorizontal: 12,
+    alignSelf: 'center',
   },
 });
