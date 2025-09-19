@@ -44,6 +44,9 @@ interface CreateUserForm {
   phone: string;
   farm_name: string;
   company_name: string;
+  province: string;
+  city: string;
+  barangay: string;
 }
 
 const colors = {
@@ -68,9 +71,19 @@ export default function SuperAdminUsers() {
   const [refreshing, setRefreshing] = useState(false);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
+  const [showProvinceModal, setShowProvinceModal] = useState(false);
+  const [showCityModal, setShowCityModal] = useState(false);
+  const [showBarangayModal, setShowBarangayModal] = useState(false);
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   // Removed filterType since we only show admin users
+
+  // Location picker state
+  const [provinces] = useState([
+    'Abra', 'Agusan del Norte', 'Agusan del Sur', 'Aklan', 'Albay', 'Antique', 'Apayao', 'Aurora', 'Basilan', 'Bataan', 'Batanes', 'Batangas', 'Benguet', 'Biliran', 'Bohol', 'Bukidnon', 'Bulacan', 'Cagayan', 'Camarines Norte', 'Camarines Sur', 'Camiguin', 'Capiz', 'Catanduanes', 'Cavite', 'Cebu', 'Compostela Valley', 'Cotabato', 'Davao del Norte', 'Davao del Sur', 'Davao Oriental', 'Dinagat Islands', 'Eastern Samar', 'Guimaras', 'Ifugao', 'Ilocos Norte', 'Ilocos Sur', 'Iloilo', 'Isabela', 'Kalinga', 'Laguna', 'Lanao del Norte', 'Lanao del Sur', 'La Union', 'Leyte', 'Maguindanao', 'Marinduque', 'Masbate', 'Metro Manila', 'Misamis Occidental', 'Misamis Oriental', 'Mountain Province', 'Negros Occidental', 'Negros Oriental', 'Northern Samar', 'Nueva Ecija', 'Nueva Vizcaya', 'Occidental Mindoro', 'Oriental Mindoro', 'Palawan', 'Pampanga', 'Pangasinan', 'Quezon', 'Quirino', 'Rizal', 'Romblon', 'Samar', 'Sarangani', 'Siquijor', 'Sorsogon', 'South Cotabato', 'Southern Leyte', 'Sultan Kudarat', 'Sulu', 'Surigao del Norte', 'Surigao del Sur', 'Tarlac', 'Tawi-Tawi', 'Zambales', 'Zamboanga del Norte', 'Zamboanga del Sur', 'Zamboanga Sibugay'
+  ]);
+  const [cities, setCities] = useState<string[]>([]);
+  const [barangays, setBarangays] = useState<string[]>([]);
 
   const [createForm, setCreateForm] = useState<CreateUserForm>({
     email: '',
@@ -81,6 +94,9 @@ export default function SuperAdminUsers() {
     phone: '',
     farm_name: '',
     company_name: '',
+    province: '',
+    city: '',
+    barangay: '',
   });
 
   useEffect(() => {
@@ -155,8 +171,8 @@ export default function SuperAdminUsers() {
 
   const createUser = async () => {
     try {
-      if (!createForm.email || !createForm.password || !createForm.first_name) {
-        Alert.alert('Error', 'Please fill in all required fields');
+      if (!createForm.email || !createForm.password || !createForm.first_name || !createForm.province || !createForm.city || !createForm.barangay) {
+        Alert.alert('Error', 'Please fill in all required fields including location information');
         return;
       }
 
@@ -180,6 +196,9 @@ export default function SuperAdminUsers() {
             phone: createForm.phone || null,
             farm_name: createForm.user_type === 'farmer' ? createForm.farm_name || null : null,
             company_name: createForm.user_type === 'buyer' ? createForm.company_name || null : null,
+            province: createForm.province || null,
+            city: createForm.city || null,
+            barangay: createForm.barangay || null,
           });
 
         if (profileError) throw profileError;
@@ -236,7 +255,46 @@ export default function SuperAdminUsers() {
       phone: '',
       farm_name: '',
       company_name: '',
+      province: '',
+      city: '',
+      barangay: '',
     });
+    setCities([]);
+    setBarangays([]);
+  };
+
+  const handleProvinceChange = (province: string) => {
+    setCreateForm({ ...createForm, province, city: '', barangay: '' });
+    setBarangays([]);
+
+    // Sample cities for popular provinces
+    const provinceCities: { [key: string]: string[] } = {
+      'Metro Manila': ['Manila', 'Quezon City', 'Makati', 'Pasig', 'Taguig', 'Mandaluyong', 'Marikina', 'Caloocan', 'Las Piñas', 'Muntinlupa', 'Parañaque', 'Pasay', 'Pateros', 'San Juan', 'Valenzuela', 'Malabon', 'Navotas'],
+      'Cebu': ['Cebu City', 'Lapu-Lapu City', 'Mandaue City', 'Talisay City', 'Toledo City', 'Danao City', 'Carcar City'],
+      'Laguna': ['Calamba', 'Santa Rosa', 'Biñan', 'San Pedro', 'Cabuyao', 'San Pablo', 'Los Baños', 'Sta. Cruz'],
+      'Cavite': ['Dasmariñas', 'Bacoor', 'Imus', 'General Trias', 'Kawit', 'Rosario', 'Noveleta', 'Trece Martires'],
+      'Bulacan': ['Malolos', 'Meycauayan', 'San Jose del Monte', 'Marilao', 'Bocaue', 'Guiguinto', 'Plaridel'],
+      'Rizal': ['Antipolo', 'Cainta', 'Taytay', 'Angono', 'Binangonan', 'Teresa', 'Morong', 'Tanay'],
+      'Pampanga': ['San Fernando', 'Angeles', 'Mabalacat', 'Apalit', 'Macabebe', 'Masantol', 'Mexico', 'Santa Ana'],
+      'Batangas': ['Batangas City', 'Lipa', 'Tanauan', 'Santo Tomas', 'Calaca', 'Lemery', 'Rosario', 'Taal'],
+      'Nueva Ecija': ['Cabanatuan', 'Gapan', 'San Jose', 'Palayan', 'Muñoz', 'Talavera', 'Santa Rosa', 'Aliaga'],
+      'Pangasinan': ['Dagupan', 'San Carlos', 'Urdaneta', 'Alaminos', 'Malasiqui', 'Mangaldan', 'Mapandan', 'Binalonan']
+    };
+
+    setCities(provinceCities[province] || ['Sample City 1', 'Sample City 2', 'Sample City 3']);
+  };
+
+  const handleCityChange = (city: string) => {
+    setCreateForm({ ...createForm, city, barangay: '' });
+
+    // Sample barangays
+    const sampleBarangays = [
+      'Barangay Poblacion', 'Barangay San Antonio', 'Barangay San Jose', 'Barangay Santa Maria',
+      'Barangay San Pedro', 'Barangay Santa Cruz', 'Barangay San Juan', 'Barangay San Miguel',
+      'Barangay Santo Niño', 'Barangay San Rafael', 'Barangay Santa Ana', 'Barangay San Vicente'
+    ];
+
+    setBarangays(sampleBarangays);
   };
 
   const filteredUsers = users.filter(user => {
@@ -429,6 +487,63 @@ export default function SuperAdminUsers() {
               keyboardType="phone-pad"
             />
 
+            {/* Location Picker */}
+            <View style={styles.locationSection}>
+              <Text style={styles.label}>Location Information:</Text>
+
+              {/* Province Picker */}
+              <View style={styles.pickerContainer}>
+                <Text style={styles.pickerLabel}>Province *</Text>
+                <View style={styles.pickerWrapper}>
+                  <TouchableOpacity
+                    style={[styles.picker, !createForm.province && styles.pickerPlaceholder]}
+                    onPress={() => setShowProvinceModal(true)}
+                  >
+                    <Text style={[styles.pickerText, !createForm.province && styles.pickerPlaceholderText]}>
+                      {createForm.province || 'Select Province'}
+                    </Text>
+                    <Icon name="chevron-down" size={16} color={colors.textSecondary} />
+                  </TouchableOpacity>
+                </View>
+              </View>
+
+              {/* City Picker */}
+              {createForm.province && (
+                <View style={styles.pickerContainer}>
+                  <Text style={styles.pickerLabel}>City/Municipality *</Text>
+                  <View style={styles.pickerWrapper}>
+                    <TouchableOpacity
+                      style={[styles.picker, !createForm.city && styles.pickerPlaceholder]}
+                      onPress={() => setShowCityModal(true)}
+                    >
+                      <Text style={[styles.pickerText, !createForm.city && styles.pickerPlaceholderText]}>
+                        {createForm.city || 'Select City/Municipality'}
+                      </Text>
+                      <Icon name="chevron-down" size={16} color={colors.textSecondary} />
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              )}
+
+              {/* Barangay Picker */}
+              {createForm.city && (
+                <View style={styles.pickerContainer}>
+                  <Text style={styles.pickerLabel}>Barangay *</Text>
+                  <View style={styles.pickerWrapper}>
+                    <TouchableOpacity
+                      style={[styles.picker, !createForm.barangay && styles.pickerPlaceholder]}
+                      onPress={() => setShowBarangayModal(true)}
+                    >
+                      <Text style={[styles.pickerText, !createForm.barangay && styles.pickerPlaceholderText]}>
+                        {createForm.barangay || 'Select Barangay'}
+                      </Text>
+                      <Icon name="chevron-down" size={16} color={colors.textSecondary} />
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              )}
+            </View>
+
             <View style={styles.modalActions}>
               <TouchableOpacity
                 style={styles.cancelButton}
@@ -448,6 +563,99 @@ export default function SuperAdminUsers() {
               </TouchableOpacity>
             </View>
           </View>
+        </View>
+      </Modal>
+
+      {/* Province Selection Modal */}
+      <Modal
+        visible={showProvinceModal}
+        animationType="slide"
+        presentationStyle="pageSheet"
+      >
+        <View style={styles.modalContainer}>
+          <View style={styles.modalHeader}>
+            <Text style={styles.modalTitle}>Select Province</Text>
+            <TouchableOpacity onPress={() => setShowProvinceModal(false)}>
+              <Icon name="times" size={24} color={colors.textSecondary} />
+            </TouchableOpacity>
+          </View>
+          <FlatList
+            data={provinces}
+            keyExtractor={(item) => item}
+            renderItem={({ item }) => (
+              <TouchableOpacity
+                style={styles.listItem}
+                onPress={() => {
+                  handleProvinceChange(item);
+                  setShowProvinceModal(false);
+                }}
+              >
+                <Text style={styles.listItemText}>{item}</Text>
+              </TouchableOpacity>
+            )}
+          />
+        </View>
+      </Modal>
+
+      {/* City Selection Modal */}
+      <Modal
+        visible={showCityModal}
+        animationType="slide"
+        presentationStyle="pageSheet"
+      >
+        <View style={styles.modalContainer}>
+          <View style={styles.modalHeader}>
+            <Text style={styles.modalTitle}>Select City/Municipality</Text>
+            <TouchableOpacity onPress={() => setShowCityModal(false)}>
+              <Icon name="times" size={24} color={colors.textSecondary} />
+            </TouchableOpacity>
+          </View>
+          <FlatList
+            data={cities}
+            keyExtractor={(item) => item}
+            renderItem={({ item }) => (
+              <TouchableOpacity
+                style={styles.listItem}
+                onPress={() => {
+                  handleCityChange(item);
+                  setShowCityModal(false);
+                }}
+              >
+                <Text style={styles.listItemText}>{item}</Text>
+              </TouchableOpacity>
+            )}
+          />
+        </View>
+      </Modal>
+
+      {/* Barangay Selection Modal */}
+      <Modal
+        visible={showBarangayModal}
+        animationType="slide"
+        presentationStyle="pageSheet"
+      >
+        <View style={styles.modalContainer}>
+          <View style={styles.modalHeader}>
+            <Text style={styles.modalTitle}>Select Barangay</Text>
+            <TouchableOpacity onPress={() => setShowBarangayModal(false)}>
+              <Icon name="times" size={24} color={colors.textSecondary} />
+            </TouchableOpacity>
+          </View>
+          <FlatList
+            data={barangays}
+            keyExtractor={(item) => item}
+            renderItem={({ item }) => (
+              <TouchableOpacity
+                style={styles.listItem}
+                onPress={() => {
+                  setCreateForm({ ...createForm, barangay: item });
+                  setShowBarangayModal(false);
+                }}
+              >
+                <Text style={styles.listItemText}>{item}</Text>
+              </TouchableOpacity>
+            )}
+          />
         </View>
       </Modal>
     </View>
@@ -703,5 +911,56 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: colors.white,
     fontWeight: '600',
+  },
+
+  // Location Picker Styles
+  locationSection: {
+    gap: 16,
+    marginTop: 8,
+  },
+  pickerContainer: {
+    gap: 8,
+  },
+  pickerLabel: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: colors.text,
+  },
+  pickerWrapper: {
+    position: 'relative',
+  },
+  picker: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 8,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    backgroundColor: colors.white,
+  },
+  pickerPlaceholder: {
+    borderColor: colors.gray200,
+  },
+  pickerText: {
+    fontSize: 16,
+    color: colors.text,
+    flex: 1,
+  },
+  pickerPlaceholderText: {
+    color: colors.textSecondary,
+  },
+
+  // List Item Styles for Modals
+  listItem: {
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+  },
+  listItemText: {
+    fontSize: 16,
+    color: colors.text,
   },
 });
