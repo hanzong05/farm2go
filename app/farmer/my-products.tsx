@@ -34,7 +34,21 @@ interface Product {
 type Profile = Database['public']['Tables']['profiles']['Row'];
 
 const { width } = Dimensions.get('window');
-const ITEM_WIDTH = (width - 48) / 2; // 2 columns with margins
+
+// Responsive column calculation
+const getNumColumns = () => {
+  if (width >= 1024) return 4; // Desktop: 4 columns
+  if (width >= 768) return 3;  // Tablet: 3 columns
+  if (width >= 480) return 2;  // Large mobile: 2 columns
+  return 1; // Small mobile: 1 column
+};
+
+const getItemWidth = (numColumns: number) => {
+  const padding = 16; // Container padding
+  const gap = 12; // Gap between items
+  const totalGap = (numColumns - 1) * gap;
+  return (width - (padding * 2) - totalGap) / numColumns;
+};
 
 // Farm2Go green color scheme
 const colors = {
@@ -78,9 +92,17 @@ export default function Farm2GoFarmerProducts() {
   const [refreshing, setRefreshing] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('all');
+  const [numColumns, setNumColumns] = useState(getNumColumns());
 
   useEffect(() => {
     loadData();
+    
+    // Listen for orientation changes
+    const subscription = Dimensions.addEventListener('change', ({ window }) => {
+      setNumColumns(getNumColumns());
+    });
+
+    return () => subscription?.remove();
   }, []);
 
   useEffect(() => {
@@ -267,58 +289,120 @@ export default function Farm2GoFarmerProducts() {
     </View>
   );
 
-  const renderProductItem = ({ item, index }: { item: Product; index: number }) => (
-    <TouchableOpacity
-      style={[styles.productCard, index % 2 === 1 && styles.productCardRight]}
-      onPress={() => router.push(`/farmer/products/${item.id}` as any)}
-      activeOpacity={0.8}
-    >
-      {/* Product Image */}
-      <View style={styles.imageContainer}>
-        {item.image_url ? (
-          <Image source={{ uri: item.image_url }} style={styles.productImage} />
-        ) : (
-          <View style={styles.placeholderImage}>
-            <Text style={styles.placeholderIcon}>🥬</Text>
-          </View>
-        )}
-        
-        {/* Status Badge */}
-        <View style={[styles.statusBadge, { backgroundColor: getStatusColor(item.status) }]}>
-          <Text style={styles.statusText}>{getStatusText(item.status)}</Text>
-        </View>
-
-        {/* Quick Actions */}
-        <View style={styles.quickActions}>
-          <TouchableOpacity style={styles.quickAction}>
-            <Text style={styles.quickActionIcon}>✏️</Text>
-          </TouchableOpacity>
-        </View>
-      </View>
-
-      {/* Product Info */}
-      <View style={styles.productInfo}>
-        <Text style={styles.productName} numberOfLines={2}>
-          {item.name}
-        </Text>
-        
-        <View style={styles.priceContainer}>
-          <Text style={styles.price}>{formatPrice(item.price)}</Text>
-          <Text style={styles.unit}>/{item.unit}</Text>
-        </View>
-
-        <View style={styles.productMeta}>
-          <View style={styles.stockInfo}>
-            <Text style={styles.stockText}>Stock: {item.quantity_available}</Text>
-          </View>
+  const renderProductItem = ({ item }: { item: Product }) => {
+    const itemWidth = getItemWidth(numColumns);
+    const isDesktop = width >= 1024;
+    const isTablet = width >= 768;
+    const isMobile = width < 768;
+    
+    return (
+      <TouchableOpacity
+        style={[
+          styles.productCard,
+          { 
+            width: itemWidth,
+            marginBottom: isDesktop ? 16 : isMobile ? 12 : 14,
+          }
+        ]}
+        onPress={() => router.push(`/farmer/products/${item.id}` as any)}
+        activeOpacity={0.8}
+      >
+        {/* Product Image */}
+        <View style={[
+          styles.imageContainer,
+          { height: itemWidth * 0.8 } // Maintain aspect ratio
+        ]}>
+          {item.image_url ? (
+            <Image source={{ uri: item.image_url }} style={styles.productImage} />
+          ) : (
+            <View style={styles.placeholderImage}>
+              <Text style={[
+                styles.placeholderIcon,
+                { fontSize: isDesktop ? 32 : isTablet ? 28 : 24 }
+              ]}>🥬</Text>
+            </View>
+          )}
           
-          <View style={styles.categoryBadge}>
-            <Text style={styles.categoryBadgeText}>{item.category}</Text>
+          {/* Status Badge */}
+          <View style={[styles.statusBadge, { backgroundColor: getStatusColor(item.status) }]}>
+            <Text style={[
+              styles.statusText,
+              { fontSize: isDesktop ? 10 : isMobile ? 8 : 9 }
+            ]}>
+              {getStatusText(item.status)}
+            </Text>
+          </View>
+
+          {/* Quick Actions */}
+          <View style={styles.quickActions}>
+            <TouchableOpacity style={[
+              styles.quickAction,
+              { 
+                width: isDesktop ? 28 : isMobile ? 20 : 24,
+                height: isDesktop ? 28 : isMobile ? 20 : 24,
+              }
+            ]}>
+              <Text style={[
+                styles.quickActionIcon,
+                { fontSize: isDesktop ? 14 : isMobile ? 10 : 12 }
+              ]}>✏️</Text>
+            </TouchableOpacity>
           </View>
         </View>
-      </View>
-    </TouchableOpacity>
-  );
+
+        {/* Product Info */}
+        <View style={[
+          styles.productInfo,
+          { padding: isDesktop ? 12 : isMobile ? 8 : 10 }
+        ]}>
+          <Text style={[
+            styles.productName,
+            { 
+              fontSize: isDesktop ? 14 : isMobile ? 12 : 13,
+              lineHeight: isDesktop ? 18 : isMobile ? 16 : 17,
+            }
+          ]} numberOfLines={2}>
+            {item.name}
+          </Text>
+          
+          <View style={styles.priceContainer}>
+            <Text style={[
+              styles.price,
+              { fontSize: isDesktop ? 16 : isMobile ? 13 : 14 }
+            ]}>
+              {formatPrice(item.price)}
+            </Text>
+            <Text style={[
+              styles.unit,
+              { fontSize: isDesktop ? 11 : isMobile ? 9 : 10 }
+            ]}>
+              /{item.unit}
+            </Text>
+          </View>
+
+          <View style={styles.productMeta}>
+            <View style={styles.stockInfo}>
+              <Text style={[
+                styles.stockText,
+                { fontSize: isDesktop ? 11 : isMobile ? 9 : 10 }
+              ]}>
+                Stock: {item.quantity_available}
+              </Text>
+            </View>
+            
+            <View style={styles.categoryBadge}>
+              <Text style={[
+                styles.categoryBadgeText,
+                { fontSize: isDesktop ? 9 : isMobile ? 8 : 8.5 }
+              ]}>
+                {item.category}
+              </Text>
+            </View>
+          </View>
+        </View>
+      </TouchableOpacity>
+    );
+  };
 
   const renderEmptyState = () => (
     <View style={styles.emptyState}>
@@ -360,7 +444,8 @@ export default function Farm2GoFarmerProducts() {
         data={filteredProducts}
         renderItem={renderProductItem}
         keyExtractor={(item) => item.id}
-        numColumns={5}
+        key={numColumns} // Force re-render when columns change
+        numColumns={numColumns}
         ListHeaderComponent={renderHeader}
         ListEmptyComponent={renderEmptyState}
         refreshControl={
@@ -372,7 +457,8 @@ export default function Farm2GoFarmerProducts() {
           />
         }
         contentContainerStyle={styles.listContent}
-        columnWrapperStyle={styles.row}
+        ItemSeparatorComponent={null}
+        columnWrapperStyle={numColumns > 1 ? styles.row : undefined}
         showsVerticalScrollIndicator={false}
       />
     </View>
@@ -619,36 +705,29 @@ const styles = StyleSheet.create({
 
   // Product List
   listContent: {
+    paddingHorizontal: 16,
     paddingBottom: 20,
   },
   
   row: {
     justifyContent: 'space-between',
-    paddingHorizontal: 8,
-    marginBottom: 12,
   },
 
   productCard: {
-    width: '18%',
     backgroundColor: colors.white,
-    borderRadius: 8,
-    marginBottom: 12,
-    elevation: 2,
+    borderRadius: 12,
+    elevation: 3,
     shadowColor: colors.shadow,
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.08,
-    shadowRadius: 3,
-  },
-  
-  productCardRight: {
-    // Already handled by gap in row style
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    overflow: 'hidden',
   },
   
   imageContainer: {
     position: 'relative',
-    aspectRatio: 1,
-    borderTopLeftRadius: 8,
-    borderTopRightRadius: 8,
+    borderTopLeftRadius: 12,
+    borderTopRightRadius: 12,
     overflow: 'hidden',
   },
   
@@ -667,71 +746,71 @@ const styles = StyleSheet.create({
   },
   
   placeholderIcon: {
-    fontSize: 20,
+    fontSize: 24,
   },
   
   statusBadge: {
     position: 'absolute',
-    top: 4,
-    left: 4,
-    paddingHorizontal: 4,
-    paddingVertical: 2,
-    borderRadius: 4,
+    top: 8,
+    left: 8,
+    paddingHorizontal: 6,
+    paddingVertical: 3,
+    borderRadius: 6,
   },
 
   statusText: {
-    fontSize: 7,
+    fontSize: 9,
     fontWeight: 'bold',
     color: colors.white,
   },
 
   quickActions: {
     position: 'absolute',
-    top: 4,
-    right: 4,
+    top: 8,
+    right: 8,
   },
 
   quickAction: {
-    width: 20,
-    height: 20,
-    borderRadius: 10,
+    width: 24,
+    height: 24,
+    borderRadius: 12,
     backgroundColor: 'rgba(255,255,255,0.9)',
     alignItems: 'center',
     justifyContent: 'center',
   },
 
   quickActionIcon: {
-    fontSize: 10,
+    fontSize: 12,
   },
   
   productInfo: {
-    padding: 6,
+    padding: 10,
   },
 
   productName: {
-    fontSize: 10,
+    fontSize: 13,
     fontWeight: '600',
     color: colors.text,
-    lineHeight: 12,
-    marginBottom: 4,
+    lineHeight: 17,
+    marginBottom: 6,
   },
 
   priceContainer: {
     flexDirection: 'row',
     alignItems: 'baseline',
-    marginBottom: 4,
+    marginBottom: 6,
   },
 
   price: {
-    fontSize: 11,
+    fontSize: 14,
     fontWeight: 'bold',
     color: colors.primary,
   },
 
   unit: {
-    fontSize: 8,
+    fontSize: 10,
     color: colors.textSecondary,
-    marginLeft: 1,
+    marginLeft: 2,
   },
 
   productMeta: {
@@ -739,24 +818,24 @@ const styles = StyleSheet.create({
   },
 
   stockInfo: {
-    marginBottom: 2,
+    marginBottom: 4,
   },
 
   stockText: {
-    fontSize: 8,
+    fontSize: 10,
     color: colors.textSecondary,
   },
 
   categoryBadge: {
     backgroundColor: colors.gray100,
-    paddingHorizontal: 4,
-    paddingVertical: 1,
-    borderRadius: 4,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
     alignSelf: 'flex-start',
   },
 
   categoryBadgeText: {
-    fontSize: 7,
+    fontSize: 8.5,
     color: colors.textSecondary,
     textTransform: 'capitalize',
   },

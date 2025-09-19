@@ -4,6 +4,7 @@ import {
   ActivityIndicator,
   Alert,
   Dimensions,
+  Platform,
   RefreshControl,
   ScrollView,
   StyleSheet,
@@ -17,7 +18,12 @@ import { supabase } from '../../lib/supabase';
 import { getUserWithProfile } from '../../services/auth';
 import { Database } from '../../types/database';
 
-const { width } = Dimensions.get('window');
+const { width, height } = Dimensions.get('window');
+
+// Responsive breakpoints
+const isTablet = width >= 768;
+const isDesktop = width >= 1024;
+const isWeb = Platform.OS === 'web';
 
 type Profile = Database['public']['Tables']['profiles']['Row'];
 
@@ -289,16 +295,28 @@ export default function FarmerOrdersScreen() {
     return { pending, preparing, ready, completed, totalRevenue };
   };
 
-
-  const renderOrderCard = ({ item: order }: { item: Order }) => {
+  const renderOrderCard = ({ item: order, isCompact = false }: { item: Order; isCompact?: boolean }) => {
     const statusColor = getStatusColor(order.status);
     
     return (
-      <View style={styles.orderCard}>
-        <View style={styles.orderHeader}>
+      <View style={[
+        styles.orderCard,
+        isDesktop && styles.orderCardDesktop,
+        isCompact && styles.orderCardCompact
+      ]}>
+        <View style={[
+          styles.orderHeader,
+          isDesktop && styles.orderHeaderDesktop
+        ]}>
           <View style={styles.orderMainInfo}>
-            <Text style={styles.orderId}>Order #{order.id.slice(-8)}</Text>
-            <Text style={styles.orderDate}>{formatDate(order.created_at)}</Text>
+            <Text style={[
+              styles.orderId,
+              isCompact && styles.orderIdCompact
+            ]}>Order #{order.id.slice(-8)}</Text>
+            <Text style={[
+              styles.orderDate,
+              isCompact && styles.orderDateCompact
+            ]}>{formatDate(order.created_at)}</Text>
           </View>
           <View style={[styles.statusBadge, { backgroundColor: statusColor }]}>
             <Text style={styles.statusText}>
@@ -311,39 +329,81 @@ export default function FarmerOrdersScreen() {
           </View>
         </View>
 
-        <View style={styles.buyerSection}>
-          <Text style={styles.buyerName}>
+        <View style={[
+          styles.buyerSection,
+          isDesktop && styles.buyerSectionDesktop
+        ]}>
+          <Text style={[
+            styles.buyerName,
+            isCompact && styles.buyerNameCompact
+          ]}>
             {order.buyer_profile?.company_name ||
              `${order.buyer_profile?.first_name || ''} ${order.buyer_profile?.last_name || ''}`.trim() ||
              'Unknown Buyer'}
           </Text>
           {order.buyer_profile?.phone && (
-            <Text style={styles.buyerPhone}>📞 {order.buyer_profile.phone}</Text>
+            <Text style={[
+              styles.buyerPhone,
+              isCompact && styles.buyerPhoneCompact
+            ]}>📞 {order.buyer_profile.phone}</Text>
           )}
         </View>
 
-        <View style={styles.orderDetails}>
+        <View style={[
+          styles.orderDetails,
+          isDesktop && styles.orderDetailsDesktop
+        ]}>
           <View style={styles.orderItems}>
-            <Text style={styles.itemsTitle}>Items Ordered:</Text>
+            <Text style={[
+              styles.itemsTitle,
+              isCompact && styles.itemsTitleCompact
+            ]}>Items Ordered:</Text>
             {order.order_items?.map((item, index) => (
-              <View key={index} style={styles.orderItem}>
-                <Text style={styles.itemQuantity}>{item.quantity} {item.product.unit}</Text>
-                <Text style={styles.itemName}>{item.product.name}</Text>
-                <Text style={styles.itemPrice}>{formatPrice(item.unit_price)}</Text>
+              <View key={index} style={[
+                styles.orderItem,
+                isCompact && styles.orderItemCompact
+              ]}>
+                <Text style={[
+                  styles.itemQuantity,
+                  isCompact && styles.itemQuantityCompact
+                ]}>{item.quantity} {item.product.unit}</Text>
+                <Text style={[
+                  styles.itemName,
+                  isCompact && styles.itemNameCompact
+                ]}>{item.product.name}</Text>
+                <Text style={[
+                  styles.itemPrice,
+                  isCompact && styles.itemPriceCompact
+                ]}>{formatPrice(item.unit_price)}</Text>
               </View>
             )) || null}
           </View>
 
-          <View style={styles.orderAmount}>
-            <Text style={styles.amountLabel}>Total Amount</Text>
-            <Text style={styles.amountValue}>{formatPrice(order.total_amount)}</Text>
+          <View style={[
+            styles.orderAmount,
+            isCompact && styles.orderAmountCompact
+          ]}>
+            <Text style={[
+              styles.amountLabel,
+              isCompact && styles.amountLabelCompact
+            ]}>Total Amount</Text>
+            <Text style={[
+              styles.amountValue,
+              isCompact && styles.amountValueCompact
+            ]}>{formatPrice(order.total_amount)}</Text>
           </View>
         </View>
 
         {/* Action Buttons */}
-        <View style={styles.actionSection}>
+        <View style={[
+          styles.actionSection,
+          isDesktop && styles.actionSectionDesktop
+        ]}>
           {order.status === 'pending' && (
-            <View style={styles.actionButtons}>
+            <View style={[
+              styles.actionButtons,
+              isDesktop && styles.actionButtonsDesktop
+            ]}>
               <TouchableOpacity
                 style={[styles.actionButton, styles.confirmButton]}
                 onPress={() => updateOrderStatus(order.id, 'confirmed')}
@@ -421,7 +481,10 @@ export default function FarmerOrdersScreen() {
   };
 
   const renderEmptyState = () => (
-    <View style={styles.emptyContainer}>
+    <View style={[
+      styles.emptyContainer,
+      isDesktop && styles.emptyContainerDesktop
+    ]}>
       <View style={styles.emptyIllustration}>
         <View style={styles.emptyIconContainer}>
           <Text style={styles.emptyIcon}>📋</Text>
@@ -459,13 +522,143 @@ export default function FarmerOrdersScreen() {
     );
   }
 
+  // Desktop Layout
+  if (isDesktop) {
+    return (
+      <View style={styles.container}>
+        <NavBar currentRoute="/farmer/orders" />
+
+        <View style={styles.desktopLayout}>
+          {/* Left Sidebar */}
+          <View style={styles.sidebar}>
+            {/* Stats */}
+            <View style={styles.sidebarSection}>
+              <Text style={styles.sidebarTitle}>Order Overview</Text>
+              <View style={styles.sidebarStats}>
+                <StatCard 
+                  title="Pending Orders" 
+                  value={stats.pending} 
+                  color="#f59e0b" 
+                  backgroundColor="#fffbeb" 
+                  icon="⏳" 
+                  variant="bordered"
+                />
+                <StatCard 
+                  title="In Progress" 
+                  value={stats.preparing} 
+                  color="#8b5cf6" 
+                  backgroundColor="#f3f0ff" 
+                  icon="👨‍🍳" 
+                  variant="bordered"
+                />
+                <StatCard 
+                  title="Ready" 
+                  value={stats.ready} 
+                  color="#10b981" 
+                  backgroundColor="#ecfdf5" 
+                  icon="✅" 
+                  variant="bordered"
+                />
+                <StatCard 
+                  title="Completed" 
+                  value={stats.completed} 
+                  color="#059669" 
+                  backgroundColor="#ecfdf5" 
+                  icon="🎉" 
+                  variant="bordered"
+                />
+              </View>
+              
+              <View style={styles.revenueCard}>
+                <StatCard 
+                  title="Total Revenue" 
+                  value={formatPrice(stats.totalRevenue)} 
+                  color="#06b6d4" 
+                  backgroundColor="#ecfeff" 
+                  icon="💰" 
+                  variant="bordered"
+                />
+              </View>
+            </View>
+
+            {/* Filter */}
+            <View style={styles.sidebarSection}>
+              <Text style={styles.sidebarTitle}>Filter Orders</Text>
+              <View style={styles.sidebarFilters}>
+                {ORDER_STATUSES.map((status) => (
+                  <TouchableOpacity
+                    key={status.key}
+                    style={[
+                      styles.sidebarFilterButton,
+                      selectedStatus === status.key && [
+                        styles.sidebarFilterButtonActive,
+                        { backgroundColor: status.color }
+                      ]
+                    ]}
+                    onPress={() => setSelectedStatus(status.key)}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={[
+                      styles.sidebarFilterText,
+                      selectedStatus === status.key && styles.sidebarFilterTextActive
+                    ]}>
+                      {status.label}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
+          </View>
+
+          {/* Main Content */}
+          <View style={styles.mainContent}>
+            <View style={styles.mainHeader}>
+              <Text style={styles.mainTitle}>
+                Orders {filteredOrders.length > 0 && `(${filteredOrders.length})`}
+              </Text>
+            </View>
+
+            <ScrollView
+              style={styles.ordersScrollView}
+              refreshControl={
+                <RefreshControl
+                  refreshing={refreshing}
+                  onRefresh={onRefresh}
+                  tintColor="#10b981"
+                  colors={['#10b981']}
+                />
+              }
+              showsVerticalScrollIndicator={false}
+            >
+              {filteredOrders.length === 0 ? (
+                renderEmptyState()
+              ) : (
+                <View style={styles.ordersGrid}>
+                  {filteredOrders.map((order) => (
+                    <View key={order.id} style={styles.orderGridItem}>
+                      {renderOrderCard({ item: order, isCompact: true })}
+                    </View>
+                  ))}
+                </View>
+              )}
+            </ScrollView>
+          </View>
+        </View>
+      </View>
+    );
+  }
+
+  // Mobile/Tablet Layout
   return (
     <View style={styles.container}>
       <NavBar currentRoute="/farmer/orders" />
 
       <ScrollView
         style={styles.scrollView}
-        contentContainerStyle={styles.scrollContent}
+        contentContainerStyle={[
+          styles.scrollContent,
+          isTablet && styles.scrollContentTablet
+        ]}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
@@ -476,26 +669,67 @@ export default function FarmerOrdersScreen() {
         }
         showsVerticalScrollIndicator={false}
       >
-        {/* Enhanced Stats */}
-        <View style={styles.statsSection}>
+        {/* Stats */}
+        <View style={[
+          styles.statsSection,
+          isTablet && styles.statsSectionTablet
+        ]}>
           <Text style={styles.sectionTitle}>Order Overview</Text>
-          <View style={styles.statsGrid}>
-            <StatCard title="Pending Orders" value={stats.pending} color="#f59e0b" backgroundColor="#fffbeb" icon="⏳" />
-            <StatCard title="In Progress" value={stats.preparing} color="#8b5cf6" backgroundColor="#f3f0ff" icon="👨‍🍳" />
-            <StatCard title="Ready" value={stats.ready} color="#10b981" backgroundColor="#ecfdf5" icon="✅" />
-            <StatCard title="Completed" value={stats.completed} color="#059669" backgroundColor="#ecfdf5" icon="🎉" />
-            <StatCard title="Total Revenue" value={formatPrice(stats.totalRevenue)} color="#06b6d4" backgroundColor="#ecfeff" icon="💰" />
+          <View style={[
+            styles.statsGrid,
+            isTablet && styles.statsGridTablet
+          ]}>
+            <StatCard 
+              title="Pending Orders" 
+              value={stats.pending} 
+              color="#f59e0b" 
+              backgroundColor="#fffbeb" 
+              icon="⏳" 
+            />
+            <StatCard 
+              title="In Progress" 
+              value={stats.preparing} 
+              color="#8b5cf6" 
+              backgroundColor="#f3f0ff" 
+              icon="👨‍🍳" 
+            />
+            <StatCard 
+              title="Ready" 
+              value={stats.ready} 
+              color="#10b981" 
+              backgroundColor="#ecfdf5" 
+              icon="✅" 
+            />
+            <StatCard 
+              title="Completed" 
+              value={stats.completed} 
+              color="#059669" 
+              backgroundColor="#ecfdf5" 
+              icon="🎉" 
+            />
+            <StatCard 
+              title="Total Revenue" 
+              value={formatPrice(stats.totalRevenue)} 
+              color="#06b6d4" 
+              backgroundColor="#ecfeff" 
+              icon="💰" 
+            />
           </View>
         </View>
 
-
-        {/* Enhanced Filter */}
-        <View style={styles.filterSection}>
+        {/* Filter */}
+        <View style={[
+          styles.filterSection,
+          isTablet && styles.filterSectionTablet
+        ]}>
           <Text style={styles.sectionTitle}>Filter Orders</Text>
           <ScrollView
             horizontal
             showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.filterContainer}
+            contentContainerStyle={[
+              styles.filterContainer,
+              isTablet && styles.filterContainerTablet
+            ]}
           >
             {ORDER_STATUSES.map((status) => (
               <TouchableOpacity
@@ -521,8 +755,11 @@ export default function FarmerOrdersScreen() {
           </ScrollView>
         </View>
 
-        {/* Orders List */}
-        <View style={styles.ordersSection}>
+        {/* Orders */}
+        <View style={[
+          styles.ordersSection,
+          isTablet && styles.ordersSectionTablet
+        ]}>
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionTitle}>
               Orders {filteredOrders.length > 0 && `(${filteredOrders.length})`}
@@ -532,7 +769,10 @@ export default function FarmerOrdersScreen() {
           {filteredOrders.length === 0 ? (
             renderEmptyState()
           ) : (
-            <View style={styles.ordersList}>
+            <View style={[
+              styles.ordersList,
+              isTablet && styles.ordersListTablet
+            ]}>
               {filteredOrders.map((order) => (
                 <View key={order.id}>
                   {renderOrderCard({ item: order })}
@@ -566,16 +806,112 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
 
-  // Scroll View
+  // Desktop Layout
+  desktopLayout: {
+    flex: 1,
+    flexDirection: 'row',
+    maxWidth: 1400,
+    alignSelf: 'center',
+    width: '100%',
+  },
+
+  sidebar: {
+    width: 320,
+    backgroundColor: '#ffffff',
+    borderRightWidth: 1,
+    borderRightColor: '#e2e8f0',
+    padding: 24,
+  },
+
+  sidebarSection: {
+    marginBottom: 32,
+  },
+
+  sidebarTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#0f172a',
+    marginBottom: 16,
+  },
+
+  sidebarStats: {
+    gap: 12,
+  },
+
+  revenueCard: {
+    marginTop: 16,
+  },
+
+  sidebarFilters: {
+    gap: 8,
+  },
+
+  sidebarFilterButton: {
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderRadius: 8,
+    backgroundColor: '#f8fafc',
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+  },
+
+  sidebarFilterButtonActive: {
+    borderColor: 'transparent',
+  },
+
+  sidebarFilterText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#64748b',
+  },
+
+  sidebarFilterTextActive: {
+    color: '#ffffff',
+  },
+
+  mainContent: {
+    flex: 1,
+    backgroundColor: '#f1f5f9',
+  },
+
+  mainHeader: {
+    padding: 24,
+    paddingBottom: 0,
+  },
+
+  mainTitle: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#0f172a',
+  },
+
+  ordersScrollView: {
+    flex: 1,
+    padding: 24,
+  },
+
+  ordersGrid: {
+    gap: 20,
+  },
+
+  orderGridItem: {
+    marginBottom: 0,
+  },
+
+  // Mobile/Tablet Scroll Layout
   scrollView: {
     flex: 1,
   },
+
   scrollContent: {
     paddingBottom: 40,
   },
 
+  scrollContentTablet: {
+    paddingHorizontal: 40,
+  },
 
-  // Section Titles
+  // Section Styles
   sectionTitle: {
     fontSize: 22,
     fontWeight: 'bold',
@@ -588,23 +924,41 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     marginBottom: 36,
   },
+
+  statsSectionTablet: {
+    paddingHorizontal: 0,
+  },
+
   statsGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 16,
   },
 
-  // Actions Section
+  statsGridTablet: {
+    justifyContent: 'space-between',
+  },
 
   // Filter Section
   filterSection: {
     paddingHorizontal: 20,
     marginBottom: 36,
   },
+
+  filterSectionTablet: {
+    paddingHorizontal: 0,
+  },
+
   filterContainer: {
     paddingRight: 20,
     gap: 12,
   },
+
+  filterContainerTablet: {
+    paddingRight: 0,
+    flexWrap: 'wrap',
+  },
+
   filterButton: {
     paddingHorizontal: 20,
     paddingVertical: 12,
@@ -618,16 +972,19 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.05,
     shadowRadius: 2,
   },
+
   filterButtonActive: {
     borderColor: 'transparent',
     elevation: 4,
     shadowOpacity: 0.15,
   },
+
   filterButtonText: {
     fontSize: 15,
     fontWeight: '600',
     color: '#64748b',
   },
+
   filterButtonTextActive: {
     color: '#ffffff',
   },
@@ -636,12 +993,24 @@ const styles = StyleSheet.create({
   ordersSection: {
     paddingHorizontal: 20,
   },
+
+  ordersSectionTablet: {
+    paddingHorizontal: 0,
+  },
+
   sectionHeader: {
     marginBottom: 24,
   },
+
   ordersList: {
     gap: 20,
   },
+
+  ordersListTablet: {
+    gap: 24,
+  },
+
+  // Order Card Styles
   orderCard: {
     backgroundColor: '#ffffff',
     borderRadius: 20,
@@ -654,16 +1023,36 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#f1f5f9',
   },
+
+  orderCardDesktop: {
+    borderRadius: 16,
+    padding: 20,
+    elevation: 3,
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+  },
+
+  orderCardCompact: {
+    padding: 16,
+    borderRadius: 12,
+  },
+
   orderHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
     marginBottom: 20,
   },
+
+  orderHeaderDesktop: {
+    marginBottom: 16,
+  },
+
   orderMainInfo: {
     flex: 1,
     marginRight: 16,
   },
+
   orderId: {
     fontSize: 20,
     fontWeight: 'bold',
@@ -671,11 +1060,22 @@ const styles = StyleSheet.create({
     marginBottom: 6,
     lineHeight: 26,
   },
+
+  orderIdCompact: {
+    fontSize: 18,
+    lineHeight: 22,
+  },
+
   orderDate: {
     fontSize: 14,
     color: '#64748b',
     fontWeight: '500',
   },
+
+  orderDateCompact: {
+    fontSize: 12,
+  },
+
   statusBadge: {
     paddingHorizontal: 14,
     paddingVertical: 8,
@@ -686,41 +1086,72 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 4,
   },
+
   statusText: {
     fontSize: 11,
     color: '#ffffff',
     fontWeight: 'bold',
     letterSpacing: 0.8,
   },
+
   buyerSection: {
     backgroundColor: '#f8fafc',
     padding: 16,
     borderRadius: 12,
     marginBottom: 20,
   },
+
+  buyerSectionDesktop: {
+    padding: 12,
+    marginBottom: 16,
+  },
+
   buyerName: {
     fontSize: 18,
     fontWeight: '700',
     color: '#0f172a',
     marginBottom: 6,
   },
+
+  buyerNameCompact: {
+    fontSize: 16,
+    marginBottom: 4,
+  },
+
   buyerPhone: {
     fontSize: 14,
     color: '#64748b',
     fontWeight: '500',
   },
+
+  buyerPhoneCompact: {
+    fontSize: 12,
+  },
+
   orderDetails: {
     marginBottom: 20,
   },
+
+  orderDetailsDesktop: {
+    marginBottom: 16,
+  },
+
   orderItems: {
     marginBottom: 20,
   },
+
   itemsTitle: {
     fontSize: 16,
     fontWeight: '600',
     color: '#0f172a',
     marginBottom: 12,
   },
+
+  itemsTitleCompact: {
+    fontSize: 14,
+    marginBottom: 8,
+  },
+
   orderItem: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -730,23 +1161,46 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     marginBottom: 8,
   },
+
+  orderItemCompact: {
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    marginBottom: 6,
+  },
+
   itemQuantity: {
     fontSize: 14,
     fontWeight: '700',
     color: '#059669',
     width: 80,
   },
+
+  itemQuantityCompact: {
+    fontSize: 12,
+    width: 60,
+  },
+
   itemName: {
     fontSize: 14,
     color: '#0f172a',
     flex: 1,
     fontWeight: '500',
   },
+
+  itemNameCompact: {
+    fontSize: 12,
+  },
+
   itemPrice: {
     fontSize: 14,
     fontWeight: '600',
     color: '#374151',
   },
+
+  itemPriceCompact: {
+    fontSize: 12,
+  },
+
   orderAmount: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -757,26 +1211,52 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#bbf7d0',
   },
+
+  orderAmountCompact: {
+    padding: 12,
+  },
+
   amountLabel: {
     fontSize: 16,
     fontWeight: '600',
     color: '#059669',
   },
+
+  amountLabelCompact: {
+    fontSize: 14,
+  },
+
   amountValue: {
     fontSize: 20,
     fontWeight: 'bold',
     color: '#059669',
   },
+
+  amountValueCompact: {
+    fontSize: 18,
+  },
+
   actionSection: {
     marginTop: 20,
     paddingTop: 20,
     borderTopWidth: 1,
     borderTopColor: '#f1f5f9',
   },
+
+  actionSectionDesktop: {
+    marginTop: 16,
+    paddingTop: 16,
+  },
+
   actionButtons: {
     flexDirection: 'row',
     gap: 12,
   },
+
+  actionButtonsDesktop: {
+    gap: 8,
+  },
+
   actionButton: {
     flex: 1,
     paddingVertical: 14,
@@ -788,52 +1268,64 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 4,
   },
+
   confirmButton: {
     backgroundColor: '#3b82f6',
   },
+
   cancelButton: {
     backgroundColor: '#dc2626',
   },
+
   preparingButton: {
     backgroundColor: '#8b5cf6',
   },
+
   readyButton: {
     backgroundColor: '#10b981',
   },
+
   completeButton: {
     backgroundColor: '#059669',
   },
+
   actionButtonText: {
     fontSize: 14,
     fontWeight: '600',
     color: '#ffffff',
     letterSpacing: 0.3,
   },
+
   additionalInfo: {
     marginTop: 16,
     paddingTop: 16,
     borderTopWidth: 1,
     borderTopColor: '#f1f5f9',
   },
+
   infoRow: {
     flexDirection: 'row',
     alignItems: 'flex-start',
     marginBottom: 8,
   },
+
   infoIcon: {
     fontSize: 16,
     marginRight: 12,
     marginTop: 2,
   },
+
   infoContent: {
     flex: 1,
   },
+
   infoLabel: {
     fontSize: 14,
     fontWeight: '600',
     color: '#374151',
     marginBottom: 4,
   },
+
   infoText: {
     fontSize: 14,
     color: '#64748b',
@@ -845,9 +1337,15 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: 48,
   },
+
+  emptyContainerDesktop: {
+    paddingVertical: 80,
+  },
+
   emptyIllustration: {
     marginBottom: 32,
   },
+
   emptyIconContainer: {
     width: 120,
     height: 120,
@@ -858,9 +1356,11 @@ const styles = StyleSheet.create({
     borderWidth: 3,
     borderColor: '#bbf7d0',
   },
+
   emptyIcon: {
     fontSize: 60,
   },
+
   emptyTitle: {
     fontSize: 28,
     fontWeight: 'bold',
@@ -868,6 +1368,7 @@ const styles = StyleSheet.create({
     marginBottom: 16,
     textAlign: 'center',
   },
+
   emptyDescription: {
     fontSize: 16,
     color: '#64748b',
@@ -876,6 +1377,7 @@ const styles = StyleSheet.create({
     lineHeight: 24,
     paddingHorizontal: 20,
   },
+
   ctaButton: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -889,12 +1391,14 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.25,
     shadowRadius: 16,
   },
+
   ctaIcon: {
     fontSize: 22,
     color: '#ffffff',
     marginRight: 12,
     fontWeight: 'bold',
   },
+
   ctaText: {
     fontSize: 16,
     color: '#ffffff',
