@@ -18,7 +18,7 @@ export interface Database {
           last_name: string | null
           phone: string | null
           barangay: string | null
-          user_type: 'farmer' | 'buyer' | 'admin'
+          user_type: 'farmer' | 'buyer' | 'admin' | 'super-admin'
           created_at: string
           updated_at: string
           // Farmer specific fields
@@ -39,7 +39,7 @@ export interface Database {
           last_name?: string | null
           phone?: string | null
           barangay?: string | null
-          user_type: 'farmer' | 'buyer' | 'admin'
+          user_type: 'farmer' | 'buyer' | 'admin' | 'super-admin'
           created_at?: string
           updated_at?: string
           farm_name?: string | null
@@ -50,25 +50,26 @@ export interface Database {
           business_type?: string | null
           business_location?: string | null
         }
-        Update: {
-          id?: string
-          email?: string
-          first_name?: string | null
-          middle_name?: string | null
-          last_name?: string | null
-          phone?: string | null
-          barangay?: string | null
-          user_type?: 'farmer' | 'buyer' | 'admin'
-          created_at?: string
-          updated_at?: string
-          farm_name?: string | null
-          farm_location?: string | null
-          farm_size?: string | null
-          crop_types?: string | null
-          company_name?: string | null
-          business_type?: string | null
-          business_location?: string | null
-        }
+       Update: {
+  id?: string
+  email?: string
+  first_name?: string | null
+  middle_name?: string | null
+  last_name?: string | null
+  phone?: string | null
+  barangay?: string | null
+  user_type?: 'farmer' | 'buyer' | 'admin' | 'super-admin'   // 👈 add 'super-admin'
+  created_at?: string
+  updated_at?: string
+  farm_name?: string | null
+  farm_location?: string | null
+  farm_size?: string | null
+  crop_types?: string | null
+  company_name?: string | null
+  business_type?: string | null
+  business_location?: string | null
+}
+
       }
       products: {
         Row: {
@@ -192,7 +193,7 @@ export interface Database {
       [_ in never]: never
     }
     Enums: {
-      user_type: 'farmer' | 'buyer' | 'admin'
+      user_type: 'farmer' | 'buyer' | 'admin' | 'super-admin' | 'super-admin'
       product_status: 'pending' | 'approved' | 'rejected'
       order_status: 'pending' | 'confirmed' | 'processing' | 'ready' | 'delivered' | 'cancelled'
       transaction_status: 'pending' | 'completed' | 'failed' | 'refunded'

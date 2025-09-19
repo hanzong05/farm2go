@@ -28,7 +28,7 @@ interface User {
   profiles: {
     first_name: string | null;
     last_name: string | null;
-    user_type: 'farmer' | 'buyer' | 'admin';
+    user_type: 'farmer' | 'buyer' | 'admin' | 'super-admin';
     farm_name: string | null;
     company_name: string | null;
     phone: string | null;
@@ -40,7 +40,7 @@ interface CreateUserForm {
   password: string;
   first_name: string;
   last_name: string;
-  user_type: 'farmer' | 'buyer' | 'admin';
+  user_type: 'farmer' | 'buyer' | 'admin' | 'super-admin';
   phone: string;
   farm_name: string;
   company_name: string;
@@ -125,7 +125,17 @@ export default function SuperAdminUsers() {
           created_at
         `)
         .eq('user_type', 'admin')
-        .order('created_at', { ascending: false });
+        .order('created_at', { ascending: false })
+        .returns<{
+          id: string;
+          first_name: string | null;
+          last_name: string | null;
+          user_type: 'farmer' | 'buyer' | 'admin' | 'super-admin';
+          farm_name: string | null;
+          company_name: string | null;
+          phone: string | null;
+          created_at: string;
+        }[]>();
 
       if (error) throw error;
 
@@ -137,7 +147,7 @@ export default function SuperAdminUsers() {
         profiles: {
           first_name: profile.first_name,
           last_name: profile.last_name,
-          user_type: profile.user_type as 'farmer' | 'buyer' | 'admin',
+          user_type: profile.user_type as 'farmer' | 'buyer' | 'admin' | 'super-admin',
           farm_name: profile.farm_name,
           company_name: profile.company_name,
           phone: profile.phone,
@@ -174,18 +184,21 @@ export default function SuperAdminUsers() {
 
       if (authData.user) {
         // Create profile
+        const profileData: Database['public']['Tables']['profiles']['Insert'] = {
+          id: authData.user.id,
+          email: createForm.email,
+          first_name: createForm.first_name,
+          last_name: createForm.last_name,
+          user_type: createForm.user_type,
+          phone: createForm.phone || null,
+          farm_name: createForm.user_type === 'farmer' ? createForm.farm_name || null : null,
+          company_name: createForm.user_type === 'buyer' ? createForm.company_name || null : null,
+          barangay: createForm.barangay || null,
+        };
+
         const { error: profileError } = await supabase
           .from('profiles')
-          .insert({
-            id: authData.user.id,
-            first_name: createForm.first_name,
-            last_name: createForm.last_name,
-            user_type: createForm.user_type,
-            phone: createForm.phone || null,
-            farm_name: createForm.user_type === 'farmer' ? createForm.farm_name || null : null,
-            company_name: createForm.user_type === 'buyer' ? createForm.company_name || null : null,
-            barangay: createForm.barangay || null,
-          });
+          .insert(profileData);
 
         if (profileError) throw profileError;
 
@@ -321,7 +334,7 @@ export default function SuperAdminUsers() {
       <View style={styles.container}>
         <HeaderComponent
           profile={profile}
-          userType="super-admin"
+          userType="admin"
           currentRoute="/super-admin/users"
         />
         <View style={styles.loadingContainer}>
