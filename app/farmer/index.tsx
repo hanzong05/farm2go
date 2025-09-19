@@ -1,12 +1,28 @@
 import { router } from 'expo-router';
 import React, { useEffect, useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 import HeaderComponent from '../../components/HeaderComponent';
 import ResponsivePage, { ResponsiveCard, ResponsiveGrid, useResponsiveValue } from '../../components/ResponsivePage';
+import { supabase } from '../../lib/supabase';
 import { getUserWithProfile } from '../../services/auth';
 import { Database } from '../../types/database';
 
 type Profile = Database['public']['Tables']['profiles']['Row'];
+
+interface DashboardStats {
+  totalProducts: number;
+  pendingOrders: number;
+  monthlyRevenue: number;
+  activeListings: number;
+}
+
+interface RecentActivity {
+  id: string;
+  type: 'order' | 'product' | 'payment';
+  title: string;
+  time: string;
+  icon: string;
+}
 
 // Farm2Go color scheme
 const colors = {
@@ -23,20 +39,203 @@ const colors = {
 
 export default function FarmerDashboard() {
   const [profile, setProfile] = useState<Profile | null>(null);
+  const [dashboardStats, setDashboardStats] = useState<DashboardStats>({
+    totalProducts: 0,
+    pendingOrders: 0,
+    monthlyRevenue: 0,
+    activeListings: 0,
+  });
+  const [recentActivity, setRecentActivity] = useState<RecentActivity[]>([]);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    loadProfile();
+    loadData();
   }, []);
 
-  const loadProfile = async () => {
+  const loadData = async () => {
     try {
+      setLoading(true);
       const userData = await getUserWithProfile();
-      if (userData?.profile) {
-        setProfile(userData.profile);
+      if (!userData?.profile) {
+        router.replace('/auth/login');
+        return;
       }
+
+      setProfile(userData.profile);
+      const farmerId = userData.user.id;
+
+      // Load dashboard stats in parallel
+      await Promise.all([
+        loadDashboardStats(farmerId),
+        loadRecentActivity(farmerId),
+      ]);
     } catch (error) {
-      console.error('Error loading profile:', error);
+      console.error('Error loading dashboard data:', error);
+    } finally {
+      setLoading(false);
     }
+  };
+
+  const loadDashboardStats = async (farmerId: string) => {
+    try {
+      // Get total products
+      const { count: totalProducts } = await supabase
+        .from('products')
+        .select('*', { count: 'exact', head: true })
+        .eq('farmer_id', farmerId);
+
+      // Get approved products (active listings)
+      const { count: activeListings } = await supabase
+        .from('products')
+        .select('*', { count: 'exact', head: true })
+        .eq('farmer_id', farmerId)
+        .eq('status', 'approved');
+
+      // Get pending orders
+      const { data: orderItems } = await supabase
+        .from('order_items')
+        .select(`
+          order_id,
+          orders!inner (
+            id,
+            status,
+            created_at
+          ),
+          products!inner (
+            farmer_id
+          )
+        `)
+        .eq('products.farmer_id', farmerId)
+        .eq('orders.status', 'pending');
+
+      const pendingOrders = orderItems ? [...new Set(orderItems.map(item => item.order_id))].length : 0;
+
+      // Get monthly revenue (completed orders from this month)
+      const now = new Date();
+      const firstDayOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+
+      const { data: monthlyOrderItems } = await supabase
+        .from('order_items')
+        .select(`
+          quantity,
+          unit_price,
+          orders!inner (
+            status,
+            created_at
+          ),
+          products!inner (
+            farmer_id
+          )
+        `)
+        .eq('products.farmer_id', farmerId)
+        .eq('orders.status', 'completed')
+        .gte('orders.created_at', firstDayOfMonth.toISOString());
+
+      const monthlyRevenue = monthlyOrderItems?.reduce((sum, item) => {
+        return sum + (item.quantity * item.unit_price);
+      }, 0) || 0;
+
+      setDashboardStats({
+        totalProducts: totalProducts || 0,
+        pendingOrders,
+        monthlyRevenue,
+        activeListings: activeListings || 0,
+      });
+    } catch (error) {
+      console.error('Error loading dashboard stats:', error);
+    }
+  };
+
+  const loadRecentActivity = async (farmerId: string) => {
+    try {
+      const activities: RecentActivity[] = [];
+
+      // Get recent orders
+      const { data: recentOrders } = await supabase
+        .from('order_items')
+        .select(`
+          order_id,
+          orders!inner (
+            id,
+            status,
+            created_at,
+            profiles!orders_buyer_id_fkey (
+              first_name,
+              last_name,
+              company_name
+            )
+          ),
+          products!inner (
+            farmer_id,
+            name
+          )
+        `)
+        .eq('products.farmer_id', farmerId)
+        .order('orders(created_at)', { ascending: false })
+        .limit(3);
+
+      if (recentOrders) {
+        recentOrders.forEach((item) => {
+          const order = item.orders;
+          const buyerName = order.profiles?.company_name ||
+                          `${order.profiles?.first_name || ''} ${order.profiles?.last_name || ''}`.trim() ||
+                          'Customer';
+
+          activities.push({
+            id: `order-${order.id}`,
+            type: 'order',
+            title: `New order from ${buyerName}`,
+            time: formatActivityTime(order.created_at),
+            icon: '📦',
+          });
+        });
+      }
+
+      // Get recently approved products
+      const { data: recentProducts } = await supabase
+        .from('products')
+        .select('id, name, status, created_at')
+        .eq('farmer_id', farmerId)
+        .eq('status', 'approved')
+        .order('created_at', { ascending: false })
+        .limit(2);
+
+      if (recentProducts) {
+        recentProducts.forEach((product) => {
+          activities.push({
+            id: `product-${product.id}`,
+            type: 'product',
+            title: `Product "${product.name}" approved`,
+            time: formatActivityTime(product.created_at),
+            icon: '✅',
+          });
+        });
+      }
+
+      // Sort activities by time and take the most recent ones
+      activities.sort((a, b) => new Date(b.time).getTime() - new Date(a.time).getTime());
+      setRecentActivity(activities.slice(0, 3));
+    } catch (error) {
+      console.error('Error loading recent activity:', error);
+    }
+  };
+
+  const formatActivityTime = (dateString: string) => {
+    const date = new Date(dateString);
+    const now = new Date();
+    const diffInMinutes = Math.floor((now.getTime() - date.getTime()) / (1000 * 60));
+
+    if (diffInMinutes < 1) return 'Just now';
+    if (diffInMinutes < 60) return `${diffInMinutes} minutes ago`;
+    if (diffInMinutes < 1440) return `${Math.floor(diffInMinutes / 60)} hours ago`;
+    return `${Math.floor(diffInMinutes / 1440)} days ago`;
+  };
+
+  const formatPrice = (price: number) => {
+    return new Intl.NumberFormat('en-PH', {
+      style: 'currency',
+      currency: 'PHP'
+    }).format(price);
   };
 
   // Responsive grid columns
@@ -69,55 +268,96 @@ export default function FarmerDashboard() {
       route: '/farmer/my-products',
       icon: '🥬',
       description: 'Manage your product listings',
-      stats: '12 Products'
+      stats: `${dashboardStats.totalProducts} Products`
     },
     {
       title: 'Orders',
       route: '/farmer/orders',
       icon: '📋',
       description: 'View and fulfill customer orders',
-      stats: '3 Pending'
+      stats: `${dashboardStats.pendingOrders} Pending`
     },
     {
       title: 'Inventory',
       route: '/farmer/inventory',
       icon: '📦',
       description: 'Manage your stock levels',
-      stats: '8 Low Stock'
+      stats: `${dashboardStats.activeListings} Active`
     },
     {
       title: 'Sales History',
       route: '/farmer/sales-history',
       icon: '💰',
       description: 'View your sales reports',
-      stats: '₱24,560 This Month'
+      stats: `${formatPrice(dashboardStats.monthlyRevenue)} This Month`
     },
     {
       title: 'Farm Profile',
       route: '/farmer/profile',
       icon: '🏡',
       description: 'Update your farm information',
-      stats: 'Complete Profile'
+      stats: profile?.farm_name ? 'Profile Complete' : 'Update Profile'
     },
     {
       title: 'Analytics',
       route: '/farmer/analytics',
       icon: '📊',
       description: 'View performance insights',
-      stats: '+15% Growth'
+      stats: 'View Reports'
     },
   ];
 
-  const dashboardStats = [
-    { title: 'Total Products', value: '12', icon: '🥬', change: '+2' },
-    { title: 'Pending Orders', value: '3', icon: '📋', change: '-1' },
-    { title: 'Monthly Revenue', value: '₱24,560', icon: '💰', change: '+15%' },
-    { title: 'Active Listings', value: '8', icon: '✅', change: '+3' },
+  const dashboardStatsDisplay = [
+    {
+      title: 'Total Products',
+      value: dashboardStats.totalProducts.toString(),
+      icon: '🥬',
+      change: dashboardStats.totalProducts > 0 ? '+' + dashboardStats.totalProducts : '0'
+    },
+    {
+      title: 'Pending Orders',
+      value: dashboardStats.pendingOrders.toString(),
+      icon: '📋',
+      change: dashboardStats.pendingOrders > 0 ? dashboardStats.pendingOrders.toString() : '0'
+    },
+    {
+      title: 'Monthly Revenue',
+      value: formatPrice(dashboardStats.monthlyRevenue),
+      icon: '💰',
+      change: dashboardStats.monthlyRevenue > 0 ? '+' + formatPrice(dashboardStats.monthlyRevenue) : '₱0'
+    },
+    {
+      title: 'Active Listings',
+      value: dashboardStats.activeListings.toString(),
+      icon: '✅',
+      change: dashboardStats.activeListings > 0 ? '+' + dashboardStats.activeListings : '0'
+    },
   ];
 
   const handleNavigation = (route: string) => {
     router.push(route as any);
   };
+
+  if (loading) {
+    return (
+      <ResponsivePage backgroundColor={colors.background}>
+        <HeaderComponent
+          profile={profile}
+          userType="farmer"
+          currentRoute="/farmer"
+          showAddButton={true}
+          addButtonText="+ Quick Add"
+          addButtonRoute="/farmer/products/add"
+          showMessages={true}
+          showNotifications={true}
+        />
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={colors.primary} />
+          <Text style={styles.loadingText}>Loading dashboard...</Text>
+        </View>
+      </ResponsivePage>
+    );
+  }
 
   return (
     <ResponsivePage backgroundColor={colors.background}>
@@ -170,7 +410,7 @@ export default function FarmerDashboard() {
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Dashboard Overview</Text>
           <ResponsiveGrid columns={{ mobile: 2, tablet: 2, desktop: 4 }} gap={16}>
-            {dashboardStats.map((stat, index) => (
+            {dashboardStatsDisplay.map((stat, index) => (
               <ResponsiveCard key={index} style={styles.statCard}>
                 <View style={styles.statContent}>
                   <Text style={styles.statIcon}>{stat.icon}</Text>
@@ -219,27 +459,25 @@ export default function FarmerDashboard() {
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Recent Activity</Text>
           <ResponsiveCard style={styles.activityCard}>
-            <View style={styles.activityItem}>
-              <Text style={styles.activityIcon}>📦</Text>
-              <View style={styles.activityContent}>
-                <Text style={styles.activityTitle}>New order received</Text>
-                <Text style={styles.activityTime}>2 minutes ago</Text>
+            {recentActivity.length > 0 ? (
+              recentActivity.map((activity) => (
+                <View key={activity.id} style={styles.activityItem}>
+                  <Text style={styles.activityIcon}>{activity.icon}</Text>
+                  <View style={styles.activityContent}>
+                    <Text style={styles.activityTitle}>{activity.title}</Text>
+                    <Text style={styles.activityTime}>{activity.time}</Text>
+                  </View>
+                </View>
+              ))
+            ) : (
+              <View style={styles.activityItem}>
+                <Text style={styles.activityIcon}>📋</Text>
+                <View style={styles.activityContent}>
+                  <Text style={styles.activityTitle}>No recent activity</Text>
+                  <Text style={styles.activityTime}>Start by adding products or managing orders</Text>
+                </View>
               </View>
-            </View>
-            <View style={styles.activityItem}>
-              <Text style={styles.activityIcon}>✅</Text>
-              <View style={styles.activityContent}>
-                <Text style={styles.activityTitle}>Product "Fresh Tomatoes" approved</Text>
-                <Text style={styles.activityTime}>1 hour ago</Text>
-              </View>
-            </View>
-            <View style={styles.activityItem}>
-              <Text style={styles.activityIcon}>💰</Text>
-              <View style={styles.activityContent}>
-                <Text style={styles.activityTitle}>Payment received: ₱450</Text>
-                <Text style={styles.activityTime}>3 hours ago</Text>
-              </View>
-            </View>
+            )}
           </ResponsiveCard>
         </View>
       </View>
@@ -251,6 +489,20 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     gap: 24,
+  },
+
+  // Loading
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  loadingText: {
+    marginTop: 16,
+    fontSize: 16,
+    color: colors.textSecondary,
+    fontWeight: '500',
   },
 
   // Welcome Section

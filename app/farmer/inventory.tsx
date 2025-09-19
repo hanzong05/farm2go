@@ -150,8 +150,6 @@ export default function Farm2GoInventoryScreen() {
     product.category.toLowerCase().includes(searchQuery.toLowerCase())
   );
 }
-
-
     setFilteredProducts(filtered);
   };
 
