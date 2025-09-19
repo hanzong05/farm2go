@@ -506,7 +506,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     backgroundColor: colors.white,
     paddingVertical: 8,
-    paddingHorizontal: 8,
+    paddingHorizontal: 16,
     borderTopWidth: 1,
     borderTopColor: colors.gray200,
     shadowColor: colors.shadow,
@@ -514,15 +514,17 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 4,
     elevation: 8,
+    justifyContent: 'flex-start',
+    gap: 8,
   },
 
   navItem: {
-    flex: 1,
     alignItems: 'center',
     paddingVertical: 8,
-    paddingHorizontal: 4,
+    paddingHorizontal: 16,
     position: 'relative',
     minHeight: 60,
+    minWidth: 80,
   },
 
   navIconContainer: {
