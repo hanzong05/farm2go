@@ -360,7 +360,7 @@ export default function HeaderComponent({
         </View>
       </View>
 
-      {/* Search Bar */}
+      {/* Search Bar and Categories Combined */}
       {showSearch && (
         <View style={styles.searchSection}>
           <View style={styles.searchContainer}>
@@ -389,38 +389,38 @@ export default function HeaderComponent({
               </TouchableOpacity>
             )}
           </View>
-        </View>
-      )}
-
-      {/* Category Tabs */}
-      {showCategories && categories.length > 0 && (
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          style={styles.categorySection}
-          contentContainerStyle={styles.categoryContainer}
-        >
-          {categories.map((category) => (
-            <TouchableOpacity
-              key={category.key}
-              style={[
-                styles.categoryTab,
-                selectedCategory === category.key && styles.categoryTabActive
-              ]}
-              onPress={() => onCategoryChange?.(category.key)}
+          
+          {/* Category Tabs under search */}
+          {showCategories && categories.length > 0 && (
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              style={styles.categoryScrollView}
+              contentContainerStyle={styles.categoryContainer}
             >
-              <Text style={[
-                styles.categoryText,
-                selectedCategory === category.key && styles.categoryTextActive
-              ]}>
-                {category.label}
-              </Text>
-              {selectedCategory === category.key && (
-                <View style={[styles.categoryIndicator, { backgroundColor: category.color }]} />
-              )}
-            </TouchableOpacity>
-          ))}
-        </ScrollView>
+              {categories.map((category) => (
+                <TouchableOpacity
+                  key={category.key}
+                  style={[
+                    styles.categoryTab,
+                    selectedCategory === category.key && styles.categoryTabActive
+                  ]}
+                  onPress={() => onCategoryChange?.(category.key)}
+                >
+                  <Text style={[
+                    styles.categoryText,
+                    selectedCategory === category.key && styles.categoryTextActive
+                  ]}>
+                    {category.label}
+                  </Text>
+                  {selectedCategory === category.key && (
+                    <View style={[styles.categoryIndicator, { backgroundColor: category.color }]} />
+                  )}
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          )}
+        </View>
       )}
 
       {/* Stats Banner */}
@@ -615,14 +615,14 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
 
-  // Categories
-  categorySection: {
-    backgroundColor: colors.white,
+  // Categories within search section
+  categoryScrollView: {
+    marginTop: 12,
   },
 
   categoryContainer: {
-    paddingHorizontal: 16,
-    paddingVertical: 12,
+    paddingHorizontal: 0,
+    paddingVertical: 0,
   },
 
   categoryTab: {
