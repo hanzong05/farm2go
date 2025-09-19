@@ -11,7 +11,6 @@ import {
     TouchableOpacity,
     View,
 } from 'react-native';
-import StatCard from '../../components/StatCard';
 import HeaderComponent from '../../components/HeaderComponent';
 import { supabase } from '../../lib/supabase';
 import { getUserWithProfile } from '../../services/auth';
@@ -444,15 +443,7 @@ export default function BuyerMyOrdersScreen() {
         showsVerticalScrollIndicator={false}
       >
         {/* Enhanced Stats */}
-        <View style={styles.statsSection}>
-          <Text style={styles.sectionTitle}>Order Summary</Text>
-          <View style={styles.statsGrid}>
-            <StatCard title="Pending" value={stats.pending} color="#f59e0b" backgroundColor="#fffbeb" icon="⏳" />
-            <StatCard title="Active" value={stats.active} color="#3b82f6" backgroundColor="#eff6ff" icon="🔄" />
-            <StatCard title="Completed" value={stats.completed} color="#10b981" backgroundColor="#ecfdf5" icon="✅" />
-            <StatCard title="Total Spent" value={formatPrice(stats.totalSpent)} color="#8b5cf6" backgroundColor="#f3f0ff" icon="💰" />
-          </View>
-        </View>
+        
 
 
         {/* Enhanced Filter */}

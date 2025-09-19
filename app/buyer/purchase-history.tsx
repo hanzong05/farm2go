@@ -402,7 +402,6 @@ export default function BuyerPurchaseHistoryScreen() {
 
   return (
     <View style={styles.container}>
-      <NavBar currentRoute="/buyer/purchase-history" />
 
       <ScrollView
         style={styles.scrollView}
@@ -419,25 +418,7 @@ export default function BuyerPurchaseHistoryScreen() {
       >
 
         {/* Enhanced Stats */}
-        <View style={styles.statsSection}>
-          <Text style={styles.sectionTitle}>Purchase Overview</Text>
-          <View style={styles.statsGrid}>
-            <StatCard title="Total Orders" value={stats.totalPurchases} color="#3b82f6" backgroundColor="#eff6ff" icon="📊" />
-            <StatCard title="Total Spent" value={formatPrice(stats.totalSpent)} color="#10b981" backgroundColor="#ecfdf5" icon="💰" />
-            <StatCard title="Average Order" value={formatPrice(stats.averageOrderValue)} color="#8b5cf6" backgroundColor="#f3f0ff" icon="📈" />
-            <StatCard title="Favorite Category" value={stats.favoriteCategory} color="#f59e0b" backgroundColor="#fffbeb" icon="⭐" />
-            <StatCard 
-              title="This Month" 
-              value={formatPrice(stats.thisMonthSpent)} 
-              color="#10b981" 
-              backgroundColor="#ecfdf5" 
-              icon="📅"
-              subtitle="Spending"
-              growth={getGrowthPercentage(stats.thisMonthSpent, stats.lastMonthSpent)}
-            />
-            <StatCard title="Unique Farms" value={stats.uniqueFarmers} color="#06b6d4" backgroundColor="#ecfeff" icon="🏡" />
-          </View>
-        </View>
+      
 
 
         {/* Enhanced Filter */}
