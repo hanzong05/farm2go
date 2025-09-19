@@ -5,13 +5,12 @@ import {
   Alert,
   FlatList,
   Modal,
-  Pressable,
   RefreshControl,
   StyleSheet,
   Text,
   TextInput,
   TouchableOpacity,
-  View,
+  View
 } from 'react-native';
 import Icon from 'react-native-vector-icons/FontAwesome5';
 import HeaderComponent from '../../components/HeaderComponent';
@@ -185,8 +184,6 @@ export default function SuperAdminUsers() {
             phone: createForm.phone || null,
             farm_name: createForm.user_type === 'farmer' ? createForm.farm_name || null : null,
             company_name: createForm.user_type === 'buyer' ? createForm.company_name || null : null,
-            province: 'Tarlac',
-            city: 'Tarlac City',
             barangay: createForm.barangay || null,
           });
 
