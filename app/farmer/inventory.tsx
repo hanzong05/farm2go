@@ -304,34 +304,27 @@ export default function Farm2GoInventoryScreen() {
         </TouchableOpacity>
       </View>
 
-      {/* Stats Dashboard */}
-      <View style={styles.statsContainer}>
-        <Text style={styles.sectionTitle}>Inventory Overview</Text>
+      {/* Stats Banner - Horizontal Layout */}
+      <View style={styles.statsBanner}>
         <View style={styles.statsGrid}>
-          <View style={styles.statCard}>
-            <Text style={styles.statIcon}>📦</Text>
-            <Text style={styles.statValue}>{stats.totalProducts}</Text>
-            <Text style={styles.statLabel}>Total Products</Text>
+          <View style={styles.statItem}>
+            <Text style={styles.statNumber}>{stats.totalProducts}</Text>
+            <Text style={styles.statLabel}>TOTAL PRODUCTS</Text>
           </View>
-          
-          <View style={styles.statCard}>
-            <Text style={styles.statIcon}>✅</Text>
-            <Text style={[styles.statValue, { color: colors.success }]}>{stats.approvedProducts}</Text>
-            <Text style={styles.statLabel}>Live Products</Text>
+          <View style={styles.statDivider} />
+          <View style={styles.statItem}>
+            <Text style={styles.statNumber}>{stats.approvedProducts}</Text>
+            <Text style={styles.statLabel}>LIVE PRODUCTS</Text>
           </View>
-          
-          <View style={styles.statCard}>
-            <Text style={styles.statIcon}>⚠️</Text>
-            <Text style={[styles.statValue, { color: colors.warning }]}>{stats.lowStockProducts}</Text>
-            <Text style={styles.statLabel}>Low Stock</Text>
+          <View style={styles.statDivider} />
+          <View style={styles.statItem}>
+            <Text style={styles.statNumber}>{stats.lowStockProducts}</Text>
+            <Text style={styles.statLabel}>LOW STOCK</Text>
           </View>
-          
-          <View style={styles.statCard}>
-            <Text style={styles.statIcon}>💰</Text>
-            <Text style={[styles.statValue, { color: colors.primary, fontSize: 14 }]}>
-              {formatPrice(stats.totalValue)}
-            </Text>
-            <Text style={styles.statLabel}>Total Value</Text>
+          <View style={styles.statDivider} />
+          <View style={styles.statItem}>
+            <Text style={styles.statNumber}>{formatPrice(stats.totalValue)}</Text>
+            <Text style={styles.statLabel}>TOTAL VALUE</Text>
           </View>
         </View>
       </View>
@@ -664,34 +657,12 @@ const styles = StyleSheet.create({
     color: colors.primary,
   },
 
-  // Stats Section
-  statsContainer: {
-    padding: 16,
+  // Stats Banner
+  statsBanner: {
     backgroundColor: colors.white,
-  },
-  
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: colors.text,
-    marginBottom: 16,
-  },
-  
-  statsGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 12,
-  },
-  
-  statCard: {
-    flex: 1,
-    minWidth: (width - 56) / 2,
-    backgroundColor: colors.white,
-    padding: 16,
-    borderRadius: 12,
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: colors.border,
+    marginHorizontal: 16,
+    marginVertical: 8,
+    borderRadius: 8,
     elevation: 2,
     shadowColor: colors.shadow,
     shadowOffset: { width: 0, height: 2 },
@@ -699,22 +670,34 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
   },
   
-  statIcon: {
-    fontSize: 24,
-    marginBottom: 8,
+  statsGrid: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 16,
   },
   
-  statValue: {
-    fontSize: 20,
+  statItem: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  
+  statNumber: {
+    fontSize: 18,
     fontWeight: 'bold',
     color: colors.text,
     marginBottom: 4,
   },
   
   statLabel: {
-    fontSize: 12,
+    fontSize: 10,
     color: colors.textSecondary,
-    textAlign: 'center',
+    textTransform: 'uppercase',
+  },
+  
+  statDivider: {
+    width: 1,
+    height: 30,
+    backgroundColor: colors.border,
   },
 
   // Category Section
