@@ -1,15 +1,15 @@
+import { router } from 'expo-router';
 import React, { useState } from 'react';
 import {
-  View,
-  Text,
-  StyleSheet,
-  TouchableOpacity,
-  ScrollView,
-  Dimensions,
   Animated,
+  Dimensions,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
 } from 'react-native';
-import { router } from 'expo-router';
-import { logoutUser, getUserWithProfile } from '../services/auth';
+import { logoutUser } from '../services/auth';
 
 const { width, height } = Dimensions.get('window');
 
@@ -27,7 +27,7 @@ const SIDEBAR_ITEMS: SidebarItem[] = [
   {
     id: 'farmer-dashboard',
     title: 'Dashboard',
-    icon: '📊',
+    icon: '📊 ',
     route: '/farmer/my-products',
     userTypes: ['farmer'],
   },
@@ -152,7 +152,7 @@ export default function Sidebar({
   }, [isVisible]);
 
   const handleLogout = async () => {
-    try {
+    try { 
       await logoutUser();
       onClose();
       router.replace('/auth/login');

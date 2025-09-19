@@ -21,21 +21,6 @@ import { Database } from '../../types/database';
 
 const { width } = Dimensions.get('window');
 
-// Responsive column calculation
-const getNumColumns = () => {
-  if (width >= 1024) return 4; // Desktop: 4 columns
-  if (width >= 768) return 3;  // Tablet: 3 columns
-  if (width >= 480) return 2;  // Large mobile: 2 columns
-  return 1; // Small mobile: 1 column
-};
-
-const getItemWidth = (numColumns: number) => {
-  const padding = 32; // Container padding (16 * 2)
-  const gap = 12; // Gap between items
-  const totalGap = (numColumns - 1) * gap;
-  return (width - padding - totalGap) / numColumns;
-};
-
 // Farm2Go green color palette
 const colors = {
   primary: '#059669',
@@ -91,17 +76,9 @@ export default function Farm2GoInventoryScreen() {
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [newStock, setNewStock] = useState('');
   const [profile, setProfile] = useState<Profile | null>(null);
-  const [numColumns, setNumColumns] = useState(getNumColumns());
 
   useEffect(() => {
     loadData();
-    
-    // Listen for orientation changes
-    const subscription = Dimensions.addEventListener('change', ({ window }) => {
-      setNumColumns(getNumColumns());
-    });
-
-    return () => subscription?.remove();
   }, []);
 
   useEffect(() => {
@@ -305,215 +282,175 @@ export default function Farm2GoInventoryScreen() {
     }
   };
 
-const renderHeader = () => (
-  <View style={styles.header}>
-    {/* Top Bar with Branding */}
-    <View style={styles.topBar}>
-      <View style={styles.brandSection}>
-        <View style={styles.logo}>
-          <Text style={styles.logoText}>F2G</Text>
+  const renderHeader = () => (
+    <View style={styles.header}>
+      {/* Top Bar with Branding */}
+      <View style={styles.topBar}>
+        <View style={styles.brandSection}>
+          <View style={styles.logo}>
+            <Text style={styles.logoText}>F2G</Text>
+          </View>
+          <View>
+            <Text style={styles.brandText}>Inventory Center</Text>
+            <Text style={styles.taglineText}>Manage your stock levels</Text>
+          </View>
         </View>
-        <View>
-          <Text style={styles.brandText}>Inventory Center</Text>
-          <Text style={styles.taglineText}>Manage your stock levels</Text>
+        
+        <TouchableOpacity 
+          style={styles.addButton}
+          onPress={() => router.push('/farmer/products/add')}
+        >
+          <Text style={styles.addButtonText}>+ Add Product</Text>
+        </TouchableOpacity>
+      </View>
+
+      {/* Category Filter */}
+      <View style={styles.categorySection}>
+        <ScrollView 
+          horizontal 
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.categoryContainer}
+        >
+          {CATEGORIES.map((category) => (
+            <TouchableOpacity
+              key={category.key}
+              style={[
+                styles.categoryTab,
+                selectedCategory === category.key && styles.categoryTabActive
+              ]}
+              onPress={() => setSelectedCategory(category.key)}
+            >
+              <Text style={styles.categoryIcon}>{category.icon}</Text>
+              <Text style={[
+                styles.categoryText,
+                selectedCategory === category.key && styles.categoryTextActive
+              ]}>
+                {category.label}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </ScrollView>
+      </View>
+
+      {/* Stats Banner */}
+      <View style={styles.statsBanner}>
+        <View style={styles.statsGrid}>
+          <View style={styles.statItem}>
+            <Text style={styles.statNumber}>{stats.totalProducts}</Text>
+            <Text style={styles.statLabel}>TOTAL PRODUCTS</Text>
+          </View>
+          <View style={styles.statDivider} />
+          <View style={styles.statItem}>
+            <Text style={styles.statNumber}>{stats.approvedProducts}</Text>
+            <Text style={styles.statLabel}>LIVE PRODUCTS</Text>
+          </View>
+          <View style={styles.statDivider} />
+          <View style={styles.statItem}>
+            <Text style={styles.statNumber}>{stats.lowStockProducts}</Text>
+            <Text style={styles.statLabel}>LOW STOCK</Text>
+          </View>
+          <View style={styles.statDivider} />
+          <View style={styles.statItem}>
+            <Text style={styles.statNumber}>{formatPrice(stats.totalValue)}</Text>
+            <Text style={styles.statLabel}>TOTAL VALUE</Text>
+          </View>
         </View>
       </View>
-      
-      <TouchableOpacity 
-        style={styles.addButton}
-        onPress={() => router.push('/farmer/products/add')}
-      >
-        <Text style={styles.addButtonText}>+ Add Product</Text>
-      </TouchableOpacity>
     </View>
+  );
 
-    {/* Category Filter - Now above stats */}
-    <View style={styles.categorySection}>
-      <ScrollView 
-        horizontal 
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={styles.categoryContainer}
-      >
-        {CATEGORIES.map((category) => (
-          <TouchableOpacity
-            key={category.key}
-            style={[
-              styles.categoryTab,
-              selectedCategory === category.key && styles.categoryTabActive
-            ]}
-            onPress={() => setSelectedCategory(category.key)}
-          >
-            <Text style={styles.categoryIcon}>{category.icon}</Text>
-            <Text style={[
-              styles.categoryText,
-              selectedCategory === category.key && styles.categoryTextActive
-            ]}>
-              {category.label}
-            </Text>
-          </TouchableOpacity>
-        ))}
-      </ScrollView>
+  const renderTableHeader = () => (
+    <View style={styles.tableHeader}>
+      <Text style={[styles.tableHeaderText, styles.productColumn]}>Product</Text>
+      <Text style={[styles.tableHeaderText, styles.categoryColumn]}>Category</Text>
+      <Text style={[styles.tableHeaderText, styles.priceColumn]}>Price</Text>
+      <Text style={[styles.tableHeaderText, styles.stockColumn]}>Stock</Text>
+      <Text style={[styles.tableHeaderText, styles.statusColumn]}>Status</Text>
+      <Text style={[styles.tableHeaderText, styles.actionsColumn]}>Actions</Text>
     </View>
+  );
 
-    {/* Stats Banner - Now below categories */}
-    <View style={styles.statsBanner}>
-      <View style={styles.statsGrid}>
-        <View style={styles.statItem}>
-          <Text style={styles.statNumber}>{stats.totalProducts}</Text>
-          <Text style={styles.statLabel}>TOTAL PRODUCTS</Text>
-        </View>
-        <View style={styles.statDivider} />
-        <View style={styles.statItem}>
-          <Text style={styles.statNumber}>{stats.approvedProducts}</Text>
-          <Text style={styles.statLabel}>LIVE PRODUCTS</Text>
-        </View>
-        <View style={styles.statDivider} />
-        <View style={styles.statItem}>
-          <Text style={styles.statNumber}>{stats.lowStockProducts}</Text>
-          <Text style={styles.statLabel}>LOW STOCK</Text>
-        </View>
-        <View style={styles.statDivider} />
-        <View style={styles.statItem}>
-          <Text style={styles.statNumber}>{formatPrice(stats.totalValue)}</Text>
-          <Text style={styles.statLabel}>TOTAL VALUE</Text>
-        </View>
-      </View>
-    </View>
-  </View>
-);
-
-  const renderProductItem = ({ item: product, index }: { item: Product; index: number }) => {
+  const renderTableRow = ({ item: product }: { item: Product }) => {
     const stockStatus = getStockStatus(product);
     const statusColor = getStatusColor(product.status);
-    const itemWidth = getItemWidth(numColumns);
-    const isDesktop = width >= 1024;
-    const isTablet = width >= 768;
-    const isMobile = width < 768;
     
-    // Calculate margin for proper spacing
-    const gap = 12;
-    const marginRight = (index + 1) % numColumns === 0 ? 0 : gap;
-
     return (
       <TouchableOpacity 
-        style={[
-          styles.productCard,
-          {
-            width: itemWidth,
-            marginRight: marginRight,
-            marginBottom: isDesktop ? 16 : isMobile ? 12 : 14,
-          }
-        ]}
+        style={styles.tableRow}
         onPress={() => router.push(`/farmer/products/${product.id}` as any)}
-        activeOpacity={0.8}
+        activeOpacity={0.7}
       >
-        {/* Product Image */}
-        <View style={[
-          styles.imageContainer,
-          { height: itemWidth * 0.8 }
-        ]}>
-          {product.image_url ? (
-            <Image source={{ uri: product.image_url }} style={styles.productImage} />
-          ) : (
-            <View style={styles.placeholderImage}>
-              <Text style={[
-                styles.placeholderIcon,
-                { fontSize: isDesktop ? 48 : isMobile ? 32 : 40 }
-              ]}>🥬</Text>
+        {/* Product Column */}
+        <View style={styles.productColumn}>
+          <View style={styles.productInfo}>
+            <View style={styles.productImageContainer}>
+              {product.image_url ? (
+                <Image source={{ uri: product.image_url }} style={styles.productTableImage} />
+              ) : (
+                <View style={styles.placeholderTableImage}>
+                  <Text style={styles.placeholderTableIcon}>🥬</Text>
+                </View>
+              )}
             </View>
-          )}
-          
-          {/* Status Badge */}
-          <View style={[styles.statusBadge, { backgroundColor: statusColor.color }]}>
-            <Text style={[
-              styles.statusText,
-              {
-                fontSize: isDesktop ? 10 : isMobile ? 8 : 9,
-              }
-            ]}>
+            <View style={styles.productDetails}>
+              <Text style={styles.productName} numberOfLines={1}>{product.name}</Text>
+              <Text style={styles.productDescription} numberOfLines={1}>
+                {product.description || 'No description'}
+              </Text>
+            </View>
+          </View>
+        </View>
+
+        {/* Category Column */}
+        <View style={styles.categoryColumn}>
+          <View style={styles.categoryBadge}>
+            <Text style={styles.categoryBadgeText}>
+              {product.category}
+            </Text>
+          </View>
+        </View>
+
+        {/* Price Column */}
+        <View style={styles.priceColumn}>
+          <Text style={styles.priceText}>{formatPrice(product.price)}</Text>
+          <Text style={styles.unitText}>/{product.unit}</Text>
+        </View>
+
+        {/* Stock Column */}
+        <View style={styles.stockColumn}>
+          <Text style={styles.stockQuantity}>{product.quantity_available}</Text>
+          <View style={[styles.stockStatusBadge, { backgroundColor: stockStatus.bgColor }]}>
+            <Text style={[styles.stockStatusText, { color: stockStatus.color }]}>
+              {stockStatus.status}
+            </Text>
+          </View>
+        </View>
+
+        {/* Status Column */}
+        <View style={styles.statusColumn}>
+          <View style={[styles.statusBadge, { backgroundColor: statusColor.bgColor }]}>
+            <Text style={[styles.statusText, { color: statusColor.color }]}>
               {product.status === 'approved' ? 'LIVE' :
                product.status === 'pending' ? 'REVIEW' : 'REJECTED'}
             </Text>
           </View>
-
-          {/* Quick Edit Icon */}
-          <TouchableOpacity 
-            style={styles.quickEditButton}
-            onPress={(e) => {
-              e.stopPropagation();
-              router.push(`/farmer/products/edit/${product.id}` as any);
-            }}
-          >
-            <Text style={[
-              styles.quickEditIcon,
-              { fontSize: isDesktop ? 14 : isMobile ? 10 : 12 }
-            ]}>✏️</Text>
-          </TouchableOpacity>
         </View>
 
-        {/* Product Info - Marketplace Style */}
-        <View style={[
-          styles.productInfo,
-          { padding: isDesktop ? 16 : isMobile ? 12 : 14 }
-        ]}>
-          <Text style={[
-            styles.productName,
-            {
-              fontSize: isDesktop ? 16 : isMobile ? 14 : 15,
-              lineHeight: isDesktop ? 20 : isMobile ? 18 : 19,
-              marginBottom: 4,
-            }
-          ]} numberOfLines={1}>
-            {product.name}
-          </Text>
-          
-          <View style={[
-            styles.priceRow,
-            { marginBottom: 8 }
-          ]}>
-            <Text style={[
-              styles.productPrice,
-              { fontSize: isDesktop ? 18 : isMobile ? 16 : 17 }
-            ]}>
-              {formatPrice(product.price)}
-            </Text>
-            <Text style={[
-              styles.productUnit,
-              { fontSize: isDesktop ? 12 : isMobile ? 10 : 11 }
-            ]}>
-              /{product.unit}
-            </Text>
-          </View>
-
-          <View style={styles.productMeta}>
-            <Text style={[
-              styles.stockText,
-              { fontSize: isDesktop ? 12 : isMobile ? 10 : 11 }
-            ]}>
-              Stock: {product.quantity_available}
-            </Text>
-            <Text style={[
-              styles.productCategoryBadge,
-              { fontSize: isDesktop ? 11 : isMobile ? 9 : 10 }
-            ]}>
-              {product.category}
-            </Text>
-          </View>
-
-          {/* Action Buttons - Simplified */}
-          <View style={[
-            styles.actionButtons,
-            { gap: isDesktop ? 8 : 6, marginTop: 8 }
-          ]}>
+        {/* Actions Column */}
+        <View style={styles.actionsColumn}>
+          <View style={styles.actionButtons}>
             <TouchableOpacity
-              style={[
-                styles.actionButton,
-                styles.inventoryUpdateButton,
-                {
-                  paddingVertical: isDesktop ? 8 : 6,
-                  paddingHorizontal: isDesktop ? 12 : 8,
-                }
-              ]}
+              style={styles.editButton}
+              onPress={(e) => {
+                e.stopPropagation();
+                router.push(`/farmer/products/edit/${product.id}` as any);
+              }}
+            >
+              <Text style={styles.actionIcon}>✏️</Text>
+            </TouchableOpacity>
+            
+            <TouchableOpacity
+              style={styles.stockButton}
               onPress={(e) => {
                 e.stopPropagation();
                 setSelectedProduct(product);
@@ -521,38 +458,17 @@ const renderHeader = () => (
                 setShowStockModal(true);
               }}
             >
-              <Text style={[
-                styles.actionButtonIcon,
-                { fontSize: isDesktop ? 10 : isMobile ? 8 : 9 }
-              ]}>📝</Text>
-              <Text style={[
-                styles.inventoryUpdateText,
-                { fontSize: isDesktop ? 10 : isMobile ? 8 : 9 }
-              ]}>Update</Text>
+              <Text style={styles.actionIcon}>📝</Text>
             </TouchableOpacity>
             
             <TouchableOpacity
-              style={[
-                styles.actionButton,
-                styles.inventoryDeleteButton,
-                {
-                  paddingVertical: isDesktop ? 8 : 6,
-                  paddingHorizontal: isDesktop ? 12 : 8,
-                }
-              ]}
+              style={styles.deleteButton}
               onPress={(e) => {
                 e.stopPropagation();
                 deleteProduct(product.id);
               }}
             >
-              <Text style={[
-                styles.actionButtonIcon,
-                { fontSize: isDesktop ? 10 : isMobile ? 8 : 9 }
-              ]}>🗑️</Text>
-              <Text style={[
-                styles.inventoryDeleteText,
-                { fontSize: isDesktop ? 10 : isMobile ? 8 : 9 }
-              ]}>Delete</Text>
+              <Text style={styles.actionIcon}>🗑️</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -598,14 +514,8 @@ const renderHeader = () => (
 
   return (
     <View style={styles.container}>
-      <FlatList
-        data={filteredProducts}
-        renderItem={renderProductItem}
-        keyExtractor={(item) => item.id}
-        key={numColumns}
-        numColumns={numColumns}
-        ListHeaderComponent={renderHeader}
-        ListEmptyComponent={renderEmptyState}
+      <ScrollView
+        style={styles.scrollContainer}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
@@ -614,10 +524,27 @@ const renderHeader = () => (
             colors={[colors.primary]}
           />
         }
-        contentContainerStyle={styles.listContent}
-        columnWrapperStyle={numColumns > 1 ? styles.row : undefined}
         showsVerticalScrollIndicator={false}
-      />
+      >
+        {renderHeader()}
+        
+        {/* Table Container */}
+        <View style={styles.tableContainer}>
+          {renderTableHeader()}
+          
+          {filteredProducts.length > 0 ? (
+            <FlatList
+              data={filteredProducts}
+              renderItem={renderTableRow}
+              keyExtractor={(item) => item.id}
+              scrollEnabled={false}
+              showsVerticalScrollIndicator={false}
+            />
+          ) : (
+            renderEmptyState()
+          )}
+        </View>
+      </ScrollView>
 
       {/* Stock Update Modal */}
       <Modal
@@ -687,6 +614,10 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.background,
+  },
+  
+  scrollContainer: {
+    flex: 1,
   },
   
   loadingContainer: {
@@ -849,39 +780,97 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
 
-  // Product List
-  listContent: {
-    paddingHorizontal: 16,
-    paddingBottom: 20,
-  },
-  
-  row: {
-    justifyContent: 'flex-start',
-  },
-  
-  productCard: {
+  // Table Styles
+  tableContainer: {
     backgroundColor: colors.white,
+    marginHorizontal: 16,
+    marginBottom: 20,
     borderRadius: 12,
     elevation: 2,
     shadowColor: colors.shadow,
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.08,
-    shadowRadius: 3,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
     overflow: 'hidden',
   },
   
-  imageContainer: {
-    position: 'relative',
+  tableHeader: {
+    flexDirection: 'row',
     backgroundColor: colors.gray100,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
   },
   
-  productImage: {
+  tableHeaderText: {
+    fontSize: 12,
+    fontWeight: 'bold',
+    color: colors.textSecondary,
+    textTransform: 'uppercase',
+  },
+  
+  tableRow: {
+    flexDirection: 'row',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+    alignItems: 'center',
+  },
+  
+  // Column Styles
+  productColumn: {
+    flex: 3,
+    minWidth: 180,
+  },
+  
+  categoryColumn: {
+    flex: 1.5,
+    minWidth: 100,
+  },
+  
+  priceColumn: {
+    flex: 1.5,
+    minWidth: 80,
+  },
+  
+  stockColumn: {
+    flex: 1.5,
+    minWidth: 100,
+  },
+  
+  statusColumn: {
+    flex: 1.2,
+    minWidth: 80,
+  },
+  
+  actionsColumn: {
+    flex: 1.8,
+    minWidth: 120,
+  },
+  
+  // Product Info Styles
+  productInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  
+  productImageContainer: {
+    width: 40,
+    height: 40,
+    borderRadius: 8,
+    marginRight: 12,
+    overflow: 'hidden',
+  },
+  
+  productTableImage: {
     width: '100%',
     height: '100%',
     resizeMode: 'cover',
   },
   
-  placeholderImage: {
+  placeholderTableImage: {
     width: '100%',
     height: '100%',
     backgroundColor: colors.gray100,
@@ -889,140 +878,124 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   
-  placeholderIcon: {
-    fontSize: 32,
+  placeholderTableIcon: {
+    fontSize: 16,
   },
   
-  statusBadge: {
-    position: 'absolute',
-    top: 8,
-    left: 8,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 4,
-  },
-  
-  statusText: {
-    fontSize: 9,
-    fontWeight: 'bold',
-    color: colors.white,
-  },
-
-  quickEditButton: {
-    position: 'absolute',
-    top: 8,
-    right: 8,
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: 'rgba(255,255,255,0.9)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    elevation: 2,
-    shadowColor: colors.shadow,
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.2,
-    shadowRadius: 2,
-  },
-
-  quickEditIcon: {
-    fontSize: 12,
-  },
-  
-  productInfo: {
-    padding: 14,
+  productDetails: {
+    flex: 1,
   },
   
   productName: {
-    fontSize: 15,
+    fontSize: 14,
     fontWeight: '600',
     color: colors.text,
-    lineHeight: 19,
-    marginBottom: 4,
+    marginBottom: 2,
   },
   
-  priceRow: {
-    flexDirection: 'row',
-    alignItems: 'baseline',
-    marginBottom: 8,
+  productDescription: {
+    fontSize: 12,
+    color: colors.textSecondary,
   },
   
-  productPrice: {
-    fontSize: 17,
+  // Category Badge
+  categoryBadge: {
+    backgroundColor: colors.gray100,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+    alignSelf: 'flex-start',
+  },
+  
+  categoryBadgeText: {
+    fontSize: 11,
+    color: colors.textSecondary,
+    textTransform: 'capitalize',
+    fontWeight: '500',
+  },
+  
+  // Price Styles
+  priceText: {
+    fontSize: 14,
     fontWeight: 'bold',
     color: colors.primary,
   },
   
-  productUnit: {
+  unitText: {
     fontSize: 11,
     color: colors.textSecondary,
-    marginLeft: 2,
   },
-
-  productMeta: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 8,
+  
+  // Stock Styles
+  stockQuantity: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    color: colors.text,
+    marginBottom: 4,
   },
-
-  stockText: {
-    fontSize: 11,
-    color: colors.textSecondary,
-    fontWeight: '500',
-  },
-
-  productCategoryBadge: {
-    fontSize: 10,
-    color: colors.textSecondary,
-    textTransform: 'capitalize',
-    backgroundColor: colors.gray100,
+  
+  stockStatusBadge: {
     paddingHorizontal: 6,
     paddingVertical: 2,
-    borderRadius: 10,
+    borderRadius: 8,
+    alignSelf: 'flex-start',
   },
   
+  stockStatusText: {
+    fontSize: 10,
+    fontWeight: '600',
+    textTransform: 'uppercase',
+  },
+  
+  // Status Badge
+  statusBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+    alignSelf: 'flex-start',
+  },
+  
+  statusText: {
+    fontSize: 11,
+    fontWeight: 'bold',
+    textTransform: 'uppercase',
+  },
+  
+  // Action Buttons
   actionButtons: {
     flexDirection: 'row',
-    gap: 6,
+    gap: 8,
   },
   
-  actionButton: {
-    flex: 1,
-    flexDirection: 'row',
+  editButton: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: colors.primary + '20',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 8,
-    paddingHorizontal: 8,
-    borderRadius: 6,
-    borderWidth: 1,
-  },
-
-  inventoryUpdateButton: {
-    backgroundColor: colors.primary + '10',
-    borderColor: colors.primary + '30',
   },
   
-  inventoryDeleteButton: {
-    backgroundColor: colors.danger + '10',
-    borderColor: colors.danger + '30',
+  stockButton: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: colors.warning + '20',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   
-  actionButtonIcon: {
-    fontSize: 9,
-    marginRight: 4,
+  deleteButton: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: colors.danger + '20',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   
-  inventoryUpdateText: {
-    fontSize: 9,
-    fontWeight: '600',
-    color: colors.primary,
-  },
-
-  inventoryDeleteText: {
-    fontSize: 9,
-    fontWeight: '600',
-    color: colors.danger,
+  actionIcon: {
+    fontSize: 12,
   },
 
   // Empty State
