@@ -11,8 +11,6 @@ import {
     TouchableOpacity,
     View,
 } from 'react-native';
-import NavBar from '../../components/NavBar';
-import StatCard from '../../components/StatCard';
 import { supabase } from '../../lib/supabase';
 import { getUserWithProfile } from '../../services/auth';
 import { Database } from '../../types/database';
