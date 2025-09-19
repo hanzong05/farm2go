@@ -130,7 +130,8 @@ export default function BuyerPurchaseHistoryScreen() {
       }
 
       // Get order items for all orders
-      const orderIds = ordersData.map(order => order.id);
+     const orderIds = ordersData.map((order: { id: string | number }) => order.id);
+
       const { data: orderItems, error: itemsError } = await (supabase as any)
         .from('order_items')
         .select(`

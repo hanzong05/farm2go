@@ -1,8 +1,8 @@
-import React, { useEffect, useState } from 'react';
-import { View, Text, Pressable, StyleSheet } from 'react-native';
 import { router } from 'expo-router';
-import ResponsivePage, { ResponsiveGrid, ResponsiveCard, useResponsiveValue } from '../../components/ResponsivePage';
+import React, { useEffect, useState } from 'react';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import HeaderComponent from '../../components/HeaderComponent';
+import ResponsivePage, { ResponsiveCard, ResponsiveGrid, useResponsiveValue } from '../../components/ResponsivePage';
 import { getUserWithProfile } from '../../services/auth';
 import { Database } from '../../types/database';
 

@@ -30,7 +30,7 @@ const NAV_ITEMS: NavItem[] = [
     id: 'farmer-dashboard',
     title: 'Dashboard',
     icon: 'chart-bar',
-    route: '/farmer/my-products',
+    route: '/farmer/index',
     userTypes: ['farmer'],
   },
   {
