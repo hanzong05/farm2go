@@ -11,7 +11,6 @@ import {
     TouchableOpacity,
     View,
 } from 'react-native';
-import NavBar from '../../components/NavBar';
 import StatCard from '../../components/StatCard';
 import HeaderComponent from '../../components/HeaderComponent';
 import { supabase } from '../../lib/supabase';
@@ -430,7 +429,6 @@ export default function BuyerMyOrdersScreen() {
         showSearch={true}
         searchPlaceholder="Search your orders..."
       />
-      <NavBar currentRoute="/buyer/my-orders" />
 
       <ScrollView
         style={styles.scrollView}

@@ -12,9 +12,8 @@ import {
   TouchableOpacity,
   View
 } from 'react-native';
-import NavBar from '../../components/NavBar';
-import StatCard from '../../components/StatCard';
 import HeaderComponent from '../../components/HeaderComponent';
+import StatCard from '../../components/StatCard';
 import { supabase } from '../../lib/supabase';
 import { getUserWithProfile } from '../../services/auth';
 import { Database } from '../../types/database';
@@ -99,6 +98,7 @@ export default function FarmerOrdersScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [selectedStatus, setSelectedStatus] = useState('all');
+  const [searchQuery, setSearchQuery] = useState('');
   const [profile, setProfile] = useState<Profile | null>(null);
 
   useEffect(() => {
@@ -107,7 +107,7 @@ export default function FarmerOrdersScreen() {
 
   useEffect(() => {
     filterOrders();
-  }, [orders, selectedStatus]);
+  }, [orders, selectedStatus, searchQuery]);
 
   const loadData = async () => {
     try {
@@ -217,11 +217,34 @@ export default function FarmerOrdersScreen() {
   };
 
   const filterOrders = () => {
-    if (selectedStatus === 'all') {
-      setFilteredOrders(orders);
-    } else {
-      setFilteredOrders(orders.filter(order => order.status === selectedStatus));
+    let filtered = orders;
+
+    // Filter by status
+    if (selectedStatus !== 'all') {
+      filtered = filtered.filter(order => order.status === selectedStatus);
     }
+
+    // Filter by search query
+    if (searchQuery.trim()) {
+      filtered = filtered.filter(order => {
+        const searchLower = searchQuery.toLowerCase();
+        const orderId = order.id.slice(-8).toLowerCase();
+        const buyerName = (order.buyer_profile?.company_name ||
+          `${order.buyer_profile?.first_name || ''} ${order.buyer_profile?.last_name || ''}`.trim() ||
+          'unknown buyer').toLowerCase();
+        const phone = order.buyer_profile?.phone?.toLowerCase() || '';
+        const address = order.delivery_address?.toLowerCase() || '';
+        const notes = order.notes?.toLowerCase() || '';
+
+        return orderId.includes(searchLower) ||
+               buyerName.includes(searchLower) ||
+               phone.includes(searchLower) ||
+               address.includes(searchLower) ||
+               notes.includes(searchLower);
+      });
+    }
+
+    setFilteredOrders(filtered);
   };
 
   const onRefresh = async () => {
@@ -530,12 +553,13 @@ export default function FarmerOrdersScreen() {
         <HeaderComponent
           profile={profile}
           showSearch={true}
+          searchQuery={searchQuery}
+          onSearchChange={setSearchQuery}
           searchPlaceholder="Search orders..."
           showAddButton={true}
           addButtonText="+ Add Product"
           addButtonRoute="/farmer/products/add"
         />
-        <NavBar currentRoute="/farmer/orders" />
 
         <View style={styles.desktopLayout}>
           {/* Left Sidebar */}
@@ -663,12 +687,13 @@ export default function FarmerOrdersScreen() {
       <HeaderComponent
         profile={profile}
         showSearch={true}
+        searchQuery={searchQuery}
+        onSearchChange={setSearchQuery}
         searchPlaceholder="Search orders..."
         showAddButton={true}
         addButtonText="+ Add Product"
         addButtonRoute="/farmer/products/add"
       />
-      <NavBar currentRoute="/farmer/orders" />
 
       <ScrollView
         style={styles.scrollView}

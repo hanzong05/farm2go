@@ -1,7 +1,6 @@
 import { router } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import { ActivityIndicator, Alert, Dimensions, RefreshControl, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View, Image, FlatList } from 'react-native';
-import NavBar from '../../components/NavBar';
 import HeaderComponent from '../../components/HeaderComponent';
 import { supabase } from '../../lib/supabase';
 import { getUserWithProfile } from '../../services/auth';
@@ -319,7 +318,10 @@ export default function MarketplaceScreen() {
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
-        <NavBar currentRoute="/buyer/marketplace" />
+        <HeaderComponent
+          profile={profile}
+          showSearch={false}
+        />
         <View style={styles.loadingContent}>
           <ActivityIndicator size="large" color="#10b981" />
           <Text style={styles.loadingText}>Loading fresh products...</Text>
@@ -349,7 +351,6 @@ export default function MarketplaceScreen() {
         onCategoryChange={(category) => setSelectedCategory(category === 'all' ? 'All' : category.charAt(0).toUpperCase() + category.slice(1))}
         showFilterButton={true}
       />
-      <NavBar currentRoute="/buyer/marketplace" />
 
       <ScrollView
         style={styles.scrollView}

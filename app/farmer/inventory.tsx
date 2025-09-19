@@ -146,7 +146,7 @@ export default function Farm2GoInventoryScreen() {
     if (searchQuery.trim()) {
       filtered = filtered.filter(product =>
         product.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        (product.description?.toLowerCase().includes(searchQuery.toLowerCase()) ?? false) ||
+        product.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
         product.category.toLowerCase().includes(searchQuery.toLowerCase())
       );
     }
@@ -296,82 +296,6 @@ export default function Farm2GoInventoryScreen() {
     }
   };
 
-  const renderHeader = () => (
-    <View style={styles.header}>
-      {/* Top Bar with Branding */}
-      <View style={styles.topBar}>
-        <View style={styles.brandSection}>
-          <View style={styles.logo}>
-            <Text style={styles.logoText}>F2G</Text>
-          </View>
-          <View>
-            <Text style={styles.brandText}>Inventory Center</Text>
-            <Text style={styles.taglineText}>Manage your stock levels</Text>
-          </View>
-        </View>
-        
-        <TouchableOpacity 
-          style={styles.addButton}
-          onPress={() => router.push('/farmer/products/add')}
-        >
-          <Text style={styles.addButtonText}>+ Add Product</Text>
-        </TouchableOpacity>
-      </View>
-
-      {/* Category Filter */}
-      <View style={styles.categorySection}>
-        <ScrollView 
-          horizontal 
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.categoryContainer}
-        >
-          {CATEGORIES.map((category) => (
-            <TouchableOpacity
-              key={category.key}
-              style={[
-                styles.categoryTab,
-                selectedCategory === category.key && styles.categoryTabActive
-              ]}
-              onPress={() => setSelectedCategory(category.key)}
-            >
-              <Text style={styles.categoryIcon}>{category.icon}</Text>
-              <Text style={[
-                styles.categoryText,
-                selectedCategory === category.key && styles.categoryTextActive
-              ]}>
-                {category.label}
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </ScrollView>
-      </View>
-
-      {/* Stats Banner */}
-      <View style={styles.statsBanner}>
-        <View style={styles.statsGrid}>
-          <View style={styles.statItem}>
-            <Text style={styles.statNumber}>{stats.totalProducts}</Text>
-            <Text style={styles.statLabel}>TOTAL PRODUCTS</Text>
-          </View>
-          <View style={styles.statDivider} />
-          <View style={styles.statItem}>
-            <Text style={styles.statNumber}>{stats.approvedProducts}</Text>
-            <Text style={styles.statLabel}>LIVE PRODUCTS</Text>
-          </View>
-          <View style={styles.statDivider} />
-          <View style={styles.statItem}>
-            <Text style={styles.statNumber}>{stats.lowStockProducts}</Text>
-            <Text style={styles.statLabel}>LOW STOCK</Text>
-          </View>
-          <View style={styles.statDivider} />
-          <View style={styles.statItem}>
-            <Text style={styles.statNumber}>{formatPrice(stats.totalValue)}</Text>
-            <Text style={styles.statLabel}>TOTAL VALUE</Text>
-          </View>
-        </View>
-      </View>
-    </View>
-  );
 
   const renderTableHeader = () => (
     <View style={styles.tableHeader}>
@@ -551,8 +475,6 @@ export default function Farm2GoInventoryScreen() {
         }
         showsVerticalScrollIndicator={false}
       >
-        {renderHeader()}
-        
         {/* Table Container */}
         <View style={styles.tableContainer}>
           {renderTableHeader()}
