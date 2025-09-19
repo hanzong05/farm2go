@@ -21,6 +21,21 @@ import { Database } from '../../types/database';
 
 const { width } = Dimensions.get('window');
 
+// Responsive column calculation
+const getNumColumns = () => {
+  if (width >= 1024) return 4; // Desktop: 4 columns
+  if (width >= 768) return 3;  // Tablet: 3 columns
+  if (width >= 480) return 2;  // Large mobile: 2 columns
+  return 1; // Small mobile: 1 column
+};
+
+const getItemWidth = (numColumns: number) => {
+  const padding = 32; // Container padding (16 * 2)
+  const gap = 12; // Gap between items
+  const totalGap = (numColumns - 1) * gap;
+  return (width - padding - totalGap) / numColumns;
+};
+
 // Farm2Go green color palette
 const colors = {
   primary: '#059669',
@@ -76,9 +91,17 @@ export default function Farm2GoInventoryScreen() {
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [newStock, setNewStock] = useState('');
   const [profile, setProfile] = useState<Profile | null>(null);
+  const [numColumns, setNumColumns] = useState(getNumColumns());
 
   useEffect(() => {
     loadData();
+    
+    // Listen for orientation changes
+    const subscription = Dimensions.addEventListener('change', ({ window }) => {
+      setNumColumns(getNumColumns());
+    });
+
+    return () => subscription?.remove();
   }, []);
 
   useEffect(() => {
@@ -359,29 +382,56 @@ export default function Farm2GoInventoryScreen() {
     </View>
   );
 
-  const renderProductItem = ({ item: product }: { item: Product }) => {
+  const renderProductItem = ({ item: product, index }: { item: Product; index: number }) => {
     const stockStatus = getStockStatus(product);
     const statusColor = getStatusColor(product.status);
+    const itemWidth = getItemWidth(numColumns);
+    const isDesktop = width >= 1024;
+    const isTablet = width >= 768;
+    const isMobile = width < 768;
+    
+    // Calculate margin for proper spacing
+    const gap = 12;
+    const marginRight = (index + 1) % numColumns === 0 ? 0 : gap;
 
     return (
       <TouchableOpacity 
-        style={styles.productCard}
+        style={[
+          styles.productCard,
+          {
+            width: itemWidth,
+            marginRight: marginRight,
+            marginBottom: isDesktop ? 16 : isMobile ? 12 : 14,
+          }
+        ]}
         onPress={() => router.push(`/farmer/products/${product.id}` as any)}
         activeOpacity={0.8}
       >
         {/* Product Image */}
-        <View style={styles.imageContainer}>
+        <View style={[
+          styles.imageContainer,
+          { height: isDesktop ? 120 : isMobile ? 80 : 100 }
+        ]}>
           {product.image_url ? (
             <Image source={{ uri: product.image_url }} style={styles.productImage} />
           ) : (
             <View style={styles.placeholderImage}>
-              <Text style={styles.placeholderIcon}>🥬</Text>
+              <Text style={[
+                styles.placeholderIcon,
+                { fontSize: isDesktop ? 36 : isMobile ? 24 : 28 }
+              ]}>🥬</Text>
             </View>
           )}
           
           {/* Status Badge */}
           <View style={[styles.statusBadge, { backgroundColor: statusColor.bgColor }]}>
-            <Text style={[styles.statusText, { color: statusColor.color }]}>
+            <Text style={[
+              styles.statusText,
+              {
+                color: statusColor.color,
+                fontSize: isDesktop ? 10 : isMobile ? 8 : 9,
+              }
+            ]}>
               {product.status === 'approved' ? 'LIVE' :
                product.status === 'pending' ? 'REVIEW' : 'REJECTED'}
             </Text>
@@ -389,34 +439,90 @@ export default function Farm2GoInventoryScreen() {
         </View>
 
         {/* Product Info */}
-        <View style={styles.productInfo}>
-          <Text style={styles.productName} numberOfLines={2}>
+        <View style={[
+          styles.productInfo,
+          { padding: isDesktop ? 16 : isMobile ? 10 : 12 }
+        ]}>
+          <Text style={[
+            styles.productName,
+            {
+              fontSize: isDesktop ? 16 : isMobile ? 12 : 14,
+              lineHeight: isDesktop ? 20 : isMobile ? 16 : 18,
+              marginBottom: isDesktop ? 6 : 4,
+            }
+          ]} numberOfLines={2}>
             {product.name}
           </Text>
           
-          <Text style={styles.productCategory}>{product.category}</Text>
+          <Text style={[
+            styles.productCategory,
+            {
+              fontSize: isDesktop ? 12 : isMobile ? 10 : 11,
+              marginBottom: isDesktop ? 10 : 8,
+            }
+          ]}>
+            {product.category}
+          </Text>
           
-          <View style={styles.priceRow}>
-            <Text style={styles.productPrice}>{formatPrice(product.price)}</Text>
-            <Text style={styles.productUnit}>/{product.unit}</Text>
+          <View style={[
+            styles.priceRow,
+            { marginBottom: isDesktop ? 14 : 10 }
+          ]}>
+            <Text style={[
+              styles.productPrice,
+              { fontSize: isDesktop ? 18 : isMobile ? 14 : 16 }
+            ]}>
+              {formatPrice(product.price)}
+            </Text>
+            <Text style={[
+              styles.productUnit,
+              { fontSize: isDesktop ? 11 : isMobile ? 9 : 10 }
+            ]}>
+              /{product.unit}
+            </Text>
           </View>
 
           {/* Stock Status */}
-          <View style={[styles.stockStatusContainer, { backgroundColor: stockStatus.bgColor }]}>
+          <View style={[
+            styles.stockStatusContainer,
+            {
+              padding: isDesktop ? 10 : 8,
+              marginBottom: isDesktop ? 14 : 10,
+              backgroundColor: stockStatus.bgColor,
+            }
+          ]}>
             <View style={styles.stockStatusContent}>
-              <Text style={[styles.stockStatusText, { color: stockStatus.color }]}>
+              <Text style={[
+                styles.stockStatusText,
+                {
+                  color: stockStatus.color,
+                  fontSize: isDesktop ? 12 : isMobile ? 10 : 11,
+                }
+              ]}>
                 {stockStatus.status}
               </Text>
-              <Text style={styles.stockQuantity}>
+              <Text style={[
+                styles.stockQuantity,
+                { fontSize: isDesktop ? 12 : isMobile ? 10 : 11 }
+              ]}>
                 {product.quantity_available} {product.unit}
               </Text>
             </View>
           </View>
 
           {/* Action Buttons */}
-          <View style={styles.actionButtons}>
+          <View style={[
+            styles.actionButtons,
+            { gap: isDesktop ? 8 : 6 }
+          ]}>
             <TouchableOpacity
-              style={styles.actionButton}
+              style={[
+                styles.actionButton,
+                {
+                  paddingVertical: isDesktop ? 10 : isMobile ? 6 : 8,
+                  paddingHorizontal: isDesktop ? 10 : isMobile ? 6 : 8,
+                }
+              ]}
               onPress={(e) => {
                 e.stopPropagation();
                 setSelectedProduct(product);
@@ -424,30 +530,64 @@ export default function Farm2GoInventoryScreen() {
                 setShowStockModal(true);
               }}
             >
-              <Text style={styles.actionButtonIcon}>📝</Text>
-              <Text style={styles.actionButtonText}>Update</Text>
+              <Text style={[
+                styles.actionButtonIcon,
+                { fontSize: isDesktop ? 12 : isMobile ? 8 : 10 }
+              ]}>📝</Text>
+              <Text style={[
+                styles.actionButtonText,
+                { fontSize: isDesktop ? 10 : isMobile ? 8 : 9 }
+              ]}>Update</Text>
             </TouchableOpacity>
             
             <TouchableOpacity
-              style={styles.actionButton}
+              style={[
+                styles.actionButton,
+                {
+                  paddingVertical: isDesktop ? 10 : isMobile ? 6 : 8,
+                  paddingHorizontal: isDesktop ? 10 : isMobile ? 6 : 8,
+                }
+              ]}
               onPress={(e) => {
                 e.stopPropagation();
                 router.push(`/farmer/products/edit/${product.id}` as any);
               }}
             >
-              <Text style={styles.actionButtonIcon}>✏️</Text>
-              <Text style={styles.actionButtonText}>Edit</Text>
+              <Text style={[
+                styles.actionButtonIcon,
+                { fontSize: isDesktop ? 12 : isMobile ? 8 : 10 }
+              ]}>✏️</Text>
+              <Text style={[
+                styles.actionButtonText,
+                { fontSize: isDesktop ? 10 : isMobile ? 8 : 9 }
+              ]}>Edit</Text>
             </TouchableOpacity>
             
             <TouchableOpacity
-              style={[styles.actionButton, styles.deleteButton]}
+              style={[
+                styles.actionButton,
+                styles.deleteButton,
+                {
+                  paddingVertical: isDesktop ? 10 : isMobile ? 6 : 8,
+                  paddingHorizontal: isDesktop ? 10 : isMobile ? 6 : 8,
+                }
+              ]}
               onPress={(e) => {
                 e.stopPropagation();
                 deleteProduct(product.id);
               }}
             >
-              <Text style={styles.actionButtonIcon}>🗑️</Text>
-              <Text style={[styles.actionButtonText, { color: colors.danger }]}>Delete</Text>
+              <Text style={[
+                styles.actionButtonIcon,
+                { fontSize: isDesktop ? 12 : isMobile ? 8 : 10 }
+              ]}>🗑️</Text>
+              <Text style={[
+                styles.actionButtonText,
+                {
+                  color: colors.danger,
+                  fontSize: isDesktop ? 10 : isMobile ? 8 : 9,
+                }
+              ]}>Delete</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -497,7 +637,8 @@ export default function Farm2GoInventoryScreen() {
         data={filteredProducts}
         renderItem={renderProductItem}
         keyExtractor={(item) => item.id}
-        numColumns={2}
+        key={numColumns}
+        numColumns={numColumns}
         ListHeaderComponent={renderHeader}
         ListEmptyComponent={renderEmptyState}
         refreshControl={
@@ -509,7 +650,7 @@ export default function Farm2GoInventoryScreen() {
           />
         }
         contentContainerStyle={styles.listContent}
-        columnWrapperStyle={styles.row}
+        columnWrapperStyle={numColumns > 1 ? styles.row : undefined}
         showsVerticalScrollIndicator={false}
       />
 
@@ -745,19 +886,17 @@ const styles = StyleSheet.create({
 
   // Product List
   listContent: {
+    paddingHorizontal: 16,
     paddingBottom: 20,
   },
   
   row: {
-    paddingHorizontal: 16,
-    gap: 12,
+    justifyContent: 'flex-start',
   },
   
   productCard: {
-    flex: 1,
     backgroundColor: colors.white,
     borderRadius: 12,
-    marginBottom: 16,
     elevation: 3,
     shadowColor: colors.shadow,
     shadowOffset: { width: 0, height: 2 },
@@ -767,7 +906,6 @@ const styles = StyleSheet.create({
   },
   
   imageContainer: {
-    height: 100,
     position: 'relative',
   },
   
@@ -786,7 +924,7 @@ const styles = StyleSheet.create({
   },
   
   placeholderIcon: {
-    fontSize: 32,
+    fontSize: 28,
   },
   
   statusBadge: {
