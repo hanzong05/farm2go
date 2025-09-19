@@ -207,7 +207,7 @@ export default function HeaderComponent({
   profile,
   userType,
   currentRoute = '',
-  showSearch = false,
+  showSearch = true,
   searchQuery = '',
   onSearchChange,
   searchPlaceholder = 'Search...',

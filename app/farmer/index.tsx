@@ -340,7 +340,7 @@ export default function FarmerDashboard() {
 
   if (loading) {
     return (
-      <ResponsivePage backgroundColor={colors.background}>
+      <View style={styles.fullScreenContainer}>
         <HeaderComponent
           profile={profile}
           userType="farmer"
@@ -355,12 +355,12 @@ export default function FarmerDashboard() {
           <ActivityIndicator size="large" color={colors.primary} />
           <Text style={styles.loadingText}>Loading dashboard...</Text>
         </View>
-      </ResponsivePage>
+      </View>
     );
   }
 
   return (
-    <ResponsivePage backgroundColor={colors.background}>
+    <View style={styles.fullScreenContainer}>
       <HeaderComponent
         profile={profile}
         userType="farmer"
@@ -371,121 +371,128 @@ export default function FarmerDashboard() {
         showMessages={true}
         showNotifications={true}
       />
-      <View style={styles.container}>
-        {/* Welcome Section */}
-        <ResponsiveCard style={styles.welcomeCard}>
-          <View style={styles.welcomeContent}>
-            <View style={styles.welcomeText}>
-              <Text style={styles.welcomeTitle}>Welcome back, Farmer! 🌱</Text>
-              <Text style={styles.welcomeSubtitle}>
-                Manage your farm, track orders, and grow your business with Farm2Go
-              </Text>
+      <ResponsivePage backgroundColor={colors.background}>
+        <View style={styles.container}>
+          {/* Welcome Section */}
+          <ResponsiveCard style={styles.welcomeCard}>
+            <View style={styles.welcomeContent}>
+              <View style={styles.welcomeText}>
+                <Text style={styles.welcomeTitle}>Welcome back, Farmer! 🌱</Text>
+                <Text style={styles.welcomeSubtitle}>
+                  Manage your farm, track orders, and grow your business with Farm2Go
+                </Text>
+              </View>
+              <View style={styles.welcomeIcon}>
+                <Text style={styles.welcomeEmoji}>🚜</Text>
+              </View>
             </View>
-            <View style={styles.welcomeIcon}>
-              <Text style={styles.welcomeEmoji}>🚜</Text>
+          </ResponsiveCard>
+
+          {/* Quick Actions */}
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Quick Actions</Text>
+            <View style={styles.quickActionsContainer}>
+              {quickActions.map((action, index) => (
+                <Pressable
+                  key={index}
+                  style={[styles.quickActionButton, { backgroundColor: action.color }]}
+                  onPress={() => handleNavigation(action.route)}
+                  android_ripple={{ color: 'rgba(255,255,255,0.2)' }}
+                >
+                  <Text style={styles.quickActionIcon}>{action.icon}</Text>
+                  <Text style={styles.quickActionTitle}>{action.title}</Text>
+                  <Text style={styles.quickActionDescription}>{action.description}</Text>
+                </Pressable>
+              ))}
             </View>
           </View>
-        </ResponsiveCard>
 
-        {/* Quick Actions */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Quick Actions</Text>
-          <View style={styles.quickActionsContainer}>
-            {quickActions.map((action, index) => (
-              <Pressable
-                key={index}
-                style={[styles.quickActionButton, { backgroundColor: action.color }]}
-                onPress={() => handleNavigation(action.route)}
-                android_ripple={{ color: 'rgba(255,255,255,0.2)' }}
-              >
-                <Text style={styles.quickActionIcon}>{action.icon}</Text>
-                <Text style={styles.quickActionTitle}>{action.title}</Text>
-                <Text style={styles.quickActionDescription}>{action.description}</Text>
-              </Pressable>
-            ))}
-          </View>
-        </View>
-
-        {/* Dashboard Stats */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Dashboard Overview</Text>
-          <ResponsiveGrid columns={{ mobile: 2, tablet: 2, desktop: 4 }} gap={16}>
-            {dashboardStatsDisplay.map((stat, index) => (
-              <ResponsiveCard key={index} style={styles.statCard}>
-                <View style={styles.statContent}>
-                  <Text style={styles.statIcon}>{stat.icon}</Text>
-                  <Text style={styles.statValue}>{stat.value}</Text>
-                  <Text style={styles.statTitle}>{stat.title}</Text>
-                  <Text style={styles.statChange}>{stat.change}</Text>
-                </View>
-              </ResponsiveCard>
-            ))}
-          </ResponsiveGrid>
-        </View>
-
-        {/* Feature Cards */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Farm Management</Text>
-          <ResponsiveGrid columns={{ mobile: 1, tablet: 2, desktop: 3 }} gap={20}>
-            {farmerFeatures.map((feature, index) => (
-              <Pressable
-                key={index}
-                onPress={() => handleNavigation(feature.route)}
-                android_ripple={{ color: colors.border }}
-              >
-                <ResponsiveCard style={styles.featureCard}>
-                  <View style={styles.featureContent}>
-                    <View style={styles.featureHeader}>
-                      <View style={styles.featureIconContainer}>
-                        <Text style={styles.featureIcon}>{feature.icon}</Text>
-                      </View>
-                      <Text style={styles.featureStats}>{feature.stats}</Text>
-                    </View>
-
-                    <Text style={styles.featureTitle}>{feature.title}</Text>
-                    <Text style={styles.featureDescription}>{feature.description}</Text>
-
-                    <View style={styles.featureAction}>
-                      <Text style={styles.featureActionText}>Manage →</Text>
-                    </View>
+          {/* Dashboard Stats */}
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Dashboard Overview</Text>
+            <ResponsiveGrid columns={{ mobile: 2, tablet: 2, desktop: 4 }} gap={16}>
+              {dashboardStatsDisplay.map((stat, index) => (
+                <ResponsiveCard key={index} style={styles.statCard}>
+                  <View style={styles.statContent}>
+                    <Text style={styles.statIcon}>{stat.icon}</Text>
+                    <Text style={styles.statValue}>{stat.value}</Text>
+                    <Text style={styles.statTitle}>{stat.title}</Text>
+                    <Text style={styles.statChange}>{stat.change}</Text>
                   </View>
                 </ResponsiveCard>
-              </Pressable>
-            ))}
-          </ResponsiveGrid>
-        </View>
+              ))}
+            </ResponsiveGrid>
+          </View>
 
-        {/* Recent Activity */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Recent Activity</Text>
-          <ResponsiveCard style={styles.activityCard}>
-            {recentActivity.length > 0 ? (
-              recentActivity.map((activity) => (
-                <View key={activity.id} style={styles.activityItem}>
-                  <Text style={styles.activityIcon}>{activity.icon}</Text>
+          {/* Feature Cards */}
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Farm Management</Text>
+            <ResponsiveGrid columns={{ mobile: 1, tablet: 2, desktop: 3 }} gap={20}>
+              {farmerFeatures.map((feature, index) => (
+                <Pressable
+                  key={index}
+                  onPress={() => handleNavigation(feature.route)}
+                  android_ripple={{ color: colors.border }}
+                >
+                  <ResponsiveCard style={styles.featureCard}>
+                    <View style={styles.featureContent}>
+                      <View style={styles.featureHeader}>
+                        <View style={styles.featureIconContainer}>
+                          <Text style={styles.featureIcon}>{feature.icon}</Text>
+                        </View>
+                        <Text style={styles.featureStats}>{feature.stats}</Text>
+                      </View>
+
+                      <Text style={styles.featureTitle}>{feature.title}</Text>
+                      <Text style={styles.featureDescription}>{feature.description}</Text>
+
+                      <View style={styles.featureAction}>
+                        <Text style={styles.featureActionText}>Manage →</Text>
+                      </View>
+                    </View>
+                  </ResponsiveCard>
+                </Pressable>
+              ))}
+            </ResponsiveGrid>
+          </View>
+
+          {/* Recent Activity */}
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Recent Activity</Text>
+            <ResponsiveCard style={styles.activityCard}>
+              {recentActivity.length > 0 ? (
+                recentActivity.map((activity) => (
+                  <View key={activity.id} style={styles.activityItem}>
+                    <Text style={styles.activityIcon}>{activity.icon}</Text>
+                    <View style={styles.activityContent}>
+                      <Text style={styles.activityTitle}>{activity.title}</Text>
+                      <Text style={styles.activityTime}>{activity.time}</Text>
+                    </View>
+                  </View>
+                ))
+              ) : (
+                <View style={styles.activityItem}>
+                  <Text style={styles.activityIcon}>📋</Text>
                   <View style={styles.activityContent}>
-                    <Text style={styles.activityTitle}>{activity.title}</Text>
-                    <Text style={styles.activityTime}>{activity.time}</Text>
+                    <Text style={styles.activityTitle}>No recent activity</Text>
+                    <Text style={styles.activityTime}>Start by adding products or managing orders</Text>
                   </View>
                 </View>
-              ))
-            ) : (
-              <View style={styles.activityItem}>
-                <Text style={styles.activityIcon}>📋</Text>
-                <View style={styles.activityContent}>
-                  <Text style={styles.activityTitle}>No recent activity</Text>
-                  <Text style={styles.activityTime}>Start by adding products or managing orders</Text>
-                </View>
-              </View>
-            )}
-          </ResponsiveCard>
+              )}
+            </ResponsiveCard>
+          </View>
         </View>
-      </View>
-    </ResponsivePage>
+      </ResponsivePage>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
+  fullScreenContainer: {
+    flex: 1,
+    backgroundColor: colors.background,
+  },
+  
   container: {
     flex: 1,
     gap: 24,
