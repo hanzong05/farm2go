@@ -12,116 +12,62 @@ import {
 import { useAuth } from '../contexts/AuthContext';
 import { logoutUser } from '../services/auth';
 
-// Enhanced icon component with better styling
-const Icon = ({ name, size = 20, color = '#ffffff', style }: { 
-  name: string; 
-  size?: number; 
-  color?: string;
-  style?: any;
-}) => {
-  const iconMap: { [key: string]: string } = {
-    // Admin icons
-    'users': '👥',
-    'clipboard': '📋',
-    'settings': '⚙️',
-    // Farmer icons
-    'leaf': '🌿',
-    'package': '📦',
-    'bar-chart': '📊',
-    'clock': '🕐',
-    'plus': '+',
-    'inventory': '📦',
-    'history': '📈',
-    // Buyer icons
-    'shopping-cart': '🛒',
-    'search': '🔍',
-    'orders': '📋',
-    'purchase-history': '📋',
-    // Common icons
-    'log-out': '↗️',
-    'user': '👤',
-  };
-
-  return (
-    <Text style={[{
-      fontSize: size,
-      color,
-      textAlign: 'center',
-      fontWeight: '500',
-    }, style]}>
-      {iconMap[name] || '●'}
-    </Text>
-  );
-};
-
 const { width } = Dimensions.get('window');
+
+// Shopee-inspired color scheme
+const colors = {
+  primary: '#ff4500',
+  secondary: '#ff6b35',
+  white: '#ffffff',
+  background: '#f5f5f5',
+  text: '#212529',
+  textSecondary: '#6c757d',
+  success: '#00c851',
+  warning: '#ffbb33',
+  danger: '#ff4444',
+  gray100: '#f8f9fa',
+  gray200: '#e9ecef',
+  gray300: '#dee2e6',
+  shadow: 'rgba(0,0,0,0.1)',
+};
 
 interface NavItem {
   id: string;
   title: string;
-  iconName: string;
+  icon: string;
   route: string;
   userTypes: ('farmer' | 'buyer' | 'admin')[];
+  badge?: number;
 }
 
 const NAV_ITEMS: NavItem[] = [
-  // Admin Navigation
-  {
-    id: 'admin-users',
-    title: 'Users',
-    iconName: 'users',
-    route: '/admin/users',
-    userTypes: ['admin'],
-  },
-  {
-    id: 'admin-products',
-    title: 'Products',
-    iconName: 'clipboard',
-    route: '/admin/products',
-    userTypes: ['admin'],
-  },
-  {
-    id: 'admin-settings',
-    title: 'Settings',
-    iconName: 'settings',
-    route: '/admin/settings',
-    userTypes: ['admin'],
-  },
-
   // Farmer Navigation
   {
     id: 'farmer-products',
     title: 'Products',
-    iconName: 'leaf',
+    icon: '📦',
     route: '/farmer/my-products',
     userTypes: ['farmer'],
   },
   {
     id: 'farmer-orders',
     title: 'Orders',
-    iconName: 'package',
+    icon: '📋',
     route: '/farmer/orders',
+    userTypes: ['farmer'],
+  },
+  {
+    id: 'farmer-analytics',
+    title: 'Analytics',
+    icon: '📊',
+    route: '/farmer/sales-history',
     userTypes: ['farmer'],
   },
   {
     id: 'farmer-inventory',
     title: 'Inventory',
-    iconName: 'inventory',
+    icon: '🏪',
     route: '/farmer/inventory',
-    userTypes: ['farmer'],
-  },
-  {
-    id: 'farmer-history',
-    title: 'History',
-    iconName: 'history',
-    route: '/farmer/sales-history',
-    userTypes: ['farmer'],
-  },
-  {
-    id: 'farmer-settings',
-    title: 'Settings',
-    iconName: 'settings',
-    route: '/farmer/settings',
     userTypes: ['farmer'],
   },
 
@@ -129,101 +75,72 @@ const NAV_ITEMS: NavItem[] = [
   {
     id: 'buyer-marketplace',
     title: 'Market',
-    iconName: 'shopping-cart',
+    icon: '🛒',
     route: '/buyer/marketplace',
     userTypes: ['buyer'],
   },
   {
     id: 'buyer-orders',
     title: 'Orders',
-    iconName: 'orders',
+    icon: '📋',
     route: '/buyer/my-orders',
     userTypes: ['buyer'],
   },
   {
-    id: 'buyer-history',
-    title: 'History',
-    iconName: 'purchase-history',
-    route: '/buyer/purchase-history',
+    id: 'buyer-favorites',
+    title: 'Wishlist',
+    icon: '❤️',
+    route: '/buyer/favorites',
     userTypes: ['buyer'],
   },
   {
-    id: 'buyer-settings',
-    title: 'Settings',
-    iconName: 'settings',
+    id: 'buyer-profile',
+    title: 'Profile',
+    icon: '👤',
     route: '/buyer/settings',
     userTypes: ['buyer'],
   },
+
+  // Admin Navigation
+  {
+    id: 'admin-dashboard',
+    title: 'Dashboard',
+    icon: '📊',
+    route: '/admin/dashboard',
+    userTypes: ['admin'],
+  },
+  {
+    id: 'admin-users',
+    title: 'Users',
+    icon: '👥',
+    route: '/admin/users',
+    userTypes: ['admin'],
+  },
+  {
+    id: 'admin-products',
+    title: 'Products',
+    icon: '📦',
+    route: '/admin/products',
+    userTypes: ['admin'],
+  },
+  {
+    id: 'admin-settings',
+    title: 'Settings',
+    icon: '⚙️',
+    route: '/admin/settings',
+    userTypes: ['admin'],
+  },
 ];
 
-// Page title and subtitle mapping
-const PAGE_INFO: { [key: string]: { title: string; subtitle: string; showActions?: boolean } } = {
-  // Farmer pages
-  '/farmer/my-products': {
-    title: 'My Products',
-    subtitle: 'Manage your farm\'s inventory',
-    showActions: true,
-  },
-  '/farmer/orders': {
-    title: 'Order Management',
-    subtitle: 'Track and manage customer orders',
-  },
-  '/farmer/inventory': {
-    title: 'Inventory Management',
-    subtitle: 'Track stock levels and performance',
-  },
-  '/farmer/sales-history': {
-    title: 'Sales Analytics',
-    subtitle: 'Track performance and revenue growth',
-  },
-  '/farmer/settings': {
-    title: 'Farm Settings',
-    subtitle: 'Manage your profile and preferences',
-  },
-  '/farmer/products/add': {
-    title: 'Add Product',
-    subtitle: 'List new produce for sale',
-  },
-
-  // Buyer pages
-  '/buyer/marketplace': {
-    title: 'Fresh Marketplace',
-    subtitle: 'Discover premium agricultural products',
-  },
-  '/buyer/my-orders': {
-    title: 'My Orders',
-    subtitle: 'Track purchases and delivery status',
-  },
-  '/buyer/purchase-history': {
-    title: 'Purchase History',
-    subtitle: 'Analyze spending patterns and favorites',
-  },
-  '/buyer/settings': {
-    title: 'Account Settings',
-    subtitle: 'Manage your profile and preferences',
-  },
-
-  // Admin pages
-  '/admin/users': {
-    title: 'User Management',
-    subtitle: 'Manage platform users and permissions',
-  },
-  '/admin/products': {
-    title: 'Product Management',
-    subtitle: 'Review and approve product listings',
-  },
-  '/admin/settings': {
-    title: 'System Settings',
-    subtitle: 'Configure platform settings',
-  },
-};
-
-interface NavBarProps {
+interface ShopeeNavBarProps {
   currentRoute?: string;
-  showUserInfo?: boolean;
+  showNotifications?: boolean;
 }
 
-export default function NavBar({ currentRoute = '', showUserInfo = true }: NavBarProps) {
+export default function ShopeeNavBar({ 
+  currentRoute = '', 
+  showNotifications = true 
+}: ShopeeNavBarProps) {
   const { user, profile, signOut } = useAuth();
 
   const handleLogout = async () => {
@@ -239,70 +156,32 @@ export default function NavBar({ currentRoute = '', showUserInfo = true }: NavBa
     router.push(route as any);
   };
 
-  const handleAddProduct = () => {
-    router.push('/farmer/products/add');
-  };
-
-  const getUserTypeTheme = () => {
+  const getUserTheme = () => {
     switch (profile?.user_type) {
       case 'farmer':
         return {
           primary: '#059669',
           secondary: '#10b981',
-          accent: '#34d399',
-          background: '#ecfdf5',
-          text: '#064e3b',
           gradient: ['#059669', '#10b981'],
         };
       case 'buyer':
         return {
           primary: '#1d4ed8',
           secondary: '#2563eb',
-          accent: '#60a5fa',
-          background: '#eff6ff',
-          text: '#1e3a8a',
           gradient: ['#1d4ed8', '#2563eb'],
         };
       case 'admin':
         return {
           primary: '#6d28d9',
           secondary: '#7c3aed',
-          accent: '#a78bfa',
-          background: '#f3e8ff',
-          text: '#581c87',
           gradient: ['#6d28d9', '#7c3aed'],
         };
       default:
         return {
-          primary: '#374151',
-          secondary: '#4b5563',
-          accent: '#6b7280',
-          background: '#f9fafb',
-          text: '#1f2937',
-          gradient: ['#374151', '#4b5563'],
+          primary: colors.primary,
+          secondary: colors.secondary,
+          gradient: [colors.primary, colors.secondary],
         };
-    }
-  };
-
-  const getUserDisplayName = () => {
-    if (profile?.first_name && profile?.last_name) {
-      return `${profile.first_name} ${profile.last_name}`;
-    } else if (profile?.first_name) {
-      return profile.first_name;
-    }
-    return 'User';
-  };
-
-  const getUserSubtitle = () => {
-    switch (profile?.user_type) {
-      case 'farmer':
-        return profile?.farm_name || 'Farmer';
-      case 'buyer':
-        return profile?.company_name || 'Buyer';
-      case 'admin':
-        return 'Administrator';
-      default:
-        return profile?.user_type || 'User';
     }
   };
 
@@ -315,8 +194,26 @@ export default function NavBar({ currentRoute = '', showUserInfo = true }: NavBa
     return currentRoute === route || currentRoute.startsWith(route);
   };
 
-  const getCurrentPageInfo = () => {
-    return PAGE_INFO[currentRoute] || { title: 'Dashboard', subtitle: 'Welcome back' };
+  const getUserDisplayName = () => {
+    if (profile?.first_name && profile?.last_name) {
+      return `${profile.first_name} ${profile.last_name}`;
+    } else if (profile?.first_name) {
+      return profile.first_name;
+    }
+    return 'User';
+  };
+
+  const getUserRole = () => {
+    switch (profile?.user_type) {
+      case 'farmer':
+        return profile?.farm_name || 'Farmer';
+      case 'buyer':
+        return 'Buyer';
+      case 'admin':
+        return 'Administrator';
+      default:
+        return 'User';
+    }
   };
 
   if (!user || !profile) {
@@ -324,140 +221,139 @@ export default function NavBar({ currentRoute = '', showUserInfo = true }: NavBa
   }
 
   const filteredNavItems = getFilteredNavItems();
-  const theme = getUserTypeTheme();
-  const pageInfo = getCurrentPageInfo();
+  const theme = getUserTheme();
 
   return (
     <View style={styles.container}>
-      <StatusBar barStyle="light-content" backgroundColor={theme.primary} />
-
-      {/* Main Navigation Bar */}
-      <View style={[styles.navbar, { backgroundColor: theme.primary }]}>
-        {/* Brand Section */}
-        <View style={styles.brandSection}>
+      <StatusBar barStyle="light-content" backgroundColor={colors.primary} />
+      
+      {/* Top Bar */}
+      <View style={[styles.topBar, { backgroundColor: colors.primary }]}>
+        {/* Logo Section */}
+        <TouchableOpacity style={styles.logoSection} activeOpacity={0.8}>
           <View style={styles.logoContainer}>
-            <View style={styles.logoWrapper}>
-              <Text style={styles.logoText}>F2G</Text>
-            </View>
-            <View style={styles.brandInfo}>
-              <Text style={styles.brandName}>Farm2Go</Text>
-              <Text style={styles.brandTagline}>
-                {profile?.user_type === 'admin' ? 'Admin Portal' :
-                 profile?.user_type === 'farmer' ? 'Producer Hub' : 'Marketplace'}
-              </Text>
-            </View>
+            <Text style={styles.logoText}>F2G</Text>
           </View>
-        </View>
+          <View>
+            <Text style={styles.brandText}>Farm2Go</Text>
+            <Text style={styles.taglineText}>
+              {profile?.user_type === 'farmer' ? 'Seller Center' : 
+               profile?.user_type === 'admin' ? 'Admin Panel' : 'Marketplace'}
+            </Text>
+          </View>
+        </TouchableOpacity>
 
-        {/* Navigation Items */}
-        <View style={styles.navItems}>
-          {filteredNavItems.slice(0, 4).map((item) => {
-            const isActive = isCurrentRoute(item.route);
-
-            return (
-              <TouchableOpacity
-                key={item.id}
-                style={[
-                  styles.navItem,
-                  isActive && styles.navItemActive,
-                ]}
-                onPress={() => handleNavigation(item.route)}
-                activeOpacity={0.7}
-              >
-                <View style={[
-                  styles.navIconContainer,
-                  isActive && [styles.navIconContainerActive, { backgroundColor: theme.accent }],
-                ]}>
-                  <Icon
-                    name={item.iconName}
-                    size={16}
-                    color={isActive ? '#ffffff' : 'rgba(255, 255, 255, 0.8)'}
-                  />
-                </View>
-                <Text style={[
-                  styles.navItemText,
-                  isActive && styles.navItemTextActive,
-                ]}>
-                  {item.title}
-                </Text>
-                {isActive && <View style={[styles.activeIndicator, { backgroundColor: theme.accent }]} />}
-              </TouchableOpacity>
-            );
-          })}
-        </View>
-
-        {/* User Section */}
-        {showUserInfo && (
-          <View style={styles.userSection}>
-            <TouchableOpacity style={styles.userInfo} activeOpacity={0.8}>
-              <View style={styles.userAvatarContainer}>
-                <View style={styles.userAvatar}>
-                  <Text style={styles.userInitial}>
-                    {getUserDisplayName().charAt(0).toUpperCase()}
-                  </Text>
-                </View>
-                <View style={styles.statusIndicator} />
+        {/* Top Actions */}
+        <View style={styles.topActions}>
+          {/* Notifications */}
+          {showNotifications && (
+            <TouchableOpacity style={styles.notificationButton} activeOpacity={0.8}>
+              <Text style={styles.notificationIcon}>🔔</Text>
+              <View style={styles.notificationBadge}>
+                <Text style={styles.badgeText}>3</Text>
               </View>
-              <View style={styles.userDetails}>
-                <Text style={styles.userName} numberOfLines={1}>
-                  {getUserDisplayName()}
-                </Text>
-                <Text style={styles.userRole} numberOfLines={1}>
-                  {getUserSubtitle()}
-                </Text>
-              </View>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={styles.logoutButton}
-              onPress={handleLogout}
-              activeOpacity={0.8}
-            >
-              <Icon name="log-out" size={14} color="#ffffff" />
-            </TouchableOpacity>
-          </View>
-        )}
-      </View>
-
-      {/* Page Header Section */}
-      <View style={[styles.pageHeader, { backgroundColor: theme.primary }]}>
-        <View style={styles.pageHeaderContent}>
-          <View style={styles.pageInfo}>
-            <Text style={styles.pageTitle}>{pageInfo.title}</Text>
-            <Text style={styles.pageSubtitle}>{pageInfo.subtitle}</Text>
-          </View>
-
-          {/* Action Buttons */}
-          {pageInfo.showActions && profile?.user_type === 'farmer' && (
-            <TouchableOpacity
-              style={styles.actionButton}
-              onPress={handleAddProduct}
-              activeOpacity={0.8}
-            >
-              <Icon name="plus" size={18} color={theme.primary} />
-              <Text style={[styles.actionButtonText, { color: theme.primary }]}>Add Product</Text>
             </TouchableOpacity>
           )}
+
+          {/* Profile */}
+          <TouchableOpacity style={styles.profileSection} activeOpacity={0.8}>
+            <View style={styles.profileAvatar}>
+              <Text style={styles.avatarText}>
+                {getUserDisplayName().charAt(0).toUpperCase()}
+              </Text>
+            </View>
+            <View style={styles.profileInfo}>
+              <Text style={styles.profileName} numberOfLines={1}>
+                {getUserDisplayName()}
+              </Text>
+              <Text style={styles.profileRole} numberOfLines={1}>
+                {getUserRole()}
+              </Text>
+            </View>
+          </TouchableOpacity>
+
+          {/* Logout */}
+          <TouchableOpacity 
+            style={styles.logoutButton} 
+            onPress={handleLogout}
+            activeOpacity={0.8}
+          >
+            <Text style={styles.logoutIcon}>⏻</Text>
+          </TouchableOpacity>
         </View>
       </View>
 
-      {/* Enhanced bottom shadow */}
-      <View style={styles.bottomShadow} />
+      {/* Bottom Navigation */}
+      <View style={styles.bottomNav}>
+        {filteredNavItems.map((item, index) => {
+          const isActive = isCurrentRoute(item.route);
+          
+          return (
+            <TouchableOpacity
+              key={item.id}
+              style={styles.navItem}
+              onPress={() => handleNavigation(item.route)}
+              activeOpacity={0.6}
+            >
+              {/* Icon Container */}
+              <View style={[
+                styles.navIconContainer,
+                isActive && [styles.navIconContainerActive, { backgroundColor: colors.primary }]
+              ]}>
+                <Text style={[
+                  styles.navIcon,
+                  isActive && styles.navIconActive
+                ]}>
+                  {item.icon}
+                </Text>
+                
+                {/* Badge */}
+                {item.badge && (
+                  <View style={styles.navBadge}>
+                    <Text style={styles.navBadgeText}>
+                      {item.badge > 99 ? '99+' : item.badge}
+                    </Text>
+                  </View>
+                )}
+              </View>
+
+              {/* Label */}
+              <Text style={[
+                styles.navLabel,
+                isActive && [styles.navLabelActive, { color: colors.primary }]
+              ]} numberOfLines={1}>
+                {item.title}
+              </Text>
+
+              {/* Active Indicator */}
+              {isActive && (
+                <View style={[styles.activeIndicator, { backgroundColor: colors.primary }]} />
+              )}
+            </TouchableOpacity>
+          );
+        })}
+      </View>
+
+      {/* Shadow */}
+      <View style={styles.shadowContainer} />
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
+    backgroundColor: colors.white,
     zIndex: 1000,
-    elevation: 15,
+    elevation: 10,
   },
-  navbar: {
+
+  // Top Bar
+  topBar: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingTop: Platform.OS === 'ios' ? 50 : (StatusBar.currentHeight || 0) + 10,
-    paddingBottom: 12,
+    paddingBottom: 16,
     paddingHorizontal: 20,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
@@ -466,319 +362,298 @@ const styles = StyleSheet.create({
     elevation: 8,
   },
 
-  // Page Header Section
-  pageHeader: {
-    paddingHorizontal: 20,
-    paddingVertical: 16,
-    borderBottomLeftRadius: 20,
-    borderBottomRightRadius: 20,
-  },
-  pageHeaderContent: {
+  logoSection: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  pageInfo: {
     flex: 1,
   },
-  pageTitle: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#ffffff',
-    marginBottom: 4,
-    letterSpacing: -0.3,
-  },
-  pageSubtitle: {
-    fontSize: 14,
-    color: 'rgba(255, 255, 255, 0.85)',
-    fontWeight: '500',
-  },
-  actionButton: {
-    flexDirection: 'row',
+
+  logoContainer: {
+    width: 36,
+    height: 36,
+    borderRadius: 8,
+    backgroundColor: colors.white,
     alignItems: 'center',
-    backgroundColor: '#ffffff',
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 12,
-    shadowColor: '#000',
+    justifyContent: 'center',
+    marginRight: 12,
+    shadowColor: colors.shadow,
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 4,
     elevation: 3,
   },
-  actionButtonText: {
-    fontSize: 14,
-    fontWeight: '600',
-    marginLeft: 6,
-  },
 
-  bottomShadow: {
-    height: 4,
-    backgroundColor: 'rgba(0, 0, 0, 0.06)',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 6,
-    elevation: 6,
-  },
-
-  // Brand Section
-  brandSection: {
-    flex: 1,
-    minWidth: 120,
-  },
-  logoContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  logoWrapper: {
-    width: 36,
-    height: 36,
-    borderRadius: 10,
-    backgroundColor: 'rgba(255, 255, 255, 0.15)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 12,
-  },
   logoText: {
-    fontSize: 14,
+    fontSize: 16,
     fontWeight: '900',
-    color: '#ffffff',
+    color: colors.primary,
     letterSpacing: -0.5,
   },
-  brandInfo: {
-    flex: 1,
-  },
-  brandName: {
+
+  brandText: {
     fontSize: 18,
     fontWeight: '800',
-    color: '#ffffff',
+    color: colors.white,
     letterSpacing: -0.3,
     lineHeight: 20,
   },
-  brandTagline: {
+
+  taglineText: {
     fontSize: 11,
     color: 'rgba(255, 255, 255, 0.8)',
     fontWeight: '500',
-    textTransform: 'uppercase',
-    letterSpacing: 0.8,
     marginTop: 1,
   },
 
-  // Navigation Items
-  navItems: {
+  topActions: {
     flexDirection: 'row',
     alignItems: 'center',
-    flex: 2,
-    justifyContent: 'center',
-    gap: 6,
-    paddingHorizontal: 8,
+    gap: 12,
   },
-  navItem: {
-    flexDirection: 'column',
-    alignItems: 'center',
-    paddingHorizontal: 10,
-    paddingVertical: 10,
-    borderRadius: 14,
-    minWidth: 60,
+
+  notificationButton: {
     position: 'relative',
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255, 255, 255, 0.15)',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  navItemActive: {
+
+  notificationIcon: {
+    fontSize: 18,
+  },
+
+  notificationBadge: {
+    position: 'absolute',
+    top: 6,
+    right: 6,
+    minWidth: 16,
+    height: 16,
+    borderRadius: 8,
+    backgroundColor: '#ff4444',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 4,
+  },
+
+  badgeText: {
+    fontSize: 9,
+    fontWeight: 'bold',
+    color: colors.white,
+  },
+
+  profileSection: {
+    flexDirection: 'row',
+    alignItems: 'center',
     backgroundColor: 'rgba(255, 255, 255, 0.1)',
-    transform: [{ scale: 1.02 }],
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 20,
+    maxWidth: 140,
   },
+
+  profileAvatar: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: colors.white,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 8,
+  },
+
+  avatarText: {
+    fontSize: 12,
+    fontWeight: 'bold',
+    color: colors.primary,
+  },
+
+  profileInfo: {
+    flex: 1,
+  },
+
+  profileName: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: colors.white,
+    lineHeight: 14,
+  },
+
+  profileRole: {
+    fontSize: 9,
+    color: 'rgba(255, 255, 255, 0.8)',
+    marginTop: 1,
+  },
+
+  logoutButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: 'rgba(255, 255, 255, 0.15)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  logoutIcon: {
+    fontSize: 16,
+    color: colors.white,
+  },
+
+  // Bottom Navigation
+  bottomNav: {
+    flexDirection: 'row',
+    backgroundColor: colors.white,
+    paddingVertical: 8,
+    paddingHorizontal: 8,
+    borderTopWidth: 1,
+    borderTopColor: colors.gray200,
+    shadowColor: colors.shadow,
+    shadowOffset: { width: 0, height: -2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 8,
+  },
+
+  navItem: {
+    flex: 1,
+    alignItems: 'center',
+    paddingVertical: 8,
+    paddingHorizontal: 4,
+    position: 'relative',
+    minHeight: 60,
+  },
+
   navIconContainer: {
-    width: 30,
-    height: 30,
-    borderRadius: 15,
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 4,
-  },
-  navIconContainerActive: {
-    backgroundColor: 'rgba(255, 255, 255, 0.25)',
-    transform: [{ scale: 1.05 }],
-  },
-  navItemText: {
-    fontSize: 10,
-    color: 'rgba(255, 255, 255, 0.8)',
-    fontWeight: '600',
-    textAlign: 'center',
-    lineHeight: 12,
-  },
-  navItemTextActive: {
-    color: '#ffffff',
-    fontWeight: '700',
-  },
-  activeIndicator: {
-    position: 'absolute',
-    bottom: -2,
-    width: 18,
-    height: 2,
-    borderRadius: 1,
+    position: 'relative',
+    backgroundColor: 'transparent',
   },
 
-  // User Section
-  userSection: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flex: 1,
-    justifyContent: 'flex-end',
-    minWidth: 120,
+  navIconContainerActive: {
+    backgroundColor: colors.primary + '15',
+    transform: [{ scale: 1.1 }],
   },
-  userInfo: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginRight: 12,
-    flex: 1,
-    justifyContent: 'flex-end',
-    paddingVertical: 6,
-    paddingHorizontal: 10,
-    borderRadius: 10,
-    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+
+  navIcon: {
+    fontSize: 18,
   },
-  userAvatarContainer: {
-    position: 'relative',
-    marginRight: 10,
+
+  navIconActive: {
+    transform: [{ scale: 1.1 }],
   },
-  userAvatar: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1.5,
-    borderColor: 'rgba(255, 255, 255, 0.3)',
-  },
-  userInitial: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: '#ffffff',
-  },
-  statusIndicator: {
+
+  navBadge: {
     position: 'absolute',
-    bottom: 1,
-    right: 1,
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: '#22c55e',
-    borderWidth: 1.5,
-    borderColor: '#ffffff',
-  },
-  userDetails: {
-    alignItems: 'flex-end',
-    maxWidth: 90,
-  },
-  userName: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#ffffff',
-    textAlign: 'right',
-    lineHeight: 15,
-  },
-  userRole: {
-    fontSize: 10,
-    color: 'rgba(255, 255, 255, 0.8)',
-    textAlign: 'right',
-    marginTop: 1,
-    fontWeight: '500',
-    textTransform: 'capitalize',
-  },
-  logoutButton: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    top: -2,
+    right: -2,
+    minWidth: 16,
+    height: 16,
+    borderRadius: 8,
+    backgroundColor: colors.danger,
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.2)',
+    paddingHorizontal: 4,
+  },
+
+  navBadgeText: {
+    fontSize: 9,
+    fontWeight: 'bold',
+    color: colors.white,
+  },
+
+  navLabel: {
+    fontSize: 10,
+    color: colors.textSecondary,
+    fontWeight: '500',
+    textAlign: 'center',
+    marginTop: 2,
+  },
+
+  navLabelActive: {
+    fontWeight: '600',
+    color: colors.primary,
+  },
+
+  activeIndicator: {
+    position: 'absolute',
+    top: 0,
+    width: 24,
+    height: 3,
+    borderRadius: 2,
+    backgroundColor: colors.primary,
+  },
+
+  shadowContainer: {
+    height: 4,
+    backgroundColor: 'rgba(0, 0, 0, 0.05)',
   },
 });
 
-// Responsive styles for larger screens
+// Responsive adjustments for tablets
 if (width > 768) {
   Object.assign(styles, {
-    navbar: {
-      ...styles.navbar,
+    topBar: {
+      ...styles.topBar,
       paddingHorizontal: 32,
-      paddingBottom: 16,
+      paddingBottom: 20,
     },
-    pageHeader: {
-      ...styles.pageHeader,
-      paddingHorizontal: 32,
-      paddingVertical: 20,
-    },
-    logoWrapper: {
-      ...styles.logoWrapper,
+    
+    logoContainer: {
+      ...styles.logoContainer,
       width: 40,
       height: 40,
-      borderRadius: 12,
-      marginRight: 14,
+      marginRight: 16,
     },
+    
     logoText: {
       ...styles.logoText,
-      fontSize: 16,
+      fontSize: 18,
     },
-    brandName: {
-      ...styles.brandName,
+    
+    brandText: {
+      ...styles.brandText,
       fontSize: 20,
     },
-    brandTagline: {
-      ...styles.brandTagline,
+    
+    taglineText: {
+      ...styles.taglineText,
       fontSize: 12,
     },
-    navItems: {
-      ...styles.navItems,
-      gap: 8,
-      paddingHorizontal: 12,
+    
+    bottomNav: {
+      ...styles.bottomNav,
+      paddingVertical: 12,
+      paddingHorizontal: 32,
     },
+    
     navItem: {
       ...styles.navItem,
-      paddingHorizontal: 12,
       paddingVertical: 12,
-      minWidth: 66,
+      minHeight: 70,
     },
+    
     navIconContainer: {
       ...styles.navIconContainer,
-      width: 34,
-      height: 34,
-      borderRadius: 17,
+      width: 44,
+      height: 44,
+      marginBottom: 6,
     },
-    navItemText: {
-      ...styles.navItemText,
+    
+    navIcon: {
+      ...styles.navIcon,
+      fontSize: 20,
+    },
+    
+    navLabel: {
+      ...styles.navLabel,
       fontSize: 11,
-    },
-    pageTitle: {
-      ...styles.pageTitle,
-      fontSize: 26,
-    },
-    pageSubtitle: {
-      ...styles.pageSubtitle,
-      fontSize: 15,
-    },
-    userAvatar: {
-      ...styles.userAvatar,
-      width: 36,
-      height: 36,
-      borderRadius: 18,
-    },
-    userName: {
-      ...styles.userName,
-      fontSize: 13,
-    },
-    userRole: {
-      ...styles.userRole,
-      fontSize: 11,
-    },
-    logoutButton: {
-      ...styles.logoutButton,
-      width: 36,
-      height: 36,
-      borderRadius: 18,
     },
   });
 }
