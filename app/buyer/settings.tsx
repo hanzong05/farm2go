@@ -5,7 +5,6 @@ import Settings from '../../components/Settings';
 export default function BuyerSettingsScreen() {
   return (
     <View style={styles.container}>
-      <NavBar currentRoute="/buyer/settings" />
       <Settings userType="buyer" currentRoute="/buyer/settings" />
     </View>
   );
