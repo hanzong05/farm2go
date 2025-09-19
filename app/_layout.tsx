@@ -8,6 +8,7 @@ import 'react-native-reanimated';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { AuthProvider } from '../contexts/AuthContext';
 import { SessionProvider } from '../contexts/SessionContext';
+import { getUserWithProfile } from '../services/auth';
 
 // Farm2Go green theme
 const Farm2GoTheme = {
@@ -83,6 +84,59 @@ const getModalScreenOptions = (title?: string) => ({
 
 export default function RootLayout() {
   const colorScheme = useColorScheme();
+
+  // Session-based routing guard for automatic user type redirection
+  useEffect(() => {
+    const checkUserSessionAndRedirect = async () => {
+      try {
+        const userData = await getUserWithProfile();
+        if (userData?.profile) {
+          const currentPath = window?.location?.pathname || '';
+          console.log('🔍 Session check - Current path:', currentPath);
+          console.log('🔍 Session check - User type:', userData.profile.user_type);
+
+          // Only redirect if user is on root or auth pages
+          const shouldRedirect = currentPath === '/' ||
+                                 currentPath === '/index' ||
+                                 currentPath.startsWith('/auth/');
+
+          if (shouldRedirect) {
+            // Import router dynamically to avoid circular dependencies
+            const { router } = await import('expo-router');
+
+            switch (userData.profile.user_type) {
+              case 'super-admin':
+                console.log('🚀 Auto-redirecting super admin to dashboard');
+                router.replace('/super-admin');
+                break;
+              case 'admin':
+                console.log('🚀 Auto-redirecting admin to dashboard');
+                router.replace('/admin/users');
+                break;
+              case 'farmer':
+                console.log('🚀 Auto-redirecting farmer to dashboard');
+                router.replace('/farmer');
+                break;
+              case 'buyer':
+                console.log('🚀 Auto-redirecting buyer to marketplace');
+                router.replace('/buyer/marketplace');
+                break;
+              default:
+                console.log('🚀 Default redirect to marketplace');
+                router.replace('/buyer/marketplace');
+            }
+          }
+        }
+      } catch (error) {
+        console.log('🔍 No active session or error checking session:', error);
+        // Don't redirect on error - user might be on public pages
+      }
+    };
+
+    // Run check after a short delay to ensure app is fully loaded
+    const timer = setTimeout(checkUserSessionAndRedirect, 1000);
+    return () => clearTimeout(timer);
+  }, []);
 
   // Enhanced deep linking for OAuth and marketplace navigation
   useEffect(() => {
@@ -203,25 +257,47 @@ export default function RootLayout() {
             }}
           />
 
-          {/* Admin Dashboard - Management Console */}
-          <Stack.Screen 
-            name="admin/dashboard" 
-            options={getDashboardScreenOptions('Admin Dashboard')}
+          {/* Super Admin Dashboard - System Management */}
+          <Stack.Screen
+            name="super-admin"
+            options={getDashboardScreenOptions('Super Admin Dashboard')}
           />
-          <Stack.Screen 
-            name="admin/users" 
+          <Stack.Screen
+            name="super-admin/users"
             options={getDashboardScreenOptions('User Management')}
           />
-          <Stack.Screen 
-            name="admin/products" 
+          <Stack.Screen
+            name="super-admin/settings"
+            options={getDashboardScreenOptions('System Settings')}
+          />
+          <Stack.Screen
+            name="super-admin/reports"
+            options={getDashboardScreenOptions('System Reports')}
+          />
+          <Stack.Screen
+            name="super-admin/backup"
+            options={getDashboardScreenOptions('Backup & Restore')}
+          />
+
+          {/* Admin Dashboard - Management Console */}
+          <Stack.Screen
+            name="admin/dashboard"
+            options={getDashboardScreenOptions('Admin Dashboard')}
+          />
+          <Stack.Screen
+            name="admin/users"
+            options={getDashboardScreenOptions('User Management')}
+          />
+          <Stack.Screen
+            name="admin/products"
             options={getDashboardScreenOptions('Product Approval')}
           />
-          <Stack.Screen 
-            name="admin/settings" 
+          <Stack.Screen
+            name="admin/settings"
             options={getDashboardScreenOptions('Platform Settings')}
           />
-          <Stack.Screen 
-            name="admin/analytics" 
+          <Stack.Screen
+            name="admin/analytics"
             options={getDashboardScreenOptions('Platform Analytics')}
           />
 

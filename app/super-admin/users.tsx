@@ -70,14 +70,14 @@ export default function SuperAdminUsers() {
   const [showEditModal, setShowEditModal] = useState(false);
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
-  const [filterType, setFilterType] = useState<'all' | 'farmer' | 'buyer' | 'admin'>('all');
+  // Removed filterType since we only show admin users
 
   const [createForm, setCreateForm] = useState<CreateUserForm>({
     email: '',
     password: '',
     first_name: '',
     last_name: '',
-    user_type: 'buyer',
+    user_type: 'admin',
     phone: '',
     farm_name: '',
     company_name: '',
@@ -120,6 +120,7 @@ export default function SuperAdminUsers() {
           phone,
           created_at
         `)
+        .eq('user_type', 'admin')
         .order('created_at', { ascending: false });
 
       if (error) throw error;
@@ -183,7 +184,7 @@ export default function SuperAdminUsers() {
 
         if (profileError) throw profileError;
 
-        Alert.alert('Success', 'User created successfully');
+        Alert.alert('Success', 'Admin user created successfully');
         setShowCreateModal(false);
         resetCreateForm();
         await loadUsers();
@@ -231,7 +232,7 @@ export default function SuperAdminUsers() {
       password: '',
       first_name: '',
       last_name: '',
-      user_type: 'buyer',
+      user_type: 'admin',
       phone: '',
       farm_name: '',
       company_name: '',
@@ -245,9 +246,7 @@ export default function SuperAdminUsers() {
       user.profiles?.farm_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
       user.profiles?.company_name?.toLowerCase().includes(searchQuery.toLowerCase());
 
-    const matchesFilter = filterType === 'all' || user.profiles?.user_type === filterType;
-
-    return matchesSearch && matchesFilter;
+    return matchesSearch;
   });
 
   const getUserTypeColor = (userType: string) => {
@@ -337,29 +336,14 @@ export default function SuperAdminUsers() {
       <View style={styles.content}>
         {/* Header */}
         <View style={styles.header}>
-          <Text style={styles.title}>User Management</Text>
+          <Text style={styles.title}>Admin User Management</Text>
           <TouchableOpacity
             style={styles.addButton}
             onPress={() => setShowCreateModal(true)}
           >
             <Icon name="plus" size={16} color={colors.white} />
-            <Text style={styles.addButtonText}>Add User</Text>
+            <Text style={styles.addButtonText}>Add Admin</Text>
           </TouchableOpacity>
-        </View>
-
-        {/* Filter Tabs */}
-        <View style={styles.filterTabs}>
-          {(['all', 'farmer', 'buyer', 'admin'] as const).map((type) => (
-            <TouchableOpacity
-              key={type}
-              style={[styles.filterTab, filterType === type && styles.filterTabActive]}
-              onPress={() => setFilterType(type)}
-            >
-              <Text style={[styles.filterTabText, filterType === type && styles.filterTabTextActive]}>
-                {type === 'all' ? 'All' : type.charAt(0).toUpperCase() + type.slice(1)}s
-              </Text>
-            </TouchableOpacity>
-          ))}
         </View>
 
         {/* Users List */}
@@ -378,7 +362,7 @@ export default function SuperAdminUsers() {
           }
           ListEmptyComponent={
             <View style={styles.emptyContainer}>
-              <Text style={styles.emptyText}>No users found</Text>
+              <Text style={styles.emptyText}>No admin users found</Text>
             </View>
           }
         />
@@ -392,7 +376,7 @@ export default function SuperAdminUsers() {
       >
         <View style={styles.modalContainer}>
           <View style={styles.modalHeader}>
-            <Text style={styles.modalTitle}>Create New User</Text>
+            <Text style={styles.modalTitle}>Create New Admin</Text>
             <TouchableOpacity onPress={() => setShowCreateModal(false)}>
               <Icon name="times" size={24} color={colors.textSecondary} />
             </TouchableOpacity>
@@ -432,24 +416,8 @@ export default function SuperAdminUsers() {
 
             <View style={styles.userTypeSelector}>
               <Text style={styles.label}>User Type:</Text>
-              <View style={styles.userTypeButtons}>
-                {(['buyer', 'farmer', 'admin'] as const).map((type) => (
-                  <TouchableOpacity
-                    key={type}
-                    style={[
-                      styles.userTypeButton,
-                      createForm.user_type === type && styles.userTypeButtonActive
-                    ]}
-                    onPress={() => setCreateForm({ ...createForm, user_type: type })}
-                  >
-                    <Text style={[
-                      styles.userTypeButtonText,
-                      createForm.user_type === type && styles.userTypeButtonTextActive
-                    ]}>
-                      {type.charAt(0).toUpperCase() + type.slice(1)}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
+              <View style={styles.fixedUserType}>
+                <Text style={styles.fixedUserTypeText}>Admin</Text>
               </View>
             </View>
 
@@ -460,24 +428,6 @@ export default function SuperAdminUsers() {
               onChangeText={(text) => setCreateForm({ ...createForm, phone: text })}
               keyboardType="phone-pad"
             />
-
-            {createForm.user_type === 'farmer' && (
-              <TextInput
-                style={styles.input}
-                placeholder="Farm Name"
-                value={createForm.farm_name}
-                onChangeText={(text) => setCreateForm({ ...createForm, farm_name: text })}
-              />
-            )}
-
-            {createForm.user_type === 'buyer' && (
-              <TextInput
-                style={styles.input}
-                placeholder="Company Name"
-                value={createForm.company_name}
-                onChangeText={(text) => setCreateForm({ ...createForm, company_name: text })}
-              />
-            )}
 
             <View style={styles.modalActions}>
               <TouchableOpacity
@@ -494,7 +444,7 @@ export default function SuperAdminUsers() {
                 style={styles.createButton}
                 onPress={createUser}
               >
-                <Text style={styles.createButtonText}>Create User</Text>
+                <Text style={styles.createButtonText}>Create Admin</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -710,6 +660,18 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
   },
   userTypeButtonTextActive: {
+    color: colors.white,
+    fontWeight: '600',
+  },
+  fixedUserType: {
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    backgroundColor: colors.danger,
+    alignItems: 'center',
+  },
+  fixedUserTypeText: {
+    fontSize: 14,
     color: colors.white,
     fontWeight: '600',
   },

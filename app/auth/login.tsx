@@ -75,30 +75,32 @@ export default function LoginScreen() {
         console.log('Login Debug - User Type:', userData?.profile?.user_type);
 
         if (userData?.profile) {
+          console.log('✅ Profile found, user_type:', userData.profile.user_type);
+
           // Redirect based on user type
           switch (userData.profile.user_type) {
             case 'super-admin':
-              console.log('Redirecting to super-admin dashboard');
+              console.log('🚀 Redirecting to super-admin dashboard');
               router.replace('/super-admin');
               break;
             case 'admin':
-              console.log('Redirecting to admin dashboard');
+              console.log('🚀 Redirecting to admin dashboard');
               router.replace('/admin/users');
               break;
             case 'farmer':
-              console.log('Redirecting to farmer dashboard');
-              router.replace('/farmer/my-products');
+              console.log('🚀 Redirecting to farmer dashboard');
+              router.replace('/farmer');
               break;
             case 'buyer':
-              console.log('Redirecting to buyer dashboard');
+              console.log('🚀 Redirecting to buyer dashboard');
               router.replace('/buyer/marketplace');
               break;
             default:
-              console.log('Default redirect to buyer dashboard, user_type:', userData.profile.user_type);
+              console.log('⚠️ Unknown user type, redirecting to marketplace. User type:', userData.profile.user_type);
               router.replace('/buyer/marketplace');
           }
         } else {
-          console.log('No profile found, redirecting to buyer marketplace');
+          console.log('❌ No profile found, redirecting to buyer marketplace');
           // Fallback to buyer dashboard if profile not found
           router.replace('/buyer/marketplace');
         }
@@ -163,25 +165,32 @@ export default function LoginScreen() {
         const userData = await getUserWithProfile();
 
         if (userData?.profile) {
+          console.log('✅ Auth state change - Profile found, user_type:', userData.profile.user_type);
+
           // Redirect based on user type
           switch (userData.profile.user_type) {
             case 'super-admin':
+              console.log('🚀 Auth state change - Redirecting super admin to dashboard');
               router.replace('/super-admin');
               break;
             case 'admin':
+              console.log('🚀 Auth state change - Redirecting admin to dashboard');
               router.replace('/admin/users');
               break;
             case 'farmer':
-              router.replace('/farmer/my-products');
+              console.log('🚀 Auth state change - Redirecting farmer to dashboard');
+              router.replace('/farmer');
               break;
             case 'buyer':
+              console.log('🚀 Auth state change - Redirecting buyer to marketplace');
               router.replace('/buyer/marketplace');
               break;
             default:
+              console.log('⚠️ Auth state change - Unknown user type, redirecting to marketplace. User type:', userData.profile.user_type);
               router.replace('/buyer/marketplace');
           }
         } else {
-          console.log('⚠️ No profile found, redirecting to marketplace');
+          console.log('❌ Auth state change - No profile found, redirecting to marketplace');
           router.replace('/buyer/marketplace');
         }
       }
