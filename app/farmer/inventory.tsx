@@ -410,7 +410,7 @@ export default function Farm2GoInventoryScreen() {
         {/* Product Image */}
         <View style={[
           styles.imageContainer,
-          { height: isDesktop ? 120 : isMobile ? 80 : 100 }
+          { height: itemWidth * 0.8 }
         ]}>
           {product.image_url ? (
             <Image source={{ uri: product.image_url }} style={styles.productImage} />
@@ -418,17 +418,16 @@ export default function Farm2GoInventoryScreen() {
             <View style={styles.placeholderImage}>
               <Text style={[
                 styles.placeholderIcon,
-                { fontSize: isDesktop ? 36 : isMobile ? 24 : 28 }
+                { fontSize: isDesktop ? 48 : isMobile ? 32 : 40 }
               ]}>🥬</Text>
             </View>
           )}
           
           {/* Status Badge */}
-          <View style={[styles.statusBadge, { backgroundColor: statusColor.bgColor }]}>
+          <View style={[styles.statusBadge, { backgroundColor: statusColor.color }]}>
             <Text style={[
               styles.statusText,
               {
-                color: statusColor.color,
                 fontSize: isDesktop ? 10 : isMobile ? 8 : 9,
               }
             ]}>
@@ -436,91 +435,83 @@ export default function Farm2GoInventoryScreen() {
                product.status === 'pending' ? 'REVIEW' : 'REJECTED'}
             </Text>
           </View>
+
+          {/* Quick Edit Icon */}
+          <TouchableOpacity 
+            style={styles.quickEditButton}
+            onPress={(e) => {
+              e.stopPropagation();
+              router.push(`/farmer/products/edit/${product.id}` as any);
+            }}
+          >
+            <Text style={[
+              styles.quickEditIcon,
+              { fontSize: isDesktop ? 14 : isMobile ? 10 : 12 }
+            ]}>✏️</Text>
+          </TouchableOpacity>
         </View>
 
-        {/* Product Info */}
+        {/* Product Info - Marketplace Style */}
         <View style={[
           styles.productInfo,
-          { padding: isDesktop ? 16 : isMobile ? 10 : 12 }
+          { padding: isDesktop ? 16 : isMobile ? 12 : 14 }
         ]}>
           <Text style={[
             styles.productName,
             {
-              fontSize: isDesktop ? 16 : isMobile ? 12 : 14,
-              lineHeight: isDesktop ? 20 : isMobile ? 16 : 18,
-              marginBottom: isDesktop ? 6 : 4,
+              fontSize: isDesktop ? 16 : isMobile ? 14 : 15,
+              lineHeight: isDesktop ? 20 : isMobile ? 18 : 19,
+              marginBottom: 4,
             }
-          ]} numberOfLines={2}>
+          ]} numberOfLines={1}>
             {product.name}
-          </Text>
-          
-          <Text style={[
-            styles.productCategory,
-            {
-              fontSize: isDesktop ? 12 : isMobile ? 10 : 11,
-              marginBottom: isDesktop ? 10 : 8,
-            }
-          ]}>
-            {product.category}
           </Text>
           
           <View style={[
             styles.priceRow,
-            { marginBottom: isDesktop ? 14 : 10 }
+            { marginBottom: 8 }
           ]}>
             <Text style={[
               styles.productPrice,
-              { fontSize: isDesktop ? 18 : isMobile ? 14 : 16 }
+              { fontSize: isDesktop ? 18 : isMobile ? 16 : 17 }
             ]}>
               {formatPrice(product.price)}
             </Text>
             <Text style={[
               styles.productUnit,
-              { fontSize: isDesktop ? 11 : isMobile ? 9 : 10 }
+              { fontSize: isDesktop ? 12 : isMobile ? 10 : 11 }
             ]}>
               /{product.unit}
             </Text>
           </View>
 
-          {/* Stock Status */}
-          <View style={[
-            styles.stockStatusContainer,
-            {
-              padding: isDesktop ? 10 : 8,
-              marginBottom: isDesktop ? 14 : 10,
-              backgroundColor: stockStatus.bgColor,
-            }
-          ]}>
-            <View style={styles.stockStatusContent}>
-              <Text style={[
-                styles.stockStatusText,
-                {
-                  color: stockStatus.color,
-                  fontSize: isDesktop ? 12 : isMobile ? 10 : 11,
-                }
-              ]}>
-                {stockStatus.status}
-              </Text>
-              <Text style={[
-                styles.stockQuantity,
-                { fontSize: isDesktop ? 12 : isMobile ? 10 : 11 }
-              ]}>
-                {product.quantity_available} {product.unit}
-              </Text>
-            </View>
+          <View style={styles.productMeta}>
+            <Text style={[
+              styles.stockText,
+              { fontSize: isDesktop ? 12 : isMobile ? 10 : 11 }
+            ]}>
+              Stock: {product.quantity_available}
+            </Text>
+            <Text style={[
+              styles.productCategoryBadge,
+              { fontSize: isDesktop ? 11 : isMobile ? 9 : 10 }
+            ]}>
+              {product.category}
+            </Text>
           </View>
 
-          {/* Action Buttons */}
+          {/* Action Buttons - Simplified */}
           <View style={[
             styles.actionButtons,
-            { gap: isDesktop ? 8 : 6 }
+            { gap: isDesktop ? 8 : 6, marginTop: 8 }
           ]}>
             <TouchableOpacity
               style={[
                 styles.actionButton,
+                styles.inventoryUpdateButton,
                 {
-                  paddingVertical: isDesktop ? 10 : isMobile ? 6 : 8,
-                  paddingHorizontal: isDesktop ? 10 : isMobile ? 6 : 8,
+                  paddingVertical: isDesktop ? 8 : 6,
+                  paddingHorizontal: isDesktop ? 12 : 8,
                 }
               ]}
               onPress={(e) => {
@@ -532,10 +523,10 @@ export default function Farm2GoInventoryScreen() {
             >
               <Text style={[
                 styles.actionButtonIcon,
-                { fontSize: isDesktop ? 12 : isMobile ? 8 : 10 }
+                { fontSize: isDesktop ? 10 : isMobile ? 8 : 9 }
               ]}>📝</Text>
               <Text style={[
-                styles.actionButtonText,
+                styles.inventoryUpdateText,
                 { fontSize: isDesktop ? 10 : isMobile ? 8 : 9 }
               ]}>Update</Text>
             </TouchableOpacity>
@@ -543,33 +534,10 @@ export default function Farm2GoInventoryScreen() {
             <TouchableOpacity
               style={[
                 styles.actionButton,
+                styles.inventoryDeleteButton,
                 {
-                  paddingVertical: isDesktop ? 10 : isMobile ? 6 : 8,
-                  paddingHorizontal: isDesktop ? 10 : isMobile ? 6 : 8,
-                }
-              ]}
-              onPress={(e) => {
-                e.stopPropagation();
-                router.push(`/farmer/products/edit/${product.id}` as any);
-              }}
-            >
-              <Text style={[
-                styles.actionButtonIcon,
-                { fontSize: isDesktop ? 12 : isMobile ? 8 : 10 }
-              ]}>✏️</Text>
-              <Text style={[
-                styles.actionButtonText,
-                { fontSize: isDesktop ? 10 : isMobile ? 8 : 9 }
-              ]}>Edit</Text>
-            </TouchableOpacity>
-            
-            <TouchableOpacity
-              style={[
-                styles.actionButton,
-                styles.deleteButton,
-                {
-                  paddingVertical: isDesktop ? 10 : isMobile ? 6 : 8,
-                  paddingHorizontal: isDesktop ? 10 : isMobile ? 6 : 8,
+                  paddingVertical: isDesktop ? 8 : 6,
+                  paddingHorizontal: isDesktop ? 12 : 8,
                 }
               ]}
               onPress={(e) => {
@@ -579,14 +547,11 @@ export default function Farm2GoInventoryScreen() {
             >
               <Text style={[
                 styles.actionButtonIcon,
-                { fontSize: isDesktop ? 12 : isMobile ? 8 : 10 }
+                { fontSize: isDesktop ? 10 : isMobile ? 8 : 9 }
               ]}>🗑️</Text>
               <Text style={[
-                styles.actionButtonText,
-                {
-                  color: colors.danger,
-                  fontSize: isDesktop ? 10 : isMobile ? 8 : 9,
-                }
+                styles.inventoryDeleteText,
+                { fontSize: isDesktop ? 10 : isMobile ? 8 : 9 }
               ]}>Delete</Text>
             </TouchableOpacity>
           </View>
@@ -897,16 +862,17 @@ const styles = StyleSheet.create({
   productCard: {
     backgroundColor: colors.white,
     borderRadius: 12,
-    elevation: 3,
+    elevation: 2,
     shadowColor: colors.shadow,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.08,
+    shadowRadius: 3,
     overflow: 'hidden',
   },
   
   imageContainer: {
     position: 'relative',
+    backgroundColor: colors.gray100,
   },
   
   productImage: {
@@ -924,13 +890,13 @@ const styles = StyleSheet.create({
   },
   
   placeholderIcon: {
-    fontSize: 28,
+    fontSize: 32,
   },
   
   statusBadge: {
     position: 'absolute',
     top: 8,
-    right: 8,
+    left: 8,
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 4,
@@ -939,66 +905,81 @@ const styles = StyleSheet.create({
   statusText: {
     fontSize: 9,
     fontWeight: 'bold',
+    color: colors.white,
+  },
+
+  quickEditButton: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: 'rgba(255,255,255,0.9)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    elevation: 2,
+    shadowColor: colors.shadow,
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.2,
+    shadowRadius: 2,
+  },
+
+  quickEditIcon: {
+    fontSize: 12,
   },
   
   productInfo: {
-    padding: 12,
+    padding: 14,
   },
   
   productName: {
-    fontSize: 14,
-    fontWeight: 'bold',
+    fontSize: 15,
+    fontWeight: '600',
     color: colors.text,
+    lineHeight: 19,
     marginBottom: 4,
-    lineHeight: 18,
-  },
-  
-  productCategory: {
-    fontSize: 11,
-    color: colors.textSecondary,
-    textTransform: 'capitalize',
-    marginBottom: 8,
   },
   
   priceRow: {
     flexDirection: 'row',
     alignItems: 'baseline',
-    marginBottom: 12,
+    marginBottom: 8,
   },
   
   productPrice: {
-    fontSize: 16,
+    fontSize: 17,
     fontWeight: 'bold',
     color: colors.primary,
   },
   
   productUnit: {
-    fontSize: 10,
+    fontSize: 11,
     color: colors.textSecondary,
     marginLeft: 2,
   },
-  
-  stockStatusContainer: {
-    padding: 8,
-    borderRadius: 8,
-    marginBottom: 12,
-  },
-  
-  stockStatusContent: {
+
+  productMeta: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    marginBottom: 8,
   },
-  
-  stockStatusText: {
-    fontSize: 11,
-    fontWeight: 'bold',
-  },
-  
-  stockQuantity: {
+
+  stockText: {
     fontSize: 11,
     color: colors.textSecondary,
     fontWeight: '500',
+  },
+
+  productCategoryBadge: {
+    fontSize: 10,
+    color: colors.textSecondary,
+    textTransform: 'capitalize',
+    backgroundColor: colors.gray100,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 10,
   },
   
   actionButtons: {
@@ -1014,25 +995,34 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     paddingHorizontal: 8,
     borderRadius: 6,
-    backgroundColor: colors.gray100,
     borderWidth: 1,
-    borderColor: colors.border,
+  },
+
+  inventoryUpdateButton: {
+    backgroundColor: colors.primary + '10',
+    borderColor: colors.primary + '30',
   },
   
-  deleteButton: {
+  inventoryDeleteButton: {
     backgroundColor: colors.danger + '10',
     borderColor: colors.danger + '30',
   },
   
   actionButtonIcon: {
-    fontSize: 10,
+    fontSize: 9,
     marginRight: 4,
   },
   
-  actionButtonText: {
+  inventoryUpdateText: {
     fontSize: 9,
     fontWeight: '600',
-    color: colors.textSecondary,
+    color: colors.primary,
+  },
+
+  inventoryDeleteText: {
+    fontSize: 9,
+    fontWeight: '600',
+    color: colors.danger,
   },
 
   // Empty State
