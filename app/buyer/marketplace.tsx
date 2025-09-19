@@ -389,7 +389,7 @@ export default function MarketplaceScreen() {
               data={filteredProducts}
               renderItem={({ item }) => renderGridProduct(item)}
               keyExtractor={(item) => item.id}
-              numColumns={2}
+              numColumns={5}
               columnWrapperStyle={styles.gridRow}
               showsVerticalScrollIndicator={false}
               scrollEnabled={false}
@@ -790,18 +790,18 @@ const styles = StyleSheet.create({
   // Grid Layout Styles
   gridRow: {
     justifyContent: 'space-between',
-    paddingHorizontal: 20,
-    marginBottom: 16,
+    paddingHorizontal: 8,
+    marginBottom: 12,
   },
   gridProductCard: {
     backgroundColor: '#ffffff',
-    borderRadius: 16,
-    width: '48%',
-    elevation: 4,
+    borderRadius: 12,
+    width: '18%',
+    elevation: 3,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.08,
+    shadowRadius: 4,
     borderWidth: 1,
     borderColor: '#f1f5f9',
     overflow: 'hidden',
@@ -824,56 +824,56 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   gridPlaceholderIcon: {
-    fontSize: 32,
+    fontSize: 20,
   },
   gridCategoryBadge: {
     position: 'absolute',
-    top: 8,
-    right: 8,
+    top: 4,
+    right: 4,
     backgroundColor: '#10b981',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 12,
+    paddingHorizontal: 4,
+    paddingVertical: 2,
+    borderRadius: 8,
   },
   gridCategoryText: {
-    fontSize: 10,
+    fontSize: 7,
     color: '#ffffff',
     fontWeight: '600',
     textTransform: 'uppercase',
   },
   gridProductInfo: {
-    padding: 12,
+    padding: 6,
   },
   gridProductName: {
-    fontSize: 14,
+    fontSize: 10,
     fontWeight: '600',
     color: '#0f172a',
-    marginBottom: 8,
-    lineHeight: 18,
+    marginBottom: 4,
+    lineHeight: 12,
   },
   gridPriceContainer: {
     flexDirection: 'row',
     alignItems: 'baseline',
-    marginBottom: 8,
+    marginBottom: 4,
   },
   gridPrice: {
-    fontSize: 16,
+    fontSize: 11,
     fontWeight: 'bold',
     color: '#059669',
   },
   gridUnit: {
-    fontSize: 11,
+    fontSize: 8,
     color: '#64748b',
-    marginLeft: 2,
+    marginLeft: 1,
   },
   gridProductMeta: {
-    marginBottom: 12,
+    marginBottom: 6,
   },
   gridFarmerInfo: {
-    marginBottom: 4,
+    marginBottom: 2,
   },
   gridFarmerText: {
-    fontSize: 11,
+    fontSize: 8,
     color: '#64748b',
     fontWeight: '500',
   },
@@ -881,19 +881,19 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
   },
   gridStockText: {
-    fontSize: 11,
+    fontSize: 8,
     color: '#6b7280',
     fontWeight: '500',
   },
   gridOrderButton: {
     backgroundColor: '#10b981',
-    paddingVertical: 8,
-    borderRadius: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
     alignItems: 'center',
   },
   gridOrderButtonText: {
     color: '#ffffff',
-    fontSize: 12,
+    fontSize: 9,
     fontWeight: '600',
   },
 });

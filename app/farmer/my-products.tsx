@@ -360,7 +360,7 @@ export default function Farm2GoFarmerProducts() {
         data={filteredProducts}
         renderItem={renderProductItem}
         keyExtractor={(item) => item.id}
-        numColumns={2}
+        numColumns={5}
         ListHeaderComponent={renderHeader}
         ListEmptyComponent={renderEmptyState}
         refreshControl={
@@ -623,20 +623,21 @@ const styles = StyleSheet.create({
   },
   
   row: {
-    paddingHorizontal: 16,
-    gap: 16,
+    justifyContent: 'space-between',
+    paddingHorizontal: 8,
+    marginBottom: 12,
   },
-  
+
   productCard: {
-    flex: 1,
+    width: '18%',
     backgroundColor: colors.white,
     borderRadius: 8,
-    marginBottom: 16,
+    marginBottom: 12,
     elevation: 2,
     shadowColor: colors.shadow,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.08,
+    shadowRadius: 3,
   },
   
   productCardRight: {
@@ -666,97 +667,96 @@ const styles = StyleSheet.create({
   },
   
   placeholderIcon: {
-    fontSize: 32,
+    fontSize: 20,
   },
   
   statusBadge: {
     position: 'absolute',
-    top: 8,
-    left: 8,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
+    top: 4,
+    left: 4,
+    paddingHorizontal: 4,
+    paddingVertical: 2,
     borderRadius: 4,
   },
-  
+
   statusText: {
-    fontSize: 10,
+    fontSize: 7,
     fontWeight: 'bold',
     color: colors.white,
   },
-  
+
   quickActions: {
     position: 'absolute',
-    top: 8,
-    right: 8,
+    top: 4,
+    right: 4,
   },
-  
+
   quickAction: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
+    width: 20,
+    height: 20,
+    borderRadius: 10,
     backgroundColor: 'rgba(255,255,255,0.9)',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  
+
   quickActionIcon: {
-    fontSize: 12,
+    fontSize: 10,
   },
   
   productInfo: {
-    padding: 12,
+    padding: 6,
   },
-  
+
   productName: {
-    fontSize: 14,
-    fontWeight: '500',
+    fontSize: 10,
+    fontWeight: '600',
     color: colors.text,
-    lineHeight: 18,
-    marginBottom: 8,
+    lineHeight: 12,
+    marginBottom: 4,
   },
-  
+
   priceContainer: {
     flexDirection: 'row',
     alignItems: 'baseline',
-    marginBottom: 8,
+    marginBottom: 4,
   },
-  
+
   price: {
-    fontSize: 16,
+    fontSize: 11,
     fontWeight: 'bold',
     color: colors.primary,
   },
-  
+
   unit: {
-    fontSize: 12,
+    fontSize: 8,
     color: colors.textSecondary,
-    marginLeft: 2,
+    marginLeft: 1,
   },
-  
+
   productMeta: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    marginBottom: 4,
   },
-  
+
   stockInfo: {
-    flex: 1,
+    marginBottom: 2,
   },
-  
+
   stockText: {
-    fontSize: 11,
+    fontSize: 8,
     color: colors.textSecondary,
   },
-  
+
   categoryBadge: {
     backgroundColor: colors.gray100,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
+    paddingHorizontal: 4,
+    paddingVertical: 1,
     borderRadius: 4,
+    alignSelf: 'flex-start',
   },
-  
+
   categoryBadgeText: {
-    fontSize: 9,
+    fontSize: 7,
     color: colors.textSecondary,
     textTransform: 'capitalize',
   },

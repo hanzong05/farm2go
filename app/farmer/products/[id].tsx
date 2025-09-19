@@ -1,22 +1,41 @@
 import { useLocalSearchParams, router } from 'expo-router';
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, ActivityIndicator, Image, Dimensions, Platform, StatusBar } from 'react-native';
 import { supabase } from '../../../lib/supabase';
 import { useAuth } from '../../../contexts/AuthContext';
+
+const { width } = Dimensions.get('window');
 
 interface Product {
   id: string;
   name: string;
   description: string;
   price: number;
-  quantity: number;
+  quantity_available: number;
   unit: string;
   category: string;
   farmer_id: string;
+  status: 'pending' | 'approved' | 'rejected';
   created_at: string;
   updated_at: string;
   image_url?: string;
 }
+
+// Farm2Go green color scheme
+const colors = {
+  primary: '#059669',
+  secondary: '#10b981',
+  success: '#10b981',
+  warning: '#f59e0b',
+  danger: '#ef4444',
+  white: '#ffffff',
+  background: '#f0f9f4',
+  surface: '#ffffff',
+  text: '#0f172a',
+  textSecondary: '#6b7280',
+  border: '#d1fae5',
+  shadow: 'rgba(0,0,0,0.1)',
+};
 
 export default function ProductDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -103,11 +122,40 @@ export default function ProductDetailScreen() {
     }
   };
 
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case 'approved': return colors.success;
+      case 'pending': return colors.warning;
+      case 'rejected': return colors.danger;
+      default: return colors.textSecondary;
+    }
+  };
+
+  const getStatusText = (status: string) => {
+    switch (status) {
+      case 'approved': return 'Live';
+      case 'pending': return 'Under Review';
+      case 'rejected': return 'Rejected';
+      default: return status;
+    }
+  };
+
+  const formatPrice = (price: number) => {
+    return new Intl.NumberFormat('en-PH', {
+      style: 'currency',
+      currency: 'PHP',
+      minimumFractionDigits: 0,
+    }).format(price);
+  };
+
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#10b981" />
-        <Text style={styles.loadingText}>Loading product...</Text>
+        <StatusBar barStyle="light-content" backgroundColor={colors.primary} />
+        <View style={styles.loadingContent}>
+          <ActivityIndicator size="large" color={colors.primary} />
+          <Text style={styles.loadingText}>Loading product...</Text>
+        </View>
       </View>
     );
   }
@@ -115,185 +163,423 @@ export default function ProductDetailScreen() {
   if (error || !product) {
     return (
       <View style={styles.errorContainer}>
-        <Text style={styles.errorText}>{error || 'Product not found'}</Text>
-        <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
-          <Text style={styles.backButtonText}>Go Back</Text>
-        </TouchableOpacity>
+        <StatusBar barStyle="light-content" backgroundColor={colors.primary} />
+        <View style={styles.errorContent}>
+          <Text style={styles.errorIcon}>⚠️</Text>
+          <Text style={styles.errorText}>{error || 'Product not found'}</Text>
+          <TouchableOpacity style={styles.primaryButton} onPress={() => router.back()}>
+            <Text style={styles.primaryButtonText}>Go Back</Text>
+          </TouchableOpacity>
+        </View>
       </View>
     );
   }
 
   return (
-    <ScrollView style={styles.container}>
+    <View style={styles.container}>
+      <StatusBar barStyle="light-content" backgroundColor={colors.primary} />
+
+      {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+        <TouchableOpacity
+          style={styles.backButton}
+          onPress={() => router.back()}
+          activeOpacity={0.7}
+        >
           <Text style={styles.backButtonText}>← Back</Text>
         </TouchableOpacity>
-        <Text style={styles.title}>Product Details</Text>
+        <Text style={styles.headerTitle}>Product Details</Text>
+        <View style={styles.headerSpacer} />
       </View>
 
-      <View style={styles.content}>
-        <View style={styles.productCard}>
-          <Text style={styles.productName}>{product.name}</Text>
-          <Text style={styles.productCategory}>{product.category}</Text>
-
-          <View style={styles.detailRow}>
-            <Text style={styles.label}>Description:</Text>
-            <Text style={styles.value}>{product.description}</Text>
-          </View>
-
-          <View style={styles.detailRow}>
-            <Text style={styles.label}>Price:</Text>
-            <Text style={styles.value}>₱{product.price.toLocaleString()} per {product.unit}</Text>
-          </View>
-
-          <View style={styles.detailRow}>
-            <Text style={styles.label}>Available Quantity:</Text>
-            <Text style={styles.value}>{product.quantity} {product.unit}(s)</Text>
-          </View>
-
-          <View style={styles.detailRow}>
-            <Text style={styles.label}>Created:</Text>
-            <Text style={styles.value}>
-              {new Date(product.created_at).toLocaleDateString()}
-            </Text>
-          </View>
-
-          {product.updated_at !== product.created_at && (
-            <View style={styles.detailRow}>
-              <Text style={styles.label}>Last Updated:</Text>
-              <Text style={styles.value}>
-                {new Date(product.updated_at).toLocaleDateString()}
-              </Text>
+      <ScrollView
+        style={styles.content}
+        showsVerticalScrollIndicator={false}
+      >
+        {/* Product Image */}
+        <View style={styles.imageSection}>
+          {product.image_url ? (
+            <Image source={{ uri: product.image_url }} style={styles.productImage} />
+          ) : (
+            <View style={styles.placeholderImage}>
+              <Text style={styles.placeholderIcon}>🥬</Text>
+              <Text style={styles.placeholderText}>No Image</Text>
             </View>
           )}
+
+          {/* Status Badge */}
+          <View style={[styles.statusBadge, { backgroundColor: getStatusColor(product.status) }]}>
+            <Text style={styles.statusText}>{getStatusText(product.status)}</Text>
+          </View>
         </View>
 
-        <View style={styles.actions}>
-          <TouchableOpacity style={styles.editButton} onPress={handleEdit}>
+        {/* Product Info Card */}
+        <View style={styles.productCard}>
+          <View style={styles.productHeader}>
+            <Text style={styles.productName}>{product.name}</Text>
+            <View style={styles.categoryBadge}>
+              <Text style={styles.categoryText}>{product.category}</Text>
+            </View>
+          </View>
+
+          <View style={styles.priceSection}>
+            <Text style={styles.priceLabel}>Price</Text>
+            <Text style={styles.priceValue}>{formatPrice(product.price)}</Text>
+            <Text style={styles.priceUnit}>per {product.unit}</Text>
+          </View>
+
+          <View style={styles.detailsSection}>
+            <View style={styles.detailItem}>
+              <Text style={styles.detailLabel}>📝 Description</Text>
+              <Text style={styles.detailValue}>{product.description}</Text>
+            </View>
+
+            <View style={styles.detailItem}>
+              <Text style={styles.detailLabel}>📦 Available Stock</Text>
+              <Text style={styles.detailValue}>{product.quantity_available} {product.unit}</Text>
+            </View>
+
+            <View style={styles.detailItem}>
+              <Text style={styles.detailLabel}>📅 Created</Text>
+              <Text style={styles.detailValue}>
+                {new Date(product.created_at).toLocaleDateString('en-US', {
+                  year: 'numeric',
+                  month: 'long',
+                  day: 'numeric'
+                })}
+              </Text>
+            </View>
+
+            {product.updated_at !== product.created_at && (
+              <View style={styles.detailItem}>
+                <Text style={styles.detailLabel}>🔄 Last Updated</Text>
+                <Text style={styles.detailValue}>
+                  {new Date(product.updated_at).toLocaleDateString('en-US', {
+                    year: 'numeric',
+                    month: 'long',
+                    day: 'numeric'
+                  })}
+                </Text>
+              </View>
+            )}
+          </View>
+        </View>
+
+        {/* Actions */}
+        <View style={styles.actionsSection}>
+          <TouchableOpacity
+            style={styles.editButton}
+            onPress={handleEdit}
+            activeOpacity={0.8}
+          >
+            <Text style={styles.editButtonIcon}>✏️</Text>
             <Text style={styles.editButtonText}>Edit Product</Text>
           </TouchableOpacity>
 
-          <TouchableOpacity style={styles.deleteButton} onPress={handleDelete}>
+          <TouchableOpacity
+            style={styles.deleteButton}
+            onPress={handleDelete}
+            activeOpacity={0.8}
+          >
+            <Text style={styles.deleteButtonIcon}>🗑️</Text>
             <Text style={styles.deleteButtonText}>Delete Product</Text>
           </TouchableOpacity>
         </View>
-      </View>
-    </ScrollView>
+
+        <View style={styles.bottomSpacer} />
+      </ScrollView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f8fafc',
+    backgroundColor: colors.background,
   },
+
+  // Loading States
   loadingContainer: {
+    flex: 1,
+    backgroundColor: colors.background,
+  },
+  loadingContent: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#f8fafc',
   },
   loadingText: {
     marginTop: 16,
     fontSize: 16,
-    color: '#6b7280',
+    color: colors.textSecondary,
+    fontWeight: '500',
   },
+
+  // Error States
   errorContainer: {
+    flex: 1,
+    backgroundColor: colors.background,
+  },
+  errorContent: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#f8fafc',
-    padding: 24,
+    paddingHorizontal: 32,
+  },
+  errorIcon: {
+    fontSize: 64,
+    marginBottom: 24,
   },
   errorText: {
-    fontSize: 16,
-    color: '#dc2626',
+    fontSize: 18,
+    color: colors.danger,
     textAlign: 'center',
-    marginBottom: 24,
+    marginBottom: 32,
+    lineHeight: 24,
   },
+
+  // Header
   header: {
-    backgroundColor: '#ffffff',
-    padding: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#e5e7eb',
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingTop: Platform.OS === 'ios' ? 50 : (StatusBar.currentHeight || 0) + 10,
+    paddingBottom: 16,
+    paddingHorizontal: 20,
+    backgroundColor: colors.primary,
+    elevation: 4,
+    shadowColor: colors.shadow,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
   },
   backButton: {
-    marginRight: 16,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
   },
   backButtonText: {
-    color: '#10b981',
+    color: colors.white,
     fontSize: 16,
     fontWeight: '600',
   },
-  title: {
+  headerTitle: {
     fontSize: 20,
-    fontWeight: '600',
-    color: '#111827',
+    fontWeight: '700',
+    color: colors.white,
+    letterSpacing: -0.3,
   },
+  headerSpacer: {
+    width: 80,
+  },
+
+  // Content
   content: {
-    padding: 16,
+    flex: 1,
   },
+
+  // Image Section
+  imageSection: {
+    position: 'relative',
+    height: 200,
+    backgroundColor: colors.surface,
+    borderBottomLeftRadius: 20,
+    borderBottomRightRadius: 20,
+    overflow: 'hidden',
+    marginBottom: 20,
+    elevation: 2,
+    shadowColor: colors.shadow,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+  },
+  productImage: {
+    width: '100%',
+    height: '100%',
+    resizeMode: 'cover',
+  },
+  placeholderImage: {
+    width: '100%',
+    height: '100%',
+    backgroundColor: '#f1f5f9',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  placeholderIcon: {
+    fontSize: 48,
+    marginBottom: 8,
+  },
+  placeholderText: {
+    fontSize: 16,
+    color: colors.textSecondary,
+    fontWeight: '500',
+  },
+  statusBadge: {
+    position: 'absolute',
+    top: 16,
+    right: 16,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
+    elevation: 2,
+    shadowColor: colors.shadow,
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.2,
+    shadowRadius: 2,
+  },
+  statusText: {
+    fontSize: 12,
+    fontWeight: 'bold',
+    color: colors.white,
+    textTransform: 'uppercase',
+  },
+
+  // Product Card
   productCard: {
-    backgroundColor: '#ffffff',
-    borderRadius: 12,
-    padding: 24,
-    marginBottom: 24,
+    backgroundColor: colors.surface,
+    borderRadius: 16,
+    padding: 20,
+    marginHorizontal: 20,
+    marginBottom: 20,
+    elevation: 3,
+    shadowColor: colors.shadow,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
     borderWidth: 1,
-    borderColor: '#e5e7eb',
+    borderColor: colors.border,
+  },
+  productHeader: {
+    marginBottom: 16,
   },
   productName: {
     fontSize: 24,
     fontWeight: '700',
-    color: '#111827',
+    color: colors.text,
     marginBottom: 8,
+    lineHeight: 30,
   },
-  productCategory: {
-    fontSize: 16,
-    color: '#6b7280',
-    marginBottom: 24,
-    fontStyle: 'italic',
+  categoryBadge: {
+    backgroundColor: colors.border,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+    alignSelf: 'flex-start',
   },
-  detailRow: {
-    flexDirection: 'row',
-    marginBottom: 16,
-  },
-  label: {
-    fontSize: 16,
+  categoryText: {
+    fontSize: 12,
+    color: colors.primary,
     fontWeight: '600',
-    color: '#374151',
-    width: 120,
+    textTransform: 'uppercase',
   },
-  value: {
+  priceSection: {
+    backgroundColor: colors.border,
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 20,
+    alignItems: 'center',
+  },
+  priceLabel: {
+    fontSize: 12,
+    color: colors.textSecondary,
+    fontWeight: '600',
+    marginBottom: 4,
+    textTransform: 'uppercase',
+  },
+  priceValue: {
+    fontSize: 28,
+    fontWeight: 'bold',
+    color: colors.primary,
+    marginBottom: 4,
+  },
+  priceUnit: {
+    fontSize: 14,
+    color: colors.textSecondary,
+  },
+  detailsSection: {
+    gap: 16,
+  },
+  detailItem: {
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+    paddingBottom: 12,
+  },
+  detailLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: colors.textSecondary,
+    marginBottom: 6,
+  },
+  detailValue: {
     fontSize: 16,
-    color: '#111827',
-    flex: 1,
+    color: colors.text,
+    lineHeight: 22,
   },
-  actions: {
+
+  // Actions
+  actionsSection: {
+    paddingHorizontal: 20,
     gap: 12,
   },
   editButton: {
-    backgroundColor: '#10b981',
-    borderRadius: 8,
+    backgroundColor: colors.primary,
+    borderRadius: 12,
     paddingVertical: 16,
+    paddingHorizontal: 20,
+    flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
+    elevation: 3,
+    shadowColor: colors.primary,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+  },
+  editButtonIcon: {
+    fontSize: 16,
+    marginRight: 8,
   },
   editButtonText: {
-    color: '#ffffff',
+    color: colors.white,
     fontSize: 16,
     fontWeight: '600',
   },
   deleteButton: {
-    backgroundColor: '#dc2626',
-    borderRadius: 8,
+    backgroundColor: colors.danger,
+    borderRadius: 12,
     paddingVertical: 16,
+    paddingHorizontal: 20,
+    flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
+    elevation: 3,
+    shadowColor: colors.danger,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+  },
+  deleteButtonIcon: {
+    fontSize: 16,
+    marginRight: 8,
   },
   deleteButtonText: {
-    color: '#ffffff',
+    color: colors.white,
     fontSize: 16,
     fontWeight: '600',
+  },
+  primaryButton: {
+    backgroundColor: colors.primary,
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: 8,
+  },
+  primaryButtonText: {
+    color: colors.white,
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  bottomSpacer: {
+    height: 40,
   },
 });
