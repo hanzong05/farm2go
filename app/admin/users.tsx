@@ -36,6 +36,7 @@ interface User {
   } | null;
   salesData?: {
     totalSales: number;
+    totalLifetime: number;
     chartData: Array<{
       date: string;
       amount: number;
@@ -45,17 +46,25 @@ interface User {
 
 const colors = {
   primary: '#059669',
+  primaryLight: '#34d399',
   secondary: '#10b981',
   white: '#ffffff',
-  background: '#f0f9f4',
+  background: '#f8fafc',
+  backgroundLight: '#f1f5f9',
   text: '#0f172a',
-  textSecondary: '#6b7280',
-  border: '#d1fae5',
-  shadow: 'rgba(0,0,0,0.1)',
+  textSecondary: '#64748b',
+  textLight: '#94a3b8',
+  border: '#e2e8f0',
+  borderLight: '#f1f5f9',
+  shadow: 'rgba(15, 23, 42, 0.08)',
+  shadowDark: 'rgba(15, 23, 42, 0.15)',
   danger: '#ef4444',
   warning: '#f59e0b',
-  gray100: '#f9fafb',
-  gray200: '#e5e7eb',
+  success: '#22c55e',
+  gray50: '#f8fafc',
+  gray100: '#f1f5f9',
+  gray200: '#e2e8f0',
+  gray300: '#cbd5e1',
 };
 
 export default function AdminUsers() {
@@ -125,7 +134,18 @@ export default function AdminUsers() {
       const startDate = new Date();
       startDate.setDate(endDate.getDate() - 7); // Last 7 days
 
-      // Fetch orders for this user
+      // Fetch all completed orders for lifetime total
+      const { data: allOrders, error: allOrdersError } = await supabase
+        .from('orders')
+        .select('total_amount')
+        .eq('buyer_id', userId)
+        .in('status', ['completed', 'delivered']);
+
+      if (allOrdersError) {
+        console.error(`Error fetching all orders for user ${userId}:`, allOrdersError);
+      }
+
+      // Fetch orders for this user (last 7 days)
       const { data: orders, error } = await supabase
         .from('orders')
         .select('total_amount, created_at, status')
@@ -136,7 +156,7 @@ export default function AdminUsers() {
 
       if (error) {
         console.error(`Error fetching orders for user ${userId}:`, error);
-        return { totalSales: 0, chartData: [] };
+        return { totalSales: 0, totalLifetime: 0, chartData: [] };
       }
 
       // Group orders by date
@@ -166,14 +186,16 @@ export default function AdminUsers() {
       }));
 
       const totalSales = chartData.reduce((sum, day) => sum + day.amount, 0);
+      const totalLifetime = allOrders?.reduce((sum, order) => sum + (order.total_amount || 0), 0) || 0;
 
       return {
         totalSales,
+        totalLifetime,
         chartData
       };
     } catch (error) {
       console.error(`Error fetching sales data for user ${userId}:`, error);
-      return { totalSales: 0, chartData: [] };
+      return { totalSales: 0, totalLifetime: 0, chartData: [] };
     }
   };
 
@@ -318,6 +340,16 @@ export default function AdminUsers() {
     }
   };
 
+  const getUserTypeIcon = (userType: string) => {
+    switch (userType) {
+      case 'farmer': return 'seedling';
+      case 'buyer': return 'shopping-cart';
+      case 'admin': return 'user-shield';
+      case 'super-admin': return 'crown';
+      default: return 'user';
+    }
+  };
+
   const formatCurrency = (amount: number): string => {
     return `₱${amount.toLocaleString('en-PH', {
       minimumFractionDigits: 2,
@@ -326,66 +358,100 @@ export default function AdminUsers() {
   };
 
   const getChartConfig = () => ({
-    backgroundColor: colors.white,
+    backgroundColor: 'transparent',
     backgroundGradientFrom: colors.white,
     backgroundGradientTo: colors.white,
     decimalPlaces: 0,
     color: (opacity = 1) => `rgba(5, 150, 105, ${opacity})`,
-    labelColor: (opacity = 1) => `rgba(107, 114, 128, ${opacity})`,
+    labelColor: (opacity = 1) => `rgba(100, 116, 139, ${opacity})`,
     style: {
       borderRadius: 12,
     },
     propsForDots: {
-      r: '3',
+      r: '2',
       strokeWidth: '1',
       stroke: colors.primary
     },
     fillShadowGradient: colors.primary,
-    fillShadowGradientOpacity: 0.1,
+    fillShadowGradientOpacity: 0.15,
   });
+
+  const getTotalSales = () => {
+    if (activeTab === 'buyer') {
+      return filteredUsers.reduce((total, user) => total + (user.salesData?.totalLifetime || 0), 0);
+    }
+    return filteredUsers.reduce((total, user) => total + (user.salesData?.totalSales || 0), 0);
+  };
 
   const renderUser = ({ item }: { item: User }) => {
     const chartData = {
-      labels: item.salesData?.chartData.map(d => d.date) || [],
+      labels: item.salesData?.chartData.map(d => d.date.split(' ')[1]) || ['1', '2', '3', '4', '5', '6', '7'],
       datasets: [
         {
-          data: item.salesData?.chartData.map(d => d.amount) || [0],
+          data: item.salesData?.chartData.map(d => d.amount) || [0, 0, 0, 0, 0, 0, 0],
           color: (opacity = 1) => `rgba(5, 150, 105, ${opacity})`,
           strokeWidth: 2,
         },
       ],
     };
 
+    const hasValidData = item.salesData?.chartData && item.salesData.chartData.some(d => d.amount > 0);
+
     return (
       <View style={styles.userCard}>
-        {/* Header Section */}
+        {/* User Header with Avatar */}
         <View style={styles.userHeader}>
-          <View style={styles.userHeaderLeft}>
-            <Text style={styles.userName}>
-              {item.profiles?.first_name} {item.profiles?.last_name}
-            </Text>
-            <Text style={styles.userEmail}>{item.email}</Text>
-            <Text style={styles.totalSales}>
+          <View style={styles.userAvatarContainer}>
+            <View style={[styles.userAvatar, { backgroundColor: getUserTypeColor(item.profiles?.user_type || '') }]}>
+              <Icon 
+                name={getUserTypeIcon(item.profiles?.user_type || '')} 
+                size={16} 
+                color={colors.white} 
+              />
+            </View>
+            <View style={styles.userInfo}>
+              <Text style={styles.userName} numberOfLines={1}>
+                {item.profiles?.first_name} {item.profiles?.last_name}
+              </Text>
+              <Text style={styles.userEmail} numberOfLines={1}>{item.email}</Text>
+            </View>
+          </View>
+          
+          <TouchableOpacity style={styles.moreButton}>
+            <Icon name="ellipsis-v" size={14} color={colors.textLight} />
+          </TouchableOpacity>
+        </View>
+
+        {/* Sales/Spending Summary */}
+        <View style={styles.salesSummary}>
+          <View style={styles.salesAmount}>
+            <Text style={styles.salesLabel}>{activeTab === 'buyer' ? '7-Day Spending' : '7-Day Sales'}</Text>
+            <Text style={styles.salesValue}>
               {formatCurrency(item.salesData?.totalSales || 0)}
             </Text>
+            {activeTab === 'buyer' && (
+              <>
+                <Text style={styles.lifetimeLabel}>Total Lifetime</Text>
+                <Text style={styles.lifetimeValue}>
+                  {formatCurrency(item.salesData?.totalLifetime || 0)}
+                </Text>
+              </>
+            )}
           </View>
-          <View style={styles.userHeaderRight}>
-            <TouchableOpacity style={styles.moreButton}>
-              <Icon name="ellipsis-h" size={16} color={colors.textSecondary} />
-            </TouchableOpacity>
-            <View style={[styles.userTypeBadge, { backgroundColor: getUserTypeColor(item.profiles?.user_type || '') }]}>
-              <Text style={styles.userTypeText}>{item.profiles?.user_type?.toUpperCase()}</Text>
-            </View>
+          <View style={[styles.userTypeBadge, { backgroundColor: getUserTypeColor(item.profiles?.user_type || '') + '15' }]}>
+            <Text style={[styles.userTypeText, { color: getUserTypeColor(item.profiles?.user_type || '') }]}>
+              {item.profiles?.user_type?.toUpperCase()}
+            </Text>
           </View>
         </View>
 
         {/* Sales Chart */}
-        {item.salesData && item.salesData.chartData.length > 0 && (
+        {hasValidData ? (
           <View style={styles.chartContainer}>
             <LineChart
               data={chartData}
-              width={(screenWidth - 48) / 2} // Account for padding and 2 columns
-              height={120}
+              width={screenWidth * 0.42}
+              height={80}
               chartConfig={getChartConfig()}
               bezier
               style={styles.chart}
@@ -395,25 +461,42 @@ export default function AdminUsers() {
               withHorizontalLines={false}
               fromZero={true}
               segments={2}
-              withDots={false}
+              withDots={true}
+              withVerticalLabels={false}
+              withHorizontalLabels={false}
             />
+          </View>
+        ) : (
+          <View style={styles.noDataContainer}>
+            <Icon name="chart-line" size={20} color={colors.textLight} />
+            <Text style={styles.noDataText}>No sales data</Text>
           </View>
         )}
 
         {/* User Details */}
         <View style={styles.userDetails}>
           {item.profiles?.farm_name && (
-            <Text style={styles.userDetail}>🏡 {item.profiles.farm_name}</Text>
-          )}
-          {item.profiles?.phone && (
-            <Text style={styles.userDetail}>📞 {item.profiles.phone}</Text>
+            <View style={styles.detailRow}>
+              <Icon name="home" size={10} color={colors.textSecondary} />
+              <Text style={styles.userDetail} numberOfLines={1}>{item.profiles.farm_name}</Text>
+            </View>
           )}
           {item.profiles?.barangay && (
-            <Text style={styles.userDetail}>📍 {item.profiles.barangay}</Text>
+            <View style={styles.detailRow}>
+              <Icon name="map-marker-alt" size={10} color={colors.textSecondary} />
+              <Text style={styles.userDetail} numberOfLines={1}>{item.profiles.barangay}</Text>
+            </View>
           )}
-          <Text style={styles.userDate}>
-            Created: {new Date(item.created_at).toLocaleDateString()}
-          </Text>
+          <View style={styles.detailRow}>
+            <Icon name="calendar" size={10} color={colors.textLight} />
+            <Text style={styles.userDate} numberOfLines={1}>
+              {new Date(item.created_at).toLocaleDateString('en-US', { 
+                month: 'short', 
+                day: 'numeric',
+                year: '2-digit'
+              })}
+            </Text>
+          </View>
         </View>
       </View>
     );
@@ -447,54 +530,68 @@ export default function AdminUsers() {
       />
 
       <View style={styles.content}>
-        {/* Header */}
+        {/* Enhanced Header */}
         <View style={styles.header}>
           <View style={styles.titleSection}>
-            <Text style={styles.title}>User Sales Management</Text>
-            <Text style={styles.barangayInfo}>
-              📍 {profile?.barangay ? `Managing: ${profile.barangay}` : 'All Barangays (No barangay filter)'}
-            </Text>
+            <Text style={styles.title}>User Management</Text>
+            <View style={styles.locationContainer}>
+              <Icon name="map-marker-alt" size={12} color={colors.textSecondary} />
+              <Text style={styles.barangayInfo}>
+                {profile?.barangay ? profile.barangay : 'All Barangays'}
+              </Text>
+            </View>
           </View>
-          <View style={styles.statsContainer}>
-            <Text style={styles.statsText}>Total {activeTab}s: {users.length}</Text>
+          
+          <View style={styles.statsCard}>
+            <View style={styles.statItem}>
+              <Text style={styles.statValue}>{filteredUsers.length}</Text>
+              <Text style={styles.statLabel}>Total {activeTab}s</Text>
+            </View>
+            <View style={styles.statDivider} />
+            <View style={styles.statItem}>
+              <Text style={styles.statValue}>{formatCurrency(getTotalSales()).replace('₱', '₱')}</Text>
+              <Text style={styles.statLabel}>{activeTab === 'buyer' ? 'Total Spending' : 'Total Sales'}</Text>
+            </View>
           </View>
         </View>
 
-        {/* Tab Navigation */}
-        <View style={styles.tabContainer}>
-          <TouchableOpacity
-            style={[styles.tab, activeTab === 'farmer' && styles.activeTab]}
-            onPress={() => setActiveTab('farmer')}
-          >
-            <Icon
-              name="seedling"
-              size={16}
-              color={activeTab === 'farmer' ? colors.white : colors.textSecondary}
-            />
-            <Text style={[
-              styles.tabText,
-              activeTab === 'farmer' && styles.activeTabText
-            ]}>
-              Farmers
-            </Text>
-          </TouchableOpacity>
+        {/* Enhanced Tab Navigation */}
+        <View style={styles.tabWrapper}>
+          <View style={styles.tabContainer}>
+            <TouchableOpacity
+              style={[styles.tab, activeTab === 'farmer' && styles.activeTab]}
+              onPress={() => setActiveTab('farmer')}
+            >
+              <Icon
+                name="seedling"
+                size={16}
+                color={activeTab === 'farmer' ? colors.white : colors.textSecondary}
+              />
+              <Text style={[
+                styles.tabText,
+                activeTab === 'farmer' && styles.activeTabText
+              ]}>
+                Farmers
+              </Text>
+            </TouchableOpacity>
 
-          <TouchableOpacity
-            style={[styles.tab, activeTab === 'buyer' && styles.activeTab]}
-            onPress={() => setActiveTab('buyer')}
-          >
-            <Icon
-              name="shopping-cart"
-              size={16}
-              color={activeTab === 'buyer' ? colors.white : colors.textSecondary}
-            />
-            <Text style={[
-              styles.tabText,
-              activeTab === 'buyer' && styles.activeTabText
-            ]}>
-              Buyers
-            </Text>
-          </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.tab, activeTab === 'buyer' && styles.activeTab]}
+              onPress={() => setActiveTab('buyer')}
+            >
+              <Icon
+                name="shopping-cart"
+                size={16}
+                color={activeTab === 'buyer' ? colors.white : colors.textSecondary}
+              />
+              <Text style={[
+                styles.tabText,
+                activeTab === 'buyer' && styles.activeTabText
+              ]}>
+                Buyers
+              </Text>
+            </TouchableOpacity>
+          </View>
         </View>
 
         {/* Users Grid */}
@@ -505,6 +602,7 @@ export default function AdminUsers() {
           numColumns={2}
           columnWrapperStyle={styles.gridRow}
           contentContainerStyle={styles.listContainer}
+          showsVerticalScrollIndicator={false}
           refreshControl={
             <RefreshControl
               refreshing={refreshing}
@@ -515,7 +613,16 @@ export default function AdminUsers() {
           }
           ListEmptyComponent={
             <View style={styles.emptyContainer}>
-              <Text style={styles.emptyText}>No users found</Text>
+              <View style={styles.emptyIconContainer}>
+                <Icon name="users" size={48} color={colors.textLight} />
+              </View>
+              <Text style={styles.emptyTitle}>No {activeTab}s found</Text>
+              <Text style={styles.emptySubtitle}>
+                {searchQuery 
+                  ? `Try adjusting your search terms` 
+                  : `No ${activeTab}s registered in this area yet`
+                }
+              </Text>
             </View>
           }
         />
@@ -531,175 +638,299 @@ const styles = StyleSheet.create({
   },
   content: {
     flex: 1,
-    paddingTop: 16,
-    paddingHorizontal: 0,
+    paddingTop: 20,
   },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
+    backgroundColor: colors.background,
   },
   loadingText: {
     marginTop: 16,
     fontSize: 16,
     color: colors.textSecondary,
+    fontWeight: '500',
   },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
-    marginBottom: 20,
+    marginBottom: 24,
+    paddingHorizontal: 20,
   },
   titleSection: {
     flex: 1,
   },
   title: {
-    fontSize: 24,
-    fontWeight: 'bold',
+    fontSize: 28,
+    fontWeight: '700',
     color: colors.text,
-    marginBottom: 4,
+    marginBottom: 8,
+  },
+  locationContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
   },
   barangayInfo: {
     fontSize: 14,
     color: colors.textSecondary,
     fontWeight: '500',
   },
-  statsContainer: {
+  statsCard: {
     backgroundColor: colors.white,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 8,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderRadius: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    elevation: 2,
+    shadowColor: colors.shadow,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 1,
+    shadowRadius: 8,
     borderWidth: 1,
     borderColor: colors.border,
   },
-  statsText: {
-    fontSize: 12,
+  statItem: {
+    alignItems: 'center',
+  },
+  statValue: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: colors.text,
+  },
+  statLabel: {
+    fontSize: 11,
     color: colors.textSecondary,
-    fontWeight: '600',
+    fontWeight: '500',
+    marginTop: 2,
+  },
+  statDivider: {
+    width: 1,
+    height: 24,
+    backgroundColor: colors.border,
+    marginHorizontal: 16,
+  },
+  tabWrapper: {
+    paddingHorizontal: 20,
+    marginBottom: 20,
   },
   tabContainer: {
     flexDirection: 'row',
     backgroundColor: colors.gray100,
-    borderRadius: 12,
+    borderRadius: 16,
     padding: 4,
-    marginHorizontal: 16,
-    marginBottom: 16,
+    elevation: 1,
+    shadowColor: colors.shadow,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 1,
+    shadowRadius: 4,
   },
   tab: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 12,
+    paddingVertical: 14,
     paddingHorizontal: 16,
-    borderRadius: 8,
+    borderRadius: 12,
     gap: 8,
   },
   activeTab: {
     backgroundColor: colors.primary,
     elevation: 2,
-    shadowColor: colors.shadow,
+    shadowColor: colors.shadowDark,
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
+    shadowOpacity: 1,
     shadowRadius: 4,
   },
   tabText: {
-    fontSize: 14,
-    fontWeight: '500',
+    fontSize: 15,
+    fontWeight: '600',
     color: colors.textSecondary,
   },
   activeTabText: {
     color: colors.white,
-    fontWeight: '600',
+    fontWeight: '700',
   },
   listContainer: {
-    gap: 12,
+    paddingHorizontal: 16,
+    paddingBottom: 20,
   },
   gridRow: {
     justifyContent: 'space-between',
-    paddingHorizontal: 4,
+    marginBottom: 16,
   },
   userCard: {
     backgroundColor: colors.white,
-    borderRadius: 12,
-    padding: 12,
-    elevation: 2,
+    borderRadius: 20,
+    padding: 16,
+    elevation: 3,
     shadowColor: colors.shadow,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    flex: 1,
-    marginHorizontal: 4,
-    maxWidth: (screenWidth - 48) / 2,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 1,
+    shadowRadius: 8,
+    width: (screenWidth - 48) / 2,
+    borderWidth: 1,
+    borderColor: colors.borderLight,
   },
   userHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
-    marginBottom: 12,
+    marginBottom: 16,
   },
-  userHeaderLeft: {
+  userAvatarContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+    gap: 10,
+  },
+  userAvatar: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    justifyContent: 'center',
+    alignItems: 'center',
+    elevation: 2,
+    shadowColor: colors.shadowDark,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+  },
+  userInfo: {
     flex: 1,
   },
-  userHeaderRight: {
-    alignItems: 'flex-end',
-    gap: 8,
-  },
   userName: {
-    fontSize: 14,
-    fontWeight: 'bold',
+    fontSize: 15,
+    fontWeight: '700',
     color: colors.text,
     marginBottom: 2,
   },
   userEmail: {
-    fontSize: 10,
+    fontSize: 11,
     color: colors.textSecondary,
-    marginBottom: 4,
-  },
-  totalSales: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: colors.primary,
+    fontWeight: '500',
   },
   moreButton: {
-    padding: 4,
+    padding: 6,
+    borderRadius: 8,
+  },
+  salesSummary: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+    paddingVertical: 12,
+    paddingHorizontal: 12,
+    backgroundColor: colors.gray50,
+    borderRadius: 12,
+  },
+  salesAmount: {
+    flex: 1,
+  },
+  salesLabel: {
+    fontSize: 11,
+    color: colors.textSecondary,
+    fontWeight: '500',
+    marginBottom: 2,
+  },
+  salesValue: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: colors.primary,
+  },
+  lifetimeLabel: {
+    fontSize: 10,
+    color: colors.textSecondary,
+    fontWeight: '500',
+    marginTop: 8,
+    marginBottom: 2,
+  },
+  lifetimeValue: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: colors.textSecondary,
   },
   userTypeBadge: {
-    paddingHorizontal: 8,
-    paddingVertical: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
     borderRadius: 12,
   },
   userTypeText: {
     fontSize: 10,
-    color: colors.white,
-    fontWeight: 'bold',
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
   },
   chartContainer: {
-    marginVertical: 8,
     alignItems: 'center',
+    marginBottom: 16,
+    backgroundColor: colors.gray50,
+    borderRadius: 12,
+    paddingVertical: 8,
   },
   chart: {
     borderRadius: 12,
   },
-  userDetails: {
+  noDataContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 24,
+    marginBottom: 16,
+  },
+  noDataText: {
+    fontSize: 12,
+    color: colors.textLight,
+    fontWeight: '500',
     marginTop: 8,
-    gap: 2,
+  },
+  userDetails: {
+    gap: 8,
+  },
+  detailRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
   },
   userDetail: {
-    fontSize: 11,
+    fontSize: 12,
     color: colors.textSecondary,
+    fontWeight: '500',
+    flex: 1,
   },
   userDate: {
-    fontSize: 10,
-    color: colors.textSecondary,
-    marginTop: 4,
+    fontSize: 11,
+    color: colors.textLight,
+    fontWeight: '500',
+    flex: 1,
   },
   emptyContainer: {
-    padding: 40,
+    paddingVertical: 60,
+    paddingHorizontal: 20,
     alignItems: 'center',
   },
-  emptyText: {
-    fontSize: 16,
+  emptyIconContainer: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: colors.gray100,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  emptyTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: colors.text,
+    marginBottom: 8,
+  },
+  emptySubtitle: {
+    fontSize: 14,
     color: colors.textSecondary,
+    textAlign: 'center',
+    lineHeight: 20,
   },
 });
