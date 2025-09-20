@@ -58,31 +58,30 @@ export default function MarketplaceLandingPage() {
     loadProducts();
   }, []);
 
-  // Handle authenticated user redirects
+  // Only redirect specific user types, let marketplace show for everyone else
   useFocusEffect(
     useCallback(() => {
       if (isMounted && (Platform.OS === 'ios' || Platform.OS === 'android') && !isRedirecting && profile) {
-        setIsRedirecting(true);
+        // Only redirect farmers and admins to their dashboards
+        // Buyers and everyone else can stay on marketplace
+        if (profile.user_type === 'farmer' || profile.user_type === 'admin' || profile.user_type === 'super-admin') {
+          setIsRedirecting(true);
 
-        // Add a small delay to ensure router is ready
-        setTimeout(() => {
-          // User is authenticated and has profile, redirect to appropriate dashboard
-          console.log('User authenticated, redirecting to dashboard. User type:', profile.user_type);
-          switch (profile.user_type) {
-            case 'farmer':
-              router.replace('/farmer/my-products');
-              break;
-            case 'admin':
-              router.replace('/admin/users');
-              break;
-            case 'super-admin':
-              router.replace('/super-admin');
-              break;
-            default:
-              // Buyers stay on marketplace
-              setIsRedirecting(false);
-          }
-        }, 100);
+          setTimeout(() => {
+            console.log('User authenticated, redirecting to dashboard. User type:', profile.user_type);
+            switch (profile.user_type) {
+              case 'farmer':
+                router.replace('/farmer/my-products' as any);
+                break;
+              case 'admin':
+                router.replace('/admin/users' as any);
+                break;
+              case 'super-admin':
+                router.replace('/super-admin' as any);
+                break;
+            }
+          }, 100);
+        }
       }
     }, [isMounted, isRedirecting, profile])
   );
@@ -131,7 +130,7 @@ export default function MarketplaceLandingPage() {
     }
   };
 
-  // If not mounted yet, show loading
+  // Show loading only if not mounted
   if (!isMounted) {
     return (
       <View style={styles.mobileLoading}>
@@ -140,6 +139,20 @@ export default function MarketplaceLandingPage() {
         </Text>
         <Text style={styles.mobileLoadingSubtitle}>
           Loading...
+        </Text>
+      </View>
+    );
+  }
+
+  // If redirecting, show loading
+  if (isRedirecting) {
+    return (
+      <View style={styles.mobileLoading}>
+        <Text style={styles.mobileLoadingTitle}>
+          🌱 Farm2Go
+        </Text>
+        <Text style={styles.mobileLoadingSubtitle}>
+          Redirecting...
         </Text>
       </View>
     );
@@ -178,7 +191,7 @@ export default function MarketplaceLandingPage() {
         'Please sign in to view product details and place orders.',
         [
           { text: 'Cancel', style: 'cancel' },
-          { text: 'Sign In', onPress: () => router.push('/auth/login') }
+          { text: 'Sign In', onPress: () => router.push('/auth/login' as any) }
         ]
       );
       return;
@@ -193,7 +206,7 @@ export default function MarketplaceLandingPage() {
         'Please sign in to add items to cart.',
         [
           { text: 'Cancel', style: 'cancel' },
-          { text: 'Sign In', onPress: () => router.push('/auth/login') }
+          { text: 'Sign In', onPress: () => router.push('/auth/login' as any) }
         ]
       );
       return;
