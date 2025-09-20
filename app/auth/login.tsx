@@ -81,11 +81,16 @@ export default function LoginScreen() {
           switch (userData.profile.user_type) {
             case 'super-admin':
               console.log('🚀 Redirecting to super-admin dashboard');
-              router.replace('/super-admin');
+              router.replace('/super-admin' as any);
               break;
             case 'admin':
               console.log('🚀 Redirecting to admin dashboard');
-              router.replace('/admin/users');
+              try {
+                router.replace('/admin/users' as any);
+                console.log('✅ Admin redirect successful');
+              } catch (error) {
+                console.error('❌ Admin redirect failed:', error);
+              }
               break;
             case 'farmer':
               console.log('🚀 Redirecting to farmer dashboard');

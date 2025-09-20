@@ -8,6 +8,7 @@ import 'react-native-reanimated';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { AuthProvider } from '../contexts/AuthContext';
 import { SessionProvider } from '../contexts/SessionContext';
+import { supabase } from '../lib/supabase';
 import { getUserWithProfile } from '../services/auth';
 
 // Farm2Go green theme
@@ -142,9 +143,56 @@ export default function RootLayout() {
       }
     };
 
-    // Run check after a short delay to ensure app is fully loaded
+    // Run check immediately and also set up a timer
+    checkUserSessionAndRedirect();
     const timer = setTimeout(checkUserSessionAndRedirect, 500);
     return () => clearTimeout(timer);
+  }, []);
+
+  // Additional auth state listener for immediate redirects
+  useEffect(() => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      console.log('🔄 Auth state change detected:', event, session?.user?.email);
+
+      if (event === 'SIGNED_IN' && session?.user) {
+        console.log('🚀 User just signed in, checking for immediate redirect');
+
+        try {
+          // Small delay to ensure profile is loaded
+          setTimeout(async () => {
+            const userData = await getUserWithProfile();
+            if (userData?.profile) {
+              const { router } = await import('expo-router');
+
+              console.log('🔄 Immediate redirect for user type:', userData.profile.user_type);
+
+              switch (userData.profile.user_type) {
+                case 'super-admin':
+                  console.log('🚀 Immediate redirect: super-admin');
+                  router.replace('/super-admin' as any);
+                  break;
+                case 'admin':
+                  console.log('🚀 Immediate redirect: admin');
+                  router.replace('/admin/users' as any);
+                  break;
+                case 'farmer':
+                  console.log('🚀 Immediate redirect: farmer');
+                  router.replace('/farmer' as any);
+                  break;
+                case 'buyer':
+                  console.log('🚀 Immediate redirect: buyer');
+                  router.replace('/buyer/marketplace' as any);
+                  break;
+              }
+            }
+          }, 200);
+        } catch (error) {
+          console.error('❌ Immediate redirect failed:', error);
+        }
+      }
+    });
+
+    return () => subscription.unsubscribe();
   }, []);
 
   // Enhanced deep linking for OAuth and marketplace navigation
