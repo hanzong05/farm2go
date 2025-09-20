@@ -5,9 +5,12 @@ import {
   Alert,
   Dimensions,
   FlatList,
+  Modal,
   RefreshControl,
+  ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   TouchableOpacity,
   View
 } from 'react-native';
@@ -74,6 +77,14 @@ export default function AdminUsers() {
   const [refreshing, setRefreshing] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [activeTab, setActiveTab] = useState<'farmer' | 'buyer'>('farmer');
+  const [selectedFarmer, setSelectedFarmer] = useState<User | null>(null);
+  const [modalVisible, setModalVisible] = useState(false);
+  const [farmerDetailTab, setFarmerDetailTab] = useState<'products' | 'orders' | 'inventory'>('products');
+  const [farmerProducts, setFarmerProducts] = useState<any[]>([]);
+  const [farmerOrders, setFarmerOrders] = useState<any[]>([]);
+  const [farmerInventory, setFarmerInventory] = useState<any[]>([]);
+  const [editingItem, setEditingItem] = useState<any>(null);
+  const [showAddForm, setShowAddForm] = useState(false);
 
   useEffect(() => {
     loadData();
@@ -383,6 +394,101 @@ export default function AdminUsers() {
     return filteredUsers.reduce((total, user) => total + (user.salesData?.totalSales || 0), 0);
   };
 
+  const openFarmerDetail = async (farmer: User) => {
+    setSelectedFarmer(farmer);
+    setModalVisible(true);
+    setFarmerDetailTab('products');
+    await loadFarmerData(farmer.id);
+  };
+
+  const loadFarmerData = async (farmerId: string) => {
+    try {
+      // Load products
+      const { data: products, error: productsError } = await supabase
+        .from('products')
+        .select('*')
+        .eq('farmer_id', farmerId)
+        .order('created_at', { ascending: false });
+
+      if (productsError) {
+        console.error('Error loading farmer products:', productsError);
+      } else {
+        setFarmerProducts(products || []);
+      }
+
+      // Load orders
+      const { data: orders, error: ordersError } = await supabase
+        .from('orders')
+        .select(`
+          *,
+          buyer_profile:profiles!orders_buyer_id_fkey(first_name, last_name),
+          order_items(
+            *,
+            product:products(name, price)
+          )
+        `)
+        .eq('farmer_id', farmerId)
+        .order('created_at', { ascending: false });
+
+      if (ordersError) {
+        console.error('Error loading farmer orders:', ordersError);
+      } else {
+        setFarmerOrders(orders || []);
+      }
+
+      // Load inventory (same as products but with stock focus)
+      setFarmerInventory(products || []);
+
+    } catch (error) {
+      console.error('Error loading farmer data:', error);
+    }
+  };
+
+  const handleDeleteProduct = async (productId: string) => {
+    Alert.alert(
+      'Delete Product',
+      'Are you sure you want to delete this product?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              const { error } = await supabase
+                .from('products')
+                .delete()
+                .eq('id', productId);
+
+              if (error) {
+                Alert.alert('Error', 'Failed to delete product');
+                return;
+              }
+
+              // Refresh farmer data
+              if (selectedFarmer) {
+                await loadFarmerData(selectedFarmer.id);
+              }
+            } catch (error) {
+              console.error('Error deleting product:', error);
+              Alert.alert('Error', 'Failed to delete product');
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const getOrderStatusColor = (status: string) => {
+    switch (status) {
+      case 'pending': return colors.warning + '40';
+      case 'confirmed': return colors.primary + '40';
+      case 'completed': return colors.success + '40';
+      case 'cancelled': return colors.danger + '40';
+      default: return colors.textLight + '40';
+    }
+  };
+
   const renderUser = ({ item }: { item: User }) => {
     const chartData = {
       labels: item.salesData?.chartData.map(d => d.date.split(' ')[1]) || ['1', '2', '3', '4', '5', '6', '7'],
@@ -410,9 +516,20 @@ export default function AdminUsers() {
               />
             </View>
             <View style={styles.userInfo}>
-              <Text style={styles.userName} numberOfLines={1}>
-                {item.profiles?.first_name} {item.profiles?.last_name}
-              </Text>
+              <TouchableOpacity
+                onPress={() => item.profiles?.user_type === 'farmer' ? openFarmerDetail(item) : null}
+                disabled={item.profiles?.user_type !== 'farmer'}
+              >
+                <Text style={[
+                  styles.userName,
+                  item.profiles?.user_type === 'farmer' && styles.clickableUserName
+                ]} numberOfLines={1}>
+                  {item.profiles?.first_name} {item.profiles?.last_name}
+                  {item.profiles?.user_type === 'farmer' && (
+                    <Icon name="external-link-alt" size={10} color={colors.primary} style={{ marginLeft: 4 }} />
+                  )}
+                </Text>
+              </TouchableOpacity>
               <Text style={styles.userEmail} numberOfLines={1}>{item.email}</Text>
             </View>
           </View>
@@ -627,6 +744,163 @@ export default function AdminUsers() {
           }
         />
       </View>
+
+      {/* Farmer Detail Modal */}
+      <Modal
+        animationType="slide"
+        transparent={false}
+        visible={modalVisible}
+        onRequestClose={() => setModalVisible(false)}
+      >
+        <View style={styles.modalContainer}>
+          {/* Modal Header */}
+          <View style={styles.modalHeader}>
+            <TouchableOpacity
+              style={styles.backButton}
+              onPress={() => setModalVisible(false)}
+            >
+              <Icon name="arrow-left" size={20} color={colors.primary} />
+            </TouchableOpacity>
+            <View style={styles.modalTitleContainer}>
+              <Text style={styles.modalTitle}>
+                {selectedFarmer?.profiles?.first_name} {selectedFarmer?.profiles?.last_name}
+              </Text>
+              <Text style={styles.modalSubtitle}>
+                {selectedFarmer?.profiles?.farm_name || 'Farm Management'}
+              </Text>
+            </View>
+          </View>
+
+          {/* Tab Navigation */}
+          <View style={styles.modalTabContainer}>
+            <TouchableOpacity
+              style={[styles.modalTab, farmerDetailTab === 'products' && styles.activeModalTab]}
+              onPress={() => setFarmerDetailTab('products')}
+            >
+              <Icon name="leaf" size={16} color={farmerDetailTab === 'products' ? colors.white : colors.textSecondary} />
+              <Text style={[styles.modalTabText, farmerDetailTab === 'products' && styles.activeModalTabText]}>
+                Products
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.modalTab, farmerDetailTab === 'orders' && styles.activeModalTab]}
+              onPress={() => setFarmerDetailTab('orders')}
+            >
+              <Icon name="shopping-bag" size={16} color={farmerDetailTab === 'orders' ? colors.white : colors.textSecondary} />
+              <Text style={[styles.modalTabText, farmerDetailTab === 'orders' && styles.activeModalTabText]}>
+                Orders
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.modalTab, farmerDetailTab === 'inventory' && styles.activeModalTab]}
+              onPress={() => setFarmerDetailTab('inventory')}
+            >
+              <Icon name="boxes" size={16} color={farmerDetailTab === 'inventory' ? colors.white : colors.textSecondary} />
+              <Text style={[styles.modalTabText, farmerDetailTab === 'inventory' && styles.activeModalTabText]}>
+                Inventory
+              </Text>
+            </TouchableOpacity>
+          </View>
+
+          {/* Tab Content */}
+          <ScrollView style={styles.modalContent}>
+            {farmerDetailTab === 'products' && (
+              <View style={styles.tabContent}>
+                <View style={styles.sectionHeader}>
+                  <Text style={styles.sectionTitle}>Products ({farmerProducts.length})</Text>
+                  <TouchableOpacity
+                    style={styles.addButton}
+                    onPress={() => setShowAddForm(true)}
+                  >
+                    <Icon name="plus" size={16} color={colors.white} />
+                    <Text style={styles.addButtonText}>Add Product</Text>
+                  </TouchableOpacity>
+                </View>
+
+                {farmerProducts.map((product) => (
+                  <View key={product.id} style={styles.itemCard}>
+                    <View style={styles.itemHeader}>
+                      <Text style={styles.itemName}>{product.name}</Text>
+                      <View style={styles.itemActions}>
+                        <TouchableOpacity
+                          style={styles.editButton}
+                          onPress={() => setEditingItem(product)}
+                        >
+                          <Icon name="edit" size={14} color={colors.primary} />
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                          style={styles.deleteButton}
+                          onPress={() => handleDeleteProduct(product.id)}
+                        >
+                          <Icon name="trash" size={14} color={colors.danger} />
+                        </TouchableOpacity>
+                      </View>
+                    </View>
+                    <Text style={styles.itemDetail}>Price: {formatCurrency(product.price)}</Text>
+                    <Text style={styles.itemDetail}>Stock: {product.stock_quantity}</Text>
+                    <Text style={styles.itemDetail}>Category: {product.category}</Text>
+                  </View>
+                ))}
+              </View>
+            )}
+
+            {farmerDetailTab === 'orders' && (
+              <View style={styles.tabContent}>
+                <View style={styles.sectionHeader}>
+                  <Text style={styles.sectionTitle}>Orders ({farmerOrders.length})</Text>
+                </View>
+
+                {farmerOrders.map((order) => (
+                  <View key={order.id} style={styles.itemCard}>
+                    <View style={styles.itemHeader}>
+                      <Text style={styles.itemName}>Order #{order.id.slice(-8)}</Text>
+                      <Text style={[styles.statusBadge, { backgroundColor: getOrderStatusColor(order.status) }]}>
+                        {order.status}
+                      </Text>
+                    </View>
+                    <Text style={styles.itemDetail}>
+                      Buyer: {order.buyer_profile?.first_name} {order.buyer_profile?.last_name}
+                    </Text>
+                    <Text style={styles.itemDetail}>Total: {formatCurrency(order.total_amount)}</Text>
+                    <Text style={styles.itemDetail}>
+                      Date: {new Date(order.created_at).toLocaleDateString()}
+                    </Text>
+                  </View>
+                ))}
+              </View>
+            )}
+
+            {farmerDetailTab === 'inventory' && (
+              <View style={styles.tabContent}>
+                <View style={styles.sectionHeader}>
+                  <Text style={styles.sectionTitle}>Inventory ({farmerInventory.length})</Text>
+                </View>
+
+                {farmerInventory.map((item) => (
+                  <View key={item.id} style={styles.itemCard}>
+                    <View style={styles.itemHeader}>
+                      <Text style={styles.itemName}>{item.name}</Text>
+                      <View style={styles.itemActions}>
+                        <TouchableOpacity
+                          style={styles.editButton}
+                          onPress={() => setEditingItem(item)}
+                        >
+                          <Icon name="edit" size={14} color={colors.primary} />
+                        </TouchableOpacity>
+                      </View>
+                    </View>
+                    <Text style={styles.itemDetail}>Current Stock: {item.stock_quantity}</Text>
+                    <Text style={[styles.itemDetail, { color: item.stock_quantity < 10 ? colors.danger : colors.textSecondary }]}>
+                      Status: {item.stock_quantity < 10 ? 'Low Stock' : 'In Stock'}
+                    </Text>
+                    <Text style={styles.itemDetail}>Price: {formatCurrency(item.price)}</Text>
+                  </View>
+                ))}
+              </View>
+            )}
+          </ScrollView>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -809,6 +1083,10 @@ const styles = StyleSheet.create({
     color: colors.text,
     marginBottom: 2,
   },
+  clickableUserName: {
+    color: colors.primary,
+    textDecorationLine: 'underline',
+  },
   userEmail: {
     fontSize: 11,
     color: colors.textSecondary,
@@ -932,5 +1210,157 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
     textAlign: 'center',
     lineHeight: 20,
+  },
+  // Modal Styles
+  modalContainer: {
+    flex: 1,
+    backgroundColor: colors.background,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    backgroundColor: colors.white,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+    elevation: 2,
+    shadowColor: colors.shadow,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 1,
+    shadowRadius: 4,
+  },
+  backButton: {
+    padding: 8,
+    marginRight: 12,
+  },
+  modalTitleContainer: {
+    flex: 1,
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: colors.text,
+  },
+  modalSubtitle: {
+    fontSize: 14,
+    color: colors.textSecondary,
+    marginTop: 2,
+  },
+  modalTabContainer: {
+    flexDirection: 'row',
+    backgroundColor: colors.white,
+    paddingHorizontal: 20,
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+  },
+  modalTab: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 8,
+    borderRadius: 8,
+    marginHorizontal: 4,
+    gap: 6,
+  },
+  activeModalTab: {
+    backgroundColor: colors.primary,
+  },
+  modalTabText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: colors.textSecondary,
+  },
+  activeModalTabText: {
+    color: colors.white,
+  },
+  modalContent: {
+    flex: 1,
+    backgroundColor: colors.background,
+  },
+  tabContent: {
+    padding: 20,
+  },
+  sectionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  sectionTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: colors.text,
+  },
+  addButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.primary,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+    gap: 8,
+  },
+  addButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: colors.white,
+  },
+  itemCard: {
+    backgroundColor: colors.white,
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 12,
+    elevation: 2,
+    shadowColor: colors.shadow,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 1,
+    shadowRadius: 4,
+    borderWidth: 1,
+    borderColor: colors.borderLight,
+  },
+  itemHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  itemName: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: colors.text,
+    flex: 1,
+  },
+  itemActions: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  editButton: {
+    padding: 8,
+    borderRadius: 6,
+    backgroundColor: colors.primary + '15',
+  },
+  deleteButton: {
+    padding: 8,
+    borderRadius: 6,
+    backgroundColor: colors.danger + '15',
+  },
+  itemDetail: {
+    fontSize: 14,
+    color: colors.textSecondary,
+    marginBottom: 4,
+  },
+  statusBadge: {
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    borderRadius: 12,
+    fontSize: 12,
+    fontWeight: '600',
+    color: colors.text,
+    textAlign: 'center',
+    minWidth: 80,
   },
 });
