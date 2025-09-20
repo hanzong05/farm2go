@@ -268,20 +268,27 @@ export default function HeaderComponent({
     router.push(route as any);
   };
 
-  const handleLogout = async () => {
-    try {
-      console.log('🚪 Starting logout process...');
-      await logoutUser();
-      console.log('✅ Logout completed, session cleared');
+  const handleAuthAction = async () => {
+    if (profile) {
+      // User is signed in, perform logout
+      try {
+        console.log('🚪 Starting logout process...');
+        await logoutUser();
+        console.log('✅ Logout completed, session cleared');
 
-      // Redirect to marketplace (public access for logged out users)
-      console.log('🔄 Redirecting to marketplace...');
-      router.replace('/buyer/marketplace' as any);
-      console.log('✅ Redirect to marketplace completed');
-    } catch (error) {
-      console.error('❌ Logout error:', error);
-      // Fallback redirect if logout fails
-      router.replace('/buyer/marketplace' as any);
+        // Redirect to marketplace (public access for logged out users)
+        console.log('🔄 Redirecting to marketplace...');
+        router.replace('/buyer/marketplace' as any);
+        console.log('✅ Redirect to marketplace completed');
+      } catch (error) {
+        console.error('❌ Logout error:', error);
+        // Fallback redirect if logout fails
+        router.replace('/buyer/marketplace' as any);
+      }
+    } else {
+      // No user signed in, redirect to sign in page
+      console.log('🔄 Redirecting to sign in...');
+      router.replace('/' as any);
     }
   };
 
@@ -376,9 +383,16 @@ export default function HeaderComponent({
             </TouchableOpacity>
           )}
 
-          <TouchableOpacity style={styles.signInButton} onPress={handleLogout}>
-            <Icon name="sign-in-alt" size={12} color={colors.white} style={styles.signInIcon} />
-            <Text style={styles.signInText}>Sign In</Text>
+          <TouchableOpacity style={styles.authButton} onPress={handleAuthAction}>
+            <Icon
+              name={profile ? "sign-out-alt" : "sign-in-alt"}
+              size={12}
+              color={colors.white}
+              style={styles.authIcon}
+            />
+            <Text style={styles.authText}>
+              {profile ? "Log Out" : "Sign In"}
+            </Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -579,7 +593,7 @@ const styles = StyleSheet.create({
     color: colors.primary,
   },
 
-  signInButton: {
+  authButton: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: 'rgba(255,255,255,0.2)',
@@ -589,11 +603,11 @@ const styles = StyleSheet.create({
     gap: 6,
   },
 
-  signInIcon: {
+  authIcon: {
     marginRight: 0,
   },
 
-  signInText: {
+  authText: {
     fontSize: 12,
     fontWeight: '600',
     color: colors.white,
