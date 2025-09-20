@@ -14,6 +14,7 @@ import {
 } from 'react-native';
 import HeaderComponent from '../../components/HeaderComponent';
 import OrderQRCodeModal from '../../components/OrderQRCodeModal';
+import OrderDetailsModal from '../../components/OrderDetailsModal';
 import { supabase } from '../../lib/supabase';
 import { getUserWithProfile } from '../../services/auth';
 import { Database } from '../../types/database';
@@ -104,6 +105,7 @@ export default function BuyerMyOrdersScreen() {
   const [selectedStatus, setSelectedStatus] = useState('all');
   const [profile, setProfile] = useState<Profile | null>(null);
   const [showQRModal, setShowQRModal] = useState(false);
+  const [showDetailsModal, setShowDetailsModal] = useState(false);
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
   const fadeAnim = new Animated.Value(0);
 
@@ -290,6 +292,16 @@ export default function BuyerMyOrdersScreen() {
     setSelectedOrder(null);
   };
 
+  const handleShowOrderDetails = (order: Order) => {
+    setSelectedOrder(order);
+    setShowDetailsModal(true);
+  };
+
+  const handleCloseDetailsModal = () => {
+    setShowDetailsModal(false);
+    setSelectedOrder(null);
+  };
+
   const renderStatsCard = (title: string, value: string | number, icon: string, color: string) => (
     <View style={[styles.statsCard, { borderLeftColor: color }]}>
       <View style={styles.statsContent}>
@@ -384,7 +396,11 @@ export default function BuyerMyOrdersScreen() {
         <View style={styles.orderIdSection}>
           <Text style={styles.orderIdLabel}>ORDER # {order.id.slice(-12).toUpperCase()}</Text>
           <View style={styles.orderActions}>
-            <TouchableOpacity style={styles.detailsButton}>
+            <TouchableOpacity
+              style={styles.detailsButton}
+              onPress={() => handleShowOrderDetails(order)}
+              activeOpacity={0.8}
+            >
               <Text style={styles.detailsButtonText}>View order details</Text>
             </TouchableOpacity>
           </View>
@@ -549,6 +565,15 @@ export default function BuyerMyOrdersScreen() {
         <OrderQRCodeModal
           visible={showQRModal}
           onClose={handleCloseQRModal}
+          order={selectedOrder}
+        />
+      )}
+
+      {/* Order Details Modal */}
+      {selectedOrder && (
+        <OrderDetailsModal
+          visible={showDetailsModal}
+          onClose={handleCloseDetailsModal}
           order={selectedOrder}
         />
       )}
