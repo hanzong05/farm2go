@@ -102,6 +102,8 @@ export default function RootLayout() {
                                  currentPath === '/index' ||
                                  currentPath.startsWith('/auth/');
 
+          console.log('🔍 Should redirect?', shouldRedirect, 'Current path:', currentPath);
+
           if (shouldRedirect) {
             // Import router dynamically to avoid circular dependencies
             const { router } = await import('expo-router');
@@ -113,7 +115,12 @@ export default function RootLayout() {
                 break;
               case 'admin':
                 console.log('🚀 Auto-redirecting admin to dashboard');
-                router.replace('/admin/users');
+                try {
+                  router.replace('/admin/users' as any);
+                  console.log('✅ Admin redirect completed to /admin/users');
+                } catch (error) {
+                  console.error('❌ Admin redirect failed:', error);
+                }
                 break;
               case 'farmer':
                 console.log('🚀 Auto-redirecting farmer to dashboard');
@@ -136,7 +143,7 @@ export default function RootLayout() {
     };
 
     // Run check after a short delay to ensure app is fully loaded
-    const timer = setTimeout(checkUserSessionAndRedirect, 1000);
+    const timer = setTimeout(checkUserSessionAndRedirect, 500);
     return () => clearTimeout(timer);
   }, []);
 
