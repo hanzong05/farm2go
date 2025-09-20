@@ -45,7 +45,7 @@ interface DatabaseOrder {
     first_name: string | null;
     last_name: string | null;
     farm_name: string | null;
-    farm_location: string | null;
+    barangay: string | null;
   } | null;
 }
 
@@ -62,7 +62,7 @@ interface Order {
     first_name: string | null;
     last_name: string | null;
     farm_name: string | null;
-    farm_location: string | null;
+    barangay: string | null;
   };
   order_items?: Array<{
     order_id: string;
@@ -137,7 +137,7 @@ export default function BuyerMyOrdersScreen() {
             first_name,
             last_name,
             farm_name,
-            farm_location
+            barangay
           )
         `)
         .eq('buyer_id', buyerId)
@@ -187,7 +187,7 @@ export default function BuyerMyOrdersScreen() {
           first_name: order.profiles.first_name,
           last_name: order.profiles.last_name,
           farm_name: order.profiles.farm_name,
-          farm_location: order.profiles.farm_location,
+          barangay: order.profiles.barangay,
         } : undefined,
         order_items: typedOrderItems?.filter(item => item.order_id === order.id).map(item => ({
           order_id: item.order_id,
@@ -289,8 +289,8 @@ export default function BuyerMyOrdersScreen() {
                `${order.farmer_profile?.first_name || ''} ${order.farmer_profile?.last_name || ''}`.trim() ||
                'Farm'}
             </Text>
-            {order.farmer_profile?.farm_location && (
-              <Text style={styles.farmerLocation}>{order.farmer_profile.farm_location}</Text>
+            {order.farmer_profile?.barangay && (
+              <Text style={styles.farmerLocation}>{order.farmer_profile.barangay}</Text>
             )}
           </View>
         </View>

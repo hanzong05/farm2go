@@ -27,7 +27,6 @@ interface User {
     last_name: string | null;
     user_type: 'farmer' | 'buyer' | 'admin' | 'super-admin';
     farm_name: string | null;
-    company_name: string | null;
     phone: string | null;
     barangay: string | null;
   } | null;
@@ -139,7 +138,6 @@ export default function AdminUsers() {
           last_name: profile.last_name,
           user_type: profile.user_type as 'farmer' | 'buyer' | 'admin' | 'super-admin',
           farm_name: profile.farm_name,
-          company_name: profile.company_name,
           phone: profile.phone,
           barangay: profile.barangay,
         },

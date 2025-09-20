@@ -32,7 +32,7 @@ interface Purchase {
     first_name: string | null;
     last_name: string | null;
     farm_name: string | null;
-    farm_location: string | null;
+    barangay: string | null;
   };
   order_items?: Array<{
     id: string;
@@ -116,7 +116,7 @@ export default function BuyerPurchaseHistoryScreen() {
             first_name,
             last_name,
             farm_name,
-            farm_location
+            barangay
           )
         `)
         .eq('buyer_id', buyerId)
@@ -309,9 +309,9 @@ export default function BuyerPurchaseHistoryScreen() {
            `${purchase.farmer_profile?.first_name || ''} ${purchase.farmer_profile?.last_name || ''}`.trim() ||
            'Unknown Farm'}
         </Text>
-        {purchase.farmer_profile?.farm_location && (
+        {purchase.farmer_profile?.barangay && (
           <Text style={styles.farmerLocation}>
-            📍 {purchase.farmer_profile.farm_location}
+            📍 {purchase.farmer_profile.barangay}
           </Text>
         )}
       </View>

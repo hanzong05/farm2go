@@ -249,7 +249,7 @@ export default function CompleteProfileScreen() {
         user_type: userType,
         // Farmer fields
         farm_name: formData.farmName || null,
-        farm_location: formData.barangay, // Use barangay as farm location
+        barangay: formData.barangay, // Use barangay as farm location
         farm_size: formData.farmSize || null,
         crop_types: formData.cropTypes || null,
         // Buyer fields

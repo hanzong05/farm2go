@@ -276,7 +276,7 @@ export default function AuthCallback() {
                 barangay: existingProfile.barangay,
                 user_type: existingProfile.user_type,
                 farm_name: existingProfile.farm_name,
-                farm_location: existingProfile.farm_location,
+                barangay: existingProfile.barangay,
                 farm_size: existingProfile.farm_size,
                 crop_types: existingProfile.crop_types,
                 company_name: existingProfile.company_name,

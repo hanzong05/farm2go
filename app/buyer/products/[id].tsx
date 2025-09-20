@@ -20,7 +20,7 @@ interface Product {
     first_name: string | null;
     last_name: string | null;
     farm_name: string | null;
-    farm_location: string | null;
+    barangay: string | null;
   };
 }
 
@@ -48,7 +48,7 @@ export default function BuyerProductDetailScreen() {
             first_name,
             last_name,
             farm_name,
-            farm_location
+            barangay
           )
         `)
         .eq('id', id)
@@ -150,10 +150,10 @@ export default function BuyerProductDetailScreen() {
                 </View>
               )}
 
-              {product.profiles.farm_location && (
+              {product.profiles.barangay && (
                 <View style={styles.detailRow}>
                   <Text style={styles.label}>Location:</Text>
-                  <Text style={styles.value}>{product.profiles.farm_location}</Text>
+                  <Text style={styles.value}>{product.profiles.barangay}</Text>
                 </View>
               )}
             </>

@@ -22,7 +22,7 @@ interface FarmerProfile {
   email: string;
   phone: string | null;
   farm_name: string | null;
-  farm_location: string | null;
+  barangay: string | null;
   farm_size: string | null;
   crop_types: string | null;
 }
@@ -174,10 +174,10 @@ export default function ContactFarmerScreen() {
             <Text style={styles.farmName}>{farmer.farm_name}</Text>
           )}
 
-          {farmer.farm_location && (
+          {farmer.barangay && (
             <View style={styles.infoRow}>
               <Text style={styles.infoLabel}>Location:</Text>
-              <Text style={styles.infoValue}>{farmer.farm_location}</Text>
+              <Text style={styles.infoValue}>{farmer.barangay}</Text>
             </View>
           )}
 

@@ -57,7 +57,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
           farm_name: null,
-          farm_location: null,
+          barangay: null,
           farm_size: null,
           crop_types: null,
           company_name: null,

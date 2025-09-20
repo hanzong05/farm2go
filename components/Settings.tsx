@@ -38,7 +38,7 @@ const FIELD_CONFIGS: Record<string, FieldConfig[]> = {
     { key: 'last_name', label: 'Last Name', placeholder: 'Enter last name' },
     { key: 'phone', label: 'Phone Number', placeholder: 'Enter phone number', keyboardType: 'phone-pad' },
     { key: 'farm_name', label: 'Farm Name', placeholder: 'Enter farm name' },
-    { key: 'farm_location', label: 'Farm Location', placeholder: 'Enter farm location' },
+    { key: 'barangay', label: 'Farm Location', placeholder: 'Enter farm location' },
     { key: 'farm_size', label: 'Farm Size', placeholder: 'e.g., 5 hectares' },
     { key: 'crop_types', label: 'Crop Types', placeholder: 'e.g., Rice, Corn' },
   ],

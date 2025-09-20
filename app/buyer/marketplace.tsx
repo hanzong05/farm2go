@@ -23,7 +23,7 @@ interface Product {
     first_name: string | null;
     last_name: string | null;
     farm_name: string | null;
-    farm_location: string | null;
+    barangay: string | null;
   };
 }
 
@@ -74,7 +74,7 @@ export default function MarketplaceScreen() {
             first_name,
             last_name,
             farm_name,
-            farm_location
+            barangay
           )
         `)
         .eq('status', 'approved')
@@ -174,7 +174,7 @@ export default function MarketplaceScreen() {
           <Text style={styles.farmerIcon}>🏡</Text>
           <View style={styles.farmerInfo}>
             <Text style={styles.farmerName}>{product.profiles?.farm_name || 'Farm'}</Text>
-            <Text style={styles.farmerLocation}>{product.profiles?.farm_location}</Text>
+            <Text style={styles.farmerLocation}>{product.profiles?.barangay}</Text>
           </View>
         </View>
       </View>
