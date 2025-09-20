@@ -213,6 +213,7 @@ export default function BuyerMyOrdersScreen() {
         }],
       }));
 
+      console.log('Transformed orders:', orders);
       setOrders(orders);
     } catch (error) {
       console.error('Error loading orders:', error);
@@ -221,10 +222,13 @@ export default function BuyerMyOrdersScreen() {
   };
 
   const filterOrders = () => {
+    console.log('Filtering orders:', { orders: orders.length, selectedStatus });
     if (selectedStatus === 'all') {
       setFilteredOrders(orders);
     } else {
-      setFilteredOrders(orders.filter(order => order.status === selectedStatus));
+      const filtered = orders.filter(order => order.status === selectedStatus);
+      console.log('Filtered orders:', filtered.length);
+      setFilteredOrders(filtered);
     }
   };
 
@@ -550,28 +554,26 @@ export default function BuyerMyOrdersScreen() {
             </Text>
           </View>
 
-          {filteredOrders.length === 0 ? (
-            renderEmptyState()
-          ) : (
-            <View style={styles.ordersList}>
-              {filteredOrders.map((order, index) => (
-                <Animated.View 
-                  key={order.id}
-                  style={{
-                    opacity: fadeAnim,
-                    transform: [{
-                      translateY: fadeAnim.interpolate({
-                        inputRange: [0, 1],
-                        outputRange: [30 * (index + 1), 0]
-                      })
-                    }]
-                  }}
-                >
-                  {renderOrderCard({ item: order })}
-                </Animated.View>
-              ))}
-            </View>
-          )}
+          {(() => {
+            console.log('Rendering orders section:', {
+              filteredOrdersLength: filteredOrders.length,
+              ordersLength: orders.length
+            });
+            return filteredOrders.length === 0 ? (
+              renderEmptyState()
+            ) : (
+              <View style={styles.ordersList}>
+                {filteredOrders.map((order, index) => {
+                  console.log('Rendering order:', order.id, order.status);
+                  return (
+                    <View key={order.id}>
+                      {renderOrderCard({ item: order })}
+                    </View>
+                  );
+                })}
+              </View>
+            );
+          })()}
         </View>
       </ScrollView>
 
