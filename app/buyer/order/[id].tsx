@@ -1,20 +1,20 @@
-import { useLocalSearchParams, router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import {
-  View,
-  Text,
-  StyleSheet,
-  ScrollView,
-  TouchableOpacity,
-  Alert,
   ActivityIndicator,
-  TextInput,
+  Alert,
   KeyboardAvoidingView,
   Platform,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
 } from 'react-native';
-import { supabase } from '../../../lib/supabase';
-import { useAuth } from '../../../contexts/AuthContext';
 import PurchaseSuccessModal from '../../../components/PurchaseSuccessModal';
+import { useAuth } from '../../../contexts/AuthContext';
+import { supabase } from '../../../lib/supabase';
 import { generateUniquePurchaseCode } from '../../../utils/purchaseCode';
 
 interface Product {
@@ -138,7 +138,8 @@ export default function OrderProductScreen() {
 
       if (orderError) {
         console.error('Error creating order:', orderError);
-        Alert.alert('Error', 'Failed to create order. Please try again.');
+        console.error('Error details:', JSON.stringify(orderError, null, 2));
+        Alert.alert('Error', `Failed to create order: ${orderError.message || 'Please try again.'}`);
         return;
       }
 
