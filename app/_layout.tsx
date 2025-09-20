@@ -113,7 +113,7 @@ export default function RootLayout() {
                 break;
               case 'admin':
                 console.log('🚀 Auto-redirecting admin to dashboard');
-                router.replace('/admin/users');
+                router.replace('/admin/users' as any);
                 break;
               case 'farmer':
                 console.log('🚀 Auto-redirecting farmer to dashboard');

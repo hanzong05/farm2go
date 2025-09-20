@@ -1,3 +1,4 @@
+import { createClient } from '@supabase/supabase-js';
 import { router } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import {
@@ -18,7 +19,6 @@ import LocationPicker from '../../components/LocationPicker';
 import { supabase } from '../../lib/supabase';
 import { getUserWithProfile } from '../../services/auth';
 import { Database } from '../../types/database';
-import { createClient } from '@supabase/supabase-js';
 
 type Profile = Database['public']['Tables']['profiles']['Row'];
 
@@ -161,18 +161,18 @@ export default function SuperAdminUsers() {
 
       // Convert to User format (simplified for super admin view)
       const usersData: User[] = data?.map(profile => ({
-        id: profile.id,
-        email: profile.email || '',
-        created_at: profile.created_at || '',
-        profiles: {
-          first_name: profile.first_name,
-          last_name: profile.last_name,
-          user_type: profile.user_type as 'farmer' | 'buyer' | 'admin' | 'super-admin',
-          farm_name: profile.farm_name,
-          company_name: profile.company_name,
-          phone: profile.phone,
-        },
-      })) || [];
+          id: profile.id,
+          email: (profile as any).email || '', // temporary fix with type assertion
+          created_at: profile.created_at || '',
+          profiles: {
+            first_name: profile.first_name,
+            last_name: profile.last_name,
+            user_type: profile.user_type as 'farmer' | 'buyer' | 'admin' | 'super-admin',
+            farm_name: profile.farm_name,
+            company_name: profile.company_name,
+            phone: profile.phone,
+          },
+        })) || [];
 
       console.log('👥 Processed users data:', usersData);
       setUsers(usersData);
