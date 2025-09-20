@@ -306,138 +306,105 @@ export default function BuyerMyOrdersScreen() {
 
   const renderOrderCard = ({ item: order }: { item: Order }) => {
     const statusConfig = getStatusConfig(order.status);
-    
+    const getStatusText = (status: string) => {
+      switch (status) {
+        case 'pending': return 'ORDER PLACED';
+        case 'confirmed': return 'CONFIRMED';
+        case 'preparing': return 'PREPARING';
+        case 'ready': return 'READY FOR PICKUP';
+        case 'completed': return 'DELIVERED';
+        case 'cancelled': return 'CANCELLED';
+        default: return status.toUpperCase();
+      }
+    };
+
+    const getDeliveryText = (status: string) => {
+      switch (status) {
+        case 'pending': return 'Processing order';
+        case 'confirmed': return 'Order confirmed by farmer';
+        case 'preparing': return 'Preparing your order';
+        case 'ready': return 'Ready for pickup/delivery';
+        case 'completed': return 'Order delivered';
+        case 'cancelled': return 'Order cancelled';
+        default: return 'Status update';
+      }
+    };
+
     return (
       <View style={styles.orderCard}>
+        {/* Order Header */}
         <View style={styles.orderHeader}>
-          <View style={styles.orderMainInfo}>
-            <Text style={styles.orderId}>Order #{order.id.slice(-8)}</Text>
+          <View style={styles.orderLeftInfo}>
+            <Text style={styles.orderStatusText}>{getStatusText(order.status)}</Text>
             <Text style={styles.orderDate}>{formatDate(order.created_at)}</Text>
           </View>
-          <View style={[styles.statusBadge, { backgroundColor: statusConfig.color }]}>
-            <Text style={styles.statusText}>
-              {order.status.toUpperCase()}
-            </Text>
+          <View style={styles.orderRightInfo}>
+            <Text style={styles.orderTotal}>TOTAL</Text>
+            <Text style={styles.orderAmount}>{formatPrice(order.total_amount)}</Text>
           </View>
         </View>
 
-        <View style={[styles.farmerSection, { backgroundColor: statusConfig.bgColor }]}>
-          <Text style={styles.farmerIcon}>🏡</Text>
-          <View style={styles.farmerInfo}>
-            <Text style={styles.farmerName}>
-              {order.farmer_profile?.farm_name ||
-               `${order.farmer_profile?.first_name || ''} ${order.farmer_profile?.last_name || ''}`.trim() ||
-               'Farm'}
-            </Text>
-            {order.farmer_profile?.barangay && (
-              <Text style={styles.farmerLocation}>{order.farmer_profile.barangay}</Text>
-            )}
-          </View>
-          <View style={[styles.verifiedBadge, { backgroundColor: statusConfig.color }]}>
-            <Text style={styles.verifiedText}>✓</Text>
-          </View>
+        {/* Delivery Status */}
+        <View style={styles.deliveryStatus}>
+          <Text style={[styles.deliveryText, { color: statusConfig.color }]}>
+            {getDeliveryText(order.status)}
+          </Text>
         </View>
 
-        <View style={styles.orderDetails}>
-          <View style={styles.orderItems}>
-            <Text style={styles.itemsTitle}>Items Ordered</Text>
-            {order.order_items?.map((item, index) => (
-              <View key={index} style={styles.orderItem}>
-                <View style={[styles.itemQuantityBadge, { backgroundColor: statusConfig.color }]}>
-                  <Text style={styles.itemQuantity}>{item.quantity}</Text>
-                  <Text style={styles.itemUnit}>{item.product.unit}</Text>
-                </View>
-                <Text style={styles.itemName}>{item.product.name}</Text>
-                <Text style={styles.itemPrice}>{formatPrice(item.unit_price)}</Text>
+        {/* Product Info */}
+        <View style={styles.productSection}>
+          {order.order_items?.map((item, index) => (
+            <View key={index} style={styles.productRow}>
+              <View style={styles.productIconContainer}>
+                <Text style={styles.productIcon}>📦</Text>
               </View>
-            )) || null}
-          </View>
-
-          <View style={styles.orderAmount}>
-            <View style={styles.amountContent}>
-              <Text style={styles.amountLabel}>Total Amount</Text>
-              <Text style={styles.amountValue}>{formatPrice(order.total_amount)}</Text>
+              <View style={styles.productInfo}>
+                <Text style={styles.productName}>{item.product.name}</Text>
+                <Text style={styles.productDetails}>
+                  Quantity: {item.quantity} {item.product.unit} • From: {
+                    order.farmer_profile?.farm_name ||
+                    `${order.farmer_profile?.first_name || ''} ${order.farmer_profile?.last_name || ''}`.trim() ||
+                    'Farm'
+                  }
+                </Text>
+              </View>
             </View>
-            <Text style={styles.amountIcon}>💰</Text>
-          </View>
+          )) || null}
         </View>
 
-        {/* Status Timeline */}
-        <View style={styles.statusTimeline}>
-          <Text style={styles.timelineTitle}>Order Progress</Text>
-          <View style={styles.timelineContainer}>
-            {['pending', 'confirmed', 'preparing', 'ready', 'completed'].map((status, index) => {
-              const isActive = ['pending', 'confirmed', 'preparing', 'ready', 'completed'].indexOf(order.status) >= index;
-              const isCurrent = order.status === status;
-              
-              return (
-                <View key={status} style={styles.timelineStep}>
-                  <View style={[
-                    styles.timelineNode,
-                    isActive && [styles.timelineNodeActive, { backgroundColor: statusConfig.color }],
-                    isCurrent && [styles.timelineNodeCurrent, { borderColor: statusConfig.color }]
-                  ]}>
-                    <Text style={[
-                      styles.timelineNodeText,
-                      isActive && styles.timelineNodeTextActive
-                    ]}>
-                      {index + 1}
-                    </Text>
-                  </View>
-                  {index < 4 && (
-                    <View style={[
-                      styles.timelineLine,
-                      isActive && [styles.timelineLineActive, { backgroundColor: statusConfig.color }]
-                    ]} />
-                  )}
-                </View>
-              );
-            })}
-          </View>
-          <View style={styles.timelineLabels}>
-            <Text style={styles.timelineLabel}>Placed</Text>
-            <Text style={styles.timelineLabel}>Confirmed</Text>
-            <Text style={styles.timelineLabel}>Preparing</Text>
-            <Text style={styles.timelineLabel}>Ready</Text>
-            <Text style={styles.timelineLabel}>Completed</Text>
-          </View>
-        </View>
-
-        {/* Additional Info */}
+        {/* Delivery Address */}
         {order.delivery_address && (
-          <View style={styles.additionalInfo}>
-            <View style={styles.infoRow}>
-              <Text style={styles.infoIcon}>📍</Text>
-              <View style={styles.infoContent}>
-                <Text style={styles.infoLabel}>Delivery Address</Text>
-                <Text style={styles.infoText}>{order.delivery_address}</Text>
-              </View>
-            </View>
+          <View style={styles.shipToSection}>
+            <Text style={styles.shipToLabel}>SHIP TO</Text>
+            <Text style={styles.shipToAddress}>{order.delivery_address}</Text>
           </View>
         )}
 
-        {order.notes && (
-          <View style={styles.additionalInfo}>
-            <View style={styles.infoRow}>
-              <Text style={styles.infoIcon}>📝</Text>
-              <View style={styles.infoContent}>
-                <Text style={styles.infoLabel}>Notes</Text>
-                <Text style={styles.infoText}>{order.notes}</Text>
-              </View>
-            </View>
+        {/* Order ID */}
+        <View style={styles.orderIdSection}>
+          <Text style={styles.orderIdLabel}>ORDER # {order.id.slice(-12).toUpperCase()}</Text>
+          <View style={styles.orderActions}>
+            <TouchableOpacity style={styles.detailsButton}>
+              <Text style={styles.detailsButtonText}>View order details</Text>
+            </TouchableOpacity>
           </View>
-        )}
+        </View>
 
         {/* Action Buttons */}
-        <View style={styles.actionButtons}>
+        <View style={styles.actionButtonsRow}>
           <TouchableOpacity
-            style={[styles.qrButton, { backgroundColor: statusConfig.color }]}
+            style={[styles.trackButton, { backgroundColor: statusConfig.color }]}
             onPress={() => handleShowQRCode(order)}
             activeOpacity={0.8}
           >
-            <Text style={styles.qrButtonIcon}>📱</Text>
-            <Text style={styles.qrButtonText}>Show QR Code</Text>
+            <Text style={styles.trackButtonText}>Show QR Code</Text>
           </TouchableOpacity>
+
+          {order.status !== 'cancelled' && order.status !== 'completed' && (
+            <TouchableOpacity style={styles.cancelButton} activeOpacity={0.8}>
+              <Text style={styles.cancelButtonText}>Request cancellation</Text>
+            </TouchableOpacity>
+          )}
         </View>
       </View>
     );
@@ -724,94 +691,96 @@ const styles = StyleSheet.create({
     marginBottom: 24,
   },
   ordersList: {
-    gap: 20,
+    gap: 12,
   },
   orderCard: {
     backgroundColor: '#ffffff',
-    borderRadius: 20,
-    padding: 24,
-    elevation: 6,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.08,
-    shadowRadius: 12,
+    borderRadius: 8,
     borderWidth: 1,
-    borderColor: '#f1f5f9',
+    borderColor: '#e5e7eb',
+    overflow: 'hidden',
   },
   orderHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
-    marginBottom: 20,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    backgroundColor: '#f9fafb',
+    borderBottomWidth: 1,
+    borderBottomColor: '#e5e7eb',
   },
-  orderMainInfo: {
-    flex: 1,
-    marginRight: 16,
-  },
-  orderId: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#0f172a',
-    marginBottom: 6,
-    lineHeight: 26,
-  },
-  orderDate: {
-    fontSize: 14,
-    color: '#64748b',
-    fontWeight: '500',
-  },
-  statusBadge: {
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 20,
-    elevation: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-  },
-  statusText: {
-    fontSize: 11,
-    color: '#ffffff',
-    fontWeight: 'bold',
-    letterSpacing: 0.8,
-  },
-  farmerSection: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 16,
-    borderRadius: 12,
-    marginBottom: 20,
-  },
-  farmerIcon: {
-    fontSize: 20,
-    marginRight: 12,
-  },
-  farmerInfo: {
+  orderLeftInfo: {
     flex: 1,
   },
-  farmerName: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#0f172a',
+  orderStatusText: {
+    fontSize: 13,
+    fontWeight: 'bold',
+    color: '#374151',
     marginBottom: 2,
   },
-  farmerLocation: {
-    fontSize: 14,
-    color: '#64748b',
-    fontWeight: '500',
+  orderDate: {
+    fontSize: 12,
+    color: '#6b7280',
   },
-  verifiedBadge: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
+  orderRightInfo: {
+    alignItems: 'flex-end',
+  },
+  orderTotal: {
+    fontSize: 11,
+    color: '#6b7280',
+    fontWeight: '500',
+    marginBottom: 2,
+  },
+  orderAmount: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#111827',
+  },
+  deliveryStatus: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f3f4f6',
+  },
+  deliveryText: {
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  productSection: {
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+  },
+  productRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    marginBottom: 8,
+  },
+  productIconContainer: {
+    width: 40,
+    height: 40,
+    borderRadius: 4,
+    backgroundColor: '#f3f4f6',
     alignItems: 'center',
     justifyContent: 'center',
+    marginRight: 12,
   },
-  verifiedText: {
+  productIcon: {
+    fontSize: 18,
+  },
+  productInfo: {
+    flex: 1,
+  },
+  productName: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#111827',
+    marginBottom: 4,
+  },
+  productDetails: {
     fontSize: 12,
-    color: '#ffffff',
-    fontWeight: 'bold',
+    color: '#6b7280',
+    lineHeight: 16,
   },
   orderDetails: {
     marginBottom: 20,
@@ -863,16 +832,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#374151',
   },
-  orderAmount: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    backgroundColor: '#ecfdf5',
-    padding: 16,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#bbf7d0',
-  },
+
   amountContent: {
     flex: 1,
   },
@@ -991,34 +951,83 @@ const styles = StyleSheet.create({
     lineHeight: 20,
   },
 
-  // Action Buttons
-  actionButtons: {
-    marginTop: 20,
-    paddingTop: 20,
-    borderTopWidth: 1,
-    borderTopColor: '#f1f5f9',
+  shipToSection: {
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f3f4f6',
   },
-  qrButton: {
+  shipToLabel: {
+    fontSize: 11,
+    color: '#6b7280',
+    fontWeight: '600',
+    marginBottom: 4,
+    textTransform: 'uppercase',
+  },
+  shipToAddress: {
+    fontSize: 13,
+    color: '#374151',
+    lineHeight: 18,
+  },
+  orderIdSection: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f3f4f6',
+  },
+  orderIdLabel: {
+    fontSize: 11,
+    color: '#6b7280',
+    fontWeight: '600',
+  },
+  orderActions: {
     flexDirection: 'row',
     alignItems: 'center',
+  },
+  detailsButton: {
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+  },
+  detailsButtonText: {
+    fontSize: 12,
+    color: '#3b82f6',
+    textDecorationLine: 'underline',
+  },
+  actionButtonsRow: {
+    flexDirection: 'row',
+    gap: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+  },
+  trackButton: {
+    flex: 1,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 6,
+    alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 14,
-    paddingHorizontal: 20,
-    borderRadius: 12,
-    elevation: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.15,
-    shadowRadius: 4,
   },
-  qrButtonIcon: {
-    fontSize: 18,
-    marginRight: 8,
-  },
-  qrButtonText: {
-    fontSize: 16,
+  trackButtonText: {
+    fontSize: 14,
     color: '#ffffff',
     fontWeight: '600',
+  },
+  cancelButton: {
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#d1d5db',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  cancelButtonText: {
+    fontSize: 14,
+    color: '#6b7280',
+    fontWeight: '500',
   },
 
   // Empty State
