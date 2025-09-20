@@ -86,24 +86,74 @@ const getModalScreenOptions = (title?: string) => ({
 export default function RootLayout() {
   const colorScheme = useColorScheme();
 
-  // Session-based routing guard for automatic user type redirection
+  // Session-based routing guard for automatic user type redirection and route protection
   useEffect(() => {
     const checkUserSessionAndRedirect = async () => {
       try {
         const userData = await getUserWithProfile();
+        const currentPath = window?.location?.pathname || '';
+
+        console.log('🔍 Session check - Current path:', currentPath);
+        console.log('🔍 Session check - User data:', userData?.profile ? 'Logged in' : 'Not logged in');
+
+        // Define public routes that don't require authentication
+        const publicRoutes = [
+          '/',
+          '/index',
+          '/buyer/marketplace',
+          '/about',
+          '/contact',
+          '/terms',
+          '/privacy',
+          '/features',
+          '/pricing',
+          '/demo',
+          '/blog',
+          '/careers',
+          '/case-studies',
+          '/cookies',
+          '/docs',
+          '/integrations',
+          '/press',
+          '/security',
+          '/support',
+          '/onboarding',
+          '/maintenance'
+        ];
+
+        // Define protected routes that require authentication
+        const protectedRoutes = [
+          '/admin',
+          '/super-admin',
+          '/farmer',
+          '/buyer/my-orders',
+          '/buyer/purchase-history',
+          '/buyer/wishlist',
+          '/buyer/settings',
+          '/buyer/cart',
+          '/buyer/checkout',
+          '/shared'
+        ];
+
+        const isPublicRoute = publicRoutes.some(route =>
+          currentPath === route || currentPath.startsWith('/auth/')
+        );
+
+        const isProtectedRoute = protectedRoutes.some(route =>
+          currentPath.startsWith(route)
+        );
+
         if (userData?.profile) {
-          const currentPath = window?.location?.pathname || '';
-          console.log('🔍 Session check - Current path:', currentPath);
+          // User is logged in
           console.log('🔍 Session check - User type:', userData.profile.user_type);
           console.log('🔍 Session check - User email:', userData.profile.email);
-          console.log('🔍 Session check - Full profile:', userData.profile);
 
           // Only redirect if user is on root or auth pages
           const shouldRedirect = currentPath === '/' ||
                                  currentPath === '/index' ||
                                  currentPath.startsWith('/auth/');
 
-          console.log('🔍 Should redirect?', shouldRedirect, 'Current path:', currentPath);
+          console.log('🔍 Should redirect authenticated user?', shouldRedirect, 'Current path:', currentPath);
 
           if (shouldRedirect) {
             // Import router dynamically to avoid circular dependencies
@@ -136,10 +186,48 @@ export default function RootLayout() {
                 router.replace('/buyer/marketplace');
             }
           }
+        } else {
+          // User is NOT logged in
+          console.log('🔒 No active session detected');
+
+          if (isProtectedRoute) {
+            // User trying to access protected route without authentication
+            console.log('🚨 Unauthorized access attempt to protected route:', currentPath);
+            console.log('🔄 Redirecting to marketplace...');
+
+            const { router } = await import('expo-router');
+            router.replace('/buyer/marketplace' as any);
+            console.log('✅ Redirected unauthorized user to marketplace');
+          } else if (isPublicRoute) {
+            // User is on public route, allow access
+            console.log('✅ Access allowed to public route:', currentPath);
+          } else {
+            // Unknown route, redirect to marketplace for safety
+            console.log('⚠️ Unknown route accessed by unauthenticated user:', currentPath);
+            console.log('🔄 Redirecting to marketplace for safety...');
+
+            const { router } = await import('expo-router');
+            router.replace('/buyer/marketplace' as any);
+          }
         }
       } catch (error) {
-        console.log('🔍 No active session or error checking session:', error);
-        // Don't redirect on error - user might be on public pages
+        console.log('🔍 Error checking session or redirecting:', error);
+        // On error, assume user is not logged in and allow only public access
+        const currentPath = window?.location?.pathname || '';
+        const publicRoutes = ['/', '/index', '/buyer/marketplace', '/about', '/contact', '/terms', '/privacy'];
+        const isPublicRoute = publicRoutes.some(route =>
+          currentPath === route || currentPath.startsWith('/auth/')
+        );
+
+        if (!isPublicRoute) {
+          console.log('🔄 Error state: Redirecting to marketplace...');
+          try {
+            const { router } = await import('expo-router');
+            router.replace('/buyer/marketplace' as any);
+          } catch (redirectError) {
+            console.error('❌ Failed to redirect on error:', redirectError);
+          }
+        }
       }
     };
 
@@ -188,6 +276,53 @@ export default function RootLayout() {
           }, 200);
         } catch (error) {
           console.error('❌ Immediate redirect failed:', error);
+        }
+      } else if (event === 'SIGNED_OUT') {
+        console.log('🚪 User signed out, checking current route...');
+
+        try {
+          const currentPath = window?.location?.pathname || '';
+          const { router } = await import('expo-router');
+
+          // Define routes that logged out users can access
+          const allowedLoggedOutRoutes = [
+            '/',
+            '/index',
+            '/buyer/marketplace',
+            '/about',
+            '/contact',
+            '/terms',
+            '/privacy',
+            '/features',
+            '/pricing',
+            '/demo',
+            '/blog',
+            '/careers',
+            '/case-studies',
+            '/cookies',
+            '/docs',
+            '/integrations',
+            '/press',
+            '/security',
+            '/support',
+            '/onboarding',
+            '/maintenance'
+          ];
+
+          const isAllowedRoute = allowedLoggedOutRoutes.some(route =>
+            currentPath === route || currentPath.startsWith('/auth/')
+          );
+
+          if (isAllowedRoute) {
+            console.log('✅ User signed out but on allowed route:', currentPath);
+            // Stay on current route if it's allowed for logged out users
+          } else {
+            console.log('🔄 User signed out from protected route, redirecting to marketplace');
+            router.replace('/buyer/marketplace' as any);
+            console.log('✅ Logout redirect to marketplace successful');
+          }
+        } catch (error) {
+          console.error('❌ Logout redirect failed:', error);
         }
       }
     });

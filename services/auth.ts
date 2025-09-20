@@ -245,16 +245,23 @@ export const loginUser = async (data: LoginData) => {
 // Logout user
 export const logoutUser = async () => {
   try {
+    console.log('🔄 Auth service: Starting logout...');
+
     // Use session manager for logout to ensure proper cleanup
     const { sessionManager } = await import('./sessionManager');
     await sessionManager.clearSession();
+
+    console.log('✅ Auth service: Logout completed successfully');
   } catch (error) {
-    console.error('Logout error:', error);
+    console.error('❌ Auth service: Logout error:', error);
+
     // Fallback to direct Supabase logout
     try {
+      console.log('🔄 Auth service: Attempting fallback logout...');
       await supabase.auth.signOut();
+      console.log('✅ Auth service: Fallback logout successful');
     } catch (fallbackError) {
-      console.error('Fallback logout error:', fallbackError);
+      console.error('❌ Auth service: Fallback logout error:', fallbackError);
     }
     throw error;
   }

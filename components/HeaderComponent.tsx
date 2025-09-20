@@ -270,10 +270,18 @@ export default function HeaderComponent({
 
   const handleLogout = async () => {
     try {
+      console.log('🚪 Starting logout process...');
       await logoutUser();
-      router.replace('/auth/login');
+      console.log('✅ Logout completed, session cleared');
+
+      // Redirect to marketplace (public access for logged out users)
+      console.log('🔄 Redirecting to marketplace...');
+      router.replace('/buyer/marketplace' as any);
+      console.log('✅ Redirect to marketplace completed');
     } catch (error) {
-      console.error('Logout error:', error);
+      console.error('❌ Logout error:', error);
+      // Fallback redirect if logout fails
+      router.replace('/buyer/marketplace' as any);
     }
   };
 

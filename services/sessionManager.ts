@@ -218,35 +218,42 @@ class SessionManager {
   // Clear session and logout
   public async clearSession(): Promise<void> {
     try {
-      console.log('🔄 Clearing session...');
+      console.log('🔄 SessionManager: Clearing session...');
 
       // Clear timers
       if (this.refreshTimer) {
         clearInterval(this.refreshTimer);
         this.refreshTimer = null;
+        console.log('🔄 SessionManager: Refresh timer cleared');
       }
       if (this.activityTimer) {
         clearInterval(this.activityTimer);
         this.activityTimer = null;
+        console.log('🔄 SessionManager: Activity timer cleared');
       }
 
       // Sign out from Supabase
+      console.log('🔄 SessionManager: Signing out from Supabase...');
       await supabase.auth.signOut();
+      console.log('✅ SessionManager: Supabase signout completed');
 
       // Clear session data
       this.sessionData = null;
+      console.log('🔄 SessionManager: Session data cleared');
 
       // Clear stored data
       await this.clearStoredSession();
+      console.log('🔄 SessionManager: Stored session data cleared');
 
-      console.log('✅ Session cleared successfully');
+      console.log('✅ SessionManager: Session cleared successfully');
       this.notifyListeners();
     } catch (error) {
-      console.error('❌ Error clearing session:', error);
+      console.error('❌ SessionManager: Error clearing session:', error);
       // Still clear local data even if Supabase signout fails
       this.sessionData = null;
       await this.clearStoredSession();
       this.notifyListeners();
+      console.log('🔄 SessionManager: Local data cleared despite error');
     }
   }
 
