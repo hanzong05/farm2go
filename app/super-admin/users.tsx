@@ -73,6 +73,7 @@ export default function SuperAdminUsers() {
   const [focusedInput, setFocusedInput] = useState<string | null>(null);
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
+  const [emailError, setEmailError] = useState('');
   // Removed filterType since we only show admin users
 
 
@@ -118,10 +119,13 @@ export default function SuperAdminUsers() {
 
   const loadUsers = async () => {
     try {
+      console.log('📊 Loading admin users...');
+
       const { data, error } = await supabase
         .from('profiles')
         .select(`
           id,
+          email,
           first_name,
           last_name,
           user_type,
@@ -143,12 +147,22 @@ export default function SuperAdminUsers() {
           created_at: string;
         }[]>();
 
-      if (error) throw error;
+      console.log('📊 Load users response:', {
+        success: !error,
+        count: data?.length || 0,
+        data: data,
+        error: error
+      });
+
+      if (error) {
+        console.error('❌ Error loading users:', error);
+        throw error;
+      }
 
       // Convert to User format (simplified for super admin view)
       const usersData: User[] = data?.map(profile => ({
         id: profile.id,
-        email: '', // We'll get this separately if needed
+        email: profile.email || '',
         created_at: profile.created_at || '',
         profiles: {
           first_name: profile.first_name,
@@ -160,6 +174,7 @@ export default function SuperAdminUsers() {
         },
       })) || [];
 
+      console.log('👥 Processed users data:', usersData);
       setUsers(usersData);
     } catch (error) {
       console.error('Error loading users:', error);
@@ -173,45 +188,105 @@ export default function SuperAdminUsers() {
     setRefreshing(false);
   };
 
+  const validateEmail = (email: string) => {
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    return emailRegex.test(email);
+  };
+
   const createUser = async () => {
     try {
+      // Validate required fields
       if (!createForm.email || !createForm.password || !createForm.first_name || !createForm.barangay) {
         Alert.alert('Error', 'Please fill in all required fields including barangay location');
         return;
       }
 
+      // Validate email format
+      if (!validateEmail(createForm.email.trim())) {
+        Alert.alert('Error', 'Please enter a valid email address');
+        return;
+      }
+
+      // Validate password length
+      if (createForm.password.length < 6) {
+        Alert.alert('Error', 'Password must be at least 6 characters long');
+        return;
+      }
+
+      console.log('🚀 Creating auth user with email:', createForm.email.trim().toLowerCase());
+
       // First create auth user
       const { data: authData, error: authError } = await supabase.auth.signUp({
-        email: createForm.email,
+        email: createForm.email.trim().toLowerCase(),
         password: createForm.password,
       });
 
-      if (authError) throw authError;
+      console.log('📧 Auth signup response:', {
+        user: authData?.user ? 'User created' : 'No user',
+        userId: authData?.user?.id,
+        error: authError ? authError.message : 'No error'
+      });
+
+      if (authError) {
+        console.error('❌ Auth error:', authError);
+        throw authError;
+      }
 
       if (authData.user) {
+        console.log('👤 Creating profile for user:', authData.user.id);
+
         // Create profile using untyped client
         const untypedSupabase = createClient(
           process.env.EXPO_PUBLIC_SUPABASE_URL || 'https://demo.supabase.co',
           process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || 'demo-anon-key'
         );
 
-        const { error: profileError } = await untypedSupabase
+        const profileData = {
+          id: authData.user.id,
+          email: createForm.email.trim().toLowerCase(),
+          first_name: createForm.first_name.trim() || null,
+          last_name: createForm.last_name.trim() || null,
+          user_type: createForm.user_type,
+          phone: createForm.phone.trim() || null,
+          farm_name: createForm.user_type === 'farmer' ? (createForm.farm_name.trim() || null) : null,
+          company_name: createForm.user_type === 'buyer' ? (createForm.company_name.trim() || null) : null,
+          barangay: createForm.barangay || null,
+        };
+
+        console.log('📝 Profile data to insert:', profileData);
+
+        const { data: insertedProfile, error: profileError } = await untypedSupabase
           .from('profiles')
-          .insert({
-            id: authData.user.id,
-            email: createForm.email,
-            first_name: createForm.first_name || null,
-            last_name: createForm.last_name || null,
-            user_type: createForm.user_type,
-            phone: createForm.phone || null,
-            farm_name: createForm.user_type === 'farmer' ? (createForm.farm_name || null) : null,
-            company_name: createForm.user_type === 'buyer' ? (createForm.company_name || null) : null,
-            barangay: createForm.barangay || null,
-          });
+          .insert(profileData)
+          .select()
+          .single();
 
-        if (profileError) throw profileError;
+        console.log('📊 Profile insertion result:', {
+          success: !profileError,
+          profile: insertedProfile,
+          error: profileError
+        });
 
-        Alert.alert('Success', 'Admin user created successfully');
+        if (profileError) {
+          console.error('❌ Profile creation error:', profileError);
+          throw profileError;
+        }
+
+        // Verify the profile was created
+        console.log('🔍 Verifying profile creation...');
+        const { data: verifyProfile, error: verifyError } = await untypedSupabase
+          .from('profiles')
+          .select('*')
+          .eq('id', authData.user.id)
+          .single();
+
+        console.log('✅ Profile verification:', {
+          found: !verifyError,
+          profile: verifyProfile,
+          error: verifyError
+        });
+
+        Alert.alert('Success', `Admin user created successfully! User ID: ${authData.user.id}`);
         setShowCreateModal(false);
         resetCreateForm();
         await loadUsers();
@@ -265,6 +340,18 @@ export default function SuperAdminUsers() {
       company_name: '',
       barangay: '',
     });
+    setEmailError('');
+  };
+
+  const handleEmailChange = (text: string) => {
+    setCreateForm({ ...createForm, email: text });
+
+    // Real-time email validation
+    if (text.trim() && !validateEmail(text.trim())) {
+      setEmailError('Please enter a valid email address');
+    } else {
+      setEmailError('');
+    }
   };
 
   const handleLocationSelect = (barangay: string) => {
@@ -415,14 +502,19 @@ export default function SuperAdminUsers() {
           </View>
 
           <View style={styles.form}>
-            <TextInput
-              style={styles.input}
-              placeholder="Email *"
-              value={createForm.email}
-              onChangeText={(text) => setCreateForm({ ...createForm, email: text })}
-              keyboardType="email-address"
-              autoCapitalize="none"
-            />
+            <View>
+              <TextInput
+                style={[styles.input, emailError ? styles.inputError : null]}
+                placeholder="Email *"
+                value={createForm.email}
+                onChangeText={handleEmailChange}
+                keyboardType="email-address"
+                autoCapitalize="none"
+              />
+              {emailError ? (
+                <Text style={styles.errorText}>{emailError}</Text>
+              ) : null}
+            </View>
 
             <TextInput
               style={styles.input}
@@ -668,6 +760,15 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     fontSize: 16,
     backgroundColor: colors.white,
+  },
+  inputError: {
+    borderColor: colors.danger,
+  },
+  errorText: {
+    color: colors.danger,
+    fontSize: 12,
+    marginTop: 4,
+    marginLeft: 4,
   },
   label: {
     fontSize: 16,
