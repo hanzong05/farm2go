@@ -24,6 +24,15 @@ export interface Database {
           // Farmer specific fields
           farm_name: string | null
           farm_size: string | null
+          // Verification fields
+          verification_status: 'pending' | 'approved' | 'rejected' | 'not_submitted'
+          id_document_url: string | null
+          face_photo_url: string | null
+          verification_submitted_at: string | null
+          verification_approved_at: string | null
+          verification_rejected_at: string | null
+          verification_admin_notes: string | null
+          id_document_type: string | null
         }
         Insert: {
           id: string
@@ -38,6 +47,14 @@ export interface Database {
           updated_at?: string
           farm_name?: string | null
           farm_size?: string | null
+          verification_status?: 'pending' | 'approved' | 'rejected' | 'not_submitted'
+          id_document_url?: string | null
+          face_photo_url?: string | null
+          verification_submitted_at?: string | null
+          verification_approved_at?: string | null
+          verification_rejected_at?: string | null
+          verification_admin_notes?: string | null
+          id_document_type?: string | null
         }
         Update: {
           id?: string
@@ -52,6 +69,14 @@ export interface Database {
           updated_at?: string
           farm_name?: string | null
           farm_size?: string | null
+          verification_status?: 'pending' | 'approved' | 'rejected' | 'not_submitted'
+          id_document_url?: string | null
+          face_photo_url?: string | null
+          verification_submitted_at?: string | null
+          verification_approved_at?: string | null
+          verification_rejected_at?: string | null
+          verification_admin_notes?: string | null
+          id_document_type?: string | null
         }
       }
       products: {
@@ -109,6 +134,7 @@ export interface Database {
           status: 'pending' | 'confirmed' | 'processing' | 'ready' | 'delivered' | 'cancelled'
           delivery_address: string
           notes: string | null
+          purchase_code: string | null
           created_at: string
           updated_at: string
         }
@@ -122,6 +148,7 @@ export interface Database {
           status?: 'pending' | 'confirmed' | 'processing' | 'ready' | 'delivered' | 'cancelled'
           delivery_address: string
           notes?: string | null
+          purchase_code?: string | null
           created_at?: string
           updated_at?: string
         }
@@ -135,6 +162,7 @@ export interface Database {
           status?: 'pending' | 'confirmed' | 'processing' | 'ready' | 'delivered' | 'cancelled'
           delivery_address?: string
           notes?: string | null
+          purchase_code?: string | null
           created_at?: string
           updated_at?: string
         }
@@ -197,6 +225,53 @@ export interface Database {
           updated_at?: string
         }
       }
+      verification_submissions: {
+        Row: {
+          id: string
+          user_id: string
+          id_document_url: string
+          face_photo_url: string
+          id_document_type: string
+          submission_notes: string | null
+          status: 'pending' | 'approved' | 'rejected' | 'not_submitted'
+          submitted_at: string
+          reviewed_at: string | null
+          reviewed_by: string | null
+          admin_notes: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          id_document_url: string
+          face_photo_url: string
+          id_document_type: string
+          submission_notes?: string | null
+          status?: 'pending' | 'approved' | 'rejected' | 'not_submitted'
+          submitted_at?: string
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          admin_notes?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          id_document_url?: string
+          face_photo_url?: string
+          id_document_type?: string
+          submission_notes?: string | null
+          status?: 'pending' | 'approved' | 'rejected' | 'not_submitted'
+          submitted_at?: string
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          admin_notes?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+      }
     }
     Views: {
       [_ in never]: never
@@ -209,6 +284,7 @@ export interface Database {
       product_status: 'pending' | 'approved' | 'rejected'
       order_status: 'pending' | 'confirmed' | 'processing' | 'ready' | 'delivered' | 'cancelled' | 'completed'
       transaction_status: 'pending' | 'completed' | 'failed' | 'refunded'
+      verification_status: 'pending' | 'approved' | 'rejected' | 'not_submitted'
     }
   }
 }

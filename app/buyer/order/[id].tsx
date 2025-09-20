@@ -13,6 +13,7 @@ import {
   View,
 } from 'react-native';
 import PurchaseSuccessModal from '../../../components/PurchaseSuccessModal';
+import VerificationGuard from '../../../components/VerificationGuard';
 import { useAuth } from '../../../contexts/AuthContext';
 import { supabase } from '../../../lib/supabase';
 import { generateUniquePurchaseCode } from '../../../utils/purchaseCode';
@@ -188,11 +189,25 @@ export default function OrderProductScreen() {
     );
   }
 
+  if (!user) {
+    return (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color="#10b981" />
+        <Text style={styles.loadingText}>Loading...</Text>
+      </View>
+    );
+  }
+
   return (
-    <KeyboardAvoidingView
-      style={styles.container}
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+    <VerificationGuard
+      userId={user.id}
+      userType="buyer"
+      action="buy"
     >
+      <KeyboardAvoidingView
+        style={styles.container}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      >
       <View style={styles.header}>
         <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
           <Text style={styles.backButtonText}>← Back</Text>
@@ -316,14 +331,11 @@ export default function OrderProductScreen() {
         />
       )}
     </KeyboardAvoidingView>
+    </VerificationGuard>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#f8fafc',
-  },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
@@ -334,6 +346,11 @@ const styles = StyleSheet.create({
     marginTop: 16,
     fontSize: 16,
     color: '#6b7280',
+    fontWeight: '500',
+  },
+  container: {
+    flex: 1,
+    backgroundColor: '#f8fafc',
   },
   errorContainer: {
     flex: 1,

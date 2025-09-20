@@ -16,6 +16,7 @@ import {
 import { router } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
 import HeaderComponent from '../../../components/HeaderComponent';
+import VerificationGuard from '../../../components/VerificationGuard';
 import { supabase } from '../../../lib/supabase';
 import { getUserWithProfile } from '../../../services/auth';
 import { Database } from '../../../types/database';
@@ -228,9 +229,9 @@ export default function AddProductScreen() {
         image_url: imageUrl,
       };
 
-      const { error } = await supabase
+      const { error } = await (supabase as any)
         .from('products')
-        .insert([productData]);
+        .insert(productData);
 
       if (error) throw error;
 
@@ -332,15 +333,29 @@ export default function AddProductScreen() {
     </View>
   );
 
+  if (!profile) {
+    return (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color="#10b981" />
+        <Text style={styles.loadingText}>Loading...</Text>
+      </View>
+    );
+  }
+
   return (
-    <KeyboardAvoidingView
-      style={styles.container}
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+    <VerificationGuard
+      userId={profile.id}
+      userType="farmer"
+      action="sell"
     >
-      <HeaderComponent
-        profile={profile}
-        showAddButton={false}
-      />
+      <KeyboardAvoidingView
+        style={styles.container}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      >
+        <HeaderComponent
+          profile={profile}
+          showAddButton={false}
+        />
 
       <ScrollView
         style={styles.content}
@@ -463,10 +478,23 @@ export default function AddProductScreen() {
         </TouchableOpacity>
       </View>
     </KeyboardAvoidingView>
+    </VerificationGuard>
   );
 }
 
 const styles = StyleSheet.create({
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#f8fafc',
+  },
+  loadingText: {
+    marginTop: 16,
+    fontSize: 16,
+    color: '#6b7280',
+    fontWeight: '500',
+  },
   container: {
     flex: 1,
     backgroundColor: '#f8fafc',
