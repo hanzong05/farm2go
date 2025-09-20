@@ -29,6 +29,7 @@ interface User {
     farm_name: string | null;
     company_name: string | null;
     phone: string | null;
+    barangay: string | null;
   } | null;
 }
 
@@ -83,7 +84,13 @@ export default function AdminUsers() {
 
   const loadUsers = async () => {
     try {
-      console.log('📊 Loading all users...');
+      if (!profile?.barangay) {
+        console.log('❌ Admin has no barangay set, cannot filter users');
+        Alert.alert('Error', 'Admin profile must have a barangay location set to view users');
+        return;
+      }
+
+      console.log('📊 Loading users from barangay:', profile.barangay);
 
       const { data, error } = await supabase
         .from('profiles')
@@ -96,8 +103,11 @@ export default function AdminUsers() {
           farm_name,
           company_name,
           phone,
+          barangay,
           created_at
         `)
+        .eq('barangay', profile.barangay)
+        .in('user_type', ['farmer', 'buyer'])
         .order('created_at', { ascending: false });
 
       console.log('📊 Load users response:', {
@@ -123,6 +133,7 @@ export default function AdminUsers() {
           farm_name: profile.farm_name,
           company_name: profile.company_name,
           phone: profile.phone,
+          barangay: profile.barangay,
         },
       })) || [];
 
@@ -146,6 +157,7 @@ export default function AdminUsers() {
       user.profiles?.last_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
       user.profiles?.farm_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
       user.profiles?.company_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      user.profiles?.barangay?.toLowerCase().includes(searchQuery.toLowerCase()) ||
       user.email?.toLowerCase().includes(searchQuery.toLowerCase());
 
     return matchesSearch;
@@ -183,6 +195,9 @@ export default function AdminUsers() {
         )}
         {item.profiles?.phone && (
           <Text style={styles.userDetail}>📞 {item.profiles.phone}</Text>
+        )}
+        {item.profiles?.barangay && (
+          <Text style={styles.userDetail}>📍 {item.profiles.barangay}</Text>
         )}
 
         <Text style={styles.userDate}>
@@ -222,7 +237,10 @@ export default function AdminUsers() {
       <View style={styles.content}>
         {/* Header */}
         <View style={styles.header}>
-          <Text style={styles.title}>User Management</Text>
+          <View style={styles.titleSection}>
+            <Text style={styles.title}>User Management</Text>
+            <Text style={styles.barangayInfo}>📍 {profile?.barangay || 'No Barangay Set'}</Text>
+          </View>
           <View style={styles.statsContainer}>
             <Text style={styles.statsText}>Total Users: {users.length}</Text>
           </View>
@@ -275,13 +293,22 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     marginBottom: 20,
+  },
+  titleSection: {
+    flex: 1,
   },
   title: {
     fontSize: 24,
     fontWeight: 'bold',
     color: colors.text,
+    marginBottom: 4,
+  },
+  barangayInfo: {
+    fontSize: 14,
+    color: colors.textSecondary,
+    fontWeight: '500',
   },
   statsContainer: {
     backgroundColor: colors.white,
