@@ -89,6 +89,17 @@ interface User {
   };
 }
 
+interface CreateUserForm {
+  email: string;
+  password: string;
+  first_name: string;
+  last_name: string;
+  user_type: 'farmer' | 'buyer' | 'admin';
+  farm_name: string;
+  phone: string;
+  barangay: string;
+}
+
 const colors = {
   primary: '#059669',
   primaryLight: '#34d399',
@@ -128,6 +139,20 @@ export default function AdminUsers() {
   const [editingItem, setEditingItem] = useState<ProductResponse | null>(null);
   const [showAddForm, setShowAddForm] = useState(false);
   const [authChecked, setAuthChecked] = useState(false);
+  
+  // Create User Modal states
+  const [createUserModalVisible, setCreateUserModalVisible] = useState(false);
+  const [createUserLoading, setCreateUserLoading] = useState(false);
+  const [createUserForm, setCreateUserForm] = useState<CreateUserForm>({
+    email: '',
+    password: '',
+    first_name: '',
+    last_name: '',
+    user_type: 'farmer',
+    farm_name: '',
+    phone: '',
+    barangay: profile?.barangay || '',
+  });
 
   useEffect(() => {
     loadData();
@@ -155,6 +180,11 @@ export default function AdminUsers() {
   useEffect(() => {
     if (profile) {
       loadUsers(profile);
+      // Update form barangay when profile loads
+      setCreateUserForm(prev => ({
+        ...prev,
+        barangay: profile.barangay || ''
+      }));
     }
   }, [activeTab, profile]);
 
@@ -565,6 +595,136 @@ export default function AdminUsers() {
     }
   };
 
+  // Create User Functions
+  const openCreateUserModal = () => {
+    setCreateUserForm({
+      email: '',
+      password: '',
+      first_name: '',
+      last_name: '',
+      user_type: activeTab, // Default to current tab
+      farm_name: '',
+      phone: '',
+      barangay: profile?.barangay || '',
+    });
+    setCreateUserModalVisible(true);
+  };
+
+  const closeCreateUserModal = () => {
+    setCreateUserModalVisible(false);
+    setCreateUserForm({
+      email: '',
+      password: '',
+      first_name: '',
+      last_name: '',
+      user_type: 'farmer',
+      farm_name: '',
+      phone: '',
+      barangay: profile?.barangay || '',
+    });
+  };
+
+  const validateCreateUserForm = (): string | null => {
+    if (!createUserForm.email.trim()) return 'Email is required';
+    if (!createUserForm.password.trim()) return 'Password is required';
+    if (createUserForm.password.length < 6) return 'Password must be at least 6 characters';
+    if (!createUserForm.first_name.trim()) return 'First name is required';
+    if (!createUserForm.last_name.trim()) return 'Last name is required';
+    if (!createUserForm.user_type) return 'User type is required';
+    if (!createUserForm.barangay.trim()) return 'Barangay is required';
+    
+    // Email validation
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(createUserForm.email)) return 'Please enter a valid email address';
+    
+    // Phone validation (if provided)
+    if (createUserForm.phone.trim() && !/^[\+]?[0-9\-\(\)\s]{10,}$/.test(createUserForm.phone)) {
+      return 'Please enter a valid phone number';
+    }
+
+    return null;
+  };
+
+  const handleCreateUser = async () => {
+    const validationError = validateCreateUserForm();
+    if (validationError) {
+      Alert.alert('Validation Error', validationError);
+      return;
+    }
+
+    setCreateUserLoading(true);
+    
+    try {
+      // Create user account with Supabase Auth
+      const { data: authData, error: authError } = await supabase.auth.signUp({
+        email: createUserForm.email,
+        password: createUserForm.password,
+      });
+
+      if (authError) {
+        throw new Error(`Failed to create user account: ${authError.message}`);
+      }
+
+      if (!authData.user) {
+        throw new Error('Failed to create user account');
+      }
+
+      // Create profile in the profiles table
+      const { error: profileError } = await supabase
+        .from('profiles')
+        .insert([
+          {
+            id: authData.user.id,
+            email: createUserForm.email,
+            first_name: createUserForm.first_name,
+            last_name: createUserForm.last_name,
+            user_type: createUserForm.user_type,
+            farm_name: createUserForm.farm_name.trim() || null,
+            phone: createUserForm.phone.trim() || null,
+            barangay: createUserForm.barangay,
+          }
+        ] as any);
+
+      if (profileError) {
+        // If profile creation fails, we should try to clean up the auth user
+        console.error('Profile creation error:', profileError);
+        throw new Error(`Failed to create user profile: ${profileError.message}`);
+      }
+
+      // Success
+      Alert.alert(
+        'Success',
+        `${createUserForm.user_type} account created successfully for ${createUserForm.first_name} ${createUserForm.last_name}`,
+        [
+          {
+            text: 'OK',
+            onPress: () => {
+              closeCreateUserModal();
+              // Refresh the users list
+              if (profile) {
+                loadUsers(profile);
+              }
+            }
+          }
+        ]
+      );
+
+    } catch (error) {
+      console.error('Create user error:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Failed to create user';
+      Alert.alert('Error', errorMessage);
+    } finally {
+      setCreateUserLoading(false);
+    }
+  };
+
+  const updateCreateUserForm = (field: keyof CreateUserForm, value: string) => {
+    setCreateUserForm(prev => ({
+      ...prev,
+      [field]: value
+    }));
+  };
+
   const renderUser = ({ item }: { item: User }) => {
     const chartData = {
       labels: item.salesData?.chartData.map(d => d.date.split(' ')[1]) || ['1', '2', '3', '4', '5', '6', '7'],
@@ -748,7 +908,7 @@ export default function AdminUsers() {
           </View>
         </View>
 
-        {/* Enhanced Tab Navigation */}
+        {/* Enhanced Tab Navigation with Create Button */}
         <View style={styles.tabWrapper}>
           <View style={styles.tabContainer}>
             <TouchableOpacity
@@ -785,6 +945,15 @@ export default function AdminUsers() {
               </Text>
             </TouchableOpacity>
           </View>
+          
+          {/* Create New User Button */}
+          <TouchableOpacity
+            style={styles.createUserButton}
+            onPress={openCreateUserModal}
+          >
+            <Icon name="user-plus" size={16} color={colors.white} />
+            <Text style={styles.createUserButtonText}>Create {activeTab}</Text>
+          </TouchableOpacity>
         </View>
 
         {/* Users Grid */}
@@ -816,10 +985,244 @@ export default function AdminUsers() {
                   : `No ${activeTab}s registered in this area yet`
                 }
               </Text>
+              <TouchableOpacity
+                style={styles.emptyCreateButton}
+                onPress={openCreateUserModal}
+              >
+                <Icon name="user-plus" size={16} color={colors.white} />
+                <Text style={styles.emptyCreateButtonText}>Create First {activeTab}</Text>
+              </TouchableOpacity>
             </View>
           }
         />
       </View>
+
+      {/* Create User Modal */}
+      <Modal
+        animationType="slide"
+        transparent={false}
+        visible={createUserModalVisible}
+        onRequestClose={closeCreateUserModal}
+      >
+        <View style={styles.modalContainer}>
+          {/* Modal Header */}
+          <View style={styles.modalHeader}>
+            <TouchableOpacity
+              style={styles.backButton}
+              onPress={closeCreateUserModal}
+            >
+              <Icon name="times" size={20} color={colors.textSecondary} />
+            </TouchableOpacity>
+            <View style={styles.modalTitleContainer}>
+              <Text style={styles.modalTitle}>Create New {createUserForm.user_type}</Text>
+              <Text style={styles.modalSubtitle}>Add a new user to the system</Text>
+            </View>
+          </View>
+
+          {/* Form Content */}
+          <ScrollView style={styles.modalContent} showsVerticalScrollIndicator={false}>
+            <View style={styles.formContainer}>
+              
+              {/* User Type Selection */}
+              <View style={styles.formGroup}>
+                <Text style={styles.formLabel}>User Type *</Text>
+                <View style={styles.userTypeSelection}>
+                  <TouchableOpacity
+                    style={[
+                      styles.userTypeOption,
+                      createUserForm.user_type === 'farmer' && styles.userTypeOptionActive
+                    ]}
+                    onPress={() => updateCreateUserForm('user_type', 'farmer')}
+                  >
+                    <Icon 
+                      name="seedling" 
+                      size={16} 
+                      color={createUserForm.user_type === 'farmer' ? colors.white : colors.textSecondary} 
+                    />
+                    <Text style={[
+                      styles.userTypeOptionText,
+                      createUserForm.user_type === 'farmer' && styles.userTypeOptionTextActive
+                    ]}>
+                      Farmer
+                    </Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[
+                      styles.userTypeOption,
+                      createUserForm.user_type === 'buyer' && styles.userTypeOptionActive
+                    ]}
+                    onPress={() => updateCreateUserForm('user_type', 'buyer')}
+                  >
+                    <Icon 
+                      name="shopping-cart" 
+                      size={16} 
+                      color={createUserForm.user_type === 'buyer' ? colors.white : colors.textSecondary} 
+                    />
+                    <Text style={[
+                      styles.userTypeOptionText,
+                      createUserForm.user_type === 'buyer' && styles.userTypeOptionTextActive
+                    ]}>
+                      Buyer
+                    </Text>
+                  </TouchableOpacity>
+                  {profile?.user_type === 'super-admin' && (
+                    <TouchableOpacity
+                      style={[
+                        styles.userTypeOption,
+                        createUserForm.user_type === 'admin' && styles.userTypeOptionActive
+                      ]}
+                      onPress={() => updateCreateUserForm('user_type', 'admin')}
+                    >
+                      <Icon 
+                        name="user-shield" 
+                        size={16} 
+                        color={createUserForm.user_type === 'admin' ? colors.white : colors.textSecondary} 
+                      />
+                      <Text style={[
+                        styles.userTypeOptionText,
+                        createUserForm.user_type === 'admin' && styles.userTypeOptionTextActive
+                      ]}>
+                        Admin
+                      </Text>
+                    </TouchableOpacity>
+                  )}
+                </View>
+              </View>
+
+              {/* Personal Information */}
+              <View style={styles.formSection}>
+                <Text style={styles.formSectionTitle}>Personal Information</Text>
+                
+                <View style={styles.formRow}>
+                  <View style={[styles.formGroup, styles.formGroupHalf]}>
+                    <Text style={styles.formLabel}>First Name *</Text>
+                    <TextInput
+                      style={styles.formInput}
+                      value={createUserForm.first_name}
+                      onChangeText={(text) => updateCreateUserForm('first_name', text)}
+                      placeholder="Enter first name"
+                      placeholderTextColor={colors.textLight}
+                    />
+                  </View>
+                  
+                  <View style={[styles.formGroup, styles.formGroupHalf]}>
+                    <Text style={styles.formLabel}>Last Name *</Text>
+                    <TextInput
+                      style={styles.formInput}
+                      value={createUserForm.last_name}
+                      onChangeText={(text) => updateCreateUserForm('last_name', text)}
+                      placeholder="Enter last name"
+                      placeholderTextColor={colors.textLight}
+                    />
+                  </View>
+                </View>
+
+                <View style={styles.formGroup}>
+                  <Text style={styles.formLabel}>Phone Number</Text>
+                  <TextInput
+                    style={styles.formInput}
+                    value={createUserForm.phone}
+                    onChangeText={(text) => updateCreateUserForm('phone', text)}
+                    placeholder="Enter phone number"
+                    placeholderTextColor={colors.textLight}
+                    keyboardType="phone-pad"
+                  />
+                </View>
+              </View>
+
+              {/* Account Information */}
+              <View style={styles.formSection}>
+                <Text style={styles.formSectionTitle}>Account Information</Text>
+                
+                <View style={styles.formGroup}>
+                  <Text style={styles.formLabel}>Email Address *</Text>
+                  <TextInput
+                    style={styles.formInput}
+                    value={createUserForm.email}
+                    onChangeText={(text) => updateCreateUserForm('email', text)}
+                    placeholder="Enter email address"
+                    placeholderTextColor={colors.textLight}
+                    keyboardType="email-address"
+                    autoCapitalize="none"
+                  />
+                </View>
+
+                <View style={styles.formGroup}>
+                  <Text style={styles.formLabel}>Password *</Text>
+                  <TextInput
+                    style={styles.formInput}
+                    value={createUserForm.password}
+                    onChangeText={(text) => updateCreateUserForm('password', text)}
+                    placeholder="Enter password (min 6 characters)"
+                    placeholderTextColor={colors.textLight}
+                    secureTextEntry
+                  />
+                </View>
+              </View>
+
+              {/* Location Information */}
+              <View style={styles.formSection}>
+                <Text style={styles.formSectionTitle}>Location</Text>
+                
+                <View style={styles.formGroup}>
+                  <Text style={styles.formLabel}>Barangay *</Text>
+                  <TextInput
+                    style={styles.formInput}
+                    value={createUserForm.barangay}
+                    onChangeText={(text) => updateCreateUserForm('barangay', text)}
+                    placeholder="Enter barangay"
+                    placeholderTextColor={colors.textLight}
+                  />
+                </View>
+              </View>
+
+              {/* Farm Information (only for farmers) */}
+              {createUserForm.user_type === 'farmer' && (
+                <View style={styles.formSection}>
+                  <Text style={styles.formSectionTitle}>Farm Information</Text>
+                  
+                  <View style={styles.formGroup}>
+                    <Text style={styles.formLabel}>Farm Name</Text>
+                    <TextInput
+                      style={styles.formInput}
+                      value={createUserForm.farm_name}
+                      onChangeText={(text) => updateCreateUserForm('farm_name', text)}
+                      placeholder="Enter farm name (optional)"
+                      placeholderTextColor={colors.textLight}
+                    />
+                  </View>
+                </View>
+              )}
+
+              {/* Action Buttons */}
+              <View style={styles.formActions}>
+                <TouchableOpacity
+                  style={styles.cancelButton}
+                  onPress={closeCreateUserModal}
+                  disabled={createUserLoading}
+                >
+                  <Text style={styles.cancelButtonText}>Cancel</Text>
+                </TouchableOpacity>
+                
+                <TouchableOpacity
+                  style={[styles.submitButton, createUserLoading && styles.submitButtonDisabled]}
+                  onPress={handleCreateUser}
+                  disabled={createUserLoading}
+                >
+                  {createUserLoading ? (
+                    <ActivityIndicator size="small" color={colors.white} />
+                  ) : (
+                    <>
+                      <Icon name="user-plus" size={16} color={colors.white} />
+                      <Text style={styles.submitButtonText}>Create User</Text>
+                    </>
+                  )}
+                </TouchableOpacity>
+              </View>
+            </View>
+          </ScrollView>
+        </View>
+      </Modal>
 
       {/* Farmer Detail Modal */}
       <Modal
@@ -1077,6 +1480,7 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 1,
     shadowRadius: 4,
+    marginBottom: 12,
   },
   tab: {
     flex: 1,
@@ -1104,6 +1508,26 @@ const styles = StyleSheet.create({
   activeTabText: {
     color: colors.white,
     fontWeight: '700',
+  },
+  createUserButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.secondary,
+    paddingVertical: 14,
+    paddingHorizontal: 20,
+    borderRadius: 16,
+    gap: 8,
+    elevation: 2,
+    shadowColor: colors.shadowDark,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 1,
+    shadowRadius: 4,
+  },
+  createUserButtonText: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: colors.white,
   },
   listContainer: {
     paddingHorizontal: 16,
@@ -1286,6 +1710,21 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
     textAlign: 'center',
     lineHeight: 20,
+    marginBottom: 24,
+  },
+  emptyCreateButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.primary,
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: 20,
+    gap: 8,
+  },
+  emptyCreateButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: colors.white,
   },
   // Modal Styles
   modalContainer: {
@@ -1438,5 +1877,125 @@ const styles = StyleSheet.create({
     color: colors.text,
     textAlign: 'center',
     minWidth: 80,
+  },
+  // Create User Form Styles
+  formContainer: {
+    padding: 20,
+  },
+  formSection: {
+    marginBottom: 24,
+  },
+  formSectionTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: colors.text,
+    marginBottom: 16,
+  },
+  formGroup: {
+    marginBottom: 16,
+  },
+  formGroupHalf: {
+    flex: 1,
+  },
+  formRow: {
+    flexDirection: 'row',
+    gap: 16,
+  },
+  formLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: colors.text,
+    marginBottom: 8,
+  },
+  formInput: {
+    backgroundColor: colors.white,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    fontSize: 16,
+    color: colors.text,
+    elevation: 1,
+    shadowColor: colors.shadow,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 1,
+    shadowRadius: 4,
+  },
+  userTypeSelection: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  userTypeOption: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 12,
+    backgroundColor: colors.gray100,
+    borderWidth: 1,
+    borderColor: colors.border,
+    gap: 8,
+  },
+  userTypeOptionActive: {
+    backgroundColor: colors.primary,
+    borderColor: colors.primary,
+  },
+  userTypeOptionText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: colors.textSecondary,
+  },
+  userTypeOptionTextActive: {
+    color: colors.white,
+  },
+  formActions: {
+    flexDirection: 'row',
+    gap: 12,
+    marginTop: 32,
+    paddingTop: 20,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+  },
+  cancelButton: {
+    flex: 1,
+    paddingVertical: 16,
+    paddingHorizontal: 24,
+    borderRadius: 12,
+    backgroundColor: colors.gray100,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  cancelButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: colors.textSecondary,
+  },
+  submitButton: {
+    flex: 2,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 16,
+    paddingHorizontal: 24,
+    borderRadius: 12,
+    backgroundColor: colors.primary,
+    gap: 8,
+    elevation: 2,
+    shadowColor: colors.shadowDark,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 1,
+    shadowRadius: 4,
+  },
+  submitButtonDisabled: {
+    backgroundColor: colors.textLight,
+    elevation: 0,
+  },
+  submitButtonText: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: colors.white,
   },
 });
