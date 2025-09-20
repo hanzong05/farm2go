@@ -14,6 +14,8 @@ import {
 } from 'react-native';
 import { supabase } from '../../../lib/supabase';
 import { useAuth } from '../../../contexts/AuthContext';
+import PurchaseSuccessModal from '../../../components/PurchaseSuccessModal';
+import { generateUniquePurchaseCode } from '../../../utils/purchaseCode';
 
 interface Product {
   id: string;
@@ -39,6 +41,8 @@ export default function OrderProductScreen() {
   const [loading, setLoading] = useState(true);
   const [ordering, setOrdering] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [showSuccessModal, setShowSuccessModal] = useState(false);
+  const [purchaseCode, setPurchaseCode] = useState<string>('');
 
   const [orderData, setOrderData] = useState({
     quantity: '1',
@@ -114,7 +118,10 @@ export default function OrderProductScreen() {
     try {
       setOrdering(true);
 
-      // Create order record
+      // Generate unique purchase code
+      const uniquePurchaseCode = generateUniquePurchaseCode();
+
+      // Create order record with purchase code
       const { error: orderError } = await (supabase as any)
         .from('orders')
         .insert({
@@ -126,6 +133,7 @@ export default function OrderProductScreen() {
           delivery_address: orderData.deliveryAddress,
           notes: orderData.notes,
           status: 'pending',
+          purchase_code: uniquePurchaseCode,
         });
 
       if (orderError) {
@@ -148,21 +156,9 @@ export default function OrderProductScreen() {
         // In a real app, you'd want to handle this with a transaction
       }
 
-      Alert.alert(
-        'Order Placed Successfully!',
-        `Your order for ${quantity} ${product.unit}(s) of ${product.name} has been placed. The farmer will be notified.`,
-        [
-          {
-            text: 'View Orders',
-            onPress: () => router.push('/buyer/my-orders'),
-          },
-          {
-            text: 'Back to Marketplace',
-            onPress: () => router.push('/buyer/marketplace'),
-            style: 'cancel',
-          },
-        ]
-      );
+      // Set purchase code and show success modal
+      setPurchaseCode(uniquePurchaseCode);
+      setShowSuccessModal(true);
     } catch (err) {
       console.error('Order error:', err);
       Alert.alert('Error', 'An error occurred while placing the order');
@@ -291,6 +287,33 @@ export default function OrderProductScreen() {
           </Text>
         </TouchableOpacity>
       </ScrollView>
+
+      {/* Purchase Success Modal */}
+      {product && (
+        <PurchaseSuccessModal
+          visible={showSuccessModal}
+          onClose={() => setShowSuccessModal(false)}
+          purchaseCode={purchaseCode}
+          orderDetails={{
+            farmName: product.profiles?.farm_name ||
+                     `${product.profiles?.first_name || ''} ${product.profiles?.last_name || ''}`.trim() ||
+                     'Unknown Farm',
+            totalAmount: calculateTotal(),
+            purchaseDate: new Date().toISOString(),
+            productName: product.name,
+            quantity: parseInt(orderData.quantity) || 0,
+            unit: product.unit,
+          }}
+          onViewOrders={() => {
+            setShowSuccessModal(false);
+            router.push('/buyer/my-orders');
+          }}
+          onBackToMarketplace={() => {
+            setShowSuccessModal(false);
+            router.push('/buyer/marketplace');
+          }}
+        />
+      )}
     </KeyboardAvoidingView>
   );
 }

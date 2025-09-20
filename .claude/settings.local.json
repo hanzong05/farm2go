@@ -14,7 +14,8 @@
       "Bash(npm uninstall:*)",
       "Bash(npm install:*)",
       "Read(//c/Users/Admin/Downloads/**)",
-      "WebFetch(domain:farm2go.vercel.app)"
+      "WebFetch(domain:farm2go.vercel.app)",
+      "Bash(npx supabase db reset:*)"
     ],
     "deny": [],
     "ask": []
