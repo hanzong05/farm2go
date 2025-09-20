@@ -35,12 +35,19 @@ interface DatabaseOrderItem {
 interface DatabaseOrder {
   id: string;
   buyer_id: string;
-  total_amount: number;
+  farmer_id: string;
+  product_id: string;
+  quantity: number;
+  total_price: number;
   status: string;
   created_at: string;
-  delivery_date: string | null;
-  delivery_address: string | null;
+  delivery_address: string;
   notes: string | null;
+  products: {
+    name: string;
+    unit: string;
+    price: number;
+  } | null;
   profiles: {
     first_name: string | null;
     last_name: string | null;
@@ -121,19 +128,24 @@ export default function BuyerMyOrdersScreen() {
 
   const loadOrders = async (buyerId: string) => {
     try {
-      // Get orders for this buyer
-      const { data: ordersData, error: ordersError } = await supabase
+      // Get orders for this buyer with product and farmer info
+      const { data: ordersData, error: ordersError } = await (supabase as any)
         .from('orders')
         .select(`
           id,
           buyer_id,
-          total_amount,
+          quantity,
+          total_price,
           status,
           created_at,
-          delivery_date,
           delivery_address,
           notes,
-          profiles!orders_buyer_id_fkey (
+          products (
+            name,
+            unit,
+            price
+          ),
+          profiles:farmer_id (
             first_name,
             last_name,
             farm_name,
@@ -145,42 +157,19 @@ export default function BuyerMyOrdersScreen() {
 
       if (ordersError) throw ordersError;
 
-      const typedOrdersData = ordersData as DatabaseOrder[] | null;
-
-      if (!typedOrdersData || typedOrdersData.length === 0) {
+      if (!ordersData || ordersData.length === 0) {
         setOrders([]);
         return;
       }
 
-      // Get order items for these orders
-      const orderIds = typedOrdersData.map(order => order.id);
-
-      const { data: orderItems, error: itemsError } = await supabase
-        .from('order_items')
-        .select(`
-          order_id,
-          quantity,
-          unit_price,
-          products (
-            farmer_id,
-            name,
-            unit
-          )
-        `)
-        .in('order_id', orderIds);
-
-      if (itemsError) throw itemsError;
-
-      const typedOrderItems = orderItems as DatabaseOrderItem[] | null;
-
-      // Combine orders with their items
-      const ordersWithItems: Order[] = typedOrdersData.map(order => ({
+      // Transform the data to match the expected structure
+      const orders: Order[] = ordersData.map((order: any) => ({
         id: order.id,
         buyer_id: order.buyer_id,
-        total_amount: order.total_amount,
+        total_amount: order.total_price, // Map total_price to total_amount for UI consistency
         status: order.status as Order['status'],
         created_at: order.created_at,
-        delivery_date: order.delivery_date,
+        delivery_date: null, // Not in current schema
         delivery_address: order.delivery_address,
         notes: order.notes,
         farmer_profile: order.profiles ? {
@@ -189,18 +178,18 @@ export default function BuyerMyOrdersScreen() {
           farm_name: order.profiles.farm_name,
           barangay: order.profiles.barangay,
         } : undefined,
-        order_items: typedOrderItems?.filter(item => item.order_id === order.id).map(item => ({
-          order_id: item.order_id,
-          quantity: item.quantity,
-          unit_price: item.unit_price,
+        order_items: [{
+          order_id: order.id,
+          quantity: order.quantity,
+          unit_price: order.products?.price || 0,
           product: {
-            name: item.products?.name || '',
-            unit: item.products?.unit || '',
+            name: order.products?.name || '',
+            unit: order.products?.unit || '',
           },
-        })),
+        }],
       }));
 
-      setOrders(ordersWithItems);
+      setOrders(orders);
     } catch (error) {
       console.error('Error loading orders:', error);
       throw error;
@@ -770,6 +759,10 @@ const styles = StyleSheet.create({
   timelineNodeActive: {
     backgroundColor: '#10b981',
     borderColor: '#10b981',
+  },
+  timelineNodeCurrent: {
+    backgroundColor: '#3b82f6',
+    borderColor: '#3b82f6',
   },
   timelineNodeText: {
     fontSize: 10,

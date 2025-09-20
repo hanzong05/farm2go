@@ -1,8 +1,8 @@
 import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { useEffect } from 'react';
-import { Linking, Platform } from 'react-native';
+import { useEffect, useRef } from 'react';
+import { Linking, Platform, AppState } from 'react-native';
 import 'react-native-reanimated';
 
 import { useColorScheme } from '@/hooks/use-color-scheme';
@@ -85,11 +85,19 @@ const getModalScreenOptions = (title?: string) => ({
 
 export default function RootLayout() {
   const colorScheme = useColorScheme();
+  const appStateRef = useRef(AppState.currentState);
+  const hasInitialized = useRef(false);
 
   // Session-based routing guard for automatic user type redirection and route protection
   useEffect(() => {
     const checkUserSessionAndRedirect = async () => {
       try {
+        // Skip session check if app is not in active state or already initialized
+        if (appStateRef.current !== 'active' && hasInitialized.current) {
+          console.log('🔍 Skipping session check - app not active or already initialized');
+          return;
+        }
+
         const userData = await getUserWithProfile();
         const currentPath = window?.location?.pathname || '';
 
@@ -210,6 +218,9 @@ export default function RootLayout() {
             router.replace('/buyer/marketplace' as any);
           }
         }
+
+        // Mark as initialized after first successful check
+        hasInitialized.current = true;
       } catch (error) {
         console.log('🔍 Error checking session or redirecting:', error);
         // On error, assume user is not logged in and allow only public access
@@ -228,21 +239,23 @@ export default function RootLayout() {
             console.error('❌ Failed to redirect on error:', redirectError);
           }
         }
+        hasInitialized.current = true;
       }
     };
 
-    // Run check immediately and also set up a timer
-    checkUserSessionAndRedirect();
-    const timer = setTimeout(checkUserSessionAndRedirect, 500);
-    return () => clearTimeout(timer);
+    // Only run on initial mount, not on every app focus
+    if (!hasInitialized.current) {
+      checkUserSessionAndRedirect();
+    }
   }, []);
 
-  // Additional auth state listener for immediate redirects
+  // Additional auth state listener for immediate redirects (only on actual auth events)
   useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       console.log('🔄 Auth state change detected:', event, session?.user?.email);
 
-      if (event === 'SIGNED_IN' && session?.user) {
+      // Only handle actual sign in/out events, not token refreshes
+      if (event === 'SIGNED_IN' && session?.user && appStateRef.current === 'active') {
         console.log('🚀 User just signed in, checking for immediate redirect');
 
         try {
@@ -328,6 +341,22 @@ export default function RootLayout() {
     });
 
     return () => subscription.unsubscribe();
+  }, []);
+
+  // AppState monitoring to prevent excessive session checks
+  useEffect(() => {
+    const handleAppStateChange = (nextAppState: any) => {
+      console.log('🔄 App state changing from', appStateRef.current, 'to', nextAppState);
+
+      if (appStateRef.current.match(/inactive|background/) && nextAppState === 'active') {
+        console.log('🔄 App came to foreground - skipping session check to prevent loading screens');
+      }
+
+      appStateRef.current = nextAppState;
+    };
+
+    const subscription = AppState.addEventListener('change', handleAppStateChange);
+    return () => subscription?.remove();
   }, []);
 
   // Enhanced deep linking for OAuth and marketplace navigation

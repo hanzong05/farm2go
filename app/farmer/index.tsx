@@ -92,52 +92,30 @@ export default function FarmerDashboard() {
         .eq('status', 'approved');
 
       // Get pending orders
-      const { data: orderItems } = await supabase
-        .from('order_items')
-        .select(`
-          order_id,
-          orders!inner (
-            id,
-            status,
-            created_at
-          ),
-          products!inner (
-            farmer_id
-          )
-        `)
-        .eq('products.farmer_id', farmerId)
-        .eq('orders.status', 'pending');
-
-      const pendingOrders = orderItems ? [...new Set(orderItems.map(item => item.order_id))].length : 0;
+      const { count: pendingOrders } = await (supabase as any)
+        .from('orders')
+        .select('*', { count: 'exact', head: true })
+        .eq('farmer_id', farmerId)
+        .eq('status', 'pending');
 
       // Get monthly revenue (completed orders from this month)
       const now = new Date();
       const firstDayOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
 
-      const { data: monthlyOrderItems } = await supabase
-        .from('order_items')
-        .select(`
-          quantity,
-          unit_price,
-          orders!inner (
-            status,
-            created_at
-          ),
-          products!inner (
-            farmer_id
-          )
-        `)
-        .eq('products.farmer_id', farmerId)
-        .eq('orders.status', 'completed')
-        .gte('orders.created_at', firstDayOfMonth.toISOString());
+      const { data: monthlyOrders } = await (supabase as any)
+        .from('orders')
+        .select('total_price')
+        .eq('farmer_id', farmerId)
+        .in('status', ['completed', 'delivered'])
+        .gte('created_at', firstDayOfMonth.toISOString());
 
-      const monthlyRevenue = monthlyOrderItems?.reduce((sum, item) => {
-        return sum + (item.quantity * item.unit_price);
+      const monthlyRevenue = monthlyOrders?.reduce((sum: number, order: any) => {
+        return sum + order.total_price;
       }, 0) || 0;
 
       setDashboardStats({
         totalProducts: totalProducts || 0,
-        pendingOrders,
+        pendingOrders: pendingOrders || 0,
         monthlyRevenue,
         activeListings: activeListings || 0,
       });
@@ -151,32 +129,27 @@ export default function FarmerDashboard() {
       const activities: RecentActivity[] = [];
 
       // Get recent orders
-      const { data: recentOrders } = await supabase
-        .from('order_items')
+      const { data: recentOrders } = await (supabase as any)
+        .from('orders')
         .select(`
-          order_id,
-          orders!inner (
-            id,
-            status,
-            created_at,
-            profiles!orders_buyer_id_fkey (
-              first_name,
-              last_name,
-              company_name
-            )
+          id,
+          status,
+          created_at,
+          profiles:buyer_id (
+            first_name,
+            last_name,
+            company_name
           ),
-          products!inner (
-            farmer_id,
+          products (
             name
           )
         `)
-        .eq('products.farmer_id', farmerId)
-        .order('orders(created_at)', { ascending: false })
+        .eq('farmer_id', farmerId)
+        .order('created_at', { ascending: false })
         .limit(3);
 
       if (recentOrders) {
-        recentOrders.forEach((item) => {
-          const order = item.orders;
+        recentOrders.forEach((order: any) => {
           const buyerName = order.profiles?.company_name ||
                           `${order.profiles?.first_name || ''} ${order.profiles?.last_name || ''}`.trim() ||
                           'Customer';
@@ -184,7 +157,7 @@ export default function FarmerDashboard() {
           activities.push({
             id: `order-${order.id}`,
             type: 'order',
-            title: `New order from ${buyerName}`,
+            title: `New order from ${buyerName} for ${order.products?.name || 'product'}`,
             time: formatActivityTime(order.created_at),
             icon: '📦',
           });
@@ -192,7 +165,7 @@ export default function FarmerDashboard() {
       }
 
       // Get recently approved products
-      const { data: recentProducts } = await supabase
+      const { data: recentProducts } = await (supabase as any)
         .from('products')
         .select('id, name, status, created_at')
         .eq('farmer_id', farmerId)
@@ -201,7 +174,7 @@ export default function FarmerDashboard() {
         .limit(2);
 
       if (recentProducts) {
-        recentProducts.forEach((product) => {
+        recentProducts.forEach((product: any) => {
           activities.push({
             id: `product-${product.id}`,
             type: 'product',

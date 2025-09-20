@@ -19,6 +19,7 @@ interface Product {
   status: 'pending' | 'approved' | 'rejected';
   created_at: string;
   farmer_id: string;
+  image_url?: string | null;
   profiles?: {
     first_name: string | null;
     last_name: string | null;
