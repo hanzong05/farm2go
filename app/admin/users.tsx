@@ -91,10 +91,10 @@ export default function AdminUsers() {
   }, []);
 
   useEffect(() => {
-    if (profile) {
+    if (profile && !loading) {
       loadUsers(profile);
     }
-  }, [activeTab]);
+  }, [activeTab, profile]);
 
   const loadData = async () => {
     try {
@@ -112,11 +112,10 @@ export default function AdminUsers() {
       }
 
       setProfile(userData.profile);
-      await loadUsers(userData.profile);
+      // loadUsers will be called by useEffect when profile is set
     } catch (error) {
       console.error('Error loading data:', error);
       Alert.alert('Error', 'Failed to load user data');
-    } finally {
       setLoading(false);
     }
   };
@@ -212,7 +211,11 @@ export default function AdminUsers() {
 
   const loadUsers = async (adminProfile?: Profile) => {
     const currentProfile = adminProfile || profile;
+    if (!currentProfile) return;
+
     try {
+      setLoading(true);
+
       let query = supabase
         .from('profiles')
         .select(`
@@ -230,33 +233,17 @@ export default function AdminUsers() {
         .order('created_at', { ascending: false });
 
       if (currentProfile?.barangay) {
-        console.log('📊 Admin barangay:', currentProfile.barangay);
-        console.log('📊 Filtering users for barangay:', currentProfile.barangay);
         query = query.eq('barangay', currentProfile.barangay);
-      } else {
-        console.log('⚠️ Admin has no barangay set, showing all users');
       }
 
       const { data, error } = await query;
-
-      console.log('📊 Load users response:', {
-        success: !error,
-        count: data?.length || 0,
-        error: error,
-        adminBarangay: currentProfile?.barangay,
-        firstFewUsers: data?.slice(0, 3).map(u => ({
-          name: `${u.first_name} ${u.last_name}`,
-          barangay: u.barangay,
-          user_type: u.user_type
-        }))
-      });
 
       if (error) {
         console.error('❌ Error loading users:', error);
         throw error;
       }
 
-      // Convert to User format
+      // Convert to User format without fetching sales data initially
       let usersData: User[] = data?.map(profile => ({
         id: profile.id,
         email: profile.email || '',
@@ -269,65 +256,65 @@ export default function AdminUsers() {
           phone: profile.phone,
           barangay: profile.barangay,
         },
+        salesData: {
+          totalSales: 0,
+          totalLifetime: 0,
+          chartData: []
+        }
       })) || [];
 
-      // Fetch real sales data for each user
-      console.log('📊 Fetching sales data for users...');
+      setUsers(usersData);
+      setLoading(false);
+
+      // Fetch sales data in background without blocking UI
+      loadSalesDataInBackground(usersData);
+
+    } catch (error) {
+      console.error('Error loading users:', error);
+      setLoading(false);
+      Alert.alert('Error', 'Failed to load users');
+    }
+  };
+
+  const loadSalesDataInBackground = async (usersData: User[]) => {
+    try {
+      // Only fetch sales data for buyers to show spending
+      const usersToUpdate = activeTab === 'buyer' ? usersData : [];
+
+      if (usersToUpdate.length === 0) return;
+
       const usersWithSalesData = await Promise.all(
-        usersData.map(async (user) => {
-          const salesData = await fetchUserSalesData(user.id);
-          return {
-            ...user,
-            salesData
-          };
+        usersToUpdate.map(async (user) => {
+          try {
+            const salesData = await fetchUserSalesData(user.id);
+            return {
+              ...user,
+              salesData
+            };
+          } catch (error) {
+            console.error(`Error fetching sales data for user ${user.id}:`, error);
+            return user; // Return user without sales data if fetch fails
+          }
         })
       );
 
-      usersData = usersWithSalesData;
-
-      // Additional client-side filtering to ensure barangay match
-      if (currentProfile?.barangay) {
-        const beforeFilter = usersData.length;
-        console.log(`🔍 Before client filter: Admin barangay="${currentProfile.barangay}"`);
-        console.log('🔍 Users before filter:', usersData.map(u => ({
-          name: `${u.profiles?.first_name} ${u.profiles?.last_name}`,
-          barangay: u.profiles?.barangay,
-          userType: u.profiles?.user_type
-        })));
-
-        usersData = usersData.filter(user => {
-          const match = user.profiles?.barangay === currentProfile.barangay;
-          if (!match) {
-            console.log(`❌ Filtering out user: ${user.profiles?.first_name} ${user.profiles?.last_name} (barangay: "${user.profiles?.barangay}" != "${currentProfile.barangay}")`);
-          }
-          return match;
-        });
-
-        console.log(`🔍 Client-side filter: ${beforeFilter} -> ${usersData.length} users (admin barangay: ${currentProfile.barangay})`);
-
-        // Log any users that don't match for debugging
-        const nonMatchingUsers = (data || []).filter(p => p.barangay !== currentProfile.barangay);
-        if (nonMatchingUsers.length > 0) {
-          console.log('⚠️ Found users with different barangays:', nonMatchingUsers.map(u => ({
-            name: `${u.first_name} ${u.last_name}`,
-            barangay: u.barangay,
-            expected: currentProfile.barangay
-          })));
-        }
-      }
-
-      console.log('👥 Final processed users data:', usersData.length, 'users');
-      setUsers(usersData);
+      setUsers(usersWithSalesData);
     } catch (error) {
-      console.error('Error loading users:', error);
-      Alert.alert('Error', 'Failed to load users');
+      console.error('Error loading sales data in background:', error);
     }
   };
 
   const onRefresh = async () => {
     setRefreshing(true);
-    await loadUsers(); // Use current profile from state for refresh
-    setRefreshing(false);
+    try {
+      if (profile) {
+        await loadUsers(profile);
+      }
+    } catch (error) {
+      console.error('Error refreshing users:', error);
+    } finally {
+      setRefreshing(false);
+    }
   };
 
   const filteredUsers = users.filter(user => {
