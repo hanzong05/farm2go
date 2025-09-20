@@ -74,7 +74,7 @@ export default function AdminUsers() {
       }
 
       setProfile(userData.profile);
-      await loadUsers();
+      await loadUsers(userData.profile);
     } catch (error) {
       console.error('Error loading data:', error);
       Alert.alert('Error', 'Failed to load user data');
@@ -83,7 +83,8 @@ export default function AdminUsers() {
     }
   };
 
-  const loadUsers = async () => {
+  const loadUsers = async (adminProfile?: Profile) => {
+    const currentProfile = adminProfile || profile;
     try {
       let query = supabase
         .from('profiles')
@@ -101,10 +102,10 @@ export default function AdminUsers() {
         .in('user_type', ['farmer', 'buyer'])
         .order('created_at', { ascending: false });
 
-      if (profile?.barangay) {
-        console.log('📊 Admin barangay:', profile.barangay);
-        console.log('📊 Filtering users for barangay:', profile.barangay);
-        query = query.eq('barangay', profile.barangay);
+      if (currentProfile?.barangay) {
+        console.log('📊 Admin barangay:', currentProfile.barangay);
+        console.log('📊 Filtering users for barangay:', currentProfile.barangay);
+        query = query.eq('barangay', currentProfile.barangay);
       } else {
         console.log('⚠️ Admin has no barangay set, showing all users');
       }
@@ -115,7 +116,7 @@ export default function AdminUsers() {
         success: !error,
         count: data?.length || 0,
         error: error,
-        adminBarangay: profile?.barangay,
+        adminBarangay: currentProfile?.barangay,
         firstFewUsers: data?.slice(0, 3).map(u => ({
           name: `${u.first_name} ${u.last_name}`,
           barangay: u.barangay,
@@ -144,18 +145,32 @@ export default function AdminUsers() {
       })) || [];
 
       // Additional client-side filtering to ensure barangay match
-      if (profile?.barangay) {
+      if (currentProfile?.barangay) {
         const beforeFilter = usersData.length;
-        usersData = usersData.filter(user => user.profiles?.barangay === profile.barangay);
-        console.log(`🔍 Client-side filter: ${beforeFilter} -> ${usersData.length} users (admin barangay: ${profile.barangay})`);
+        console.log(`🔍 Before client filter: Admin barangay="${currentProfile.barangay}"`);
+        console.log('🔍 Users before filter:', usersData.map(u => ({
+          name: `${u.profiles?.first_name} ${u.profiles?.last_name}`,
+          barangay: u.profiles?.barangay,
+          userType: u.profiles?.user_type
+        })));
+
+        usersData = usersData.filter(user => {
+          const match = user.profiles?.barangay === currentProfile.barangay;
+          if (!match) {
+            console.log(`❌ Filtering out user: ${user.profiles?.first_name} ${user.profiles?.last_name} (barangay: "${user.profiles?.barangay}" != "${currentProfile.barangay}")`);
+          }
+          return match;
+        });
+
+        console.log(`🔍 Client-side filter: ${beforeFilter} -> ${usersData.length} users (admin barangay: ${currentProfile.barangay})`);
 
         // Log any users that don't match for debugging
-        const nonMatchingUsers = (data || []).filter(p => p.barangay !== profile.barangay);
+        const nonMatchingUsers = (data || []).filter(p => p.barangay !== currentProfile.barangay);
         if (nonMatchingUsers.length > 0) {
           console.log('⚠️ Found users with different barangays:', nonMatchingUsers.map(u => ({
             name: `${u.first_name} ${u.last_name}`,
             barangay: u.barangay,
-            expected: profile.barangay
+            expected: currentProfile.barangay
           })));
         }
       }
@@ -170,7 +185,7 @@ export default function AdminUsers() {
 
   const onRefresh = async () => {
     setRefreshing(true);
-    await loadUsers();
+    await loadUsers(); // Use current profile from state for refresh
     setRefreshing(false);
   };
 
