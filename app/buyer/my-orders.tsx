@@ -125,11 +125,15 @@ export default function BuyerMyOrdersScreen() {
   const loadData = async () => {
     try {
       const userData = await getUserWithProfile();
+      console.log('User data:', userData);
+
       if (!userData?.profile) {
+        console.log('No user profile found, redirecting to login');
         navigation.navigate('Login' as never);
         return;
       }
 
+      console.log('Setting profile and loading orders for user:', userData.user.id);
       setProfile(userData.profile);
       await loadOrders(userData.user.id);
     } catch (error) {
@@ -154,7 +158,6 @@ export default function BuyerMyOrdersScreen() {
           created_at,
           delivery_address,
           notes,
-          purchase_code,
           products (
             name,
             unit,
@@ -170,7 +173,12 @@ export default function BuyerMyOrdersScreen() {
         .eq('buyer_id', buyerId)
         .order('created_at', { ascending: false });
 
-      if (ordersError) throw ordersError;
+      if (ordersError) {
+        console.error('Orders query error:', ordersError);
+        throw ordersError;
+      }
+
+      console.log('Orders data:', ordersData);
 
       if (!ordersData || ordersData.length === 0) {
         setOrders([]);
@@ -187,7 +195,7 @@ export default function BuyerMyOrdersScreen() {
         delivery_date: null, // Not in current schema
         delivery_address: order.delivery_address,
         notes: order.notes,
-        purchase_code: order.purchase_code,
+        purchase_code: null, // Temporarily set to null until column exists
         farmer_profile: order.profiles ? {
           first_name: order.profiles.first_name,
           last_name: order.profiles.last_name,
