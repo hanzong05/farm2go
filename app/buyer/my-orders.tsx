@@ -1,8 +1,9 @@
-import { router } from 'expo-router';
+import { useNavigation } from '@react-navigation/native';
 import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  Animated,
   Dimensions,
   RefreshControl,
   ScrollView,
@@ -12,6 +13,7 @@ import {
   View,
 } from 'react-native';
 import HeaderComponent from '../../components/HeaderComponent';
+import OrderQRCodeModal from '../../components/OrderQRCodeModal';
 import { supabase } from '../../lib/supabase';
 import { getUserWithProfile } from '../../services/auth';
 import { Database } from '../../types/database';
@@ -65,6 +67,7 @@ interface Order {
   delivery_date: string | null;
   delivery_address: string | null;
   notes: string | null;
+  purchase_code?: string;
   farmer_profile?: {
     first_name: string | null;
     last_name: string | null;
@@ -93,15 +96,26 @@ const ORDER_STATUSES = [
 ];
 
 export default function BuyerMyOrdersScreen() {
+  const navigation = useNavigation();
   const [orders, setOrders] = useState<Order[]>([]);
   const [filteredOrders, setFilteredOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [selectedStatus, setSelectedStatus] = useState('all');
   const [profile, setProfile] = useState<Profile | null>(null);
+  const [showQRModal, setShowQRModal] = useState(false);
+  const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
+  const fadeAnim = new Animated.Value(0);
 
   useEffect(() => {
     loadData();
+    
+    // Fade in animation
+    Animated.timing(fadeAnim, {
+      toValue: 1,
+      duration: 600,
+      useNativeDriver: true,
+    }).start();
   }, []);
 
   useEffect(() => {
@@ -112,7 +126,7 @@ export default function BuyerMyOrdersScreen() {
     try {
       const userData = await getUserWithProfile();
       if (!userData?.profile) {
-        router.replace('/auth/login');
+        navigation.navigate('Login' as never);
         return;
       }
 
@@ -140,6 +154,7 @@ export default function BuyerMyOrdersScreen() {
           created_at,
           delivery_address,
           notes,
+          purchase_code,
           products (
             name,
             unit,
@@ -172,6 +187,7 @@ export default function BuyerMyOrdersScreen() {
         delivery_date: null, // Not in current schema
         delivery_address: order.delivery_address,
         notes: order.notes,
+        purchase_code: order.purchase_code,
         farmer_profile: order.profiles ? {
           first_name: order.profiles.first_name,
           last_name: order.profiles.last_name,
@@ -252,6 +268,29 @@ export default function BuyerMyOrdersScreen() {
     return { pending, active, completed, totalSpent };
   };
 
+  const handleShowQRCode = (order: Order) => {
+    setSelectedOrder(order);
+    setShowQRModal(true);
+  };
+
+  const handleCloseQRModal = () => {
+    setShowQRModal(false);
+    setSelectedOrder(null);
+  };
+
+  const renderStatsCard = (title: string, value: string | number, icon: string, color: string) => (
+    <View style={[styles.statsCard, { borderLeftColor: color }]}>
+      <View style={styles.statsContent}>
+        <View style={[styles.statsIcon, { backgroundColor: color + '20' }]}>
+          <Text style={styles.statsIconText}>{icon}</Text>
+        </View>
+        <View style={styles.statsInfo}>
+          <Text style={styles.statsValue}>{value}</Text>
+          <Text style={styles.statsTitle}>{title}</Text>
+        </View>
+      </View>
+    </View>
+  );
 
   const renderOrderCard = ({ item: order }: { item: Order }) => {
     const statusConfig = getStatusConfig(order.status);
@@ -270,7 +309,7 @@ export default function BuyerMyOrdersScreen() {
           </View>
         </View>
 
-        <View style={styles.farmerSection}>
+        <View style={[styles.farmerSection, { backgroundColor: statusConfig.bgColor }]}>
           <Text style={styles.farmerIcon}>🏡</Text>
           <View style={styles.farmerInfo}>
             <Text style={styles.farmerName}>
@@ -282,6 +321,9 @@ export default function BuyerMyOrdersScreen() {
               <Text style={styles.farmerLocation}>{order.farmer_profile.barangay}</Text>
             )}
           </View>
+          <View style={[styles.verifiedBadge, { backgroundColor: statusConfig.color }]}>
+            <Text style={styles.verifiedText}>✓</Text>
+          </View>
         </View>
 
         <View style={styles.orderDetails}>
@@ -289,7 +331,10 @@ export default function BuyerMyOrdersScreen() {
             <Text style={styles.itemsTitle}>Items Ordered</Text>
             {order.order_items?.map((item, index) => (
               <View key={index} style={styles.orderItem}>
-                <Text style={styles.itemQuantity}>{item.quantity} {item.product.unit}</Text>
+                <View style={[styles.itemQuantityBadge, { backgroundColor: statusConfig.color }]}>
+                  <Text style={styles.itemQuantity}>{item.quantity}</Text>
+                  <Text style={styles.itemUnit}>{item.product.unit}</Text>
+                </View>
                 <Text style={styles.itemName}>{item.product.name}</Text>
                 <Text style={styles.itemPrice}>{formatPrice(item.unit_price)}</Text>
               </View>
@@ -297,8 +342,11 @@ export default function BuyerMyOrdersScreen() {
           </View>
 
           <View style={styles.orderAmount}>
-            <Text style={styles.amountLabel}>Total Amount</Text>
-            <Text style={styles.amountValue}>{formatPrice(order.total_amount)}</Text>
+            <View style={styles.amountContent}>
+              <Text style={styles.amountLabel}>Total Amount</Text>
+              <Text style={styles.amountValue}>{formatPrice(order.total_amount)}</Text>
+            </View>
+            <Text style={styles.amountIcon}>💰</Text>
           </View>
         </View>
 
@@ -314,8 +362,8 @@ export default function BuyerMyOrdersScreen() {
                 <View key={status} style={styles.timelineStep}>
                   <View style={[
                     styles.timelineNode,
-                    isActive && styles.timelineNodeActive,
-                    isCurrent && styles.timelineNodeCurrent
+                    isActive && [styles.timelineNodeActive, { backgroundColor: statusConfig.color }],
+                    isCurrent && [styles.timelineNodeCurrent, { borderColor: statusConfig.color }]
                   ]}>
                     <Text style={[
                       styles.timelineNodeText,
@@ -327,7 +375,7 @@ export default function BuyerMyOrdersScreen() {
                   {index < 4 && (
                     <View style={[
                       styles.timelineLine,
-                      isActive && styles.timelineLineActive
+                      isActive && [styles.timelineLineActive, { backgroundColor: statusConfig.color }]
                     ]} />
                   )}
                 </View>
@@ -367,6 +415,18 @@ export default function BuyerMyOrdersScreen() {
             </View>
           </View>
         )}
+
+        {/* Action Buttons */}
+        <View style={styles.actionButtons}>
+          <TouchableOpacity
+            style={[styles.qrButton, { backgroundColor: statusConfig.color }]}
+            onPress={() => handleShowQRCode(order)}
+            activeOpacity={0.8}
+          >
+            <Text style={styles.qrButtonIcon}>📱</Text>
+            <Text style={styles.qrButtonText}>Show QR Code</Text>
+          </TouchableOpacity>
+        </View>
       </View>
     );
   };
@@ -389,7 +449,7 @@ export default function BuyerMyOrdersScreen() {
       {selectedStatus === 'all' && (
         <TouchableOpacity
           style={styles.ctaButton}
-          onPress={() => router.push('/buyer/marketplace')}
+          onPress={() => navigation.navigate('Marketplace' as never)}
           activeOpacity={0.8}
         >
           <Text style={styles.ctaIcon}>🛒</Text>
@@ -431,11 +491,18 @@ export default function BuyerMyOrdersScreen() {
         }
         showsVerticalScrollIndicator={false}
       >
-        {/* Enhanced Stats */}
-        
+        {/* Stats Section */}
+        <View style={styles.statsSection}>
+          <Text style={styles.sectionTitle}>Order Summary</Text>
+          <View style={styles.statsGrid}>
+            {renderStatsCard('Pending', stats.pending, '⏰', '#f59e0b')}
+            {renderStatsCard('Active', stats.active, '🚀', '#3b82f6')}
+            {renderStatsCard('Completed', stats.completed, '✅', '#10b981')}
+            {renderStatsCard('Total Spent', formatPrice(stats.totalSpent), '💰', '#8b5cf6')}
+          </View>
+        </View>
 
-
-        {/* Enhanced Filter */}
+        {/* Filter */}
         <View style={styles.filterSection}>
           <Text style={styles.sectionTitle}>Filter Orders</Text>
           <ScrollView
@@ -479,15 +546,35 @@ export default function BuyerMyOrdersScreen() {
             renderEmptyState()
           ) : (
             <View style={styles.ordersList}>
-              {filteredOrders.map((order) => (
-                <View key={order.id}>
+              {filteredOrders.map((order, index) => (
+                <Animated.View 
+                  key={order.id}
+                  style={{
+                    opacity: fadeAnim,
+                    transform: [{
+                      translateY: fadeAnim.interpolate({
+                        inputRange: [0, 1],
+                        outputRange: [30 * (index + 1), 0]
+                      })
+                    }]
+                  }}
+                >
                   {renderOrderCard({ item: order })}
-                </View>
+                </Animated.View>
               ))}
             </View>
           )}
         </View>
       </ScrollView>
+
+      {/* QR Code Modal */}
+      {selectedOrder && (
+        <OrderQRCodeModal
+          visible={showQRModal}
+          onClose={handleCloseQRModal}
+          order={selectedOrder}
+        />
+      )}
     </View>
   );
 }
@@ -520,8 +607,6 @@ const styles = StyleSheet.create({
     paddingBottom: 40,
   },
 
-  // Welcome Header
-
   // Section Titles
   sectionTitle: {
     fontSize: 22,
@@ -540,7 +625,50 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
     gap: 16,
   },
-
+  statsCard: {
+    flex: 1,
+    minWidth: (width - 60) / 2,
+    backgroundColor: '#ffffff',
+    borderRadius: 16,
+    borderLeftWidth: 4,
+    elevation: 4,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
+  },
+  statsContent: {
+    padding: 20,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  statsIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 16,
+  },
+  statsIconText: {
+    fontSize: 20,
+  },
+  statsInfo: {
+    flex: 1,
+  },
+  statsValue: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#0f172a',
+    marginBottom: 4,
+  },
+  statsTitle: {
+    fontSize: 12,
+    color: '#64748b',
+    fontWeight: '600',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
 
   // Filter Section
   filterSection: {
@@ -641,7 +769,6 @@ const styles = StyleSheet.create({
   farmerSection: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#f8fafc',
     padding: 16,
     borderRadius: 12,
     marginBottom: 20,
@@ -664,6 +791,18 @@ const styles = StyleSheet.create({
     color: '#64748b',
     fontWeight: '500',
   },
+  verifiedBadge: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  verifiedText: {
+    fontSize: 12,
+    color: '#ffffff',
+    fontWeight: 'bold',
+  },
   orderDetails: {
     marginBottom: 20,
   },
@@ -685,11 +824,23 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     marginBottom: 8,
   },
+  itemQuantityBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+    marginRight: 12,
+    minWidth: 60,
+    alignItems: 'center',
+  },
   itemQuantity: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: '#059669',
-    width: 80,
+    fontSize: 12,
+    fontWeight: 'bold',
+    color: '#ffffff',
+  },
+  itemUnit: {
+    fontSize: 10,
+    color: '#ffffff',
+    fontWeight: '500',
   },
   itemName: {
     fontSize: 14,
@@ -712,6 +863,9 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#bbf7d0',
   },
+  amountContent: {
+    flex: 1,
+  },
   amountLabel: {
     fontSize: 16,
     fontWeight: '600',
@@ -721,6 +875,9 @@ const styles = StyleSheet.create({
     fontSize: 20,
     fontWeight: 'bold',
     color: '#059669',
+  },
+  amountIcon: {
+    fontSize: 24,
   },
   
   // Status Timeline
@@ -757,12 +914,10 @@ const styles = StyleSheet.create({
     borderColor: '#e2e8f0',
   },
   timelineNodeActive: {
-    backgroundColor: '#10b981',
     borderColor: '#10b981',
   },
   timelineNodeCurrent: {
-    backgroundColor: '#3b82f6',
-    borderColor: '#3b82f6',
+    borderWidth: 3,
   },
   timelineNodeText: {
     fontSize: 10,
@@ -824,6 +979,36 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#64748b',
     lineHeight: 20,
+  },
+
+  // Action Buttons
+  actionButtons: {
+    marginTop: 20,
+    paddingTop: 20,
+    borderTopWidth: 1,
+    borderTopColor: '#f1f5f9',
+  },
+  qrButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 14,
+    paddingHorizontal: 20,
+    borderRadius: 12,
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 4,
+  },
+  qrButtonIcon: {
+    fontSize: 18,
+    marginRight: 8,
+  },
+  qrButtonText: {
+    fontSize: 16,
+    color: '#ffffff',
+    fontWeight: '600',
   },
 
   // Empty State
