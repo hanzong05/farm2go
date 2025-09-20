@@ -62,7 +62,7 @@ const getAuthScreenOptions = (title?: string) => ({
 });
 
 // Dashboard screen options with marketplace styling
-const getDashboardScreenOptions = (title?: string) => ({
+const getDashboardScreenOptions = (title?: string)  => ({
   ...getScreenOptions(title),
   animation: 'slide_from_bottom' as const,
   contentStyle: {
@@ -113,7 +113,7 @@ export default function RootLayout() {
                 break;
               case 'admin':
                 console.log('🚀 Auto-redirecting admin to dashboard');
-                router.replace('/admin/users' as any);
+                router.replace('/admin/users');
                 break;
               case 'farmer':
                 console.log('🚀 Auto-redirecting farmer to dashboard');

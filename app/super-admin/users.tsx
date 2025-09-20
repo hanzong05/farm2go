@@ -32,6 +32,7 @@ interface User {
     user_type: 'farmer' | 'buyer' | 'admin' | 'super-admin';
     farm_name: string | null;
     phone: string | null;
+    barangay: string | null;
   } | null;
 }
 
@@ -128,17 +129,20 @@ export default function SuperAdminUsers() {
           user_type,
           farm_name,
           phone,
+          barangay,
           created_at
         `)
         .eq('user_type', 'admin')
         .order('created_at', { ascending: false })
         .returns<{
           id: string;
+          email: string;
           first_name: string | null;
           last_name: string | null;
           user_type: 'farmer' | 'buyer' | 'admin' | 'super-admin';
           farm_name: string | null;
-                phone: string | null;
+          phone: string | null;
+          barangay: string | null;
           created_at: string;
         }[]>();
 
@@ -157,14 +161,15 @@ export default function SuperAdminUsers() {
       // Convert to User format (simplified for super admin view)
       const usersData: User[] = data?.map(profile => ({
           id: profile.id,
-          email: (profile as any).email || '', // temporary fix with type assertion
+          email: profile.email || '',
           created_at: profile.created_at || '',
           profiles: {
             first_name: profile.first_name,
             last_name: profile.last_name,
             user_type: profile.user_type as 'farmer' | 'buyer' | 'admin' | 'super-admin',
             farm_name: profile.farm_name,
-              phone: profile.phone,
+            phone: profile.phone,
+            barangay: profile.barangay,
           },
         })) || [];
 
@@ -355,7 +360,8 @@ export default function SuperAdminUsers() {
       user.profiles?.first_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
       user.profiles?.last_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
       user.profiles?.farm_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      user.profiles?.barangay?.toLowerCase().includes(searchQuery.toLowerCase());
+      user.profiles?.barangay?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      user.email?.toLowerCase().includes(searchQuery.toLowerCase());
 
     return matchesSearch;
   });
@@ -381,11 +387,16 @@ export default function SuperAdminUsers() {
           </View>
         </View>
 
+        <Text style={styles.userDetail}>📧 {item.email}</Text>
+
         {item.profiles?.farm_name && (
           <Text style={styles.userDetail}>🏡 {item.profiles.farm_name}</Text>
         )}
         {item.profiles?.phone && (
           <Text style={styles.userDetail}>📞 {item.profiles.phone}</Text>
+        )}
+        {item.profiles?.barangay && (
+          <Text style={styles.userDetail}>📍 {item.profiles.barangay}</Text>
         )}
 
         <Text style={styles.userDate}>

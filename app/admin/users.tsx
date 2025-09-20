@@ -64,6 +64,8 @@ export default function AdminUsers() {
       const userData = await getUserWithProfile();
       console.log('🔍 Admin Page - User data:', userData);
       console.log('🔍 Admin Page - User type:', userData?.profile?.user_type);
+      console.log('🔍 Admin Page - User barangay:', userData?.profile?.barangay);
+      console.log('🔍 Admin Page - Full profile:', JSON.stringify(userData?.profile, null, 2));
 
       if (!userData?.profile || !['admin', 'super-admin'].includes(userData.profile.user_type)) {
         console.log('❌ Access denied - User type:', userData?.profile?.user_type);
@@ -84,15 +86,7 @@ export default function AdminUsers() {
 
   const loadUsers = async () => {
     try {
-      if (!profile?.barangay) {
-        console.log('❌ Admin has no barangay set, cannot filter users');
-        Alert.alert('Error', 'Admin profile must have a barangay location set to view users');
-        return;
-      }
-
-      console.log('📊 Loading users from barangay:', profile.barangay);
-
-      const { data, error } = await supabase
+      let query = supabase
         .from('profiles')
         .select(`
           id,
@@ -101,14 +95,21 @@ export default function AdminUsers() {
           last_name,
           user_type,
           farm_name,
-          company_name,
           phone,
           barangay,
           created_at
         `)
-        .eq('barangay', profile.barangay)
         .in('user_type', ['farmer', 'buyer'])
         .order('created_at', { ascending: false });
+
+      if (profile?.barangay) {
+        console.log('📊 Loading users from barangay:', profile.barangay);
+        query = query.eq('barangay', profile.barangay);
+      } else {
+        console.log('⚠️ Admin has no barangay set, showing all users');
+      }
+
+      const { data, error } = await query;
 
       console.log('📊 Load users response:', {
         success: !error,
@@ -235,7 +236,9 @@ export default function AdminUsers() {
         <View style={styles.header}>
           <View style={styles.titleSection}>
             <Text style={styles.title}>User Management</Text>
-            <Text style={styles.barangayInfo}>📍 {profile?.barangay || 'No Barangay Set'}</Text>
+            <Text style={styles.barangayInfo}>
+              📍 {profile?.barangay ? `Managing: ${profile.barangay}` : 'All Barangays (No barangay filter)'}
+            </Text>
           </View>
           <View style={styles.statsContainer}>
             <Text style={styles.statsText}>Total Users: {users.length}</Text>
