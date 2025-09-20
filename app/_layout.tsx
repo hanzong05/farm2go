@@ -107,7 +107,7 @@ export default function RootLayout() {
             switch (userData.profile.user_type) {
               case 'super-admin':
                 console.log('🚀 Auto-redirecting super admin to dashboard');
-                router.replace('/super-admin');
+                router.replace('/super-admin' as any);
                 break;
               case 'admin':
                 console.log('🚀 Auto-redirecting admin to dashboard');

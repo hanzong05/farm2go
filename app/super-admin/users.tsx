@@ -18,6 +18,7 @@ import LocationPicker from '../../components/LocationPicker';
 import { supabase } from '../../lib/supabase';
 import { getUserWithProfile } from '../../services/auth';
 import { Database } from '../../types/database';
+import { createClient } from '@supabase/supabase-js';
 
 type Profile = Database['public']['Tables']['profiles']['Row'];
 
@@ -183,22 +184,25 @@ export default function SuperAdminUsers() {
       if (authError) throw authError;
 
       if (authData.user) {
-        // Create profile
-        const profileData: Database['public']['Tables']['profiles']['Insert'] = {
-          id: authData.user.id,
-          email: createForm.email,
-          first_name: createForm.first_name,
-          last_name: createForm.last_name,
-          user_type: createForm.user_type,
-          phone: createForm.phone || null,
-          farm_name: createForm.user_type === 'farmer' ? createForm.farm_name || null : null,
-          company_name: createForm.user_type === 'buyer' ? createForm.company_name || null : null,
-          barangay: createForm.barangay || null,
-        };
+        // Create profile using untyped client
+        const untypedSupabase = createClient(
+          process.env.EXPO_PUBLIC_SUPABASE_URL || 'https://demo.supabase.co',
+          process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || 'demo-anon-key'
+        );
 
-        const { error: profileError } = await supabase
+        const { error: profileError } = await untypedSupabase
           .from('profiles')
-          .insert(profileData);
+          .insert({
+            id: authData.user.id,
+            email: createForm.email,
+            first_name: createForm.first_name || null,
+            last_name: createForm.last_name || null,
+            user_type: createForm.user_type,
+            phone: createForm.phone || null,
+            farm_name: createForm.user_type === 'farmer' ? (createForm.farm_name || null) : null,
+            company_name: createForm.user_type === 'buyer' ? (createForm.company_name || null) : null,
+            barangay: createForm.barangay || null,
+          });
 
         if (profileError) throw profileError;
 
