@@ -103,7 +103,8 @@ export default function AdminUsers() {
         .order('created_at', { ascending: false });
 
       if (profile?.barangay) {
-        console.log('📊 Loading users from barangay:', profile.barangay);
+        console.log('📊 Admin barangay:', profile.barangay);
+        console.log('📊 Filtering users for barangay:', profile.barangay);
         query = query.eq('barangay', profile.barangay);
       } else {
         console.log('⚠️ Admin has no barangay set, showing all users');
@@ -114,7 +115,13 @@ export default function AdminUsers() {
       console.log('📊 Load users response:', {
         success: !error,
         count: data?.length || 0,
-        error: error
+        error: error,
+        adminBarangay: profile?.barangay,
+        firstFewUsers: data?.slice(0, 3).map(u => ({
+          name: `${u.first_name} ${u.last_name}`,
+          barangay: u.barangay,
+          user_type: u.user_type
+        }))
       });
 
       if (error) {
@@ -123,7 +130,7 @@ export default function AdminUsers() {
       }
 
       // Convert to User format
-      const usersData: User[] = data?.map(profile => ({
+      let usersData: User[] = data?.map(profile => ({
         id: profile.id,
         email: profile.email || '',
         created_at: profile.created_at || '',
@@ -138,7 +145,24 @@ export default function AdminUsers() {
         },
       })) || [];
 
-      console.log('👥 Processed users data:', usersData.length, 'users');
+      // Additional client-side filtering to ensure barangay match
+      if (profile?.barangay) {
+        const beforeFilter = usersData.length;
+        usersData = usersData.filter(user => user.profiles?.barangay === profile.barangay);
+        console.log(`🔍 Client-side filter: ${beforeFilter} -> ${usersData.length} users (admin barangay: ${profile.barangay})`);
+
+        // Log any users that don't match for debugging
+        const nonMatchingUsers = (data || []).filter(p => p.barangay !== profile.barangay);
+        if (nonMatchingUsers.length > 0) {
+          console.log('⚠️ Found users with different barangays:', nonMatchingUsers.map(u => ({
+            name: `${u.first_name} ${u.last_name}`,
+            barangay: u.barangay,
+            expected: profile.barangay
+          })));
+        }
+      }
+
+      console.log('👥 Final processed users data:', usersData.length, 'users');
       setUsers(usersData);
     } catch (error) {
       console.error('Error loading users:', error);
