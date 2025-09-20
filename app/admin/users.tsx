@@ -25,6 +25,48 @@ const { width: screenWidth } = Dimensions.get('window');
 
 type Profile = Database['public']['Tables']['profiles']['Row'];
 
+interface ProfileResponse {
+  id: string;
+  email: string | null;
+  first_name: string | null;
+  last_name: string | null;
+  user_type: 'farmer' | 'buyer' | 'admin' | 'super-admin';
+  farm_name: string | null;
+  phone: string | null;
+  barangay: string | null;
+  created_at: string | null;
+}
+
+interface OrderResponse {
+  id: string;
+  buyer_id: string;
+  farmer_id: string;
+  total_amount: number;
+  status: string;
+  created_at: string;
+  buyer_profile?: {
+    first_name: string | null;
+    last_name: string | null;
+  };
+  order_items?: Array<{
+    id: string;
+    product: {
+      name: string;
+      price: number;
+    };
+  }>;
+}
+
+interface ProductResponse {
+  id: string;
+  name: string;
+  price: number;
+  stock_quantity: number;
+  category: string;
+  farmer_id: string;
+  created_at: string;
+}
+
 interface User {
   id: string;
   email: string;
@@ -80,14 +122,34 @@ export default function AdminUsers() {
   const [selectedFarmer, setSelectedFarmer] = useState<User | null>(null);
   const [modalVisible, setModalVisible] = useState(false);
   const [farmerDetailTab, setFarmerDetailTab] = useState<'products' | 'orders' | 'inventory'>('products');
-  const [farmerProducts, setFarmerProducts] = useState<any[]>([]);
-  const [farmerOrders, setFarmerOrders] = useState<any[]>([]);
-  const [farmerInventory, setFarmerInventory] = useState<any[]>([]);
-  const [editingItem, setEditingItem] = useState<any>(null);
+  const [farmerProducts, setFarmerProducts] = useState<ProductResponse[]>([]);
+  const [farmerOrders, setFarmerOrders] = useState<OrderResponse[]>([]);
+  const [farmerInventory, setFarmerInventory] = useState<ProductResponse[]>([]);
+  const [editingItem, setEditingItem] = useState<ProductResponse | null>(null);
   const [showAddForm, setShowAddForm] = useState(false);
+  const [authChecked, setAuthChecked] = useState(false);
 
   useEffect(() => {
     loadData();
+
+    // Listen for auth state changes (handles refresh scenarios)
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      console.log('🔐 Auth state change:', event, session?.user?.id);
+
+      if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
+        // Re-check user profile when auth is restored
+        if (!profile && !authChecked) {
+          await loadData();
+        }
+      } else if (event === 'SIGNED_OUT') {
+        setLoading(false);
+        router.replace('/');
+      }
+    });
+
+    return () => {
+      subscription.unsubscribe();
+    };
   }, []);
 
   useEffect(() => {
@@ -98,15 +160,23 @@ export default function AdminUsers() {
 
   const loadData = async () => {
     try {
+      // Wait a bit for auth state to stabilize on refresh
+      await new Promise(resolve => setTimeout(resolve, 100));
+
       const userData = await getUserWithProfile();
       console.log('🔍 Admin Page - User data:', userData);
       console.log('🔍 Admin Page - User type:', userData?.profile?.user_type);
       console.log('🔍 Admin Page - User barangay:', userData?.profile?.barangay);
       console.log('🔍 Admin Page - Full profile:', JSON.stringify(userData?.profile, null, 2));
 
+      setAuthChecked(true);
+
       if (!userData?.profile || !['admin', 'super-admin'].includes(userData.profile.user_type)) {
         console.log('❌ Access denied - User type:', userData?.profile?.user_type);
-        Alert.alert('Access Denied', `You do not have admin privileges. Current user type: ${userData?.profile?.user_type || 'none'}`);
+        // Only show alert if we actually have user data but wrong permissions
+        if (userData?.profile) {
+          Alert.alert('Access Denied', `You do not have admin privileges. Current user type: ${userData?.profile?.user_type || 'none'}`);
+        }
         setLoading(false);
         router.replace('/');
         return;
@@ -116,8 +186,17 @@ export default function AdminUsers() {
       // Don't set loading to false here - let loadUsers handle it
     } catch (error) {
       console.error('Error loading data:', error);
-      Alert.alert('Error', 'Failed to load user data');
+      setAuthChecked(true);
+      // Only show error alert if it's not an auth issue during refresh
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      if (errorMessage !== 'No user on the session!' && !errorMessage.includes('session')) {
+        Alert.alert('Error', 'Failed to load user data');
+      }
       setLoading(false);
+      // Give auth time to restore before redirecting
+      setTimeout(() => {
+        router.replace('/');
+      }, 1000);
     }
   };
 
@@ -165,6 +244,16 @@ export default function AdminUsers() {
         .lte('created_at', endDate.toISOString())
         .in('status', ['completed', 'delivered']);
 
+      type OrderData = {
+        total_amount: number;
+        created_at: string;
+        status: string;
+      };
+
+      type AllOrderData = {
+        total_amount: number;
+      };
+
       if (error) {
         console.error(`Error fetching orders for user ${userId}:`, error);
         return { totalSales: 0, totalLifetime: 0, chartData: [] };
@@ -180,7 +269,7 @@ export default function AdminUsers() {
       });
 
       // Add actual sales data
-      orders?.forEach(order => {
+      (orders as OrderData[] | null)?.forEach(order => {
         const orderDate = new Date(order.created_at).toLocaleDateString('en-US', {
           month: 'short',
           day: 'numeric'
@@ -197,7 +286,7 @@ export default function AdminUsers() {
       }));
 
       const totalSales = chartData.reduce((sum, day) => sum + day.amount, 0);
-      const totalLifetime = allOrders?.reduce((sum, order) => sum + (order.total_amount || 0), 0) || 0;
+      const totalLifetime = (allOrders as AllOrderData[] | null)?.reduce((sum, order) => sum + (order.total_amount || 0), 0) || 0;
 
       return {
         totalSales,
@@ -244,14 +333,14 @@ export default function AdminUsers() {
       }
 
       // Convert to User format without fetching sales data initially
-      let usersData: User[] = data?.map(profile => ({
+      let usersData: User[] = (data as ProfileResponse[] | null)?.map(profile => ({
         id: profile.id,
         email: profile.email || '',
         created_at: profile.created_at || '',
         profiles: {
           first_name: profile.first_name,
           last_name: profile.last_name,
-          user_type: profile.user_type as 'farmer' | 'buyer' | 'admin' | 'super-admin',
+          user_type: profile.user_type,
           farm_name: profile.farm_name,
           phone: profile.phone,
           barangay: profile.barangay,
@@ -400,7 +489,7 @@ export default function AdminUsers() {
       if (productsError) {
         console.error('Error loading farmer products:', productsError);
       } else {
-        setFarmerProducts(products || []);
+        setFarmerProducts((products as ProductResponse[] | null) || []);
       }
 
       // Load orders
@@ -420,11 +509,11 @@ export default function AdminUsers() {
       if (ordersError) {
         console.error('Error loading farmer orders:', ordersError);
       } else {
-        setFarmerOrders(orders || []);
+        setFarmerOrders((orders as OrderResponse[] | null) || []);
       }
 
       // Load inventory (same as products but with stock focus)
-      setFarmerInventory(products || []);
+      setFarmerInventory((products as ProductResponse[] | null) || []);
 
     } catch (error) {
       console.error('Error loading farmer data:', error);
