@@ -20,7 +20,7 @@ interface Product {
   name: string;
   description: string;
   price: number;
-  quantity: number;
+  quantity_available: number;
   unit: string;
   category: string;
   farmer_id: string;
@@ -101,7 +101,7 @@ export default function OrderProductScreen() {
       return;
     }
 
-    if (quantity > product.quantity) {
+    if (quantity > product.quantity_available) {
       Alert.alert('Error', 'Requested quantity exceeds available stock');
       return;
     }
@@ -115,14 +115,14 @@ export default function OrderProductScreen() {
       setOrdering(true);
 
       // Create order record
-      const { error: orderError } = await supabase
+      const { error: orderError } = await (supabase as any)
         .from('orders')
         .insert({
           buyer_id: user.id,
           farmer_id: product.farmer_id,
           product_id: product.id,
           quantity: quantity,
-          total_amount: calculateTotal(),
+          total_price: calculateTotal(),
           delivery_address: orderData.deliveryAddress,
           notes: orderData.notes,
           status: 'pending',
@@ -135,11 +135,10 @@ export default function OrderProductScreen() {
       }
 
       // Update product quantity
-      const { error: updateError } = await supabase
+      const { error: updateError } = await (supabase as any)
         .from('products')
         .update({
-          quantity: product.quantity - quantity,
-          updated_at: new Date().toISOString()
+          quantity_available: product.quantity_available - quantity
         })
         .eq('id', product.id);
 
@@ -210,7 +209,7 @@ export default function OrderProductScreen() {
           <Text style={styles.sectionTitle}>Product Summary</Text>
           <Text style={styles.productName}>{product.name}</Text>
           <Text style={styles.productPrice}>₱{product.price.toLocaleString()} per {product.unit}</Text>
-          <Text style={styles.availableStock}>Available: {product.quantity} {product.unit}(s)</Text>
+          <Text style={styles.availableStock}>Available: {product.quantity_available} {product.unit}(s)</Text>
 
           {product.profiles && (
             <Text style={styles.farmerName}>

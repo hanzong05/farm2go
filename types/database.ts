@@ -102,10 +102,12 @@ export interface Database {
         Row: {
           id: string
           buyer_id: string
-          total_amount: number
-          status: 'pending' | 'confirmed' | 'processing' | 'ready' | 'delivered' | 'cancelled' | 'completed'
+          farmer_id: string
+          product_id: string
+          quantity: number
+          total_price: number
+          status: 'pending' | 'confirmed' | 'processing' | 'ready' | 'delivered' | 'cancelled'
           delivery_address: string
-          delivery_date: string | null
           notes: string | null
           created_at: string
           updated_at: string
@@ -113,10 +115,12 @@ export interface Database {
         Insert: {
           id?: string
           buyer_id: string
-          total_amount: number
-          status?: 'pending' | 'confirmed' | 'processing' | 'ready' | 'delivered' | 'cancelled' | 'completed'
+          farmer_id: string
+          product_id: string
+          quantity: number
+          total_price: number
+          status?: 'pending' | 'confirmed' | 'processing' | 'ready' | 'delivered' | 'cancelled'
           delivery_address: string
-          delivery_date?: string | null
           notes?: string | null
           created_at?: string
           updated_at?: string
@@ -124,10 +128,12 @@ export interface Database {
         Update: {
           id?: string
           buyer_id?: string
-          total_amount?: number
-          status?: 'pending' | 'confirmed' | 'processing' | 'ready' | 'delivered' | 'cancelled' | 'completed'
+          farmer_id?: string
+          product_id?: string
+          quantity?: number
+          total_price?: number
+          status?: 'pending' | 'confirmed' | 'processing' | 'ready' | 'delivered' | 'cancelled'
           delivery_address?: string
-          delivery_date?: string | null
           notes?: string | null
           created_at?: string
           updated_at?: string

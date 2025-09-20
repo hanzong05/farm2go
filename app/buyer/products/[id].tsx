@@ -9,7 +9,7 @@ interface Product {
   name: string;
   description: string;
   price: number;
-  quantity: number;
+  quantity_available: number;
   unit: string;
   category: string;
   farmer_id: string;
@@ -128,7 +128,7 @@ export default function BuyerProductDetailScreen() {
 
           <View style={styles.detailRow}>
             <Text style={styles.label}>Available Quantity:</Text>
-            <Text style={styles.value}>{product.quantity} {product.unit}(s)</Text>
+            <Text style={styles.value}>{product.quantity_available} {product.unit}(s)</Text>
           </View>
 
           {product.profiles && (
