@@ -91,7 +91,7 @@ export default function AdminUsers() {
   }, []);
 
   useEffect(() => {
-    if (profile && !loading) {
+    if (profile) {
       loadUsers(profile);
     }
   }, [activeTab, profile]);
@@ -107,12 +107,13 @@ export default function AdminUsers() {
       if (!userData?.profile || !['admin', 'super-admin'].includes(userData.profile.user_type)) {
         console.log('❌ Access denied - User type:', userData?.profile?.user_type);
         Alert.alert('Access Denied', `You do not have admin privileges. Current user type: ${userData?.profile?.user_type || 'none'}`);
+        setLoading(false);
         router.replace('/');
         return;
       }
 
       setProfile(userData.profile);
-      // loadUsers will be called by useEffect when profile is set
+      // Don't set loading to false here - let loadUsers handle it
     } catch (error) {
       console.error('Error loading data:', error);
       Alert.alert('Error', 'Failed to load user data');
@@ -214,7 +215,6 @@ export default function AdminUsers() {
     if (!currentProfile) return;
 
     try {
-      setLoading(true);
 
       let query = supabase
         .from('profiles')
