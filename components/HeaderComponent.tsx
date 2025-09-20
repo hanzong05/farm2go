@@ -276,19 +276,19 @@ export default function HeaderComponent({
         await logoutUser();
         console.log('✅ Logout completed, session cleared');
 
-        // Redirect to marketplace (public access for logged out users)
-        console.log('🔄 Redirecting to marketplace...');
-        router.replace('/buyer/marketplace' as any);
-        console.log('✅ Redirect to marketplace completed');
+        // Redirect to landing page (marketplace)
+        console.log('🔄 Redirecting to landing page...');
+        router.replace('/' as any);
+        console.log('✅ Redirect to landing page completed');
       } catch (error) {
         console.error('❌ Logout error:', error);
         // Fallback redirect if logout fails
-        router.replace('/buyer/marketplace' as any);
+        router.replace('/' as any);
       }
     } else {
-      // No user signed in, redirect to sign in page
-      console.log('🔄 Redirecting to sign in...');
-      router.replace('/' as any);
+      // No user signed in, redirect to login page
+      console.log('🔄 Redirecting to login...');
+      router.replace('/auth/login' as any);
     }
   };
 
