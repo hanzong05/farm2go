@@ -64,10 +64,17 @@ export default function AdminUsers() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const [activeTab, setActiveTab] = useState<'farmer' | 'buyer'>('farmer');
 
   useEffect(() => {
     loadData();
   }, []);
+
+  useEffect(() => {
+    if (profile) {
+      loadUsers(profile);
+    }
+  }, [activeTab]);
 
   const loadData = async () => {
     try {
@@ -112,38 +119,62 @@ export default function AdminUsers() {
     return dates;
   };
 
-  const generateSampleSalesData = (userType: string, barangay: string): User['salesData'] => {
-    const dates = generateDateRange();
-    const baseAmount = userType === 'buyer' ? 15000 : 8000;
-    const variation = userType === 'buyer' ? 5000 : 3000;
-    
-    // Create some realistic sales patterns
-    const chartData = dates.map((date, index) => {
-      let multiplier = 1;
-      
-      // Weekend boost for buyers
-      const dayOfWeek = new Date().getDay();
-      if (userType === 'buyer' && (dayOfWeek === 6 || dayOfWeek === 0)) {
-        multiplier = 1.3;
+  const fetchUserSalesData = async (userId: string): Promise<User['salesData']> => {
+    try {
+      const endDate = new Date();
+      const startDate = new Date();
+      startDate.setDate(endDate.getDate() - 7); // Last 7 days
+
+      // Fetch orders for this user
+      const { data: orders, error } = await supabase
+        .from('orders')
+        .select('total_amount, created_at, status')
+        .eq('buyer_id', userId)
+        .gte('created_at', startDate.toISOString())
+        .lte('created_at', endDate.toISOString())
+        .in('status', ['completed', 'delivered']);
+
+      if (error) {
+        console.error(`Error fetching orders for user ${userId}:`, error);
+        return { totalSales: 0, chartData: [] };
       }
-      
-      // Random variation
-      const randomFactor = 0.7 + Math.random() * 0.6; // 0.7 to 1.3
-      
-      const amount = Math.round((baseAmount + Math.random() * variation) * multiplier * randomFactor);
-      
-      return {
+
+      // Group orders by date
+      const salesByDate: { [date: string]: number } = {};
+      const dates = generateDateRange();
+
+      // Initialize all dates with 0
+      dates.forEach(date => {
+        salesByDate[date] = 0;
+      });
+
+      // Add actual sales data
+      orders?.forEach(order => {
+        const orderDate = new Date(order.created_at).toLocaleDateString('en-US', {
+          month: 'short',
+          day: 'numeric'
+        });
+        if (salesByDate.hasOwnProperty(orderDate)) {
+          salesByDate[orderDate] += order.total_amount || 0;
+        }
+      });
+
+      // Convert to chart data format
+      const chartData = dates.map(date => ({
         date,
-        amount
+        amount: salesByDate[date] || 0
+      }));
+
+      const totalSales = chartData.reduce((sum, day) => sum + day.amount, 0);
+
+      return {
+        totalSales,
+        chartData
       };
-    });
-
-    const totalSales = chartData.reduce((sum, day) => sum + day.amount, 0);
-
-    return {
-      totalSales,
-      chartData
-    };
+    } catch (error) {
+      console.error(`Error fetching sales data for user ${userId}:`, error);
+      return { totalSales: 0, chartData: [] };
+    }
   };
 
   const loadUsers = async (adminProfile?: Profile) => {
@@ -162,7 +193,7 @@ export default function AdminUsers() {
           barangay,
           created_at
         `)
-        .in('user_type', ['farmer', 'buyer'])
+        .eq('user_type', activeTab)
         .order('created_at', { ascending: false });
 
       if (currentProfile?.barangay) {
@@ -192,7 +223,7 @@ export default function AdminUsers() {
         throw error;
       }
 
-      // Convert to User format with sales data
+      // Convert to User format
       let usersData: User[] = data?.map(profile => ({
         id: profile.id,
         email: profile.email || '',
@@ -205,8 +236,21 @@ export default function AdminUsers() {
           phone: profile.phone,
           barangay: profile.barangay,
         },
-        salesData: generateSampleSalesData(profile.user_type, profile.barangay || 'Unknown'),
       })) || [];
+
+      // Fetch real sales data for each user
+      console.log('📊 Fetching sales data for users...');
+      const usersWithSalesData = await Promise.all(
+        usersData.map(async (user) => {
+          const salesData = await fetchUserSalesData(user.id);
+          return {
+            ...user,
+            salesData
+          };
+        })
+      );
+
+      usersData = usersWithSalesData;
 
       // Additional client-side filtering to ensure barangay match
       if (currentProfile?.barangay) {
@@ -340,8 +384,8 @@ export default function AdminUsers() {
           <View style={styles.chartContainer}>
             <LineChart
               data={chartData}
-              width={screenWidth - 64} // Account for card padding
-              height={180}
+              width={(screenWidth - 48) / 2} // Account for padding and 2 columns
+              height={120}
               chartConfig={getChartConfig()}
               bezier
               style={styles.chart}
@@ -350,7 +394,8 @@ export default function AdminUsers() {
               withVerticalLines={false}
               withHorizontalLines={false}
               fromZero={true}
-              segments={4}
+              segments={2}
+              withDots={false}
             />
           </View>
         )}
@@ -411,15 +456,54 @@ export default function AdminUsers() {
             </Text>
           </View>
           <View style={styles.statsContainer}>
-            <Text style={styles.statsText}>Total Users: {users.length}</Text>
+            <Text style={styles.statsText}>Total {activeTab}s: {users.length}</Text>
           </View>
         </View>
 
-        {/* Users List */}
+        {/* Tab Navigation */}
+        <View style={styles.tabContainer}>
+          <TouchableOpacity
+            style={[styles.tab, activeTab === 'farmer' && styles.activeTab]}
+            onPress={() => setActiveTab('farmer')}
+          >
+            <Icon
+              name="seedling"
+              size={16}
+              color={activeTab === 'farmer' ? colors.white : colors.textSecondary}
+            />
+            <Text style={[
+              styles.tabText,
+              activeTab === 'farmer' && styles.activeTabText
+            ]}>
+              Farmers
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.tab, activeTab === 'buyer' && styles.activeTab]}
+            onPress={() => setActiveTab('buyer')}
+          >
+            <Icon
+              name="shopping-cart"
+              size={16}
+              color={activeTab === 'buyer' ? colors.white : colors.textSecondary}
+            />
+            <Text style={[
+              styles.tabText,
+              activeTab === 'buyer' && styles.activeTabText
+            ]}>
+              Buyers
+            </Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* Users Grid */}
         <FlatList
           data={filteredUsers}
           renderItem={renderUser}
           keyExtractor={(item) => item.id}
+          numColumns={2}
+          columnWrapperStyle={styles.gridRow}
           contentContainerStyle={styles.listContainer}
           refreshControl={
             <RefreshControl
@@ -447,7 +531,8 @@ const styles = StyleSheet.create({
   },
   content: {
     flex: 1,
-    padding: 16,
+    paddingTop: 16,
+    paddingHorizontal: 0,
   },
   loadingContainer: {
     flex: 1,
@@ -492,18 +577,60 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
     fontWeight: '600',
   },
-  listContainer: {
-    gap: 16,
+  tabContainer: {
+    flexDirection: 'row',
+    backgroundColor: colors.gray100,
+    borderRadius: 12,
+    padding: 4,
+    marginHorizontal: 16,
+    marginBottom: 16,
   },
-  userCard: {
-    backgroundColor: colors.white,
-    borderRadius: 16,
-    padding: 16,
+  tab: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    gap: 8,
+  },
+  activeTab: {
+    backgroundColor: colors.primary,
     elevation: 2,
     shadowColor: colors.shadow,
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 4,
+  },
+  tabText: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: colors.textSecondary,
+  },
+  activeTabText: {
+    color: colors.white,
+    fontWeight: '600',
+  },
+  listContainer: {
+    gap: 12,
+  },
+  gridRow: {
+    justifyContent: 'space-between',
+    paddingHorizontal: 4,
+  },
+  userCard: {
+    backgroundColor: colors.white,
+    borderRadius: 12,
+    padding: 12,
+    elevation: 2,
+    shadowColor: colors.shadow,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    flex: 1,
+    marginHorizontal: 4,
+    maxWidth: (screenWidth - 48) / 2,
   },
   userHeader: {
     flexDirection: 'row',
@@ -519,18 +646,18 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   userName: {
-    fontSize: 18,
+    fontSize: 14,
     fontWeight: 'bold',
     color: colors.text,
     marginBottom: 2,
   },
   userEmail: {
-    fontSize: 12,
+    fontSize: 10,
     color: colors.textSecondary,
     marginBottom: 4,
   },
   totalSales: {
-    fontSize: 20,
+    fontSize: 16,
     fontWeight: 'bold',
     color: colors.primary,
   },
@@ -559,11 +686,11 @@ const styles = StyleSheet.create({
     gap: 2,
   },
   userDetail: {
-    fontSize: 14,
+    fontSize: 11,
     color: colors.textSecondary,
   },
   userDate: {
-    fontSize: 12,
+    fontSize: 10,
     color: colors.textSecondary,
     marginTop: 4,
   },
