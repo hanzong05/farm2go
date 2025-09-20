@@ -95,8 +95,13 @@ export default function SuperAdminUsers() {
   const loadData = async () => {
     try {
       const userData = await getUserWithProfile();
+      console.log('🔍 Super Admin Page - User data:', userData);
+      console.log('🔍 Super Admin Page - Profile:', userData?.profile);
+      console.log('🔍 Super Admin Page - User type:', userData?.profile?.user_type);
+
       if (!userData?.profile || userData.profile.user_type !== 'super-admin') {
-        Alert.alert('Access Denied', 'You do not have super admin privileges');
+        console.log('❌ Access denied - User type:', userData?.profile?.user_type);
+        Alert.alert('Access Denied', `You do not have super admin privileges. Current user type: ${userData?.profile?.user_type || 'none'}`);
         router.replace('/');
         return;
       }

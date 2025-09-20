@@ -94,6 +94,8 @@ export default function RootLayout() {
           const currentPath = window?.location?.pathname || '';
           console.log('🔍 Session check - Current path:', currentPath);
           console.log('🔍 Session check - User type:', userData.profile.user_type);
+          console.log('🔍 Session check - User email:', userData.profile.email);
+          console.log('🔍 Session check - Full profile:', userData.profile);
 
           // Only redirect if user is on root or auth pages
           const shouldRedirect = currentPath === '/' ||
