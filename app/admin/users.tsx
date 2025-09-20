@@ -61,11 +61,11 @@ export default function AdminUsers() {
   const loadData = async () => {
     try {
       const userData = await getUserWithProfile();
-      console.log('= Admin Page - User data:', userData);
-      console.log('= Admin Page - User type:', userData?.profile?.user_type);
+      console.log('ğŸ” Admin Page - User data:', userData);
+      console.log('ğŸ” Admin Page - User type:', userData?.profile?.user_type);
 
       if (!userData?.profile || !['admin', 'super-admin'].includes(userData.profile.user_type)) {
-        console.log('L Access denied - User type:', userData?.profile?.user_type);
+        console.log('âŒ Access denied - User type:', userData?.profile?.user_type);
         Alert.alert('Access Denied', `You do not have admin privileges. Current user type: ${userData?.profile?.user_type || 'none'}`);
         router.replace('/');
         return;
@@ -83,7 +83,7 @@ export default function AdminUsers() {
 
   const loadUsers = async () => {
     try {
-      console.log('=Ê Loading all users...');
+      console.log('ğŸ“Š Loading all users...');
 
       const { data, error } = await supabase
         .from('profiles')
@@ -100,14 +100,14 @@ export default function AdminUsers() {
         `)
         .order('created_at', { ascending: false });
 
-      console.log('=Ê Load users response:', {
+      console.log('ğŸ“Š Load users response:', {
         success: !error,
         count: data?.length || 0,
         error: error
       });
 
       if (error) {
-        console.error('L Error loading users:', error);
+        console.error('âŒ Error loading users:', error);
         throw error;
       }
 
@@ -126,7 +126,7 @@ export default function AdminUsers() {
         },
       })) || [];
 
-      console.log('=e Processed users data:', usersData.length, 'users');
+      console.log('ğŸ‘¥ Processed users data:', usersData.length, 'users');
       setUsers(usersData);
     } catch (error) {
       console.error('Error loading users:', error);
@@ -173,16 +173,16 @@ export default function AdminUsers() {
           </View>
         </View>
 
-        <Text style={styles.userDetail}>=ç {item.email}</Text>
+        <Text style={styles.userDetail}>ğŸ“§ {item.email}</Text>
 
         {item.profiles?.farm_name && (
-          <Text style={styles.userDetail}><á {item.profiles.farm_name}</Text>
+          <Text style={styles.userDetail}>ğŸ¡ {item.profiles.farm_name}</Text>
         )}
         {item.profiles?.company_name && (
-          <Text style={styles.userDetail}><â {item.profiles.company_name}</Text>
+          <Text style={styles.userDetail}>ğŸ¢ {item.profiles.company_name}</Text>
         )}
         {item.profiles?.phone && (
-          <Text style={styles.userDetail}>=Ş {item.profiles.phone}</Text>
+          <Text style={styles.userDetail}>ğŸ“ {item.profiles.phone}</Text>
         )}
 
         <Text style={styles.userDate}>
