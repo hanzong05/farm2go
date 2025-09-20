@@ -20,10 +20,6 @@ export interface RegisterData {
   // Farmer specific
   farmName?: string;
   farmSize?: string;
-  cropTypes?: string;
-  // Buyer specific
-  companyName?: string;
-  businessType?: string;
 }
 
 export interface LoginData {
@@ -64,9 +60,6 @@ export const registerUser = async (data: RegisterData) => {
         updated_at: new Date().toISOString(),
         farm_name: data.farmName || null,
         farm_size: data.farmSize || null,
-        crop_types: data.cropTypes || null,
-        company_name: data.companyName || null,
-        business_type: data.businessType || null,
       };
 
       // Simulate API delay
@@ -135,10 +128,6 @@ export const registerUser = async (data: RegisterData) => {
       // Farmer fields
       farm_name: data.farmName || null,
       farm_size: data.farmSize || null,
-      crop_types: data.cropTypes || null,
-      // Buyer fields
-      company_name: data.companyName || null,
-      business_type: data.businessType || null,
     };
 
     console.log('📝 Profile data:', {
@@ -546,12 +535,7 @@ export const handleOAuthCallback = async (userType: 'farmer' | 'buyer') => {
       barangay: null,
       user_type: userType,
       farm_name: null,
-      farm_location: null,
       farm_size: null,
-      crop_types: null,
-      company_name: null,
-      business_type: null,
-      business_location: null,
     };
 
     const { error: profileError } = await supabase

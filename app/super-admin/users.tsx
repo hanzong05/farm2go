@@ -31,7 +31,6 @@ interface User {
     last_name: string | null;
     user_type: 'farmer' | 'buyer' | 'admin' | 'super-admin';
     farm_name: string | null;
-    company_name: string | null;
     phone: string | null;
   } | null;
 }
@@ -44,7 +43,6 @@ interface CreateUserForm {
   user_type: 'farmer' | 'buyer' | 'admin' | 'super-admin';
   phone: string;
   farm_name: string;
-  company_name: string;
   barangay: string;
 }
 
@@ -85,7 +83,6 @@ export default function SuperAdminUsers() {
     user_type: 'admin',
     phone: '',
     farm_name: '',
-    company_name: '',
     barangay: '',
   });
 
@@ -130,7 +127,6 @@ export default function SuperAdminUsers() {
           last_name,
           user_type,
           farm_name,
-          company_name,
           phone,
           created_at
         `)
@@ -142,8 +138,7 @@ export default function SuperAdminUsers() {
           last_name: string | null;
           user_type: 'farmer' | 'buyer' | 'admin' | 'super-admin';
           farm_name: string | null;
-          company_name: string | null;
-          phone: string | null;
+                phone: string | null;
           created_at: string;
         }[]>();
 
@@ -169,8 +164,7 @@ export default function SuperAdminUsers() {
             last_name: profile.last_name,
             user_type: profile.user_type as 'farmer' | 'buyer' | 'admin' | 'super-admin',
             farm_name: profile.farm_name,
-            company_name: profile.company_name,
-            phone: profile.phone,
+              phone: profile.phone,
           },
         })) || [];
 
@@ -249,7 +243,6 @@ export default function SuperAdminUsers() {
           user_type: createForm.user_type,
           phone: createForm.phone.trim() || null,
           farm_name: createForm.user_type === 'farmer' ? (createForm.farm_name.trim() || null) : null,
-          company_name: createForm.user_type === 'buyer' ? (createForm.company_name.trim() || null) : null,
           barangay: createForm.barangay || null,
         };
 
@@ -337,8 +330,7 @@ export default function SuperAdminUsers() {
       user_type: 'admin',
       phone: '',
       farm_name: '',
-      company_name: '',
-      barangay: '',
+        barangay: '',
     });
     setEmailError('');
   };
@@ -363,7 +355,7 @@ export default function SuperAdminUsers() {
       user.profiles?.first_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
       user.profiles?.last_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
       user.profiles?.farm_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      user.profiles?.company_name?.toLowerCase().includes(searchQuery.toLowerCase());
+      user.profiles?.barangay?.toLowerCase().includes(searchQuery.toLowerCase());
 
     return matchesSearch;
   });
@@ -391,9 +383,6 @@ export default function SuperAdminUsers() {
 
         {item.profiles?.farm_name && (
           <Text style={styles.userDetail}>🏡 {item.profiles.farm_name}</Text>
-        )}
-        {item.profiles?.company_name && (
-          <Text style={styles.userDetail}>🏢 {item.profiles.company_name}</Text>
         )}
         {item.profiles?.phone && (
           <Text style={styles.userDetail}>📞 {item.profiles.phone}</Text>

@@ -23,13 +23,7 @@ export interface Database {
           updated_at: string
           // Farmer specific fields
           farm_name: string | null
-          farm_location: string | null
           farm_size: string | null
-          crop_types: string | null
-          // Buyer specific fields
-          company_name: string | null
-          business_type: string | null
-          business_location: string | null
         }
         Insert: {
           id: string
@@ -43,33 +37,22 @@ export interface Database {
           created_at?: string
           updated_at?: string
           farm_name?: string | null
-          farm_location?: string | null
           farm_size?: string | null
-          crop_types?: string | null
-          company_name?: string | null
-          business_type?: string | null
-          business_location?: string | null
         }
-       Update: {
-  id?: string
-  email?: string
-  first_name?: string | null
-  middle_name?: string | null
-  last_name?: string | null
-  phone?: string | null
-  barangay?: string | null
-  user_type?: 'farmer' | 'buyer' | 'admin' | 'super-admin'   // 👈 add 'super-admin'
-  created_at?: string
-  updated_at?: string
-  farm_name?: string | null
-  farm_location?: string | null
-  farm_size?: string | null
-  crop_types?: string | null
-  company_name?: string | null
-  business_type?: string | null
-  business_location?: string | null
-}
-
+        Update: {
+          id?: string
+          email?: string
+          first_name?: string | null
+          middle_name?: string | null
+          last_name?: string | null
+          phone?: string | null
+          barangay?: string | null
+          user_type?: 'farmer' | 'buyer' | 'admin' | 'super-admin'
+          created_at?: string
+          updated_at?: string
+          farm_name?: string | null
+          farm_size?: string | null
+        }
       }
       products: {
         Row: {
@@ -119,12 +102,10 @@ export interface Database {
         Row: {
           id: string
           buyer_id: string
-          farmer_id: string
-          product_id: string
-          quantity: number
-          total_price: number
-          status: 'pending' | 'confirmed' | 'processing' | 'ready' | 'delivered' | 'cancelled'
+          total_amount: number
+          status: 'pending' | 'confirmed' | 'processing' | 'ready' | 'delivered' | 'cancelled' | 'completed'
           delivery_address: string
+          delivery_date: string | null
           notes: string | null
           created_at: string
           updated_at: string
@@ -132,12 +113,10 @@ export interface Database {
         Insert: {
           id?: string
           buyer_id: string
-          farmer_id: string
-          product_id: string
-          quantity: number
-          total_price: number
-          status?: 'pending' | 'confirmed' | 'processing' | 'ready' | 'delivered' | 'cancelled'
+          total_amount: number
+          status?: 'pending' | 'confirmed' | 'processing' | 'ready' | 'delivered' | 'cancelled' | 'completed'
           delivery_address: string
+          delivery_date?: string | null
           notes?: string | null
           created_at?: string
           updated_at?: string
@@ -145,13 +124,40 @@ export interface Database {
         Update: {
           id?: string
           buyer_id?: string
-          farmer_id?: string
+          total_amount?: number
+          status?: 'pending' | 'confirmed' | 'processing' | 'ready' | 'delivered' | 'cancelled' | 'completed'
+          delivery_address?: string
+          delivery_date?: string | null
+          notes?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+      }
+      order_items: {
+        Row: {
+          id: string
+          order_id: string
+          product_id: string
+          quantity: number
+          unit_price: number
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          order_id: string
+          product_id: string
+          quantity: number
+          unit_price: number
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          order_id?: string
           product_id?: string
           quantity?: number
-          total_price?: number
-          status?: 'pending' | 'confirmed' | 'processing' | 'ready' | 'delivered' | 'cancelled'
-          delivery_address?: string
-          notes?: string | null
+          unit_price?: number
           created_at?: string
           updated_at?: string
         }
@@ -193,9 +199,9 @@ export interface Database {
       [_ in never]: never
     }
     Enums: {
-      user_type: 'farmer' | 'buyer' | 'admin' | 'super-admin' | 'super-admin'
+      user_type: 'farmer' | 'buyer' | 'admin' | 'super-admin'
       product_status: 'pending' | 'approved' | 'rejected'
-      order_status: 'pending' | 'confirmed' | 'processing' | 'ready' | 'delivered' | 'cancelled'
+      order_status: 'pending' | 'confirmed' | 'processing' | 'ready' | 'delivered' | 'cancelled' | 'completed'
       transaction_status: 'pending' | 'completed' | 'failed' | 'refunded'
     }
   }

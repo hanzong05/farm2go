@@ -156,7 +156,6 @@ export default function AdminUsers() {
       user.profiles?.first_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
       user.profiles?.last_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
       user.profiles?.farm_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      user.profiles?.company_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
       user.profiles?.barangay?.toLowerCase().includes(searchQuery.toLowerCase()) ||
       user.email?.toLowerCase().includes(searchQuery.toLowerCase());
 
@@ -189,9 +188,6 @@ export default function AdminUsers() {
 
         {item.profiles?.farm_name && (
           <Text style={styles.userDetail}>🏡 {item.profiles.farm_name}</Text>
-        )}
-        {item.profiles?.company_name && (
-          <Text style={styles.userDetail}>🏢 {item.profiles.company_name}</Text>
         )}
         {item.profiles?.phone && (
           <Text style={styles.userDetail}>📞 {item.profiles.phone}</Text>
