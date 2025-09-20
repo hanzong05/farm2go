@@ -376,10 +376,9 @@ export default function HeaderComponent({
             </TouchableOpacity>
           )}
 
-          <TouchableOpacity style={styles.profileButton} onPress={handleLogout}>
-            <View style={styles.profileAvatar}>
-              <Icon name="sign-out-alt" size={12} color={colors.primary} />
-            </View>
+          <TouchableOpacity style={styles.signInButton} onPress={handleLogout}>
+            <Icon name="sign-in-alt" size={12} color={colors.white} style={styles.signInIcon} />
+            <Text style={styles.signInText}>Sign In</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -578,6 +577,26 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: 'bold',
     color: colors.primary,
+  },
+
+  signInButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 6,
+    gap: 6,
+  },
+
+  signInIcon: {
+    marginRight: 0,
+  },
+
+  signInText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: colors.white,
   },
 
   // Search Section
