@@ -13,10 +13,14 @@ import {
   View,
 } from 'react-native';
 import { supabase } from '../lib/supabase';
+import { Database } from '../types/database';
 import WebCamera from './WebCamera';
 import WebFileInput from './WebFileInput';
 
 const { width } = Dimensions.get('window');
+
+type VerificationSubmission = Database['public']['Tables']['verification_submissions']['Insert'];
+type ProfileUpdate = Database['public']['Tables']['profiles']['Update'];
 
 interface VerificationUploadProps {
   userId: string;
@@ -235,28 +239,32 @@ export default function VerificationUpload({
       setUploadProgress('Submitting verification...');
 
       // Submit verification to database
-      const { error } = await supabase
-        .from('verification_submissions')
-        .insert({
-          user_id: userId,
-          id_document_url: idDocumentUrl,
-          face_photo_url: facePhotoUrl,
-          id_document_type: verificationData.idDocument.type,
-          submission_notes: verificationData.notes || null,
-          status: 'pending',
-        });
+      const submissionData: VerificationSubmission = {
+        user_id: userId,
+        id_document_url: idDocumentUrl,
+        face_photo_url: facePhotoUrl,
+        id_document_type: verificationData.idDocument.type,
+        submission_notes: verificationData.notes || null,
+        status: 'pending',
+      };
+
+      const { error } = await (supabase
+        .from('verification_submissions') as any)
+        .insert(submissionData);
 
       if (error) {
         throw error;
       }
 
       // Update profile verification status
-      const { error: profileError } = await supabase
-        .from('profiles')
-        .update({
-          verification_status: 'pending',
-          verification_submitted_at: new Date().toISOString(),
-        })
+      const profileUpdate: ProfileUpdate = {
+        verification_status: 'pending',
+        verification_submitted_at: new Date().toISOString(),
+      };
+
+      const { error: profileError } = await (supabase
+        .from('profiles') as any)
+        .update(profileUpdate)
         .eq('id', userId);
 
       if (profileError) {
