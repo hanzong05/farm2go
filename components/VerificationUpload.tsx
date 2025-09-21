@@ -85,23 +85,33 @@ export default function VerificationUpload({
   };
 
   const showImagePickerOptions = (type: 'id' | 'face') => {
-    if (Platform.OS === 'web') {
+    console.log('Platform.OS:', Platform.OS);
+
+    // For web platforms, show web-specific options
+    if (Platform.OS === 'web' || typeof window !== 'undefined') {
       Alert.alert(
         `${type === 'id' ? 'ID Document' : 'Face Photo'}`,
         'Choose how you want to add your photo',
         [
           {
             text: 'Use Web Camera',
-            onPress: () => setShowWebCamera(type),
+            onPress: () => {
+              console.log('Setting showWebCamera to:', type);
+              setShowWebCamera(type);
+            },
           },
           {
             text: 'Select File',
-            onPress: () => setShowFileInput(type),
+            onPress: () => {
+              console.log('Setting showFileInput to:', type);
+              setShowFileInput(type);
+            },
           },
           { text: 'Cancel', style: 'cancel' },
         ]
       );
     } else {
+      // For mobile platforms, show mobile-specific options
       Alert.alert(
         `${type === 'id' ? 'ID Document' : 'Face Photo'}`,
         'Choose how you want to add your photo',
@@ -302,6 +312,7 @@ export default function VerificationUpload({
   };
 
   if (showWebCamera) {
+    console.log('Rendering WebCamera for type:', showWebCamera);
     return (
       <ScrollView style={styles.container} contentContainerStyle={styles.content}>
         <View style={styles.header}>
@@ -320,7 +331,10 @@ export default function VerificationUpload({
 
         <TouchableOpacity
           style={styles.backButton}
-          onPress={() => setShowWebCamera(null)}
+          onPress={() => {
+            console.log('Back button pressed');
+            setShowWebCamera(null);
+          }}
           activeOpacity={0.8}
         >
           <Text style={styles.backButtonText}>← Back to Upload Options</Text>

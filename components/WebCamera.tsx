@@ -15,7 +15,9 @@ export default function WebCamera({ onPhotoTaken, type }: WebCameraProps) {
   const [isWebPlatform, setIsWebPlatform] = useState(false);
 
   useEffect(() => {
-    setIsWebPlatform(Platform.OS === 'web');
+    const webPlatform = Platform.OS === 'web' || typeof window !== 'undefined';
+    console.log('WebCamera Platform.OS:', Platform.OS, 'isWebPlatform:', webPlatform);
+    setIsWebPlatform(webPlatform);
   }, []);
 
   const startCamera = useCallback(async () => {
