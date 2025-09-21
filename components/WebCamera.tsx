@@ -1,5 +1,5 @@
 import React, { useRef, useState, useCallback, useEffect } from 'react';
-import { View, TouchableOpacity, Text, StyleSheet, Alert, Platform } from 'react-native';
+import { View, TouchableOpacity, Text, StyleSheet, Alert, Platform, ActivityIndicator } from 'react-native';
 
 interface WebCameraProps {
   onPhotoTaken: (photoUri: string) => void;
@@ -10,9 +10,11 @@ export default function WebCamera({ onPhotoTaken, type }: WebCameraProps) {
   const videoRef = useRef<any>(null);
   const canvasRef = useRef<any>(null);
   const streamRef = useRef<MediaStream | null>(null);
+  const videoContainerRef = useRef<any>(null);
   const [isStreaming, setIsStreaming] = useState(false);
   const [hasPermission, setHasPermission] = useState<boolean | null>(null);
   const [isWebPlatform, setIsWebPlatform] = useState(false);
+  const [isInitializing, setIsInitializing] = useState(false);
 
   useEffect(() => {
     const webPlatform = Platform.OS === 'web' || typeof window !== 'undefined';
@@ -22,6 +24,9 @@ export default function WebCamera({ onPhotoTaken, type }: WebCameraProps) {
 
   const startCamera = useCallback(async () => {
     if (!isWebPlatform) return;
+
+    setIsInitializing(true);
+    console.log('📷 Starting camera initialization...');
 
     try {
       // Check if getUserMedia is available
@@ -82,16 +87,83 @@ export default function WebCamera({ onPhotoTaken, type }: WebCameraProps) {
         throw lastError || new Error('Failed to access camera with any constraints');
       }
 
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream;
-        await videoRef.current.play();
-        streamRef.current = stream;
-        setIsStreaming(true);
-        setHasPermission(true);
+      // Create video element directly for better mobile compatibility
+      console.log('📹 Creating video element...');
+
+      if (typeof window !== 'undefined') {
+        // Wait a bit for the container to be rendered
+        setTimeout(async () => {
+          if (!videoContainerRef.current) {
+            console.error('❌ Video container not found');
+            setHasPermission(false);
+            setIsInitializing(false);
+            return;
+          }
+
+          // Remove any existing video element
+          const existingVideo = videoContainerRef.current.querySelector('video');
+          if (existingVideo) {
+            existingVideo.remove();
+          }
+
+          // Create new video element
+          const videoElement = document.createElement('video');
+          videoElement.style.width = '100%';
+          videoElement.style.height = '100%';
+          videoElement.style.objectFit = 'cover';
+          videoElement.style.backgroundColor = '#000000';
+          videoElement.style.borderRadius = '8px';
+          videoElement.autoplay = true;
+          videoElement.playsInline = true;
+          videoElement.muted = true;
+          videoElement.controls = false;
+
+          // Mobile-specific attributes
+          videoElement.setAttribute('webkit-playsinline', 'true');
+          videoElement.setAttribute('x-webkit-airplay', 'deny');
+
+          console.log('📹 Setting up video element...');
+          videoElement.srcObject = stream;
+
+          // Wait for video to be ready before playing
+          videoElement.onloadedmetadata = () => {
+            console.log('📹 Video metadata loaded, starting playback...');
+            videoElement.play().then(() => {
+              console.log('📹 Video playback started successfully');
+              setIsStreaming(true);
+              setHasPermission(true);
+              setIsInitializing(false);
+            }).catch((playError) => {
+              console.error('❌ Video play error:', playError);
+              setHasPermission(false);
+              setIsInitializing(false);
+            });
+          };
+
+          // Store reference for later use
+          videoRef.current = videoElement;
+          streamRef.current = stream;
+
+          // Add video to container
+          videoContainerRef.current.appendChild(videoElement);
+
+          // Fallback - try to play immediately
+          try {
+            await videoElement.play();
+            console.log('📹 Video playing immediately');
+            setIsStreaming(true);
+            setHasPermission(true);
+            setIsInitializing(false);
+          } catch (playError) {
+            console.log('📹 Immediate play failed, waiting for metadata...');
+            // The onloadedmetadata handler will handle this
+          }
+        }, 100);
       }
     } catch (error: any) {
       console.error('Error accessing camera:', error);
       setHasPermission(false);
+      setIsInitializing(false);
 
       let errorMessage = 'Failed to access camera. ';
       if (error.name === 'NotAllowedError') {
@@ -115,11 +187,30 @@ export default function WebCamera({ onPhotoTaken, type }: WebCameraProps) {
   }, [isWebPlatform, type]);
 
   const stopCamera = useCallback(() => {
+    console.log('📹 Stopping camera...');
+
     if (streamRef.current) {
       streamRef.current.getTracks().forEach(track => track.stop());
       streamRef.current = null;
     }
+
+    // Clean up video element
+    if (videoRef.current) {
+      videoRef.current.srcObject = null;
+      videoRef.current = null;
+    }
+
+    // Remove video element from container
+    if (videoContainerRef.current) {
+      const videoElement = videoContainerRef.current.querySelector('video');
+      if (videoElement) {
+        videoElement.remove();
+      }
+    }
+
     setIsStreaming(false);
+    setIsInitializing(false);
+    console.log('📹 Camera stopped');
   }, []);
 
   const takePhoto = useCallback(() => {
@@ -166,12 +257,13 @@ export default function WebCamera({ onPhotoTaken, type }: WebCameraProps) {
     <View style={styles.container}>
       <View style={styles.optionsContainer}>
         <TouchableOpacity
-          style={styles.optionButton}
+          style={[styles.optionButton, isInitializing && styles.optionButtonDisabled]}
           onPress={startCamera}
+          disabled={isInitializing}
           activeOpacity={0.8}
         >
           <Text style={styles.optionButtonText}>
-            📷 Use Camera
+            {isInitializing ? '⏳ Starting Camera...' : '📷 Use Camera'}
           </Text>
         </TouchableOpacity>
 
@@ -199,15 +291,30 @@ export default function WebCamera({ onPhotoTaken, type }: WebCameraProps) {
         </TouchableOpacity>
       </View>
 
+      {isInitializing && (
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color="#3b82f6" />
+          <Text style={styles.loadingText}>Initializing camera...</Text>
+        </View>
+      )}
+
       {isStreaming && (
         <View style={styles.cameraContainer}>
-          {React.createElement('video', {
-            ref: videoRef,
-            style: styles.video,
-            autoPlay: true,
-            playsInline: true,
-            muted: true,
-          })}
+          {React.createElement('div', {
+            ref: videoContainerRef,
+            style: {
+              width: '100%',
+              height: '100%',
+              position: 'relative',
+              borderRadius: 8,
+              overflow: 'hidden',
+              backgroundColor: '#000000',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              border: '2px solid #3b82f6',
+            },
+          }, 'Camera Loading...')}
           {React.createElement('canvas', {
             ref: canvasRef,
             style: styles.hiddenCanvas,
@@ -218,14 +325,14 @@ export default function WebCamera({ onPhotoTaken, type }: WebCameraProps) {
               onPress={takePhoto}
               activeOpacity={0.8}
             >
-              <Text style={styles.captureButtonText}>Take Photo</Text>
+              <Text style={styles.captureButtonText}>📷 Take Photo</Text>
             </TouchableOpacity>
             <TouchableOpacity
               style={styles.cancelButton}
               onPress={stopCamera}
               activeOpacity={0.8}
             >
-              <Text style={styles.cancelButtonText}>Cancel</Text>
+              <Text style={styles.cancelButtonText}>✕ Cancel</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -308,6 +415,8 @@ const styles = StyleSheet.create({
     width: '100%',
     height: '100%',
     objectFit: 'cover',
+    backgroundColor: '#000000',
+    borderRadius: 8,
   } as any,
   hiddenCanvas: {
     display: 'none',
@@ -389,10 +498,25 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     alignItems: 'center',
   },
+  optionButtonDisabled: {
+    backgroundColor: '#9ca3af',
+  },
   optionButtonText: {
     color: '#ffffff',
     fontSize: 16,
     fontWeight: '600',
+    textAlign: 'center',
+  },
+  loadingContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 40,
+    paddingHorizontal: 24,
+  },
+  loadingText: {
+    fontSize: 16,
+    color: '#6b7280',
+    marginTop: 12,
     textAlign: 'center',
   },
 });
