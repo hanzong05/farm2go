@@ -31,7 +31,8 @@
       "permissions": [
         "CAMERA",
         "READ_EXTERNAL_STORAGE",
-        "WRITE_EXTERNAL_STORAGE"
+        "WRITE_EXTERNAL_STORAGE",
+        "RECORD_AUDIO"
       ]
     },
     "web": {
@@ -57,6 +58,13 @@
         {
           "photosPermission": "The app accesses your photos to let you select images for identity verification.",
           "cameraPermission": "The app accesses your camera to let you take photos for identity verification."
+        }
+      ],
+      [
+        "react-native-vision-camera",
+        {
+          "cameraPermissionText": "This app uses the camera to capture photos and videos for identity verification.",
+          "enableMicrophonePermission": false
         }
       ]
     ],

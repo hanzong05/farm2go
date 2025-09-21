@@ -15,7 +15,8 @@
       "Bash(npm install:*)",
       "Read(//c/Users/Admin/Downloads/**)",
       "WebFetch(domain:farm2go.vercel.app)",
-      "Bash(npx supabase db reset:*)"
+      "Bash(npx supabase db reset:*)",
+      "Bash(npx expo start:*)"
     ],
     "deny": [],
     "ask": []

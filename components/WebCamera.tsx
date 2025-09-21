@@ -282,6 +282,66 @@ export default function WebCamera({ onPhotoTaken, type }: WebCameraProps) {
     return videoDevices[0].deviceId;
   }, []);
 
+  // Request runtime camera permissions with explicit user guidance
+  const requestCameraPermissions = useCallback(async () => {
+    try {
+      console.log('📱 Requesting camera permissions...');
+
+      // Check if permissions API is available
+      if ('permissions' in navigator) {
+        try {
+          const permission = await navigator.permissions.query({ name: 'camera' as PermissionName });
+          console.log('📱 Current camera permission state:', permission.state);
+
+          if (permission.state === 'denied') {
+            console.log('📱 Camera permission previously denied');
+            throw new Error('Camera permission denied. Please enable camera access in your browser settings.');
+          }
+        } catch (permissionError) {
+          console.log('📱 Permissions API not fully supported, continuing with getUserMedia');
+        }
+      }
+
+      // Request permissions by attempting to access the camera
+      console.log('📱 Requesting camera access...');
+      const permissionStream = await navigator.mediaDevices.getUserMedia({
+        video: {
+          facingMode: 'user' // Start with front camera for permission request
+        }
+      });
+
+      console.log('✅ Camera permissions granted successfully');
+
+      // Stop the permission test stream immediately
+      permissionStream.getTracks().forEach(track => {
+        console.log('📱 Stopping permission test track:', track.label);
+        track.stop();
+      });
+
+      // Small delay to ensure complete cleanup
+      await new Promise(resolve => setTimeout(resolve, 100));
+
+      return true;
+    } catch (error: any) {
+      console.error('❌ Camera permission request failed:', error);
+
+      if (error.name === 'NotAllowedError') {
+        console.log('📱 User denied camera permission');
+        Alert.alert(
+          'Camera Permission Required',
+          'Please allow camera access in your browser to use this feature. Look for the camera icon in your browser\'s address bar and click "Allow".',
+          [{ text: 'OK' }]
+        );
+      } else if (error.name === 'NotFoundError') {
+        console.log('📱 No camera found on device');
+      } else {
+        console.log('📱 Other camera permission error:', error.name, error.message);
+      }
+
+      return false;
+    }
+  }, []);
+
   const startCamera = useCallback(async () => {
     if (!isWebPlatform) return;
 
@@ -300,6 +360,13 @@ export default function WebCamera({ onPhotoTaken, type }: WebCameraProps) {
       // Check if we're in a secure context (HTTPS or localhost)
       if (!window.isSecureContext && location.hostname !== 'localhost') {
         throw new Error('Camera access requires HTTPS. Please use a secure connection.');
+      }
+
+      // Request runtime permissions first
+      console.log('📱 Requesting runtime camera permissions...');
+      const hasPermission = await requestCameraPermissions();
+      if (!hasPermission) {
+        throw new Error('Camera permission denied. Please allow camera access and try again.');
       }
 
       // First, check if any video input devices are available
@@ -676,63 +743,224 @@ export default function WebCamera({ onPhotoTaken, type }: WebCameraProps) {
     if (!isStreaming || isInitializing) return;
 
     const newCamera = currentCamera === 'user' ? 'environment' : 'user';
-    console.log('📱 Switching camera from', currentCamera, 'to', newCamera);
+    console.log('📱 SWITCHING CAMERA: from', currentCamera, 'to', newCamera);
 
     try {
-      // Stop current camera first
-      stopCamera();
+      setIsInitializing(true);
 
-      // Update camera state and reset selected device so it finds a new one
+      // Request runtime permissions for camera switching
+      console.log('📱 Requesting runtime permissions for camera switch...');
+      const hasPermission = await requestCameraPermissions();
+      if (!hasPermission) {
+        throw new Error('Camera permission required for switching cameras');
+      }
+
+      // Stop current camera completely
+      console.log('📱 Stopping current camera stream...');
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach(track => {
+          console.log('📱 Stopping track:', track.label, track.kind);
+          track.stop();
+        });
+        streamRef.current = null;
+      }
+
+      // Clean up video element
+      if (videoRef.current) {
+        videoRef.current.srcObject = null;
+      }
+
+      // Remove video element from container
+      if (videoContainerRef.current) {
+        const videoElement = videoContainerRef.current.querySelector('video');
+        if (videoElement) {
+          videoElement.remove();
+        }
+      }
+
+      setIsStreaming(false);
+      setActualCamera('unknown');
+
+      // Update camera state and reset selected device
       setCurrentCamera(newCamera);
-      setSelectedDeviceId(null); // Reset so it finds the best device for new camera
+      setSelectedDeviceId(null);
 
-      // Wait a bit for cleanup, then restart with new camera
+      console.log('📱 Camera state updated to:', newCamera);
+
+      // Wait for cleanup, then start new camera
       setTimeout(async () => {
-        console.log('📱 Starting camera with new setting:', newCamera);
-
-        // Force re-enumeration of devices to ensure fresh device list
         try {
+          console.log('📱 Re-enumerating devices for camera switch...');
           const devices = await navigator.mediaDevices.enumerateDevices();
+          const videoDevices = devices.filter(device => device.kind === 'videoinput');
+
+          console.log('📱 Available devices after switch:', videoDevices.map(d => ({
+            deviceId: d.deviceId.substring(0, 8) + '...',
+            label: d.label || 'Unnamed Camera'
+          })));
+
           setAvailableDevices(devices);
 
-          // Find the best device for the new camera setting
-          const targetDeviceId = findBestCameraDevice(devices, newCamera);
-          if (targetDeviceId) {
-            setSelectedDeviceId(targetDeviceId);
-            console.log('📱 Selected device for', newCamera, 'camera:', targetDeviceId.substring(0, 8) + '...');
-          }
-        } catch (enumError) {
-          console.warn('Failed to enumerate devices during camera switch:', enumError);
-        }
-
-        // Start the camera with new settings
-        try {
-          await startCamera();
-        } catch (startError) {
-          console.error('Failed to start camera after switch:', startError);
-          // If switching fails, try to go back to the previous camera
-          console.log('📱 Attempting to revert to previous camera...');
-          setCurrentCamera(currentCamera);
-          setSelectedDeviceId(null);
-
-          setTimeout(async () => {
-            try {
-              await startCamera();
-            } catch (revertError) {
-              console.error('Failed to revert camera:', revertError);
-              // If everything fails, show permission denied screen
-              setShowPermissionDenied(true);
-              setLastError('Camera switching failed. Please try refreshing the page.');
+          // Try multiple strategies to get the right camera
+          const constraintSets = [
+            // Strategy 1: Exact facingMode
+            {
+              video: {
+                facingMode: { exact: newCamera }
+              }
+            },
+            // Strategy 2: Exact facingMode with constraints
+            {
+              video: {
+                facingMode: { exact: newCamera },
+                width: { ideal: 1280 },
+                height: { ideal: 720 }
+              }
+            },
+            // Strategy 3: Try specific device for new camera
+            ...(findBestCameraDevice(devices, newCamera) ? [{
+              video: {
+                deviceId: { exact: findBestCameraDevice(devices, newCamera) }
+              }
+            }] : []),
+            // Strategy 4: Ideal facingMode (allows fallback)
+            {
+              video: {
+                facingMode: { ideal: newCamera }
+              }
             }
-          }, 300);
+          ];
+
+          let newStream = null;
+          let success = false;
+
+          for (const constraints of constraintSets) {
+            try {
+              console.log('📱 Trying camera switch with constraints:', constraints);
+              newStream = await navigator.mediaDevices.getUserMedia(constraints);
+
+              // Verify we got the right camera
+              const videoTrack = newStream.getVideoTracks()[0];
+              const settings = videoTrack.getSettings();
+              let detectedFacing = settings.facingMode;
+
+              // Infer from label if facingMode is unknown
+              if (!detectedFacing || detectedFacing === 'unknown') {
+                const label = videoTrack.label?.toLowerCase() || '';
+                if (label.includes('back') || label.includes('rear') || label.includes('environment') ||
+                    label.includes('main') || label.includes('primary')) {
+                  detectedFacing = 'environment';
+                } else if (label.includes('front') || label.includes('user') || label.includes('face') ||
+                          label.includes('selfie')) {
+                  detectedFacing = 'user';
+                }
+              }
+
+              console.log('📱 Camera switch result:', {
+                requested: newCamera,
+                detected: detectedFacing,
+                label: videoTrack.label,
+                success: detectedFacing === newCamera || !detectedFacing
+              });
+
+              success = true;
+              break;
+            } catch (error) {
+              console.warn('📱 Camera switch attempt failed:', constraints, error);
+              if (newStream) {
+                newStream.getTracks().forEach(track => track.stop());
+                newStream = null;
+              }
+            }
+          }
+
+          if (newStream && success) {
+            // Set up new video element
+            console.log('📱 Setting up new video element for switched camera...');
+
+            if (videoContainerRef.current) {
+              // Create new video element
+              const videoElement = document.createElement('video');
+              videoElement.style.width = '100vw';
+              videoElement.style.height = '100vh';
+              videoElement.style.objectFit = 'cover';
+              videoElement.style.backgroundColor = '#000000';
+              videoElement.style.position = 'absolute';
+              videoElement.style.top = '0';
+              videoElement.style.left = '0';
+              videoElement.style.zIndex = '1';
+              videoElement.autoplay = true;
+              videoElement.playsInline = true;
+              videoElement.muted = true;
+              videoElement.controls = false;
+              videoElement.setAttribute('webkit-playsinline', 'true');
+
+              videoElement.srcObject = newStream;
+
+              videoElement.onloadedmetadata = async () => {
+                try {
+                  await videoElement.play();
+                  console.log('📱 New camera stream playing successfully');
+
+                  // Update state
+                  setIsStreaming(true);
+                  setIsInitializing(false);
+
+                  // Update actual camera based on detection
+                  const videoTrack = newStream.getVideoTracks()[0];
+                  const settings = videoTrack.getSettings();
+                  let actualFacingMode = settings.facingMode;
+
+                  if (!actualFacingMode || actualFacingMode === 'unknown') {
+                    const label = videoTrack.label?.toLowerCase() || '';
+                    if (label.includes('back') || label.includes('rear') || label.includes('environment')) {
+                      actualFacingMode = 'environment';
+                    } else if (label.includes('front') || label.includes('user') || label.includes('face')) {
+                      actualFacingMode = 'user';
+                    } else {
+                      actualFacingMode = newCamera; // Assume success
+                    }
+                  }
+
+                  setActualCamera(actualFacingMode as 'user' | 'environment' | 'unknown');
+
+                } catch (playError) {
+                  console.error('📱 Failed to play new camera stream:', playError);
+                  setIsInitializing(false);
+                }
+              };
+
+              // Store references
+              videoRef.current = videoElement;
+              streamRef.current = newStream;
+
+              // Add to container
+              videoContainerRef.current.appendChild(videoElement);
+
+              console.log('📱 Camera switch completed successfully');
+            }
+          } else {
+            console.error('📱 Failed to switch camera - could not get new stream');
+            setIsInitializing(false);
+            setLastError('Failed to switch camera. Try again or refresh the page.');
+            setShowPermissionDenied(true);
+          }
+
+        } catch (error) {
+          console.error('📱 Camera switch failed:', error);
+          setIsInitializing(false);
+          setLastError('Camera switch failed: ' + error.message);
+          setShowPermissionDenied(true);
         }
-      }, 500); // Increased delay for better mobile compatibility
+      }, 800); // Longer delay for complete cleanup
+
     } catch (error) {
-      console.error('Error switching camera:', error);
-      setLastError('Camera switch failed');
+      console.error('📱 Error during camera switch:', error);
+      setIsInitializing(false);
+      setLastError('Camera switch error');
       setShowPermissionDenied(true);
     }
-  }, [currentCamera, isStreaming, isInitializing, stopCamera, startCamera, findBestCameraDevice]);
+  }, [currentCamera, isStreaming, isInitializing, findBestCameraDevice]);
 
   const takePhoto = useCallback(() => {
     if (!isWebPlatform || !videoRef.current || !canvasRef.current) return;
@@ -885,6 +1113,20 @@ export default function WebCamera({ onPhotoTaken, type }: WebCameraProps) {
             <View style={styles.buttonTextContainer}>
               <Text style={styles.secondaryButtonText}>Choose File</Text>
               <Text style={styles.buttonSubtext}>Upload from device</Text>
+            </View>
+          </View>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={styles.permissionButton}
+          onPress={requestCameraPermissions}
+          activeOpacity={0.8}
+        >
+          <View style={styles.buttonContent}>
+            <Text style={styles.buttonIcon}>🔐</Text>
+            <View style={styles.buttonTextContainer}>
+              <Text style={styles.permissionButtonText}>Grant Camera Access</Text>
+              <Text style={styles.buttonSubtext}>Allow camera permissions</Text>
             </View>
           </View>
         </TouchableOpacity>
@@ -1139,6 +1381,16 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     borderColor: '#e2e8f0',
   },
+  permissionButton: {
+    backgroundColor: '#8b5cf6',
+    borderRadius: 12,
+    padding: 20,
+    shadowColor: '#8b5cf6',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 6,
+  },
   buttonContent: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1162,6 +1414,12 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '600',
     color: '#374151',
+    marginBottom: 2,
+  },
+  permissionButtonText: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#ffffff',
     marginBottom: 2,
   },
   buttonSubtext: {

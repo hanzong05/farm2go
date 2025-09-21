@@ -14,7 +14,7 @@ import {
 } from 'react-native';
 import { supabase } from '../lib/supabase';
 import { Database } from '../types/database';
-import WebCamera from './WebCamera';
+import VisionCamera from './VisionCamera';
 import WebFileInput from './WebFileInput';
 
 const { width } = Dimensions.get('window');
@@ -59,7 +59,7 @@ export default function VerificationUpload({
   });
   const [uploading, setUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState('');
-  const [showWebCamera, setShowWebCamera] = useState<'id' | 'face' | null>(null);
+  const [showVisionCamera, setShowVisionCamera] = useState<'id' | 'face' | null>(null);
   const [showFileInput, setShowFileInput] = useState<'id' | 'face' | null>(null);
 
   const requestCameraPermission = async () => {
@@ -92,29 +92,9 @@ export default function VerificationUpload({
     console.log('Platform.OS:', Platform.OS);
     console.log('showImagePickerOptions called for type:', type);
 
-    // For web platforms, directly show options without Alert
-    if (Platform.OS === 'web' || typeof window !== 'undefined') {
-      console.log('Web platform detected, setting showWebCamera directly');
-      setShowWebCamera(type);
-      return;
-    }
-
-    // For mobile platforms, show mobile-specific options
-    Alert.alert(
-      `${type === 'id' ? 'ID Document' : 'Face Photo'}`,
-      'Choose how you want to add your photo',
-      [
-        {
-          text: 'Take Photo',
-          onPress: () => takePhoto(type),
-        },
-        {
-          text: 'Choose from Gallery',
-          onPress: () => pickImage(type),
-        },
-        { text: 'Cancel', style: 'cancel' },
-      ]
-    );
+    // For all platforms, use VisionCamera (it handles platform detection internally)
+    console.log('Platform detected:', Platform.OS, 'setting showVisionCamera directly');
+    setShowVisionCamera(type);
   };
 
   const takePhoto = async (type: 'id' | 'face') => {
@@ -173,10 +153,10 @@ export default function VerificationUpload({
     }
   };
 
-  const handleWebCameraPhoto = (photoUri: string) => {
-    if (showWebCamera) {
-      updateVerificationData(showWebCamera, photoUri);
-      setShowWebCamera(null);
+  const handleVisionCameraPhoto = (photoUri: string) => {
+    if (showVisionCamera) {
+      updateVerificationData(showVisionCamera, photoUri);
+      setShowVisionCamera(null);
     }
   };
 
@@ -302,29 +282,29 @@ export default function VerificationUpload({
     );
   };
 
-  if (showWebCamera) {
-    console.log('Rendering WebCamera for type:', showWebCamera);
+  if (showVisionCamera) {
+    console.log('Rendering VisionCamera for type:', showVisionCamera);
     return (
       <ScrollView style={styles.container} contentContainerStyle={styles.content}>
         <View style={styles.header}>
           <Text style={styles.title}>
-            {showWebCamera === 'id' ? 'Capture ID Document' : 'Take Face Photo'}
+            {showVisionCamera === 'id' ? 'Capture ID Document' : 'Take Face Photo'}
           </Text>
           <Text style={styles.subtitle}>
-            Position your {showWebCamera === 'id' ? 'ID document' : 'face'} in the camera frame and take a photo
+            Position your {showVisionCamera === 'id' ? 'ID document' : 'face'} in the camera frame and take a photo
           </Text>
         </View>
 
-        <WebCamera
-          type={showWebCamera}
-          onPhotoTaken={handleWebCameraPhoto}
+        <VisionCamera
+          type={showVisionCamera}
+          onPhotoTaken={handleVisionCameraPhoto}
         />
 
         <TouchableOpacity
           style={styles.backButton}
           onPress={() => {
             console.log('Back button pressed');
-            setShowWebCamera(null);
+            setShowVisionCamera(null);
           }}
           activeOpacity={0.8}
         >
