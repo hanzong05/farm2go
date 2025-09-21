@@ -1,4 +1,4 @@
-import React, { useRef, useState, useCallback } from 'react';
+import React, { useRef, useState, useCallback, useEffect } from 'react';
 import { View, TouchableOpacity, Text, StyleSheet, Alert, Platform } from 'react-native';
 
 interface WebCameraProps {
@@ -7,41 +7,61 @@ interface WebCameraProps {
 }
 
 export default function WebCamera({ onPhotoTaken, type }: WebCameraProps) {
-  const videoRef = useRef<HTMLVideoElement | null>(null);
-  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const videoRef = useRef<any>(null);
+  const canvasRef = useRef<any>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const [isStreaming, setIsStreaming] = useState(false);
   const [hasPermission, setHasPermission] = useState<boolean | null>(null);
+  const [isWebPlatform, setIsWebPlatform] = useState(false);
+
+  useEffect(() => {
+    setIsWebPlatform(Platform.OS === 'web');
+  }, []);
 
   const startCamera = useCallback(async () => {
-    if (!Platform.OS === 'web') return;
+    if (!isWebPlatform) return;
 
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({
+      // Check if getUserMedia is available
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        throw new Error('Camera not supported by this browser');
+      }
+
+      const constraints = {
         video: {
-          width: { ideal: 1280 },
-          height: { ideal: 720 },
+          width: { ideal: 1280, max: 1920 },
+          height: { ideal: 720, max: 1080 },
           facingMode: type === 'face' ? 'user' : 'environment'
         }
-      });
+      };
+
+      const stream = await navigator.mediaDevices.getUserMedia(constraints);
 
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
-        videoRef.current.play();
+        await videoRef.current.play();
         streamRef.current = stream;
         setIsStreaming(true);
         setHasPermission(true);
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error accessing camera:', error);
       setHasPermission(false);
-      Alert.alert(
-        'Camera Access Denied',
-        'Please allow camera access to take verification photos. You can enable it in your browser settings.',
-        [{ text: 'OK' }]
-      );
+
+      let errorMessage = 'Failed to access camera. ';
+      if (error.name === 'NotAllowedError') {
+        errorMessage += 'Please allow camera access in your browser settings.';
+      } else if (error.name === 'NotFoundError') {
+        errorMessage += 'No camera found on this device.';
+      } else if (error.name === 'NotSupportedError') {
+        errorMessage += 'Camera is not supported by this browser.';
+      } else {
+        errorMessage += 'Please check your camera permissions and try again.';
+      }
+
+      Alert.alert('Camera Access Error', errorMessage, [{ text: 'OK' }]);
     }
-  }, [type]);
+  }, [isWebPlatform, type]);
 
   const stopCamera = useCallback(() => {
     if (streamRef.current) {
@@ -52,32 +72,42 @@ export default function WebCamera({ onPhotoTaken, type }: WebCameraProps) {
   }, []);
 
   const takePhoto = useCallback(() => {
-    if (!videoRef.current || !canvasRef.current) return;
+    if (!isWebPlatform || !videoRef.current || !canvasRef.current) return;
 
     const video = videoRef.current;
     const canvas = canvasRef.current;
-    const context = canvas.getContext('2d');
 
-    if (!context) return;
-
-    // Set canvas dimensions based on video
-    canvas.width = video.videoWidth;
-    canvas.height = video.videoHeight;
-
-    // Draw the video frame to canvas
-    context.drawImage(video, 0, 0, canvas.width, canvas.height);
-
-    // Convert to blob and create URL
-    canvas.toBlob((blob) => {
-      if (blob) {
-        const photoUri = URL.createObjectURL(blob);
-        onPhotoTaken(photoUri);
-        stopCamera();
+    try {
+      const context = canvas.getContext('2d');
+      if (!context) {
+        Alert.alert('Error', 'Unable to access canvas context');
+        return;
       }
-    }, 'image/jpeg', 0.8);
-  }, [onPhotoTaken, stopCamera]);
 
-  if (Platform.OS !== 'web') {
+      // Set canvas dimensions based on video
+      canvas.width = video.videoWidth || 640;
+      canvas.height = video.videoHeight || 480;
+
+      // Draw the video frame to canvas
+      context.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+      // Convert to blob and create URL
+      canvas.toBlob((blob: Blob | null) => {
+        if (blob) {
+          const photoUri = URL.createObjectURL(blob);
+          onPhotoTaken(photoUri);
+          stopCamera();
+        } else {
+          Alert.alert('Error', 'Failed to capture photo');
+        }
+      }, 'image/jpeg', 0.8);
+    } catch (error) {
+      console.error('Error taking photo:', error);
+      Alert.alert('Error', 'Failed to capture photo. Please try again.');
+    }
+  }, [isWebPlatform, onPhotoTaken, stopCamera]);
+
+  if (!isWebPlatform) {
     return null;
   }
 
@@ -95,17 +125,17 @@ export default function WebCamera({ onPhotoTaken, type }: WebCameraProps) {
         </TouchableOpacity>
       ) : (
         <View style={styles.cameraContainer}>
-          <video
-            ref={videoRef}
-            style={styles.video}
-            autoPlay
-            playsInline
-            muted
-          />
-          <canvas
-            ref={canvasRef}
-            style={styles.hiddenCanvas}
-          />
+          {React.createElement('video', {
+            ref: videoRef,
+            style: styles.video,
+            autoPlay: true,
+            playsInline: true,
+            muted: true,
+          })}
+          {React.createElement('canvas', {
+            ref: canvasRef,
+            style: styles.hiddenCanvas,
+          })}
           <View style={styles.controls}>
             <TouchableOpacity
               style={styles.captureButton}
@@ -137,6 +167,30 @@ export default function WebCamera({ onPhotoTaken, type }: WebCameraProps) {
           >
             <Text style={styles.retryButtonText}>Try Again</Text>
           </TouchableOpacity>
+
+          {/* Fallback file input for browsers without camera support */}
+          <View style={styles.fallbackSection}>
+            <Text style={styles.fallbackText}>Or select image from files:</Text>
+            {React.createElement('input', {
+              type: 'file',
+              accept: 'image/*',
+              capture: type === 'face' ? 'user' : 'environment',
+              onChange: (e: any) => {
+                const file = e.target.files?.[0];
+                if (file) {
+                  const photoUri = URL.createObjectURL(file);
+                  onPhotoTaken(photoUri);
+                }
+              },
+              style: {
+                marginTop: 10,
+                padding: 10,
+                borderRadius: 5,
+                border: '1px solid #ccc',
+                backgroundColor: '#f9f9f9',
+              },
+            })}
+          </View>
         </View>
       )}
     </View>
@@ -234,5 +288,15 @@ const styles = StyleSheet.create({
     color: '#ffffff',
     fontSize: 14,
     fontWeight: '600',
+  },
+  fallbackSection: {
+    marginTop: 20,
+    alignItems: 'center',
+  },
+  fallbackText: {
+    fontSize: 14,
+    color: '#6b7280',
+    marginBottom: 10,
+    textAlign: 'center',
   },
 });

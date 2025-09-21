@@ -14,6 +14,7 @@ import {
 } from 'react-native';
 import { supabase } from '../lib/supabase';
 import WebCamera from './WebCamera';
+import WebFileInput from './WebFileInput';
 
 const { width } = Dimensions.get('window');
 
@@ -55,6 +56,7 @@ export default function VerificationUpload({
   const [uploading, setUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState('');
   const [showWebCamera, setShowWebCamera] = useState<'id' | 'face' | null>(null);
+  const [showFileInput, setShowFileInput] = useState<'id' | 'face' | null>(null);
 
   const requestCameraPermission = async () => {
     const { status } = await ImagePicker.requestCameraPermissionsAsync();
@@ -93,8 +95,8 @@ export default function VerificationUpload({
             onPress: () => setShowWebCamera(type),
           },
           {
-            text: 'Choose from Files',
-            onPress: () => pickImage(type),
+            text: 'Select File',
+            onPress: () => setShowFileInput(type),
           },
           { text: 'Cancel', style: 'cancel' },
         ]
@@ -178,6 +180,13 @@ export default function VerificationUpload({
     if (showWebCamera) {
       updateVerificationData(showWebCamera, photoUri);
       setShowWebCamera(null);
+    }
+  };
+
+  const handleFileInput = (fileUri: string) => {
+    if (showFileInput) {
+      updateVerificationData(showFileInput, fileUri);
+      setShowFileInput(null);
     }
   };
 
@@ -312,6 +321,34 @@ export default function VerificationUpload({
         <TouchableOpacity
           style={styles.backButton}
           onPress={() => setShowWebCamera(null)}
+          activeOpacity={0.8}
+        >
+          <Text style={styles.backButtonText}>← Back to Upload Options</Text>
+        </TouchableOpacity>
+      </ScrollView>
+    );
+  }
+
+  if (showFileInput) {
+    return (
+      <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+        <View style={styles.header}>
+          <Text style={styles.title}>
+            {showFileInput === 'id' ? 'Select ID Document' : 'Select Face Photo'}
+          </Text>
+          <Text style={styles.subtitle}>
+            Choose an image file from your computer
+          </Text>
+        </View>
+
+        <WebFileInput
+          type={showFileInput}
+          onFileSelected={handleFileInput}
+        />
+
+        <TouchableOpacity
+          style={styles.backButton}
+          onPress={() => setShowFileInput(null)}
           activeOpacity={0.8}
         >
           <Text style={styles.backButtonText}>← Back to Upload Options</Text>
