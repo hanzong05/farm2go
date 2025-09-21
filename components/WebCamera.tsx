@@ -43,14 +43,61 @@ export default function WebCamera({ onPhotoTaken, type }: WebCameraProps) {
       const videoDevices = devices.filter(device => device.kind === 'videoinput');
 
       console.log('📱 Testing camera capabilities...');
-      console.log('📱 Available video devices:', videoDevices.length);
+      console.log('📱 Available video devices:', videoDevices.map(d => ({
+        deviceId: d.deviceId.substring(0, 8) + '...',
+        label: d.label || 'Unnamed Camera',
+        groupId: d.groupId?.substring(0, 8) + '...' || 'none'
+      })));
 
       // Test if we can actually access cameras with different facingModes
       const testResults = {
         front: false,
         back: false,
-        deviceCount: videoDevices.length
+        deviceCount: videoDevices.length,
+        devices: [] as Array<{ deviceId: string; label: string; facingMode?: string; index: number }>,
       };
+
+      // Test each device individually to map them better
+      for (let i = 0; i < Math.min(videoDevices.length, 3); i++) {
+        const device = videoDevices[i];
+        try {
+          const testStream = await navigator.mediaDevices.getUserMedia({
+            video: { deviceId: { exact: device.deviceId } }
+          });
+
+          const track = testStream.getVideoTracks()[0];
+          const settings = track.getSettings();
+          const label = track.label?.toLowerCase() || '';
+
+          let inferredFacing = settings.facingMode;
+          if (!inferredFacing || inferredFacing === 'unknown') {
+            // Infer from label
+            if (label.includes('back') || label.includes('rear') || label.includes('environment') ||
+                label.includes('main') || label.includes('primary') || label.includes('camera 1')) {
+              inferredFacing = 'environment';
+            } else if (label.includes('front') || label.includes('user') || label.includes('face') ||
+                      label.includes('selfie') || label.includes('camera 0')) {
+              inferredFacing = 'user';
+            }
+          }
+
+          console.log(`📹 Device ${i}: ${device.label} -> ${inferredFacing || 'unknown'}`);
+
+          testResults.devices.push({
+            deviceId: device.deviceId,
+            label: device.label,
+            facingMode: inferredFacing,
+            index: i
+          });
+
+          if (inferredFacing === 'user') testResults.front = true;
+          if (inferredFacing === 'environment') testResults.back = true;
+
+          testStream.getTracks().forEach(track => track.stop());
+        } catch (error) {
+          console.log(`❌ Device ${i} test failed:`, (error as any).name);
+        }
+      }
 
       // Quick test for front camera
       try {
@@ -59,9 +106,9 @@ export default function WebCamera({ onPhotoTaken, type }: WebCameraProps) {
         });
         testResults.front = true;
         frontStream.getTracks().forEach(track => track.stop());
-        console.log('✅ Front camera test: SUCCESS');
+        console.log('✅ Front camera facingMode test: SUCCESS');
       } catch (error) {
-        console.log('❌ Front camera test: FAILED');
+        console.log('❌ Front camera facingMode test: FAILED');
       }
 
       // Quick test for back camera
@@ -71,9 +118,9 @@ export default function WebCamera({ onPhotoTaken, type }: WebCameraProps) {
         });
         testResults.back = true;
         backStream.getTracks().forEach(track => track.stop());
-        console.log('✅ Back camera test: SUCCESS');
+        console.log('✅ Back camera facingMode test: SUCCESS');
       } catch (error) {
-        console.log('❌ Back camera test: FAILED');
+        console.log('❌ Back camera facingMode test: FAILED');
       }
 
       console.log('📱 Camera capabilities test results:', testResults);
@@ -289,8 +336,10 @@ export default function WebCamera({ onPhotoTaken, type }: WebCameraProps) {
       // Try different constraint sets, starting with mobile-optimized approaches
       const constraintSets: MediaStreamConstraints[] = [];
 
-      // Check if we're on mobile (basic heuristic)
-      const isMobile = /Android|iPhone|iPad|iPod|BlackBerry|Windows Phone/i.test(navigator.userAgent);
+      // Check if we're on mobile (enhanced detection)
+      const isMobile = /Android|iPhone|iPad|iPod|BlackBerry|Windows Phone|Mobile/i.test(navigator.userAgent) ||
+                       ('ontouchstart' in window) ||
+                       (navigator.maxTouchPoints > 0);
 
       if (isMobile) {
         // Mobile-first constraints - start with facingMode which is more reliable on mobile
@@ -426,14 +475,47 @@ export default function WebCamera({ onPhotoTaken, type }: WebCameraProps) {
           const videoTrack = stream.getVideoTracks()[0];
           if (videoTrack) {
             const settings = videoTrack.getSettings();
-            const actualFacingMode = settings.facingMode || 'unknown';
+            const capabilities = videoTrack.getCapabilities();
+            let actualFacingMode = settings.facingMode || 'unknown';
+
+            console.log('📹 Camera track details:', {
+              settings: settings,
+              capabilities: capabilities,
+              label: videoTrack.label,
+              deviceId: settings.deviceId?.substring(0, 8) + '...' || 'unknown'
+            });
+
+            // If facingMode is unknown, try to infer from device label or deviceId
+            if (actualFacingMode === 'unknown' || !actualFacingMode) {
+              const label = videoTrack.label?.toLowerCase() || '';
+              const deviceId = settings.deviceId || '';
+
+              // Check device label for camera type hints
+              if (label.includes('back') || label.includes('rear') || label.includes('environment') ||
+                  label.includes('main') || label.includes('primary') || label.includes('camera 1') ||
+                  label.includes('camera2') || label.includes('wide') || label.includes('telephoto')) {
+                actualFacingMode = 'environment';
+                console.log('🔍 Inferred back camera from label:', label);
+              } else if (label.includes('front') || label.includes('user') || label.includes('face') ||
+                        label.includes('selfie') || label.includes('facetime') || label.includes('camera 0') ||
+                        label.includes('camera0') || label.includes('inner')) {
+                actualFacingMode = 'user';
+                console.log('🔍 Inferred front camera from label:', label);
+              } else {
+                // As a last resort, assume we got what we requested if the stream works
+                actualFacingMode = currentCamera;
+                console.log('🔍 Assuming requested camera since stream works:', currentCamera);
+              }
+            }
+
             console.log('✅ Camera stream obtained:', {
               requestedFacingMode: currentCamera,
               actualFacingMode: actualFacingMode,
               matchesRequest: actualFacingMode === currentCamera,
               width: settings.width,
               height: settings.height,
-              deviceId: settings.deviceId?.substring(0, 8) + '...' || 'unknown'
+              deviceId: settings.deviceId?.substring(0, 8) + '...' || 'unknown',
+              inferredFromLabel: !settings.facingMode
             });
 
             // Update actual camera state
@@ -842,11 +924,14 @@ export default function WebCamera({ onPhotoTaken, type }: WebCameraProps) {
       {/* Camera Guide Overlay */}
       {isStreaming && (
         <View style={styles.guideOverlay}>
-          {/* Camera mismatch warning */}
-          {actualCamera !== 'unknown' && actualCamera !== currentCamera && (
+          {/* Camera mismatch warning or unknown camera helper */}
+          {((actualCamera !== 'unknown' && actualCamera !== currentCamera) || actualCamera === 'unknown') && (
             <View style={styles.cameraWarning}>
               <Text style={styles.warningText}>
-                ⚠️ Using {actualCamera === 'user' ? 'front' : 'back'} camera instead of {currentCamera === 'user' ? 'front' : 'back'} camera
+                {actualCamera === 'unknown'
+                  ? `📷 Camera active - Switch to ${currentCamera === 'user' ? 'back' : 'front'} camera if needed`
+                  : `⚠️ Using ${actualCamera === 'user' ? 'front' : 'back'} camera instead of ${currentCamera === 'user' ? 'front' : 'back'} camera`
+                }
               </Text>
               <TouchableOpacity style={styles.warningButton} onPress={switchCamera}>
                 <Text style={styles.warningButtonText}>Switch Camera</Text>
