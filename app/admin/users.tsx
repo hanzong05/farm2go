@@ -157,6 +157,11 @@ export default function AdminUsers() {
   const [buyerDetailTab, setBuyerDetailTab] = useState<'orders' | 'history'>('orders');
   const [buyerOrders, setBuyerOrders] = useState<OrderResponse[]>([]);
   const [buyerHistory, setBuyerHistory] = useState<OrderResponse[]>([]);
+
+  // QR Scanner states
+  const [qrScannerVisible, setQrScannerVisible] = useState(false);
+  const [orderProcessingVisible, setOrderProcessingVisible] = useState(false);
+  const [scannedOrderData, setScannedOrderData] = useState<any>(null);
   
   // Create User Modal states
   const [createUserModalVisible, setCreateUserModalVisible] = useState(false);
@@ -696,6 +701,78 @@ export default function AdminUsers() {
     }
   };
 
+  // QR Scanner Functions
+  const handleQrScan = () => {
+    setQrScannerVisible(true);
+  };
+
+  const handleQrCodeScanned = async (data: string) => {
+    try {
+      // Parse the QR code data (assuming it contains order information)
+      const orderData = JSON.parse(data);
+
+      // Fetch the full order details from the database including buyer's full information
+      const { data: orderDetails, error } = await supabase
+        .from('orders')
+        .select(`
+          *,
+          buyer_profile:profiles!orders_buyer_id_fkey(first_name, last_name, phone, barangay),
+          farmer_profile:profiles!orders_farmer_id_fkey(first_name, last_name, farm_name),
+          product:products(name, price, unit)
+        `)
+        .eq('id', orderData.orderId || orderData.order_id)
+        .single();
+
+      if (error) {
+        Alert.alert('Error', 'Order not found or invalid QR code');
+        return;
+      }
+
+      // Add buyer name info for easy display
+      const enrichedOrderData = {
+        ...orderDetails,
+        buyerName: `${orderDetails.buyer_profile?.first_name || ''} ${orderDetails.buyer_profile?.last_name || ''}`.trim(),
+        farmerName: `${orderDetails.farmer_profile?.first_name || ''} ${orderDetails.farmer_profile?.last_name || ''}`.trim(),
+      };
+
+      setScannedOrderData(enrichedOrderData);
+      setQrScannerVisible(false);
+      setOrderProcessingVisible(true);
+    } catch (error) {
+      console.error('Error processing QR code:', error);
+      Alert.alert('Error', 'Invalid QR code format');
+    }
+  };
+
+  const handleOrderAction = async (action: 'complete' | 'cancel') => {
+    if (!scannedOrderData) return;
+
+    try {
+      const newStatus = action === 'complete' ? 'delivered' : 'cancelled';
+
+      const { error } = await supabase
+        .from('orders')
+        .update({ status: newStatus })
+        .eq('id', scannedOrderData.id);
+
+      if (error) throw error;
+
+      Alert.alert(
+        'Success',
+        `Order has been ${action === 'complete' ? 'completed' : 'cancelled'} successfully`
+      );
+
+      setOrderProcessingVisible(false);
+      setScannedOrderData(null);
+
+      // Refresh the users list to update any displayed data
+      loadData();
+    } catch (error) {
+      console.error('Error updating order:', error);
+      Alert.alert('Error', 'Failed to update order status');
+    }
+  };
+
   // Create User Functions
   const openCreateUserModal = () => {
     setCreateUserForm({
@@ -1053,6 +1130,17 @@ export default function AdminUsers() {
             </TouchableOpacity>
           </View>
           
+          {/* QR Scanner Button (only for buyer tab) */}
+          {activeTab === 'buyer' && (
+            <TouchableOpacity
+              style={styles.qrScannerButton}
+              onPress={() => setQrScannerVisible(true)}
+            >
+              <Icon name="qrcode" size={16} color={colors.white} />
+              <Text style={styles.qrScannerButtonText}>Scan QR</Text>
+            </TouchableOpacity>
+          )}
+
           {/* Create New User Button */}
           <TouchableOpacity
             style={styles.createUserButton}
@@ -1662,6 +1750,167 @@ export default function AdminUsers() {
           </ScrollView>
         </View>
       </Modal>
+
+      {/* QR Scanner Modal */}
+      <Modal
+        animationType="slide"
+        transparent={false}
+        visible={qrScannerVisible}
+        onRequestClose={() => setQrScannerVisible(false)}
+      >
+        <View style={styles.qrScannerContainer}>
+          <View style={styles.qrScannerHeader}>
+            <TouchableOpacity
+              style={styles.qrCloseButton}
+              onPress={() => setQrScannerVisible(false)}
+            >
+              <Icon name="times" size={24} color={colors.white} />
+            </TouchableOpacity>
+            <Text style={styles.qrScannerTitle}>Scan Buyer QR Code</Text>
+          </View>
+
+          <View style={styles.qrCameraContainer}>
+            <Text style={styles.qrCameraMockText}>
+              QR Scanner Camera
+            </Text>
+            <TouchableOpacity
+              style={styles.qrMockScanButton}
+              onPress={() => {
+                // Simulate QR code scan for testing
+                const mockQrData = JSON.stringify({
+                  orderId: '123-test-order',
+                  buyerId: 'test-buyer-id'
+                });
+                handleQrCodeScanned(mockQrData);
+              }}
+            >
+              <Icon name="qrcode" size={24} color={colors.white} />
+              <Text style={styles.qrMockScanButtonText}>Simulate QR Scan</Text>
+            </TouchableOpacity>
+
+            <View style={styles.qrOverlay}>
+              <View style={styles.qrFrame} />
+              <Text style={styles.qrInstructions}>
+                Position the QR code within the frame
+              </Text>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Order Processing Modal */}
+      <Modal
+        animationType="slide"
+        transparent={true}
+        visible={orderProcessingVisible}
+        onRequestClose={() => setOrderProcessingVisible(false)}
+      >
+        <View style={styles.orderProcessingOverlay}>
+          <View style={styles.orderProcessingContainer}>
+            <View style={styles.orderProcessingHeader}>
+              <Text style={styles.orderProcessingTitle}>Process Order</Text>
+              <TouchableOpacity
+                style={styles.orderCloseButton}
+                onPress={() => setOrderProcessingVisible(false)}
+              >
+                <Icon name="times" size={20} color={colors.textSecondary} />
+              </TouchableOpacity>
+            </View>
+
+            {scannedOrderData && (
+              <ScrollView style={styles.orderDetailsContainer}>
+                {/* Buyer Information */}
+                <View style={styles.orderInfoSection}>
+                  <Text style={styles.orderSectionTitle}>Buyer Information</Text>
+                  <View style={styles.orderInfoRow}>
+                    <Icon name="user" size={16} color={colors.primary} />
+                    <Text style={styles.orderInfoText}>
+                      {scannedOrderData.buyerName || 'Unknown Buyer'}
+                    </Text>
+                  </View>
+                  <View style={styles.orderInfoRow}>
+                    <Icon name="phone" size={16} color={colors.primary} />
+                    <Text style={styles.orderInfoText}>
+                      {scannedOrderData.buyer_profile?.phone || 'No phone'}
+                    </Text>
+                  </View>
+                  <View style={styles.orderInfoRow}>
+                    <Icon name="map-marker-alt" size={16} color={colors.primary} />
+                    <Text style={styles.orderInfoText}>
+                      {scannedOrderData.buyer_profile?.barangay || 'No location'}
+                    </Text>
+                  </View>
+                </View>
+
+                {/* Order Details */}
+                <View style={styles.orderInfoSection}>
+                  <Text style={styles.orderSectionTitle}>Order Details</Text>
+                  <View style={styles.orderInfoRow}>
+                    <Icon name="leaf" size={16} color={colors.primary} />
+                    <Text style={styles.orderInfoText}>
+                      {scannedOrderData.product?.name || 'Unknown Product'}
+                    </Text>
+                  </View>
+                  <View style={styles.orderInfoRow}>
+                    <Icon name="shopping-bag" size={16} color={colors.primary} />
+                    <Text style={styles.orderInfoText}>
+                      Quantity: {scannedOrderData.quantity} {scannedOrderData.product?.unit || 'units'}
+                    </Text>
+                  </View>
+                  <View style={styles.orderInfoRow}>
+                    <Icon name="peso-sign" size={16} color={colors.primary} />
+                    <Text style={styles.orderInfoText}>
+                      Total: ₱{scannedOrderData.total_price?.toFixed(2) || '0.00'}
+                    </Text>
+                  </View>
+                  <View style={styles.orderInfoRow}>
+                    <Icon name="clock" size={16} color={colors.primary} />
+                    <Text style={styles.orderInfoText}>
+                      Status: {scannedOrderData.status}
+                    </Text>
+                  </View>
+                </View>
+
+                {/* Farmer Information */}
+                <View style={styles.orderInfoSection}>
+                  <Text style={styles.orderSectionTitle}>Farmer Information</Text>
+                  <View style={styles.orderInfoRow}>
+                    <Icon name="seedling" size={16} color={colors.primary} />
+                    <Text style={styles.orderInfoText}>
+                      {scannedOrderData.farmerName || 'Unknown Farmer'}
+                    </Text>
+                  </View>
+                  <View style={styles.orderInfoRow}>
+                    <Icon name="store" size={16} color={colors.primary} />
+                    <Text style={styles.orderInfoText}>
+                      {scannedOrderData.farmer_profile?.farm_name || 'No farm name'}
+                    </Text>
+                  </View>
+                </View>
+              </ScrollView>
+            )}
+
+            {/* Action Buttons */}
+            <View style={styles.orderActionButtons}>
+              <TouchableOpacity
+                style={[styles.orderActionButton, styles.completeButton]}
+                onPress={() => handleOrderAction('complete')}
+              >
+                <Icon name="check" size={16} color={colors.white} />
+                <Text style={styles.orderActionButtonText}>Complete Transaction</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.orderActionButton, styles.cancelButton]}
+                onPress={() => handleOrderAction('cancel')}
+              >
+                <Icon name="times" size={16} color={colors.white} />
+                <Text style={styles.orderActionButtonText}>Cancel Order</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -1807,6 +2056,27 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
   },
   createUserButtonText: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: colors.white,
+  },
+  qrScannerButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.primary,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    borderRadius: 16,
+    gap: 8,
+    elevation: 2,
+    shadowColor: colors.shadowDark,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    marginRight: 8,
+  },
+  qrScannerButtonText: {
     fontSize: 15,
     fontWeight: '700',
     color: colors.white,
@@ -2382,5 +2652,174 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: '#6b7280',
     fontWeight: '600',
+  },
+
+  // QR Scanner Styles
+  qrScannerContainer: {
+    flex: 1,
+    backgroundColor: colors.text,
+  },
+  qrScannerHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    paddingTop: 50,
+    backgroundColor: colors.text,
+  },
+  qrCloseButton: {
+    padding: 8,
+  },
+  qrScannerTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: colors.white,
+    flex: 1,
+    textAlign: 'center',
+    marginRight: 40,
+  },
+  qrCameraContainer: {
+    flex: 1,
+    position: 'relative',
+  },
+  camera: {
+    flex: 1,
+  },
+  qrOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  qrFrame: {
+    width: 250,
+    height: 250,
+    borderWidth: 2,
+    borderColor: colors.white,
+    borderRadius: 20,
+    backgroundColor: 'transparent',
+  },
+  qrInstructions: {
+    fontSize: 16,
+    color: colors.white,
+    textAlign: 'center',
+    marginTop: 30,
+    paddingHorizontal: 40,
+  },
+  qrCameraMockText: {
+    fontSize: 18,
+    color: colors.white,
+    textAlign: 'center',
+    marginTop: 100,
+  },
+  qrMockScanButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.primary,
+    paddingVertical: 15,
+    paddingHorizontal: 30,
+    borderRadius: 25,
+    marginTop: 50,
+    marginHorizontal: 50,
+    gap: 10,
+  },
+  qrMockScanButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: colors.white,
+  },
+
+  // Order Processing Modal Styles
+  orderProcessingOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+  },
+  orderProcessingContainer: {
+    backgroundColor: colors.white,
+    borderRadius: 20,
+    width: '100%',
+    maxHeight: '80%',
+    elevation: 10,
+    shadowColor: colors.shadowDark,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+  },
+  orderProcessingHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+  },
+  orderProcessingTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: colors.text,
+  },
+  orderCloseButton: {
+    padding: 8,
+  },
+  orderDetailsContainer: {
+    maxHeight: 400,
+    paddingHorizontal: 20,
+  },
+  orderInfoSection: {
+    marginVertical: 16,
+  },
+  orderSectionTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: colors.text,
+    marginBottom: 12,
+  },
+  orderInfoRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+    gap: 10,
+  },
+  orderInfoText: {
+    fontSize: 14,
+    color: colors.textSecondary,
+    flex: 1,
+  },
+  orderActionButtons: {
+    flexDirection: 'row',
+    gap: 12,
+    paddingHorizontal: 20,
+    paddingVertical: 20,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+  },
+  orderActionButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 14,
+    borderRadius: 12,
+    gap: 8,
+  },
+  completeButton: {
+    backgroundColor: colors.success,
+  },
+  cancelButton: {
+    backgroundColor: colors.danger,
+  },
+  orderActionButtonText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: colors.white,
   },
 });
