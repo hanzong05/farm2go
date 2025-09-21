@@ -1,6 +1,19 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Alert, Platform, StyleSheet, Text, TouchableOpacity, View, ViewStyle } from 'react-native';
-import { Camera, PhotoFile, TakePhotoOptions, useCameraDevice, useCameraPermission } from 'react-native-vision-camera';
+
+// Conditionally import vision-camera only on native platforms
+let Camera: any, useCameraDevice: any, useCameraPermission: any;
+
+if (Platform.OS === 'ios' || Platform.OS === 'android') {
+  try {
+    const visionCamera = require('react-native-vision-camera');
+    Camera = visionCamera.Camera;
+    useCameraDevice = visionCamera.useCameraDevice;
+    useCameraPermission = visionCamera.useCameraPermission;
+  } catch (error) {
+    console.warn('Failed to import react-native-vision-camera:', error);
+  }
+}
 
 interface VisionCameraProps {
   onPhotoTaken: (photoUri: string) => void;
@@ -8,7 +21,7 @@ interface VisionCameraProps {
 }
 
 export default function VisionCamera({ onPhotoTaken, type }: VisionCameraProps) {
-  const cameraRef = useRef<Camera>(null);
+  const cameraRef = useRef<any>(null);
   const [isActive, setIsActive] = useState(false);
   const [isInitializing, setIsInitializing] = useState(false);
   const [currentCameraPosition, setCurrentCameraPosition] = useState<'front' | 'back'>(
@@ -17,11 +30,12 @@ export default function VisionCamera({ onPhotoTaken, type }: VisionCameraProps) 
   const [showPermissionDenied, setShowPermissionDenied] = useState(false);
   const [isNativePlatform, setIsNativePlatform] = useState(false);
 
-  // Get camera permission status and request function
-  const { hasPermission, requestPermission } = useCameraPermission();
+  // Get camera permission status and request function (only on native platforms)
+  const visionCameraHooks = useCameraPermission ? useCameraPermission() : { hasPermission: null, requestPermission: () => Promise.resolve(false) };
+  const { hasPermission, requestPermission } = visionCameraHooks;
 
-  // Get camera device based on current position
-  const device = useCameraDevice(currentCameraPosition);
+  // Get camera device based on current position (only on native platforms)
+  const device = useCameraDevice ? useCameraDevice(currentCameraPosition) : null;
 
   // Check if we're on a native platform
   useEffect(() => {
@@ -159,11 +173,11 @@ export default function VisionCamera({ onPhotoTaken, type }: VisionCameraProps) 
     try {
       console.log('📷 Taking photo...');
 
-      const options: TakePhotoOptions = {
-        // Add valid TakePhotoOptions properties here if needed
+      const options = {
+        quality: 0.8,
       };
 
-      const photo: PhotoFile = await cameraRef.current.takePhoto(options);
+      const photo = await cameraRef.current.takePhoto(options);
 
       console.log('✅ Photo taken:', photo.path);
 
