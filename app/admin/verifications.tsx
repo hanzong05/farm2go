@@ -14,6 +14,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import Swal from 'sweetalert2';
 import HeaderComponent from '../../components/HeaderComponent';
 import { supabase } from '../../lib/supabase';
 import { getUserWithProfile } from '../../services/auth';
@@ -61,6 +62,8 @@ export default function AdminVerificationsScreen() {
   const [reviewModalData, setReviewModalData] = useState<ReviewModalData | null>(null);
   const [adminNotes, setAdminNotes] = useState('');
   const [processing, setProcessing] = useState(false);
+  const [imageViewModal, setImageViewModal] = useState(false);
+  const [selectedImage, setSelectedImage] = useState<{url: string, title: string} | null>(null);
 
   const STATUS_OPTIONS = [
     { key: 'all', label: 'All', color: '#6b7280' },
@@ -89,7 +92,13 @@ export default function AdminVerificationsScreen() {
       await loadVerificationSubmissions();
     } catch (error) {
       console.error('Error loading data:', error);
-      Alert.alert('Error', 'Failed to load verification submissions');
+      Swal.fire({
+        title: 'Error',
+        text: 'Failed to load verification submissions',
+        icon: 'error',
+        confirmButtonText: 'OK',
+        confirmButtonColor: '#ef4444'
+      });
     } finally {
       setLoading(false);
     }
@@ -141,9 +150,35 @@ export default function AdminVerificationsScreen() {
   };
 
   const openReviewModal = (submission: VerificationSubmission, action: 'approve' | 'reject') => {
-    setReviewModalData({ submission, action });
-    setAdminNotes('');
-    setShowReviewModal(true);
+    const userName = `${submission.user_profile?.first_name} ${submission.user_profile?.last_name}`;
+
+    Swal.fire({
+      title: `${action === 'approve' ? 'Approve' : 'Reject'} Verification?`,
+      text: `Are you sure you want to ${action} ${userName}'s verification?`,
+      icon: action === 'approve' ? 'question' : 'warning',
+      showCancelButton: true,
+      confirmButtonText: `Yes, ${action}`,
+      confirmButtonColor: action === 'approve' ? '#10b981' : '#ef4444',
+      cancelButtonText: 'Cancel',
+      cancelButtonColor: '#6b7280',
+      reverseButtons: true
+    }).then((result) => {
+      if (result.isConfirmed) {
+        setReviewModalData({ submission, action });
+        setAdminNotes('');
+        setShowReviewModal(true);
+      }
+    });
+  };
+
+  const openImageViewer = (imageUrl: string, title: string) => {
+    setSelectedImage({ url: imageUrl, title });
+    setImageViewModal(true);
+  };
+
+  const closeImageViewer = () => {
+    setImageViewModal(false);
+    setSelectedImage(null);
   };
 
   const closeReviewModal = () => {
@@ -172,16 +207,38 @@ export default function AdminVerificationsScreen() {
 
       if (error) throw error;
 
-      Alert.alert(
-        'Success',
-        `Verification ${action === 'approve' ? 'approved' : 'rejected'} successfully`,
-        [{ text: 'OK', onPress: closeReviewModal }]
-      );
+      Swal.fire({
+        title: 'Success!',
+        text: `Verification ${action === 'approve' ? 'approved' : 'rejected'} successfully`,
+        icon: 'success',
+        confirmButtonText: 'OK',
+        confirmButtonColor: '#10b981',
+        timer: 3000,
+        timerProgressBar: true
+      }).then(() => {
+        closeReviewModal();
+      });
 
       await loadVerificationSubmissions();
     } catch (error) {
       console.error('Error processing verification:', error);
-      Alert.alert('Error', 'Failed to process verification. Please try again.');
+
+      let errorMessage = 'Failed to process verification. Please try again.';
+      if (error instanceof Error) {
+        if (error.message.includes('network')) {
+          errorMessage = 'Network error. Please check your connection and try again.';
+        } else if (error.message.includes('permission')) {
+          errorMessage = 'You do not have permission to perform this action.';
+        }
+      }
+
+      Swal.fire({
+        title: 'Error',
+        text: errorMessage,
+        icon: 'error',
+        confirmButtonText: 'Try Again',
+        confirmButtonColor: '#ef4444'
+      });
     } finally {
       setProcessing(false);
     }
@@ -259,14 +316,24 @@ export default function AdminVerificationsScreen() {
       <View style={styles.documentsSection}>
         <Text style={styles.documentsTitle}>Documents</Text>
         <View style={styles.documentsRow}>
-          <View style={styles.documentPreview}>
+          <TouchableOpacity
+            style={styles.documentPreview}
+            onPress={() => openImageViewer(submission.id_document_url, 'ID Document')}
+            activeOpacity={0.8}
+          >
             <Image source={{ uri: submission.id_document_url }} style={styles.documentImage} />
             <Text style={styles.documentLabel}>ID Document</Text>
-          </View>
-          <View style={styles.documentPreview}>
+            <Text style={styles.viewImageHint}>Tap to view full size</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.documentPreview}
+            onPress={() => openImageViewer(submission.face_photo_url, 'Face Photo')}
+            activeOpacity={0.8}
+          >
             <Image source={{ uri: submission.face_photo_url }} style={styles.faceImage} />
             <Text style={styles.documentLabel}>Face Photo</Text>
-          </View>
+            <Text style={styles.viewImageHint}>Tap to view full size</Text>
+          </TouchableOpacity>
         </View>
       </View>
 
@@ -409,14 +476,26 @@ export default function AdminVerificationsScreen() {
 
                   <View style={styles.modalDocuments}>
                     <View style={styles.modalDocumentRow}>
-                      <Image
-                        source={{ uri: reviewModalData.submission.id_document_url }}
-                        style={styles.modalDocumentImage}
-                      />
-                      <Image
-                        source={{ uri: reviewModalData.submission.face_photo_url }}
-                        style={styles.modalFaceImage}
-                      />
+                      <TouchableOpacity
+                        onPress={() => openImageViewer(reviewModalData.submission.id_document_url, 'ID Document')}
+                        activeOpacity={0.8}
+                      >
+                        <Image
+                          source={{ uri: reviewModalData.submission.id_document_url }}
+                          style={styles.modalDocumentImage}
+                        />
+                        <Text style={styles.modalImageLabel}>ID Document (Tap to enlarge)</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        onPress={() => openImageViewer(reviewModalData.submission.face_photo_url, 'Face Photo')}
+                        activeOpacity={0.8}
+                      >
+                        <Image
+                          source={{ uri: reviewModalData.submission.face_photo_url }}
+                          style={styles.modalFaceImage}
+                        />
+                        <Text style={styles.modalImageLabel}>Face Photo (Tap to enlarge)</Text>
+                      </TouchableOpacity>
                     </View>
                   </View>
 
@@ -468,6 +547,48 @@ export default function AdminVerificationsScreen() {
               </TouchableOpacity>
             </View>
           </View>
+        </View>
+      </Modal>
+
+      {/* Full Screen Image Viewer Modal */}
+      <Modal
+        visible={imageViewModal}
+        animationType="fade"
+        transparent={true}
+        onRequestClose={closeImageViewer}
+      >
+        <View style={styles.imageViewerOverlay}>
+          <View style={styles.imageViewerHeader}>
+            <Text style={styles.imageViewerTitle}>{selectedImage?.title}</Text>
+            <TouchableOpacity onPress={closeImageViewer} style={styles.imageViewerCloseButton}>
+              <Text style={styles.imageViewerCloseText}>✕</Text>
+            </TouchableOpacity>
+          </View>
+
+          <ScrollView
+            style={styles.imageViewerContent}
+            contentContainerStyle={styles.imageViewerContentContainer}
+            maximumZoomScale={3}
+            minimumZoomScale={1}
+            showsVerticalScrollIndicator={false}
+            showsHorizontalScrollIndicator={false}
+          >
+            {selectedImage && (
+              <Image
+                source={{ uri: selectedImage.url }}
+                style={styles.fullScreenImage}
+                resizeMode="contain"
+              />
+            )}
+          </ScrollView>
+
+          <TouchableOpacity
+            style={styles.imageViewerCloseArea}
+            onPress={closeImageViewer}
+            activeOpacity={1}
+          >
+            <Text style={styles.imageViewerCloseHint}>Tap anywhere to close</Text>
+          </TouchableOpacity>
         </View>
       </Modal>
     </View>
@@ -633,6 +754,13 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#6b7280',
     fontWeight: '500',
+  },
+  viewImageHint: {
+    fontSize: 10,
+    color: '#9ca3af',
+    fontStyle: 'italic',
+    textAlign: 'center',
+    marginTop: 2,
   },
   actionButtons: {
     flexDirection: 'row',
@@ -827,5 +955,71 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#ffffff',
     fontWeight: '600',
+  },
+  modalImageLabel: {
+    fontSize: 11,
+    color: '#6b7280',
+    textAlign: 'center',
+    marginTop: 4,
+    fontStyle: 'italic',
+  },
+
+  // Image Viewer Modal Styles
+  imageViewerOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.95)',
+  },
+  imageViewerHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingTop: 50,
+    paddingBottom: 20,
+  },
+  imageViewerTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#ffffff',
+  },
+  imageViewerCloseButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  imageViewerCloseText: {
+    fontSize: 20,
+    color: '#ffffff',
+    fontWeight: 'bold',
+  },
+  imageViewerContent: {
+    flex: 1,
+  },
+  imageViewerContentContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  fullScreenImage: {
+    width: width,
+    height: '100%',
+  },
+  imageViewerCloseArea: {
+    position: 'absolute',
+    bottom: 50,
+    left: 0,
+    right: 0,
+    alignItems: 'center',
+  },
+  imageViewerCloseHint: {
+    fontSize: 14,
+    color: 'rgba(255, 255, 255, 0.7)',
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 16,
   },
 });
