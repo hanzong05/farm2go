@@ -5,6 +5,7 @@ import {
   Alert,
   Dimensions,
   Image,
+  Platform,
   ScrollView,
   StyleSheet,
   Text,
@@ -12,6 +13,7 @@ import {
   View,
 } from 'react-native';
 import { supabase } from '../lib/supabase';
+import WebCamera from './WebCamera';
 
 const { width } = Dimensions.get('window');
 
@@ -52,6 +54,7 @@ export default function VerificationUpload({
   });
   const [uploading, setUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState('');
+  const [showWebCamera, setShowWebCamera] = useState<'id' | 'face' | null>(null);
 
   const requestCameraPermission = async () => {
     const { status } = await ImagePicker.requestCameraPermissionsAsync();
@@ -80,21 +83,39 @@ export default function VerificationUpload({
   };
 
   const showImagePickerOptions = (type: 'id' | 'face') => {
-    Alert.alert(
-      `${type === 'id' ? 'ID Document' : 'Face Photo'}`,
-      'Choose how you want to add your photo',
-      [
-        {
-          text: 'Take Photo',
-          onPress: () => takePhoto(type),
-        },
-        {
-          text: 'Choose from Gallery',
-          onPress: () => pickImage(type),
-        },
-        { text: 'Cancel', style: 'cancel' },
-      ]
-    );
+    if (Platform.OS === 'web') {
+      Alert.alert(
+        `${type === 'id' ? 'ID Document' : 'Face Photo'}`,
+        'Choose how you want to add your photo',
+        [
+          {
+            text: 'Use Web Camera',
+            onPress: () => setShowWebCamera(type),
+          },
+          {
+            text: 'Choose from Files',
+            onPress: () => pickImage(type),
+          },
+          { text: 'Cancel', style: 'cancel' },
+        ]
+      );
+    } else {
+      Alert.alert(
+        `${type === 'id' ? 'ID Document' : 'Face Photo'}`,
+        'Choose how you want to add your photo',
+        [
+          {
+            text: 'Take Photo',
+            onPress: () => takePhoto(type),
+          },
+          {
+            text: 'Choose from Gallery',
+            onPress: () => pickImage(type),
+          },
+          { text: 'Cancel', style: 'cancel' },
+        ]
+      );
+    }
   };
 
   const takePhoto = async (type: 'id' | 'face') => {
@@ -150,6 +171,13 @@ export default function VerificationUpload({
         ...prev,
         facePhoto: { uri },
       }));
+    }
+  };
+
+  const handleWebCameraPhoto = (photoUri: string) => {
+    if (showWebCamera) {
+      updateVerificationData(showWebCamera, photoUri);
+      setShowWebCamera(null);
     }
   };
 
@@ -263,6 +291,34 @@ export default function VerificationUpload({
       ]
     );
   };
+
+  if (showWebCamera) {
+    return (
+      <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+        <View style={styles.header}>
+          <Text style={styles.title}>
+            {showWebCamera === 'id' ? 'Capture ID Document' : 'Take Face Photo'}
+          </Text>
+          <Text style={styles.subtitle}>
+            Position your {showWebCamera === 'id' ? 'ID document' : 'face'} in the camera frame and take a photo
+          </Text>
+        </View>
+
+        <WebCamera
+          type={showWebCamera}
+          onPhotoTaken={handleWebCameraPhoto}
+        />
+
+        <TouchableOpacity
+          style={styles.backButton}
+          onPress={() => setShowWebCamera(null)}
+          activeOpacity={0.8}
+        >
+          <Text style={styles.backButtonText}>← Back to Upload Options</Text>
+        </TouchableOpacity>
+      </ScrollView>
+    );
+  }
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
@@ -539,5 +595,20 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
+  },
+  backButton: {
+    backgroundColor: '#f3f4f6',
+    borderRadius: 12,
+    paddingVertical: 16,
+    paddingHorizontal: 20,
+    alignItems: 'center',
+    marginTop: 24,
+    borderWidth: 1,
+    borderColor: '#d1d5db',
+  },
+  backButtonText: {
+    color: '#374151',
+    fontSize: 16,
+    fontWeight: '600',
   },
 });
