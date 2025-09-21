@@ -17,7 +17,9 @@
       "WebFetch(domain:farm2go.vercel.app)",
       "Bash(npx supabase db reset:*)",
       "Bash(npx expo start:*)",
-      "Bash(pkill:*)"
+      "Bash(pkill:*)",
+      "Bash(npx supabase:*)",
+      "WebFetch(domain:lipviwhsjgvcmdggecqn.supabase.co)"
     ],
     "deny": [],
     "ask": []

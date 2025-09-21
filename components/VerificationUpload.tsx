@@ -204,7 +204,7 @@ export default function VerificationUpload({
       const blob = await response.blob();
 
       const fileExt = uri.split('.').pop();
-      const filePath = `verification/${userId}/${fileName}.${fileExt}`;
+      const filePath = `${userId}/${fileName}.${fileExt}`;
 
       const { data, error } = await supabase.storage
         .from('verification-documents')
