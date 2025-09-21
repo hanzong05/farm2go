@@ -60,7 +60,7 @@ interface Order {
   id: string;
   buyer_id: string;
   total_amount: number;
-  status: 'pending' | 'confirmed' | 'preparing' | 'ready' | 'completed' | 'cancelled';
+  status: 'pending' | 'confirmed' | 'processing' | 'ready' | 'delivered' | 'cancelled';
   created_at: string;
   delivery_date: string | null;
   delivery_address: string | null;
@@ -86,9 +86,9 @@ const ORDER_STATUSES = [
   { key: 'all', label: 'All Orders', color: '#6b7280' },
   { key: 'pending', label: 'Pending', color: '#f59e0b' },
   { key: 'confirmed', label: 'Confirmed', color: '#3b82f6' },
-  { key: 'preparing', label: 'Preparing', color: '#8b5cf6' },
+  { key: 'processing', label: 'Processing', color: '#8b5cf6' },
   { key: 'ready', label: 'Ready', color: '#10b981' },
-  { key: 'completed', label: 'Completed', color: '#059669' },
+  { key: 'delivered', label: 'Delivered', color: '#059669' },
   { key: 'cancelled', label: 'Cancelled', color: '#dc2626' },
 ];
 
@@ -309,14 +309,14 @@ export default function FarmerOrdersScreen() {
 
   const getOrderStats = () => {
     const pending = orders.filter(o => o.status === 'pending').length;
-    const preparing = orders.filter(o => o.status === 'preparing').length;
+    const processing = orders.filter(o => o.status === 'processing').length;
     const ready = orders.filter(o => o.status === 'ready').length;
-    const completed = orders.filter(o => o.status === 'completed').length;
+    const delivered = orders.filter(o => o.status === 'delivered').length;
     const totalRevenue = orders
-      .filter(o => o.status === 'completed')
+      .filter(o => o.status === 'delivered')
       .reduce((sum, o) => sum + o.total_amount, 0);
 
-    return { pending, preparing, ready, completed, totalRevenue };
+    return { pending, processing, ready, delivered, totalRevenue };
   };
 
   const renderOrderCard = ({ item: order, isCompact = false }: { item: Order; isCompact?: boolean }) => {
@@ -346,9 +346,9 @@ export default function FarmerOrdersScreen() {
             <Text style={styles.statusText}>
               {order.status === 'pending' ? 'NEW' :
                order.status === 'confirmed' ? 'CONFIRMED' :
-               order.status === 'preparing' ? 'PREPARING' :
+               order.status === 'processing' ? 'PROCESSING' :
                order.status === 'ready' ? 'READY' :
-               order.status === 'completed' ? 'COMPLETED' : 'CANCELLED'}
+               order.status === 'delivered' ? 'DELIVERED' : 'CANCELLED'}
             </Text>
           </View>
         </View>
@@ -456,8 +456,8 @@ export default function FarmerOrdersScreen() {
 
           {order.status === 'confirmed' && (
             <TouchableOpacity
-              style={[styles.actionButton, styles.preparingButton]}
-              onPress={() => updateOrderStatus(order.id, 'preparing')}
+              style={[styles.actionButton, styles.processingButton]}
+              onPress={() => updateOrderStatus(order.id, 'processing')}
               activeOpacity={0.8}
             >
               <View style={styles.actionButtonContent}>
@@ -467,7 +467,7 @@ export default function FarmerOrdersScreen() {
             </TouchableOpacity>
           )}
 
-          {order.status === 'preparing' && (
+          {order.status === 'processing' && (
             <TouchableOpacity
               style={[styles.actionButton, styles.readyButton]}
               onPress={() => updateOrderStatus(order.id, 'ready')}
@@ -483,7 +483,7 @@ export default function FarmerOrdersScreen() {
           {order.status === 'ready' && (
             <TouchableOpacity
               style={[styles.actionButton, styles.completeButton]}
-              onPress={() => updateOrderStatus(order.id, 'completed')}
+              onPress={() => updateOrderStatus(order.id, 'delivered')}
               activeOpacity={0.8}
             >
               <View style={styles.actionButtonContent}>
@@ -1244,7 +1244,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#dc2626',
   },
 
-  preparingButton: {
+  processingButton: {
     backgroundColor: '#8b5cf6',
   },
 

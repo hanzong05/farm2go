@@ -577,7 +577,7 @@ export default function AdminUsers() {
 
   const loadBuyerData = async (buyerId: string) => {
     try {
-      // Load current orders (pending, confirmed, completed)
+      // Load current orders (pending, confirmed, processing, ready)
       const { data: orders, error: ordersError } = await supabase
         .from('orders')
         .select(`
@@ -586,7 +586,7 @@ export default function AdminUsers() {
           product:products(name, price, unit)
         `)
         .eq('buyer_id', buyerId)
-        .in('status', ['pending', 'confirmed', 'completed'])
+        .in('status', ['pending', 'confirmed', 'processing', 'ready'])
         .order('created_at', { ascending: false });
 
       if (ordersError) {
@@ -621,9 +621,9 @@ export default function AdminUsers() {
     switch (status) {
       case 'pending': return 'ORDER PLACED';
       case 'confirmed': return 'CONFIRMED';
-      case 'preparing': return 'PREPARING';
+      case 'processing': return 'PROCESSING';
       case 'ready': return 'READY FOR PICKUP';
-      case 'completed': return 'DELIVERED';
+      case 'delivered': return 'DELIVERED';
       case 'cancelled': return 'CANCELLED';
       default: return status.toUpperCase();
     }
@@ -633,9 +633,9 @@ export default function AdminUsers() {
     switch (status) {
       case 'pending': return 'Processing order';
       case 'confirmed': return 'Order confirmed by farmer';
-      case 'preparing': return 'Preparing your order';
+      case 'processing': return 'Preparing your order';
       case 'ready': return 'Ready for pickup/delivery';
-      case 'completed': return 'Order delivered';
+      case 'delivered': return 'Order delivered';
       case 'cancelled': return 'Order cancelled';
       default: return 'Status update';
     }

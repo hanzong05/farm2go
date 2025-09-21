@@ -63,7 +63,7 @@ interface Order {
   id: string;
   buyer_id: string;
   total_amount: number;
-  status: 'pending' | 'confirmed' | 'preparing' | 'ready' | 'completed' | 'cancelled';
+  status: 'pending' | 'confirmed' | 'processing' | 'ready' | 'delivered' | 'cancelled';
   created_at: string;
   delivery_date: string | null;
   delivery_address: string | null;
@@ -90,9 +90,9 @@ const ORDER_STATUSES = [
   { key: 'all', label: 'All Orders', color: '#6b7280', bgColor: '#f3f4f6' },
   { key: 'pending', label: 'Pending', color: '#f59e0b', bgColor: '#fffbeb' },
   { key: 'confirmed', label: 'Confirmed', color: '#3b82f6', bgColor: '#eff6ff' },
-  { key: 'preparing', label: 'Preparing', color: '#8b5cf6', bgColor: '#f3f0ff' },
+  { key: 'processing', label: 'Processing', color: '#8b5cf6', bgColor: '#f3f0ff' },
   { key: 'ready', label: 'Ready', color: '#10b981', bgColor: '#ecfdf5' },
-  { key: 'completed', label: 'Completed', color: '#059669', bgColor: '#ecfdf5' },
+  { key: 'delivered', label: 'Delivered', color: '#059669', bgColor: '#ecfdf5' },
   { key: 'cancelled', label: 'Cancelled', color: '#dc2626', bgColor: '#fef2f2' },
 ];
 
@@ -273,10 +273,10 @@ export default function BuyerMyOrdersScreen() {
 
   const getOrderStats = () => {
     const pending = orders.filter(o => o.status === 'pending').length;
-    const active = orders.filter(o => ['confirmed', 'preparing', 'ready'].includes(o.status)).length;
-    const completed = orders.filter(o => o.status === 'completed').length;
+    const active = orders.filter(o => ['confirmed', 'processing', 'ready'].includes(o.status)).length;
+    const completed = orders.filter(o => o.status === 'delivered').length;
     const totalSpent = orders
-      .filter(o => o.status === 'completed')
+      .filter(o => o.status === 'delivered')
       .reduce((sum, o) => sum + o.total_amount, 0);
 
     return { pending, active, completed, totalSpent };
@@ -322,9 +322,9 @@ export default function BuyerMyOrdersScreen() {
       switch (status) {
         case 'pending': return 'ORDER PLACED';
         case 'confirmed': return 'CONFIRMED';
-        case 'preparing': return 'PREPARING';
+        case 'processing': return 'PROCESSING';
         case 'ready': return 'READY FOR PICKUP';
-        case 'completed': return 'DELIVERED';
+        case 'delivered': return 'DELIVERED';
         case 'cancelled': return 'CANCELLED';
         default: return status.toUpperCase();
       }
@@ -334,9 +334,9 @@ export default function BuyerMyOrdersScreen() {
       switch (status) {
         case 'pending': return 'Processing order';
         case 'confirmed': return 'Order confirmed by farmer';
-        case 'preparing': return 'Preparing your order';
+        case 'processing': return 'Preparing your order';
         case 'ready': return 'Ready for pickup/delivery';
-        case 'completed': return 'Order delivered';
+        case 'delivered': return 'Order delivered';
         case 'cancelled': return 'Order cancelled';
         default: return 'Status update';
       }
@@ -416,7 +416,7 @@ export default function BuyerMyOrdersScreen() {
             <Text style={styles.trackButtonText}>Show QR Code</Text>
           </TouchableOpacity>
 
-          {order.status !== 'cancelled' && order.status !== 'completed' && (
+          {order.status !== 'cancelled' && order.status !== 'delivered' && (
             <TouchableOpacity style={styles.cancelButton} activeOpacity={0.8}>
               <Text style={styles.cancelButtonText}>Request cancellation</Text>
             </TouchableOpacity>
