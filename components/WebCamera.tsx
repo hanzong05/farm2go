@@ -13,6 +13,7 @@ export default function WebCamera({ onPhotoTaken, type }: WebCameraProps) {
   const videoContainerRef = useRef<any>(null);
   const [isStreaming, setIsStreaming] = useState(false);
   const [hasPermission, setHasPermission] = useState<boolean | null>(null);
+  const [showPermissionDenied, setShowPermissionDenied] = useState(false);
   const [isWebPlatform, setIsWebPlatform] = useState(false);
   const [isInitializing, setIsInitializing] = useState(false);
 
@@ -26,6 +27,7 @@ export default function WebCamera({ onPhotoTaken, type }: WebCameraProps) {
     if (!isWebPlatform) return;
 
     setIsInitializing(true);
+    setShowPermissionDenied(false);
     console.log('📷 Starting camera initialization...');
 
     try {
@@ -75,11 +77,13 @@ export default function WebCamera({ onPhotoTaken, type }: WebCameraProps) {
 
       for (const constraints of constraintSets) {
         try {
+          console.log('🔄 Trying camera with constraints:', constraints);
           stream = await navigator.mediaDevices.getUserMedia(constraints);
+          console.log('✅ Camera stream obtained successfully');
           break;
         } catch (error) {
           lastError = error;
-          console.warn('Failed with constraints:', constraints, error);
+          console.warn('❌ Failed with constraints:', constraints, error);
         }
       }
 
@@ -95,8 +99,8 @@ export default function WebCamera({ onPhotoTaken, type }: WebCameraProps) {
         setTimeout(async () => {
           if (!videoContainerRef.current) {
             console.error('❌ Video container not found');
-            setHasPermission(false);
             setIsInitializing(false);
+            setShowPermissionDenied(true);
             return;
           }
 
@@ -135,8 +139,9 @@ export default function WebCamera({ onPhotoTaken, type }: WebCameraProps) {
               setIsInitializing(false);
             }).catch((playError) => {
               console.error('❌ Video play error:', playError);
-              setHasPermission(false);
               setIsInitializing(false);
+              // Don't automatically set hasPermission to false for play errors
+              // as the stream might be working fine
             });
           };
 
@@ -162,26 +167,42 @@ export default function WebCamera({ onPhotoTaken, type }: WebCameraProps) {
       }
     } catch (error: any) {
       console.error('Error accessing camera:', error);
-      setHasPermission(false);
       setIsInitializing(false);
 
       let errorMessage = 'Failed to access camera. ';
+      let shouldShowPermissionDenied = false;
+
       if (error.name === 'NotAllowedError') {
         errorMessage += 'Please allow camera access in your browser settings and refresh the page.';
+        shouldShowPermissionDenied = true;
+        setHasPermission(false);
       } else if (error.name === 'NotFoundError' || error.message.includes('No camera found')) {
         errorMessage += 'No camera was detected on this device. You can still upload a photo from your files using the "Choose File" option.';
+        shouldShowPermissionDenied = true;
+        setHasPermission(false);
       } else if (error.name === 'NotSupportedError') {
         errorMessage += 'Camera is not supported by this browser. Try using a modern browser like Chrome, Firefox, or Safari.';
+        shouldShowPermissionDenied = true;
+        setHasPermission(false);
       } else if (error.name === 'NotReadableError') {
         errorMessage += 'Camera is being used by another application. Please close other camera applications and try again.';
+        shouldShowPermissionDenied = true;
+        setHasPermission(false);
       } else if (error.name === 'OverconstrainedError') {
         errorMessage += 'Camera constraints could not be satisfied. Try refreshing the page.';
+        shouldShowPermissionDenied = true;
+        setHasPermission(false);
       } else if (error.message.includes('HTTPS')) {
         errorMessage += 'This site needs to be accessed via HTTPS to use the camera. You can still upload photos using the "Choose File" option.';
+        shouldShowPermissionDenied = true;
+        setHasPermission(false);
       } else {
         errorMessage += 'Please check your camera permissions and try again. You can also use the "Choose File" option to upload a photo.';
+        console.log('🤔 Unknown camera error - not showing permission denied UI');
+        // For unknown errors, don't show permission denied UI
       }
 
+      setShowPermissionDenied(shouldShowPermissionDenied);
       Alert.alert('Camera Access Error', errorMessage, [{ text: 'OK' }]);
     }
   }, [isWebPlatform, type]);
@@ -210,6 +231,7 @@ export default function WebCamera({ onPhotoTaken, type }: WebCameraProps) {
 
     setIsStreaming(false);
     setIsInitializing(false);
+    setShowPermissionDenied(false);
     console.log('📹 Camera stopped');
   }, []);
 
@@ -339,7 +361,7 @@ export default function WebCamera({ onPhotoTaken, type }: WebCameraProps) {
       )}
 
 
-      {hasPermission === false && (
+      {showPermissionDenied && (
         <View style={styles.permissionDenied}>
           <Text style={styles.permissionText}>
             Camera access is required for verification. Please allow camera access in your browser settings and try again.
