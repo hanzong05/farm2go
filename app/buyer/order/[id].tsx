@@ -158,9 +158,16 @@ export default function OrderProductScreen() {
         // In a real app, you'd want to handle this with a transaction
       }
 
-      // Set purchase code and show success modal
+      // Set purchase code and show success modal immediately
       setPurchaseCode(uniquePurchaseCode);
       setShowSuccessModal(true);
+
+      // Also show a quick alert for immediate feedback
+      Alert.alert(
+        '✅ Success!',
+        'Your order has been placed successfully! You can view your purchase details and QR code in the modal that just opened.',
+        [{ text: 'OK', style: 'default' }]
+      );
     } catch (err) {
       console.error('Order error:', err);
       Alert.alert('Error', 'An error occurred while placing the order');
