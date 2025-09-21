@@ -199,28 +199,47 @@ export default function VerificationUpload({
   };
 
   const uploadImageToSupabase = async (uri: string, fileName: string): Promise<string> => {
-    const response = await fetch(uri);
-    const blob = await response.blob();
+    try {
+      const response = await fetch(uri);
+      const blob = await response.blob();
 
-    const fileExt = uri.split('.').pop();
-    const filePath = `verification/${userId}/${fileName}.${fileExt}`;
+      const fileExt = uri.split('.').pop();
+      const filePath = `verification/${userId}/${fileName}.${fileExt}`;
 
-    const { data, error } = await supabase.storage
-      .from('verification-documents')
-      .upload(filePath, blob, {
-        cacheControl: '3600',
-        upsert: true,
-      });
+      const { data, error } = await supabase.storage
+        .from('verification-documents')
+        .upload(filePath, blob, {
+          cacheControl: '3600',
+          upsert: true,
+        });
 
-    if (error) {
-      throw error;
+      if (error) {
+        console.error('Storage upload error:', error);
+
+        // Check if it's a bucket not found error
+        if (error.message.includes('Bucket not found')) {
+          throw new Error('Storage bucket not configured. Please contact support to set up verification document storage.');
+        }
+
+        throw error;
+      }
+
+      const { data: urlData } = supabase.storage
+        .from('verification-documents')
+        .getPublicUrl(data.path);
+
+      return urlData.publicUrl;
+    } catch (uploadError) {
+      console.error('Upload process error:', uploadError);
+
+      // If it's our custom bucket error, throw it as-is
+      if (uploadError instanceof Error && uploadError.message.includes('Storage bucket not configured')) {
+        throw uploadError;
+      }
+
+      // For other errors, provide a generic message
+      throw new Error('Failed to upload image. Please check your internet connection and try again.');
     }
-
-    const { data: urlData } = supabase.storage
-      .from('verification-documents')
-      .getPublicUrl(data.path);
-
-    return urlData.publicUrl;
   };
 
   const submitVerification = async () => {

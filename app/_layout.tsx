@@ -92,10 +92,22 @@ export default function RootLayout() {
   useEffect(() => {
     const checkUserSessionAndRedirect = async () => {
       try {
-        // Skip session check if app is not in active state or already initialized
-        if (appStateRef.current !== 'active' && hasInitialized.current) {
-          console.log('🔍 Skipping session check - app not active or already initialized');
-          return;
+        // Skip session check only if already initialized AND user data is available
+        // This ensures that mobile browser refreshes still trigger proper session checks
+        if (hasInitialized.current) {
+          try {
+            const existingUserData = await getUserWithProfile();
+            if (existingUserData?.profile) {
+              console.log('🔍 Skipping session check - already initialized with valid user data');
+              return;
+            } else {
+              console.log('🔍 User data not found despite initialization, running session check');
+              hasInitialized.current = false; // Reset to allow proper session check
+            }
+          } catch (error) {
+            console.log('🔍 Error checking existing user data, running session check');
+            hasInitialized.current = false; // Reset to allow proper session check
+          }
         }
 
         const userData = await getUserWithProfile();
@@ -156,12 +168,13 @@ export default function RootLayout() {
           console.log('🔍 Session check - User type:', userData.profile.user_type);
           console.log('🔍 Session check - User email:', userData.profile.email);
 
-          // Only redirect if user is on root or auth pages
+          // Only redirect if user is on root, auth pages, or wrong user type section
           const shouldRedirect = currentPath === '/' ||
                                  currentPath === '/index' ||
-                                 currentPath.startsWith('/auth/');
+                                 currentPath.startsWith('/auth/') ||
+                                 (userData.profile.user_type === 'farmer' && currentPath.startsWith('/buyer/marketplace'));
 
-          console.log('🔍 Should redirect authenticated user?', shouldRedirect, 'Current path:', currentPath);
+          console.log('🔍 Should redirect authenticated user?', shouldRedirect, 'Current path:', currentPath, 'User type:', userData.profile.user_type);
 
           if (shouldRedirect) {
             // Import router dynamically to avoid circular dependencies
@@ -343,13 +356,39 @@ export default function RootLayout() {
     return () => subscription.unsubscribe();
   }, []);
 
-  // AppState monitoring to prevent excessive session checks
+  // AppState monitoring to handle mobile browser refresh scenarios
   useEffect(() => {
     const handleAppStateChange = (nextAppState: any) => {
       console.log('🔄 App state changing from', appStateRef.current, 'to', nextAppState);
 
       if (appStateRef.current.match(/inactive|background/) && nextAppState === 'active') {
-        console.log('🔄 App came to foreground - skipping session check to prevent loading screens');
+        console.log('🔄 App came to foreground - checking if session needs refresh');
+
+        // On mobile browsers, when switching back to the app, we might need to refresh user state
+        // if the page was reloaded/reset
+        if (Platform.OS === 'web' && typeof window !== 'undefined') {
+          // Check if the current user is still valid after potential page refresh
+          setTimeout(async () => {
+            try {
+              const userData = await getUserWithProfile();
+              const currentPath = window?.location?.pathname || '';
+
+              console.log('🔄 Foreground check - Current path:', currentPath, 'User:', userData?.profile ? 'Valid' : 'Invalid');
+
+              // If user data exists but we're not on the right path, redirect
+              if (userData?.profile && currentPath.startsWith('/buyer/marketplace')) {
+                const { router } = await import('expo-router');
+
+                console.log('🔄 Mobile refresh detected - redirecting farmer from marketplace');
+                if (userData.profile.user_type === 'farmer') {
+                  router.replace('/farmer');
+                }
+              }
+            } catch (error) {
+              console.log('🔄 Error during foreground session check:', error);
+            }
+          }, 500); // Small delay to allow page to stabilize
+        }
       }
 
       appStateRef.current = nextAppState;
@@ -357,6 +396,42 @@ export default function RootLayout() {
 
     const subscription = AppState.addEventListener('change', handleAppStateChange);
     return () => subscription?.remove();
+  }, []);
+
+  // Page visibility handler for mobile browser refresh detection
+  useEffect(() => {
+    if (Platform.OS === 'web' && typeof window !== 'undefined') {
+      const handleVisibilityChange = () => {
+        if (document.visibilityState === 'visible') {
+          console.log('🔄 Page became visible - checking user session');
+
+          // Small delay to allow any page refresh to complete
+          setTimeout(async () => {
+            try {
+              const userData = await getUserWithProfile();
+              const currentPath = window?.location?.pathname || '';
+
+              console.log('🔄 Visibility check - Current path:', currentPath, 'User type:', userData?.profile?.user_type);
+
+              // If user is a farmer but ended up on marketplace, redirect back
+              if (userData?.profile?.user_type === 'farmer' && currentPath.startsWith('/buyer/marketplace')) {
+                console.log('🔄 Farmer detected on marketplace after page refresh - redirecting to farmer dashboard');
+                const { router } = await import('expo-router');
+                router.replace('/farmer');
+              }
+            } catch (error) {
+              console.log('🔄 Error during visibility session check:', error);
+            }
+          }, 1000); // Longer delay for page refresh scenarios
+        }
+      };
+
+      document.addEventListener('visibilitychange', handleVisibilityChange);
+
+      return () => {
+        document.removeEventListener('visibilitychange', handleVisibilityChange);
+      };
+    }
   }, []);
 
   // Enhanced deep linking for OAuth and marketplace navigation
