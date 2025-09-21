@@ -40,21 +40,31 @@ export default function AuthCallback() {
           });
         }
 
-        // Get the stored user type from AsyncStorage and localStorage (for web compatibility)
-        console.log('📱 Checking storage for user type...');
-        let storedUserType = await AsyncStorage.getItem('oauth_user_type');
+        // Get the stored user type from sessionManager first, then fallback to legacy storage
+        console.log('📱 Checking storage for OAuth state...');
+        const { sessionManager } = await import('../../services/sessionManager');
+        const oauthState = await sessionManager.getOAuthState();
 
-        // Check if this is a sign-in intent
-        let oauthIntent = await AsyncStorage.getItem('oauth_intent');
+        let storedUserType = oauthState?.userType;
+        let oauthIntent = oauthState?.intent;
 
-        // If not in AsyncStorage, try localStorage (for web)
-        if (!storedUserType && typeof window !== 'undefined') {
-          storedUserType = localStorage.getItem('oauth_user_type');
-          console.log('📱 Checking localStorage for user type:', storedUserType);
-        }
+        console.log('📱 SessionManager OAuth state:', oauthState);
 
-        if (!oauthIntent && typeof window !== 'undefined') {
-          oauthIntent = localStorage.getItem('oauth_intent');
+        // Fallback to legacy storage if sessionManager doesn't have the data
+        if (!storedUserType || !oauthIntent) {
+          console.log('📱 Falling back to legacy storage...');
+          storedUserType = storedUserType || await AsyncStorage.getItem('oauth_user_type');
+          oauthIntent = oauthIntent || await AsyncStorage.getItem('oauth_intent');
+
+          // If not in AsyncStorage, try localStorage (for web)
+          if (!storedUserType && typeof window !== 'undefined') {
+            storedUserType = localStorage.getItem('oauth_user_type');
+            console.log('📱 Checking localStorage for user type:', storedUserType);
+          }
+
+          if (!oauthIntent && typeof window !== 'undefined') {
+            oauthIntent = localStorage.getItem('oauth_intent');
+          }
         }
 
         console.log('📱 Final stored user type:', storedUserType);
@@ -68,9 +78,11 @@ export default function AuthCallback() {
           console.log('  - oauth_timestamp:', localStorage.getItem('oauth_timestamp'));
         }
 
-        // For sign-in attempts, always look up user type from database rather than relying on storage
-        if (oauthIntent === 'signin') {
-          console.log('📱 This is a sign-in attempt - looking up user type from database');
+        // For sign-in attempts or when intent is unclear, always look up user type from database
+        // This fixes mobile browser issues where intent might not be properly stored
+        if (oauthIntent === 'signin' || !oauthIntent) {
+          console.log('📱 This is a sign-in attempt or unclear intent - looking up user type from database');
+          console.log('📱 Mobile browser compatibility mode enabled');
 
           // First get the OAuth user to check their email
           console.log('🔐 Getting OAuth user...');
@@ -302,7 +314,10 @@ export default function AuthCallback() {
             }
           }
 
-          // Clean up storage
+          // Clean up OAuth state using sessionManager
+          await sessionManager.clearOAuthState();
+
+          // Also clean up legacy storage
           await AsyncStorage.removeItem('oauth_user_type');
           await AsyncStorage.removeItem('oauth_intent');
 
@@ -313,35 +328,40 @@ export default function AuthCallback() {
             localStorage.removeItem('oauth_timestamp');
           }
 
-          // Check if this was a registration attempt
-          if (storedUserType && oauthIntent === 'registration') {
-            console.log('⚠️ User attempted to register with Gmail but account already exists');
-            console.log('🔄 Redirecting to login with message...');
+          // For existing users, always redirect to dashboard regardless of intent
+          // This fixes the mobile browser issue where intent might be misidentified
+          console.log('✅ Existing user found, redirecting to dashboard');
+          const profile = existingProfile as any;
+          console.log('👤 User type from profile:', profile.user_type);
 
-            const errorMessage = `An account with this email (${user.email}) already exists. Please sign in instead.`;
-            router.replace(`/auth/login?info=${encodeURIComponent(errorMessage)}`);
-            return;
-          } else {
-            // Regular sign-in flow or existing user
-            console.log('✅ Sign-in successful, redirecting to dashboard');
-            const profile = existingProfile as any;
-            console.log('👤 User type from profile:', profile.user_type);
-
-            switch (profile.user_type) {
-              case 'farmer':
-                console.log('🚜 Redirecting to farmer dashboard');
-                router.replace('/farmer/my-products');
-                break;
-              case 'buyer':
-                console.log('🛒 Redirecting to buyer marketplace');
-                router.replace('/buyer/marketplace');
-                break;
-              default:
-                console.log('❓ Unknown user type, defaulting to buyer marketplace');
-                router.replace('/buyer/marketplace');
-            }
-            return;
+          // If the user was trying to register but already has an account,
+          // log it but still proceed with login
+          if (oauthIntent === 'registration') {
+            console.log('ℹ️ User attempted to register but account exists - proceeding with login');
           }
+
+          switch (profile.user_type) {
+            case 'farmer':
+              console.log('🚜 Redirecting to farmer dashboard');
+              router.replace('/farmer/my-products');
+              break;
+            case 'buyer':
+              console.log('🛒 Redirecting to buyer marketplace');
+              router.replace('/buyer/marketplace');
+              break;
+            case 'admin':
+              console.log('👑 Redirecting to admin dashboard');
+              router.replace('/admin/users');
+              break;
+            case 'super-admin':
+              console.log('🔱 Redirecting to super admin dashboard');
+              router.replace('/super-admin');
+              break;
+            default:
+              console.log('❓ Unknown user type, defaulting to buyer marketplace');
+              router.replace('/buyer/marketplace');
+          }
+          return;
         }
 
         // Redirect to complete profile screen
