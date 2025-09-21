@@ -89,46 +89,82 @@ export default function WebCamera({ onPhotoTaken, type }: WebCameraProps) {
       return null;
     }
 
-    // For mobile devices, try to identify cameras by their labels or position
-    const backCameraKeywords = ['back', 'rear', 'environment', 'world', 'main', 'camera2', 'camera 1'];
-    const frontCameraKeywords = ['front', 'user', 'face', 'selfie', 'camera0', 'camera 0'];
+    // If only one camera available, use it regardless of facing mode
+    if (videoDevices.length === 1) {
+      console.log('ℹ️ Only one camera available, using it:', videoDevices[0].label);
+      return videoDevices[0].deviceId;
+    }
+
+    // Enhanced keywords for better camera detection on mobile devices
+    const backCameraKeywords = [
+      'back', 'rear', 'environment', 'world', 'main', 'primary',
+      'camera2', 'camera 1', 'camera1', 'wide', 'telephoto',
+      'back facing', 'rear facing', 'outward', 'external'
+    ];
+    const frontCameraKeywords = [
+      'front', 'user', 'face', 'selfie', 'facetime', 'inner',
+      'camera0', 'camera 0', 'camera0', 'front facing',
+      'forward', 'internal', 'self', 'portrait'
+    ];
 
     if (facingMode === 'environment') {
-      // Look for back camera
+      // Look for back camera by label
       const backCamera = videoDevices.find(device => {
         const label = device.label.toLowerCase();
         return backCameraKeywords.some(keyword => label.includes(keyword));
       });
 
       if (backCamera) {
-        console.log('✅ Found back camera:', backCamera.label);
+        console.log('✅ Found back camera by label:', backCamera.label);
         return backCamera.deviceId;
       }
 
-      // If no back camera found by label, try the last device (often the back camera)
+      // Try to find devices that explicitly don't match front camera keywords
+      const nonFrontCameras = videoDevices.filter(device => {
+        const label = device.label.toLowerCase();
+        return !frontCameraKeywords.some(keyword => label.includes(keyword));
+      });
+
+      if (nonFrontCameras.length > 0) {
+        console.log('✅ Found non-front camera as back camera:', nonFrontCameras[0].label);
+        return nonFrontCameras[0].deviceId;
+      }
+
+      // If multiple cameras and no clear back camera found, try the last device
       if (videoDevices.length > 1) {
-        console.log('⚠️ Using last device as back camera fallback');
+        console.log('⚠️ Using last device as back camera fallback:', videoDevices[videoDevices.length - 1].label);
         return videoDevices[videoDevices.length - 1].deviceId;
       }
     } else {
-      // Look for front camera
+      // Look for front camera by label
       const frontCamera = videoDevices.find(device => {
         const label = device.label.toLowerCase();
         return frontCameraKeywords.some(keyword => label.includes(keyword));
       });
 
       if (frontCamera) {
-        console.log('✅ Found front camera:', frontCamera.label);
+        console.log('✅ Found front camera by label:', frontCamera.label);
         return frontCamera.deviceId;
       }
 
-      // If no front camera found by label, use the first device (often the front camera)
-      console.log('⚠️ Using first device as front camera fallback');
+      // Try to find devices that explicitly don't match back camera keywords
+      const nonBackCameras = videoDevices.filter(device => {
+        const label = device.label.toLowerCase();
+        return !backCameraKeywords.some(keyword => label.includes(keyword));
+      });
+
+      if (nonBackCameras.length > 0) {
+        console.log('✅ Found non-back camera as front camera:', nonBackCameras[0].label);
+        return nonBackCameras[0].deviceId;
+      }
+
+      // If multiple cameras and no clear front camera found, use the first device
+      console.log('⚠️ Using first device as front camera fallback:', videoDevices[0].label);
       return videoDevices[0].deviceId;
     }
 
     // Last resort - use any available device
-    console.log('⚠️ Using any available device as fallback');
+    console.log('⚠️ Using any available device as fallback:', videoDevices[0].label);
     return videoDevices[0].deviceId;
   }, []);
 
@@ -186,23 +222,29 @@ export default function WebCamera({ onPhotoTaken, type }: WebCameraProps) {
       // Try different constraint sets, starting with explicit device selection
       const constraintSets: MediaStreamConstraints[] = [];
 
-      // If we found a specific device, try using it first
+      // If we found a specific device, try using it first with exact deviceId
       if (targetDeviceId) {
         constraintSets.push(
-          // Try with exact device ID
+          // Try with exact device ID and minimal constraints for mobile compatibility
+          {
+            video: {
+              deviceId: { exact: targetDeviceId }
+            }
+          },
+          // Try with exact device ID and basic resolution
           {
             video: {
               deviceId: { exact: targetDeviceId },
-              width: { ideal: 1920, max: 1920 },
-              height: { ideal: 1080, max: 1080 }
+              width: { ideal: 1280 },
+              height: { ideal: 720 }
             }
           },
           // Try with ideal device ID
           {
             video: {
               deviceId: { ideal: targetDeviceId },
-              width: { ideal: 1280, max: 1920 },
-              height: { ideal: 720, max: 1080 }
+              width: { ideal: 1280 },
+              height: { ideal: 720 }
             }
           }
         );
@@ -210,35 +252,39 @@ export default function WebCamera({ onPhotoTaken, type }: WebCameraProps) {
 
       // Add facingMode-based constraints as fallbacks
       constraintSets.push(
-        // Try with exact facingMode
+        // Try with exact facingMode only (best for mobile switching)
         {
           video: {
-            width: { ideal: 1920, max: 1920 },
-            height: { ideal: 1080, max: 1080 },
             facingMode: { exact: currentCamera }
+          }
+        },
+        // Try with exact facingMode and basic resolution
+        {
+          video: {
+            facingMode: { exact: currentCamera },
+            width: { ideal: 1280 },
+            height: { ideal: 720 }
           }
         },
         // Try with ideal facingMode
         {
           video: {
-            width: { ideal: 1920, max: 1920 },
-            height: { ideal: 1080, max: 1080 },
             facingMode: { ideal: currentCamera }
           }
         },
         // Try with just facingMode
         {
           video: {
-            width: { ideal: 1280, max: 1920 },
-            height: { ideal: 720, max: 1080 },
+            width: { ideal: 1280 },
+            height: { ideal: 720 },
             facingMode: currentCamera
           }
         },
-        // Fallback to any camera with good quality
+        // Fallback to any camera with basic quality
         {
           video: {
-            width: { ideal: 1920, max: 1920 },
-            height: { ideal: 1080, max: 1080 }
+            width: { ideal: 1280 },
+            height: { ideal: 720 }
           }
         },
         // Final fallback with minimal constraints
@@ -427,15 +473,32 @@ export default function WebCamera({ onPhotoTaken, type }: WebCameraProps) {
       setCurrentCamera(newCamera);
       setSelectedDeviceId(null); // Reset so it finds the best device for new camera
 
-      // Wait a bit longer before restarting to ensure cleanup is complete
-      setTimeout(() => {
+      // Wait a bit for cleanup, then restart with new camera
+      setTimeout(async () => {
         console.log('📱 Starting camera with new setting:', newCamera);
+
+        // Force re-enumeration of devices to ensure fresh device list
+        try {
+          const devices = await navigator.mediaDevices.enumerateDevices();
+          setAvailableDevices(devices);
+
+          // Find the best device for the new camera setting
+          const targetDeviceId = findBestCameraDevice(devices, newCamera);
+          if (targetDeviceId) {
+            setSelectedDeviceId(targetDeviceId);
+            console.log('📱 Selected device for', newCamera, 'camera:', targetDeviceId.substring(0, 8) + '...');
+          }
+        } catch (enumError) {
+          console.warn('Failed to enumerate devices during camera switch:', enumError);
+        }
+
+        // Start the camera with new settings
         startCamera();
-      }, 500);
+      }, 300);
     } catch (error) {
       console.error('Error switching camera:', error);
     }
-  }, [currentCamera, isStreaming, isInitializing, stopCamera, startCamera]);
+  }, [currentCamera, isStreaming, isInitializing, stopCamera, startCamera, findBestCameraDevice]);
 
   const takePhoto = useCallback(() => {
     if (!isWebPlatform || !videoRef.current || !canvasRef.current) return;
