@@ -16,6 +16,18 @@ export default function WebCamera({ onPhotoTaken, type }: WebCameraProps) {
   const [showPermissionDenied, setShowPermissionDenied] = useState(false);
   const [isWebPlatform, setIsWebPlatform] = useState(false);
   const [isInitializing, setIsInitializing] = useState(false);
+  const [lastError, setLastError] = useState<string>('');
+
+  // Debug logging for state changes
+  useEffect(() => {
+    console.log('🔍 State Debug:', {
+      isStreaming,
+      hasPermission,
+      showPermissionDenied,
+      isInitializing,
+      isWebPlatform
+    });
+  }, [isStreaming, hasPermission, showPermissionDenied, isInitializing, isWebPlatform]);
 
   useEffect(() => {
     const webPlatform = Platform.OS === 'web' || typeof window !== 'undefined';
@@ -27,7 +39,9 @@ export default function WebCamera({ onPhotoTaken, type }: WebCameraProps) {
     if (!isWebPlatform) return;
 
     setIsInitializing(true);
+    console.log('✅ Clearing showPermissionDenied - starting camera');
     setShowPermissionDenied(false);
+    setLastError(''); // Clear any previous errors
     console.log('📷 Starting camera initialization...');
 
     try {
@@ -100,6 +114,8 @@ export default function WebCamera({ onPhotoTaken, type }: WebCameraProps) {
           if (!videoContainerRef.current) {
             console.error('❌ Video container not found');
             setIsInitializing(false);
+            console.log('❌ Setting showPermissionDenied to true - video container not found');
+            setLastError('Video container not found');
             setShowPermissionDenied(true);
             return;
           }
@@ -202,6 +218,8 @@ export default function WebCamera({ onPhotoTaken, type }: WebCameraProps) {
         // For unknown errors, don't show permission denied UI
       }
 
+      console.log('❌ Setting showPermissionDenied to:', shouldShowPermissionDenied, 'due to error:', error.name);
+      setLastError(`${error.name}: ${error.message}`);
       setShowPermissionDenied(shouldShowPermissionDenied);
       Alert.alert('Camera Access Error', errorMessage, [{ text: 'OK' }]);
     }
@@ -277,6 +295,31 @@ export default function WebCamera({ onPhotoTaken, type }: WebCameraProps) {
 
   return (
     <View style={styles.container}>
+      {/* Debug Panel for Mobile - Show camera states */}
+      <View style={styles.debugPanel}>
+        <Text style={styles.debugTitle}>📱 Camera Debug Info:</Text>
+        <Text style={styles.debugText}>
+          • isStreaming: {isStreaming ? '✅' : '❌'} {isStreaming.toString()}
+        </Text>
+        <Text style={styles.debugText}>
+          • hasPermission: {hasPermission === null ? '⏳' : hasPermission ? '✅' : '❌'} {String(hasPermission)}
+        </Text>
+        <Text style={styles.debugText}>
+          • showPermissionDenied: {showPermissionDenied ? '🚫' : '✅'} {showPermissionDenied.toString()}
+        </Text>
+        <Text style={styles.debugText}>
+          • isInitializing: {isInitializing ? '⏳' : '✅'} {isInitializing.toString()}
+        </Text>
+        <Text style={styles.debugText}>
+          • isWebPlatform: {isWebPlatform ? '✅' : '❌'} {isWebPlatform.toString()}
+        </Text>
+        {lastError && (
+          <Text style={styles.debugTextError}>
+            • Last Error: {lastError}
+          </Text>
+        )}
+      </View>
+
       <View style={styles.optionsContainer}>
         <TouchableOpacity
           style={[styles.optionButton, isInitializing && styles.optionButtonDisabled]}
@@ -540,5 +583,32 @@ const styles = StyleSheet.create({
     color: '#6b7280',
     marginTop: 12,
     textAlign: 'center',
+  },
+  debugPanel: {
+    backgroundColor: '#f3f4f6',
+    padding: 12,
+    marginBottom: 16,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#d1d5db',
+  },
+  debugTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#374151',
+    marginBottom: 8,
+  },
+  debugText: {
+    fontSize: 12,
+    color: '#4b5563',
+    marginBottom: 4,
+    fontFamily: 'monospace',
+  },
+  debugTextError: {
+    fontSize: 12,
+    color: '#dc2626',
+    marginBottom: 4,
+    fontFamily: 'monospace',
+    fontWeight: '600',
   },
 });
