@@ -29,15 +29,58 @@ export default function WebCamera({ onPhotoTaken, type }: WebCameraProps) {
         throw new Error('Camera not supported by this browser');
       }
 
-      const constraints = {
-        video: {
-          width: { ideal: 1280, max: 1920 },
-          height: { ideal: 720, max: 1080 },
-          facingMode: type === 'face' ? 'user' : 'environment'
-        }
-      };
+      // Check if we're in a secure context (HTTPS or localhost)
+      if (!window.isSecureContext && location.hostname !== 'localhost') {
+        throw new Error('Camera access requires HTTPS. Please use a secure connection.');
+      }
 
-      const stream = await navigator.mediaDevices.getUserMedia(constraints);
+      // First, check if any video input devices are available
+      const devices = await navigator.mediaDevices.enumerateDevices();
+      const videoDevices = devices.filter(device => device.kind === 'videoinput');
+
+      if (videoDevices.length === 0) {
+        throw new Error('No camera found on this device');
+      }
+
+      // Try different constraint sets, starting with the most specific
+      const constraintSets = [
+        // Try with specific facing mode first
+        {
+          video: {
+            width: { ideal: 1280, max: 1920 },
+            height: { ideal: 720, max: 1080 },
+            facingMode: type === 'face' ? 'user' : 'environment'
+          }
+        },
+        // Fallback to any camera without facing mode constraint
+        {
+          video: {
+            width: { ideal: 1280, max: 1920 },
+            height: { ideal: 720, max: 1080 }
+          }
+        },
+        // Final fallback with minimal constraints
+        {
+          video: true
+        }
+      ];
+
+      let stream = null;
+      let lastError = null;
+
+      for (const constraints of constraintSets) {
+        try {
+          stream = await navigator.mediaDevices.getUserMedia(constraints);
+          break;
+        } catch (error) {
+          lastError = error;
+          console.warn('Failed with constraints:', constraints, error);
+        }
+      }
+
+      if (!stream) {
+        throw lastError || new Error('Failed to access camera with any constraints');
+      }
 
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
@@ -52,13 +95,19 @@ export default function WebCamera({ onPhotoTaken, type }: WebCameraProps) {
 
       let errorMessage = 'Failed to access camera. ';
       if (error.name === 'NotAllowedError') {
-        errorMessage += 'Please allow camera access in your browser settings.';
-      } else if (error.name === 'NotFoundError') {
-        errorMessage += 'No camera found on this device.';
+        errorMessage += 'Please allow camera access in your browser settings and refresh the page.';
+      } else if (error.name === 'NotFoundError' || error.message.includes('No camera found')) {
+        errorMessage += 'No camera was detected on this device. You can still upload a photo from your files using the "Choose File" option.';
       } else if (error.name === 'NotSupportedError') {
-        errorMessage += 'Camera is not supported by this browser.';
+        errorMessage += 'Camera is not supported by this browser. Try using a modern browser like Chrome, Firefox, or Safari.';
+      } else if (error.name === 'NotReadableError') {
+        errorMessage += 'Camera is being used by another application. Please close other camera applications and try again.';
+      } else if (error.name === 'OverconstrainedError') {
+        errorMessage += 'Camera constraints could not be satisfied. Try refreshing the page.';
+      } else if (error.message.includes('HTTPS')) {
+        errorMessage += 'This site needs to be accessed via HTTPS to use the camera. You can still upload photos using the "Choose File" option.';
       } else {
-        errorMessage += 'Please check your camera permissions and try again.';
+        errorMessage += 'Please check your camera permissions and try again. You can also use the "Choose File" option to upload a photo.';
       }
 
       Alert.alert('Camera Access Error', errorMessage, [{ text: 'OK' }]);
