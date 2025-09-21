@@ -390,78 +390,76 @@ export default function WebCamera({ onPhotoTaken, type }: WebCameraProps) {
         </View>
       )}
 
-      {/* Fullscreen Video Container */}
-      <View style={[styles.fullscreenCameraContainer, !isStreaming && styles.hidden]}>
-        {React.createElement('div', {
-          ref: videoContainerRef,
-          style: {
-            position: 'fixed',
-            top: 0,
-            left: 0,
-            width: '100vw',
-            height: '100vh',
-            backgroundColor: '#000000',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            zIndex: 1000,
-          },
-        }, 'Camera Loading...')}
+      {/* Fullscreen Video Container - Always render for ref access */}
+      {React.createElement('div', {
+        ref: videoContainerRef,
+        style: {
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          width: '100vw',
+          height: '100vh',
+          backgroundColor: '#000000',
+          display: isStreaming ? 'flex' : 'none',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 1000,
+        },
+      }, 'Camera Loading...')}
 
-        {/* Camera Guide Overlay */}
-        {isStreaming && (
-          <View style={styles.guideOverlay}>
-            {type === 'id' ? (
-              // Rectangle guide for ID
-              <View style={styles.rectangleGuide}>
-                <Text style={styles.guideText}>Position your ID within this frame</Text>
-              </View>
-            ) : (
-              // Oval guide for face
-              <View style={styles.ovalGuide}>
-                <Text style={styles.guideText}>Position your face within this oval</Text>
-              </View>
-            )}
-          </View>
-        )}
+      {/* Camera Guide Overlay */}
+      {isStreaming && (
+        <View style={styles.guideOverlay}>
+          {type === 'id' ? (
+            // Rectangle guide for ID
+            <View style={styles.rectangleGuide}>
+              <Text style={styles.guideText}>Position your ID within this frame</Text>
+            </View>
+          ) : (
+            // Oval guide for face
+            <View style={styles.ovalGuide}>
+              <Text style={styles.guideText}>Position your face within this oval</Text>
+            </View>
+          )}
+        </View>
+      )}
 
-        {React.createElement('canvas', {
-          ref: canvasRef,
-          style: styles.hiddenCanvas,
-        })}
+      {React.createElement('canvas', {
+        ref: canvasRef,
+        style: styles.hiddenCanvas,
+      })}
 
-        {isStreaming && (
-          <View style={styles.fullscreenControls}>
-            {/* Camera Switch Button */}
+      {isStreaming && (
+        <View style={styles.fullscreenControls}>
+          {/* Camera Switch Button */}
+          <TouchableOpacity
+            style={styles.switchButton}
+            onPress={switchCamera}
+            activeOpacity={0.8}
+          >
+            <Text style={styles.switchButtonText}>
+              🔄 {currentCamera === 'user' ? 'Back' : 'Front'}
+            </Text>
+          </TouchableOpacity>
+
+          <View style={styles.mainControls}>
             <TouchableOpacity
-              style={styles.switchButton}
-              onPress={switchCamera}
+              style={styles.captureButton}
+              onPress={takePhoto}
               activeOpacity={0.8}
             >
-              <Text style={styles.switchButtonText}>
-                🔄 {currentCamera === 'user' ? 'Back' : 'Front'}
-              </Text>
+              <Text style={styles.captureButtonText}>📷 Take Photo</Text>
             </TouchableOpacity>
-
-            <View style={styles.mainControls}>
-              <TouchableOpacity
-                style={styles.captureButton}
-                onPress={takePhoto}
-                activeOpacity={0.8}
-              >
-                <Text style={styles.captureButtonText}>📷 Take Photo</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.cancelButton}
-                onPress={stopCamera}
-                activeOpacity={0.8}
-              >
-                <Text style={styles.cancelButtonText}>✕ Cancel</Text>
-              </TouchableOpacity>
-            </View>
+            <TouchableOpacity
+              style={styles.cancelButton}
+              onPress={stopCamera}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.cancelButtonText}>✕ Cancel</Text>
+            </TouchableOpacity>
           </View>
-        )}
-      </View>
+        </View>
+      )}
 
       {showPermissionDenied && (
         <View style={styles.permissionDenied}>
