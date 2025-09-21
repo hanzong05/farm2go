@@ -109,77 +109,75 @@ export default function WebCamera({ onPhotoTaken, type }: WebCameraProps) {
       console.log('📹 Creating video element...');
 
       if (typeof window !== 'undefined') {
-        // Wait a bit for the container to be rendered
-        setTimeout(async () => {
-          if (!videoContainerRef.current) {
-            console.error('❌ Video container not found');
-            setIsInitializing(false);
-            console.log('❌ Setting showPermissionDenied to true - video container not found');
-            setLastError('Video container not found');
-            setShowPermissionDenied(true);
-            return;
-          }
+        // Check immediately since container is now always rendered
+        if (!videoContainerRef.current) {
+          console.error('❌ Video container not found');
+          setIsInitializing(false);
+          console.log('❌ Setting showPermissionDenied to true - video container not found');
+          setLastError('Video container not found');
+          setShowPermissionDenied(true);
+          return;
+        }
 
-          // Remove any existing video element
-          const existingVideo = videoContainerRef.current.querySelector('video');
-          if (existingVideo) {
-            existingVideo.remove();
-          }
+        // Remove any existing video element
+        const existingVideo = videoContainerRef.current.querySelector('video');
+        if (existingVideo) {
+          existingVideo.remove();
+        }
 
-          // Create new video element
-          const videoElement = document.createElement('video');
-          videoElement.style.width = '100%';
-          videoElement.style.height = '100%';
-          videoElement.style.objectFit = 'cover';
-          videoElement.style.backgroundColor = '#000000';
-          videoElement.style.borderRadius = '8px';
-          videoElement.autoplay = true;
-          videoElement.playsInline = true;
-          videoElement.muted = true;
-          videoElement.controls = false;
+        // Create new video element
+        const videoElement = document.createElement('video');
+        videoElement.style.width = '100%';
+        videoElement.style.height = '100%';
+        videoElement.style.objectFit = 'cover';
+        videoElement.style.backgroundColor = '#000000';
+        videoElement.style.borderRadius = '8px';
+        videoElement.autoplay = true;
+        videoElement.playsInline = true;
+        videoElement.muted = true;
+        videoElement.controls = false;
 
-          // Mobile-specific attributes
-          videoElement.setAttribute('webkit-playsinline', 'true');
-          videoElement.setAttribute('x-webkit-airplay', 'deny');
+        // Mobile-specific attributes
+        videoElement.setAttribute('webkit-playsinline', 'true');
+        videoElement.setAttribute('x-webkit-airplay', 'deny');
 
-          console.log('📹 Setting up video element...');
-          videoElement.srcObject = stream;
+        console.log('📹 Setting up video element...');
+        videoElement.srcObject = stream;
 
-          // Wait for video to be ready before playing
-          videoElement.onloadedmetadata = () => {
-            console.log('📹 Video metadata loaded, starting playback...');
-            videoElement.play().then(() => {
-              console.log('📹 Video playback started successfully');
-              setIsStreaming(true);
-              setHasPermission(true);
-              setIsInitializing(false);
-            }).catch((playError) => {
-              console.error('❌ Video play error:', playError);
-              setIsInitializing(false);
-              // Don't automatically set hasPermission to false for play errors
-              // as the stream might be working fine
-            });
-          };
-
-          // Store reference for later use
-          videoRef.current = videoElement;
-          streamRef.current = stream;
-
-          // Add video to container
-          videoContainerRef.current.appendChild(videoElement);
-
-          // Fallback - try to play immediately
-          try {
-            await videoElement.play();
-            console.log('📹 Video playing immediately');
+        // Wait for video to be ready before playing
+        videoElement.onloadedmetadata = () => {
+          console.log('📹 Video metadata loaded, starting playback...');
+          videoElement.play().then(() => {
+            console.log('📹 Video playback started successfully');
             setIsStreaming(true);
             setHasPermission(true);
             setIsInitializing(false);
-          } catch (playError) {
-            console.log('📹 Immediate play failed, waiting for metadata...');
-            // The onloadedmetadata handler will handle this
-          }
-        }, 100);
+          }).catch((playError) => {
+            console.error('❌ Video play error:', playError);
+            setIsInitializing(false);
+            // Don't automatically set hasPermission to false for play errors
+            // as the stream might be working fine
+          });
+        };
+
+        // Store reference for later use
+        videoRef.current = videoElement;
+        streamRef.current = stream;
+
+        // Add video to container
+        videoContainerRef.current.appendChild(videoElement);
+
+        // Fallback - try to play immediately
+        try {
+          await videoElement.play();
+          console.log('📹 Video playing immediately');
+          setIsStreaming(true);
+          setHasPermission(true);
+          setIsInitializing(false);
+        } catch (playError) {
+          console.log('📹 Immediate play failed, waiting for metadata...');
+          // The onloadedmetadata handler will handle this
+        }
       }
     } catch (error: any) {
       console.error('Error accessing camera:', error);
@@ -363,27 +361,28 @@ export default function WebCamera({ onPhotoTaken, type }: WebCameraProps) {
         </View>
       )}
 
-      {isStreaming && (
-        <View style={styles.cameraContainer}>
-          {React.createElement('div', {
-            ref: videoContainerRef,
-            style: {
-              width: '100%',
-              height: '100%',
-              position: 'relative',
-              borderRadius: 8,
-              overflow: 'hidden',
-              backgroundColor: '#000000',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              border: '2px solid #3b82f6',
-            },
-          }, 'Camera Loading...')}
-          {React.createElement('canvas', {
-            ref: canvasRef,
-            style: styles.hiddenCanvas,
-          })}
+      {/* Always render video container but only show it when streaming */}
+      <View style={[styles.cameraContainer, !isStreaming && styles.hidden]}>
+        {React.createElement('div', {
+          ref: videoContainerRef,
+          style: {
+            width: '100%',
+            height: '100%',
+            position: 'relative',
+            borderRadius: 8,
+            overflow: 'hidden',
+            backgroundColor: '#000000',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            border: '2px solid #3b82f6',
+          },
+        }, 'Camera Loading...')}
+        {React.createElement('canvas', {
+          ref: canvasRef,
+          style: styles.hiddenCanvas,
+        })}
+        {isStreaming && (
           <View style={styles.controls}>
             <TouchableOpacity
               style={styles.captureButton}
@@ -400,8 +399,8 @@ export default function WebCamera({ onPhotoTaken, type }: WebCameraProps) {
               <Text style={styles.cancelButtonText}>✕ Cancel</Text>
             </TouchableOpacity>
           </View>
-        </View>
-      )}
+        )}
+      </View>
 
 
       {showPermissionDenied && (
@@ -610,5 +609,8 @@ const styles = StyleSheet.create({
     marginBottom: 4,
     fontFamily: 'monospace',
     fontWeight: '600',
+  },
+  hidden: {
+    display: 'none',
   },
 });
