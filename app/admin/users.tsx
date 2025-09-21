@@ -42,11 +42,22 @@ interface OrderResponse {
   buyer_id: string;
   farmer_id: string;
   total_amount: number;
+  quantity: number;
   status: string;
   created_at: string;
   buyer_profile?: {
     first_name: string | null;
     last_name: string | null;
+  };
+  farmer_profile?: {
+    first_name: string | null;
+    last_name: string | null;
+    farm_name: string | null;
+  };
+  product?: {
+    name: string;
+    price: number;
+    unit: string;
   };
   order_items?: Array<{
     id: string;
@@ -139,6 +150,13 @@ export default function AdminUsers() {
   const [editingItem, setEditingItem] = useState<ProductResponse | null>(null);
   const [showAddForm, setShowAddForm] = useState(false);
   const [authChecked, setAuthChecked] = useState(false);
+
+  // Buyer modal states
+  const [selectedBuyer, setSelectedBuyer] = useState<User | null>(null);
+  const [buyerModalVisible, setBuyerModalVisible] = useState(false);
+  const [buyerDetailTab, setBuyerDetailTab] = useState<'orders' | 'history'>('orders');
+  const [buyerOrders, setBuyerOrders] = useState<OrderResponse[]>([]);
+  const [buyerHistory, setBuyerHistory] = useState<OrderResponse[]>([]);
   
   // Create User Modal states
   const [createUserModalVisible, setCreateUserModalVisible] = useState(false);
@@ -550,6 +568,89 @@ export default function AdminUsers() {
     }
   };
 
+  const openBuyerDetail = async (buyer: User) => {
+    setSelectedBuyer(buyer);
+    setBuyerModalVisible(true);
+    setBuyerDetailTab('orders');
+    await loadBuyerData(buyer.id);
+  };
+
+  const loadBuyerData = async (buyerId: string) => {
+    try {
+      // Load current orders (pending, confirmed, completed)
+      const { data: orders, error: ordersError } = await supabase
+        .from('orders')
+        .select(`
+          *,
+          farmer_profile:profiles!orders_farmer_id_fkey(first_name, last_name, farm_name),
+          product:products(name, price, unit)
+        `)
+        .eq('buyer_id', buyerId)
+        .in('status', ['pending', 'confirmed', 'completed'])
+        .order('created_at', { ascending: false });
+
+      if (ordersError) {
+        console.error('Error loading buyer orders:', ordersError);
+      } else {
+        setBuyerOrders((orders as OrderResponse[] | null) || []);
+      }
+
+      // Load purchase history (all orders including cancelled/delivered)
+      const { data: history, error: historyError } = await supabase
+        .from('orders')
+        .select(`
+          *,
+          farmer_profile:profiles!orders_farmer_id_fkey(first_name, last_name, farm_name),
+          product:products(name, price, unit)
+        `)
+        .eq('buyer_id', buyerId)
+        .order('created_at', { ascending: false });
+
+      if (historyError) {
+        console.error('Error loading buyer history:', historyError);
+      } else {
+        setBuyerHistory((history as OrderResponse[] | null) || []);
+      }
+
+    } catch (error) {
+      console.error('Error loading buyer data:', error);
+    }
+  };
+
+  const getOrderStatusText = (status: string) => {
+    switch (status) {
+      case 'pending': return 'ORDER PLACED';
+      case 'confirmed': return 'CONFIRMED';
+      case 'preparing': return 'PREPARING';
+      case 'ready': return 'READY FOR PICKUP';
+      case 'completed': return 'DELIVERED';
+      case 'cancelled': return 'CANCELLED';
+      default: return status.toUpperCase();
+    }
+  };
+
+  const getOrderDeliveryText = (status: string) => {
+    switch (status) {
+      case 'pending': return 'Processing order';
+      case 'confirmed': return 'Order confirmed by farmer';
+      case 'preparing': return 'Preparing your order';
+      case 'ready': return 'Ready for pickup/delivery';
+      case 'completed': return 'Order delivered';
+      case 'cancelled': return 'Order cancelled';
+      default: return 'Status update';
+    }
+  };
+
+  const formatOrderDate = (dateString: string) => {
+    return new Date(dateString).toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+  };
+
   const handleDeleteProduct = async (productId: string) => {
     Alert.alert(
       'Delete Product',
@@ -753,15 +854,21 @@ export default function AdminUsers() {
             </View>
             <View style={styles.userInfo}>
               <TouchableOpacity
-                onPress={() => item.profiles?.user_type === 'farmer' ? openFarmerDetail(item) : null}
-                disabled={item.profiles?.user_type !== 'farmer'}
+                onPress={() => {
+                  if (item.profiles?.user_type === 'farmer') {
+                    openFarmerDetail(item);
+                  } else if (item.profiles?.user_type === 'buyer') {
+                    openBuyerDetail(item);
+                  }
+                }}
+                disabled={item.profiles?.user_type !== 'farmer' && item.profiles?.user_type !== 'buyer'}
               >
                 <Text style={[
                   styles.userName,
-                  item.profiles?.user_type === 'farmer' && styles.clickableUserName
+                  (item.profiles?.user_type === 'farmer' || item.profiles?.user_type === 'buyer') && styles.clickableUserName
                 ]} numberOfLines={1}>
                   {item.profiles?.first_name} {item.profiles?.last_name}
-                  {item.profiles?.user_type === 'farmer' && (
+                  {(item.profiles?.user_type === 'farmer' || item.profiles?.user_type === 'buyer') && (
                     <Icon name="external-link-alt" size={10} color={colors.primary} style={{ marginLeft: 4 }} />
                   )}
                 </Text>
@@ -1375,6 +1482,181 @@ export default function AdminUsers() {
                     <Text style={styles.itemDetail}>Price: {formatCurrency(item.price)}</Text>
                   </View>
                 ))}
+              </View>
+            )}
+          </ScrollView>
+        </View>
+      </Modal>
+
+      {/* Buyer Detail Modal */}
+      <Modal
+        animationType="slide"
+        transparent={false}
+        visible={buyerModalVisible}
+        onRequestClose={() => setBuyerModalVisible(false)}
+      >
+        <View style={styles.modalContainer}>
+          {/* Modal Header */}
+          <View style={styles.modalHeader}>
+            <TouchableOpacity
+              style={styles.backButton}
+              onPress={() => setBuyerModalVisible(false)}
+            >
+              <Icon name="arrow-left" size={20} color={colors.primary} />
+            </TouchableOpacity>
+            <View style={styles.modalTitleContainer}>
+              <Text style={styles.modalTitle}>
+                {selectedBuyer?.profiles?.first_name} {selectedBuyer?.profiles?.last_name}
+              </Text>
+              <Text style={styles.modalSubtitle}>
+                Buyer Account Management
+              </Text>
+            </View>
+          </View>
+
+          {/* Tab Navigation */}
+          <View style={styles.modalTabContainer}>
+            <TouchableOpacity
+              style={[styles.modalTab, buyerDetailTab === 'orders' && styles.activeModalTab]}
+              onPress={() => setBuyerDetailTab('orders')}
+            >
+              <Icon name="shopping-bag" size={16} color={buyerDetailTab === 'orders' ? colors.white : colors.textSecondary} />
+              <Text style={[styles.modalTabText, buyerDetailTab === 'orders' && styles.activeModalTabText]}>
+                Current Orders
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.modalTab, buyerDetailTab === 'history' && styles.activeModalTab]}
+              onPress={() => setBuyerDetailTab('history')}
+            >
+              <Icon name="history" size={16} color={buyerDetailTab === 'history' ? colors.white : colors.textSecondary} />
+              <Text style={[styles.modalTabText, buyerDetailTab === 'history' && styles.activeModalTabText]}>
+                Purchase History
+              </Text>
+            </TouchableOpacity>
+          </View>
+
+          {/* Tab Content */}
+          <ScrollView style={styles.modalContent}>
+            {buyerDetailTab === 'orders' && (
+              <View style={styles.tabContent}>
+                <View style={styles.sectionHeader}>
+                  <Text style={styles.sectionTitle}>Current Orders ({buyerOrders.length})</Text>
+                </View>
+
+                {buyerOrders.map((order) => (
+                  <View key={order.id} style={styles.buyerOrderCard}>
+                    {/* Order Header - similar to buyer's view */}
+                    <View style={styles.buyerOrderHeader}>
+                      <View style={styles.buyerOrderLeftInfo}>
+                        <Text style={styles.buyerOrderStatusText}>{getOrderStatusText(order.status)}</Text>
+                        <Text style={styles.buyerOrderDate}>{formatOrderDate(order.created_at)}</Text>
+                      </View>
+                      <View style={styles.buyerOrderRightInfo}>
+                        <Text style={styles.buyerOrderTotal}>TOTAL</Text>
+                        <Text style={styles.buyerOrderAmount}>{formatCurrency(order.total_amount)}</Text>
+                      </View>
+                    </View>
+
+                    {/* Delivery Status */}
+                    <View style={styles.buyerDeliveryStatus}>
+                      <Text style={[styles.buyerDeliveryText, { color: getOrderStatusColor(order.status) }]}>
+                        {getOrderDeliveryText(order.status)}
+                      </Text>
+                    </View>
+
+                    {/* Product Info */}
+                    <View style={styles.buyerProductSection}>
+                      <View style={styles.buyerProductRow}>
+                        <View style={styles.buyerProductIconContainer}>
+                          <Text style={styles.buyerProductIcon}>📦</Text>
+                        </View>
+                        <View style={styles.buyerProductInfo}>
+                          <Text style={styles.buyerProductName}>{order.product?.name}</Text>
+                          <Text style={styles.buyerProductDetails}>
+                            Quantity: {order.quantity} {order.product?.unit} • From: {
+                              order.farmer_profile?.farm_name ||
+                              `${order.farmer_profile?.first_name || ''} ${order.farmer_profile?.last_name || ''}`.trim() ||
+                              'Farm'
+                            }
+                          </Text>
+                        </View>
+                      </View>
+                    </View>
+
+                    {/* Order ID Section */}
+                    <View style={styles.buyerOrderIdSection}>
+                      <Text style={styles.buyerOrderIdLabel}>ORDER # {order.id.slice(-12).toUpperCase()}</Text>
+                    </View>
+                  </View>
+                ))}
+
+                {buyerOrders.length === 0 && (
+                  <View style={styles.emptyContainer}>
+                    <Text style={styles.emptyText}>No current orders</Text>
+                  </View>
+                )}
+              </View>
+            )}
+
+            {buyerDetailTab === 'history' && (
+              <View style={styles.tabContent}>
+                <View style={styles.sectionHeader}>
+                  <Text style={styles.sectionTitle}>Purchase History ({buyerHistory.length})</Text>
+                </View>
+
+                {buyerHistory.map((order) => (
+                  <View key={order.id} style={styles.buyerOrderCard}>
+                    {/* Order Header - similar to buyer's view */}
+                    <View style={styles.buyerOrderHeader}>
+                      <View style={styles.buyerOrderLeftInfo}>
+                        <Text style={styles.buyerOrderStatusText}>{getOrderStatusText(order.status)}</Text>
+                        <Text style={styles.buyerOrderDate}>{formatOrderDate(order.created_at)}</Text>
+                      </View>
+                      <View style={styles.buyerOrderRightInfo}>
+                        <Text style={styles.buyerOrderTotal}>TOTAL</Text>
+                        <Text style={styles.buyerOrderAmount}>{formatCurrency(order.total_amount)}</Text>
+                      </View>
+                    </View>
+
+                    {/* Delivery Status */}
+                    <View style={styles.buyerDeliveryStatus}>
+                      <Text style={[styles.buyerDeliveryText, { color: getOrderStatusColor(order.status) }]}>
+                        {getOrderDeliveryText(order.status)}
+                      </Text>
+                    </View>
+
+                    {/* Product Info */}
+                    <View style={styles.buyerProductSection}>
+                      <View style={styles.buyerProductRow}>
+                        <View style={styles.buyerProductIconContainer}>
+                          <Text style={styles.buyerProductIcon}>📦</Text>
+                        </View>
+                        <View style={styles.buyerProductInfo}>
+                          <Text style={styles.buyerProductName}>{order.product?.name}</Text>
+                          <Text style={styles.buyerProductDetails}>
+                            Quantity: {order.quantity} {order.product?.unit} • From: {
+                              order.farmer_profile?.farm_name ||
+                              `${order.farmer_profile?.first_name || ''} ${order.farmer_profile?.last_name || ''}`.trim() ||
+                              'Farm'
+                            }
+                          </Text>
+                        </View>
+                      </View>
+                    </View>
+
+                    {/* Order ID Section */}
+                    <View style={styles.buyerOrderIdSection}>
+                      <Text style={styles.buyerOrderIdLabel}>ORDER # {order.id.slice(-12).toUpperCase()}</Text>
+                    </View>
+                  </View>
+                ))}
+
+                {buyerHistory.length === 0 && (
+                  <View style={styles.emptyContainer}>
+                    <Text style={styles.emptyText}>No purchase history</Text>
+                  </View>
+                )}
               </View>
             )}
           </ScrollView>
@@ -1997,5 +2279,108 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '700',
     color: colors.white,
+  },
+
+  // Buyer Order Card Styles (matching buyer's my-orders view)
+  buyerOrderCard: {
+    backgroundColor: '#ffffff',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+    overflow: 'hidden',
+    marginBottom: 12,
+  },
+  buyerOrderHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    backgroundColor: '#f9fafb',
+    borderBottomWidth: 1,
+    borderBottomColor: '#e5e7eb',
+  },
+  buyerOrderLeftInfo: {
+    flex: 1,
+  },
+  buyerOrderStatusText: {
+    fontSize: 13,
+    fontWeight: 'bold',
+    color: '#374151',
+    marginBottom: 2,
+  },
+  buyerOrderDate: {
+    fontSize: 12,
+    color: '#6b7280',
+  },
+  buyerOrderRightInfo: {
+    alignItems: 'flex-end',
+  },
+  buyerOrderTotal: {
+    fontSize: 11,
+    color: '#6b7280',
+    fontWeight: '500',
+    marginBottom: 2,
+  },
+  buyerOrderAmount: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#111827',
+  },
+  buyerDeliveryStatus: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f3f4f6',
+  },
+  buyerDeliveryText: {
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  buyerProductSection: {
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+  },
+  buyerProductRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    marginBottom: 8,
+  },
+  buyerProductIconContainer: {
+    width: 40,
+    height: 40,
+    borderRadius: 4,
+    backgroundColor: '#f3f4f6',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+  },
+  buyerProductIcon: {
+    fontSize: 18,
+  },
+  buyerProductInfo: {
+    flex: 1,
+  },
+  buyerProductName: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#111827',
+    marginBottom: 4,
+  },
+  buyerProductDetails: {
+    fontSize: 12,
+    color: '#6b7280',
+    lineHeight: 16,
+  },
+  buyerOrderIdSection: {
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#f3f4f6',
+  },
+  buyerOrderIdLabel: {
+    fontSize: 11,
+    color: '#6b7280',
+    fontWeight: '600',
   },
 });

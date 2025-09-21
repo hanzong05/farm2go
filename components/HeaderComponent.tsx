@@ -98,6 +98,22 @@ const NAV_ITEMS: NavItem[] = [
     route: '/buyer/purchase-history',
     userTypes: ['buyer'],
   },
+  {
+    id: 'buyer-verification',
+    title: 'Verification',
+    icon: 'id-card',
+    route: '/verification/status',
+    userTypes: ['buyer'],
+  },
+
+  // Farmer verification
+  {
+    id: 'farmer-verification',
+    title: 'Verification',
+    icon: 'id-card',
+    route: '/verification/status',
+    userTypes: ['farmer'],
+  },
 
   // Admin items
   {
@@ -112,6 +128,13 @@ const NAV_ITEMS: NavItem[] = [
     title: 'Products',
     icon: 'check-circle',
     route: '/admin/products',
+    userTypes: ['admin'],
+  },
+  {
+    id: 'admin-verifications',
+    title: 'Verifications',
+    icon: 'id-badge',
+    route: '/admin/verifications',
     userTypes: ['admin'],
   },
   {
