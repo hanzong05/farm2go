@@ -18,6 +18,7 @@ export default function WebCamera({ onPhotoTaken, type }: WebCameraProps) {
   const [isInitializing, setIsInitializing] = useState(false);
   const [lastError, setLastError] = useState<string>('');
   const [currentCamera, setCurrentCamera] = useState<'user' | 'environment'>('environment');
+  const [showDebug, setShowDebug] = useState(false);
 
   // Debug logging for state changes
   useEffect(() => {
@@ -372,58 +373,108 @@ export default function WebCamera({ onPhotoTaken, type }: WebCameraProps) {
 
   return (
     <View style={styles.container}>
-      {/* Debug Panel for Mobile - Show camera states */}
-      <View style={[styles.debugPanel, { zIndex: 10 }]}>
-        <Text style={styles.debugTitle}>📱 Camera Debug Info:</Text>
-        <Text style={styles.debugText}>
-          • isStreaming: {isStreaming ? '✅' : '❌'} {isStreaming.toString()}
+      {/* Header with type indicator */}
+      <View style={styles.header}>
+        <Text style={styles.headerTitle}>
+          {type === 'id' ? '📄 ID Document Verification' : '👤 Face Verification'}
         </Text>
-        <Text style={styles.debugText}>
-          • hasPermission: {hasPermission === null ? '⏳' : hasPermission ? '✅' : '❌'} {String(hasPermission)}
+        <Text style={styles.headerSubtitle}>
+          {type === 'id' 
+            ? 'Position your ID clearly within the frame' 
+            : 'Position your face within the oval guide'
+          }
         </Text>
-        <Text style={styles.debugText}>
-          • showPermissionDenied: {showPermissionDenied ? '🚫' : '✅'} {showPermissionDenied.toString()}
-        </Text>
-        <Text style={styles.debugText}>
-          • isInitializing: {isInitializing ? '⏳' : '✅'} {isInitializing.toString()}
-        </Text>
-        <Text style={styles.debugText}>
-          • isWebPlatform: {isWebPlatform ? '✅' : '❌'} {isWebPlatform.toString()}
-        </Text>
-        {lastError && (
-          <Text style={styles.debugTextError}>
-            • Last Error: {lastError}
-          </Text>
-        )}
       </View>
 
-      <View style={styles.optionsContainer}>
+      {/* Debug Panel - Hidden by default, toggle with button */}
+      {showDebug && (
+        <View style={styles.debugPanel}>
+          <Text style={styles.debugTitle}>📱 Camera Debug Info:</Text>
+          <Text style={styles.debugText}>
+            • Stream: {isStreaming ? '✅ Active' : '❌ Inactive'}
+          </Text>
+          <Text style={styles.debugText}>
+            • Permission: {hasPermission === null ? '⏳ Pending' : hasPermission ? '✅ Granted' : '❌ Denied'}
+          </Text>
+          <Text style={styles.debugText}>
+            • Initializing: {isInitializing ? '⏳ Yes' : '✅ No'}
+          </Text>
+          <Text style={styles.debugText}>
+            • Camera: {currentCamera === 'user' ? '📷 Front' : '📷 Back'}
+          </Text>
+          {lastError && (
+            <Text style={styles.debugTextError}>
+              • Error: {lastError.split(':')[0]}
+            </Text>
+          )}
+        </View>
+      )}
+
+      {/* Main action buttons */}
+      <View style={styles.actionContainer}>
         <TouchableOpacity
-          style={isInitializing ? [styles.optionButton, styles.optionButtonDisabled] : styles.optionButton}
+          style={[
+            styles.primaryButton,
+            isInitializing && styles.primaryButtonDisabled
+          ]}
           onPress={startCamera}
           disabled={isInitializing}
           activeOpacity={0.8}
         >
-          <Text style={styles.optionButtonText}>
-            {isInitializing ? '⏳ Starting Camera...' : '📷 Use Camera'}
-          </Text>
+          <View style={styles.buttonContent}>
+            <Text style={styles.buttonIcon}>
+              {isInitializing ? '⏳' : '📷'}
+            </Text>
+            <View style={styles.buttonTextContainer}>
+              <Text style={styles.primaryButtonText}>
+                {isInitializing ? 'Starting Camera...' : 'Use Camera'}
+              </Text>
+              <Text style={styles.buttonSubtext}>
+                {isInitializing ? 'Please wait' : 'Live capture'}
+              </Text>
+            </View>
+          </View>
+          {isInitializing && (
+            <ActivityIndicator size="small" color="#ffffff" style={styles.buttonSpinner} />
+          )}
         </TouchableOpacity>
 
         <TouchableOpacity
-          style={styles.optionButton}
+          style={styles.secondaryButton}
           onPress={handleFileUpload}
           activeOpacity={0.8}
         >
-          <Text style={styles.optionButtonText}>
-            📁 Choose File
-          </Text>
+          <View style={styles.buttonContent}>
+            <Text style={styles.buttonIcon}>📁</Text>
+            <View style={styles.buttonTextContainer}>
+              <Text style={styles.secondaryButtonText}>Choose File</Text>
+              <Text style={styles.buttonSubtext}>Upload from device</Text>
+            </View>
+          </View>
         </TouchableOpacity>
       </View>
 
+      {/* Debug toggle button */}
+      <TouchableOpacity
+        style={styles.debugToggle}
+        onPress={() => setShowDebug(!showDebug)}
+        activeOpacity={0.7}
+      >
+        <Text style={styles.debugToggleText}>
+          {showDebug ? '🔼' : '🔽'} Debug
+        </Text>
+      </TouchableOpacity>
+
+      {/* Loading overlay */}
       {isInitializing && (
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#3b82f6" />
-          <Text style={styles.loadingText}>Initializing camera...</Text>
+        <View style={styles.loadingOverlay}>
+          <View style={styles.loadingCard}>
+            <ActivityIndicator size="large" color="#3b82f6" />
+            <Text style={styles.loadingTitle}>Initializing Camera</Text>
+            <Text style={styles.loadingSubtext}>
+              Setting up your {currentCamera === 'user' ? 'front' : 'rear'} camera...
+            </Text>
+          </View>
         </View>
       )}
 
@@ -442,7 +493,7 @@ export default function WebCamera({ onPhotoTaken, type }: WebCameraProps) {
           justifyContent: 'center',
           zIndex: 1000,
         },
-      }, 'Camera Loading...')}
+      })}
 
       {/* Camera Guide Overlay */}
       {isStreaming && (
@@ -450,12 +501,24 @@ export default function WebCamera({ onPhotoTaken, type }: WebCameraProps) {
           {type === 'id' ? (
             // Rectangle guide for ID
             <View style={styles.rectangleGuide}>
-              <Text style={styles.guideText}>Position your ID within this frame</Text>
+              <View style={styles.guideCorners}>
+                <View style={[styles.corner, styles.topLeft]} />
+                <View style={[styles.corner, styles.topRight]} />
+                <View style={[styles.corner, styles.bottomLeft]} />
+                <View style={[styles.corner, styles.bottomRight]} />
+              </View>
+              <View style={styles.guideTextContainer}>
+                <Text style={styles.guideText}>Position your ID within this frame</Text>
+                <Text style={styles.guideSubtext}>Make sure all corners are visible</Text>
+              </View>
             </View>
           ) : (
             // Oval guide for face
             <View style={styles.ovalGuide}>
-              <Text style={styles.guideText}>Position your face within this oval</Text>
+              <View style={styles.guideTextContainer}>
+                <Text style={styles.guideText}>Position your face here</Text>
+                <Text style={styles.guideSubtext}>Keep your face centered and well-lit</Text>
+              </View>
             </View>
           )}
         </View>
@@ -466,73 +529,95 @@ export default function WebCamera({ onPhotoTaken, type }: WebCameraProps) {
         style: styles.hiddenCanvas,
       })}
 
+      {/* Camera controls overlay */}
       {isStreaming && (
-        <View style={styles.fullscreenControls}>
-          {/* Camera Switch Button */}
-          <TouchableOpacity
-            style={styles.switchButton}
-            onPress={switchCamera}
-            activeOpacity={0.8}
-          >
-            <Text style={styles.switchButtonText}>
-              🔄 {currentCamera === 'user' ? 'Back' : 'Front'}
-            </Text>
-          </TouchableOpacity>
-
-          <View style={styles.mainControls}>
+        <View style={styles.cameraControls}>
+          {/* Top controls */}
+          <View style={styles.topControls}>
             <TouchableOpacity
-              style={styles.captureButton}
-              onPress={takePhoto}
+              style={styles.switchButton}
+              onPress={switchCamera}
               activeOpacity={0.8}
             >
-              <Text style={styles.captureButtonText}>📷 Take Photo</Text>
+              <Text style={styles.controlIcon}>🔄</Text>
+              <Text style={styles.switchButtonText}>
+                Switch to {currentCamera === 'user' ? 'Back' : 'Front'}
+              </Text>
             </TouchableOpacity>
+          </View>
+
+          {/* Bottom controls */}
+          <View style={styles.bottomControls}>
             <TouchableOpacity
-              style={styles.cancelButton}
+              style={styles.cancelControlButton}
               onPress={stopCamera}
               activeOpacity={0.8}
             >
-              <Text style={styles.cancelButtonText}>✕ Cancel</Text>
+              <Text style={styles.controlIcon}>✕</Text>
+              <Text style={styles.controlButtonText}>Cancel</Text>
             </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.captureControlButton}
+              onPress={takePhoto}
+              activeOpacity={0.8}
+            >
+              <View style={styles.captureInner} />
+            </TouchableOpacity>
+
+            <View style={styles.placeholderButton} />
           </View>
         </View>
       )}
 
+      {/* Permission denied screen */}
       {showPermissionDenied && (
-        <View style={styles.permissionDenied}>
-          <Text style={styles.permissionText}>
-            Camera access is required for verification. Please allow camera access in your browser settings and try again.
-          </Text>
-          <TouchableOpacity
-            style={styles.retryButton}
-            onPress={startCamera}
-            activeOpacity={0.8}
-          >
-            <Text style={styles.retryButtonText}>Try Again</Text>
-          </TouchableOpacity>
+        <View style={styles.permissionScreen}>
+          <View style={styles.permissionCard}>
+            <Text style={styles.permissionIcon}>🚫</Text>
+            <Text style={styles.permissionTitle}>Camera Access Required</Text>
+            <Text style={styles.permissionMessage}>
+              Camera access is needed for verification. Please allow camera permissions in your browser and try again.
+            </Text>
+            
+            <TouchableOpacity
+              style={styles.retryButton}
+              onPress={startCamera}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.retryButtonText}>Try Again</Text>
+            </TouchableOpacity>
 
-          <View style={styles.fallbackSection}>
-            <Text style={styles.fallbackText}>Or select image from files:</Text>
-            {React.createElement('input', {
-              type: 'file',
-              accept: 'image/*',
-              capture: type === 'face' ? 'user' : 'environment',
-              onChange: (e: Event) => {
-                const target = e.target as HTMLInputElement;
-                const file = target.files?.[0];
-                if (file) {
-                  const photoUri = URL.createObjectURL(file);
-                  onPhotoTaken(photoUri);
-                }
-              },
-              style: {
-                marginTop: 10,
-                padding: 10,
-                borderRadius: 5,
-                border: '1px solid #ccc',
-                backgroundColor: '#f9f9f9',
-              },
-            })}
+            <View style={styles.alternativeSection}>
+              <Text style={styles.alternativeTitle}>Alternative Option</Text>
+              <Text style={styles.alternativeText}>
+                You can still complete verification by uploading a photo from your device
+              </Text>
+              
+              {React.createElement('input', {
+                type: 'file',
+                accept: 'image/*',
+                capture: type === 'face' ? 'user' : 'environment',
+                onChange: (e: Event) => {
+                  const target = e.target as HTMLInputElement;
+                  const file = target.files?.[0];
+                  if (file) {
+                    const photoUri = URL.createObjectURL(file);
+                    onPhotoTaken(photoUri);
+                  }
+                },
+                style: {
+                  width: '100%',
+                  padding: '12px',
+                  fontSize: '16px',
+                  borderRadius: '8px',
+                  border: '2px dashed #d1d5db',
+                  backgroundColor: '#f9fafb',
+                  cursor: 'pointer',
+                  marginTop: '12px',
+                },
+              })}
+            </View>
           </View>
         </View>
       )}
@@ -543,158 +628,110 @@ export default function WebCamera({ onPhotoTaken, type }: WebCameraProps) {
 const styles = StyleSheet.create({
   container: {
     width: '100%',
-    minHeight: 300,
-    backgroundColor: '#f9fafb',
-    borderRadius: 12,
+    minHeight: 400,
+    backgroundColor: '#ffffff',
+    borderRadius: 16,
     overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 4,
   },
-  startButton: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 48,
-    backgroundColor: '#f3f4f6',
-    borderWidth: 2,
-    borderColor: '#d1d5db',
-    borderStyle: 'dashed',
+  header: {
+    padding: 24,
+    backgroundColor: '#f8fafc',
+    borderBottomWidth: 1,
+    borderBottomColor: '#e2e8f0',
+  },
+  headerTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#1e293b',
+    marginBottom: 4,
+  },
+  headerSubtitle: {
+    fontSize: 14,
+    color: '#64748b',
+    lineHeight: 20,
+  },
+  actionContainer: {
+    padding: 24,
+    gap: 16,
+  },
+  primaryButton: {
+    backgroundColor: '#3b82f6',
     borderRadius: 12,
+    padding: 20,
+    shadowColor: '#3b82f6',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 6,
   },
-  startButtonText: {
+  primaryButtonDisabled: {
+    backgroundColor: '#94a3b8',
+    shadowOpacity: 0.1,
+  },
+  secondaryButton: {
+    backgroundColor: '#ffffff',
+    borderRadius: 12,
+    padding: 20,
+    borderWidth: 2,
+    borderColor: '#e2e8f0',
+  },
+  buttonContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  buttonIcon: {
+    fontSize: 24,
+    marginRight: 16,
+  },
+  buttonTextContainer: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  primaryButtonText: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#ffffff',
+    marginBottom: 2,
+  },
+  secondaryButtonText: {
     fontSize: 18,
     fontWeight: '600',
     color: '#374151',
+    marginBottom: 2,
+  },
+  buttonSubtext: {
+    fontSize: 12,
+    color: 'rgba(255, 255, 255, 0.8)',
     textAlign: 'center',
   },
-  fullscreenCameraContainer: {
-    position: 'fixed' as any,
-    top: 0,
-    left: 0,
-    width: '100vw' as any,
-    height: '100vh' as any,
-    zIndex: 1000,
-    backgroundColor: '#000000',
-  },
-  fullscreenControls: {
+  buttonSpinner: {
     position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    backgroundColor: 'rgba(0, 0, 0, 0.8)' as any,
-    paddingVertical: 20,
-    paddingHorizontal: 16,
-    flexDirection: 'column',
-    alignItems: 'center',
-    zIndex: 10,
-  },
-  captureButton: {
-    backgroundColor: '#10b981',
-    paddingHorizontal: 32,
-    paddingVertical: 16,
-    borderRadius: 50,
-    marginHorizontal: 8,
-  },
-  captureButtonText: {
-    color: '#ffffff',
-    fontSize: 18,
-    fontWeight: '600',
-  },
-  cancelButton: {
-    backgroundColor: '#dc2626',
-    paddingHorizontal: 32,
-    paddingVertical: 16,
-    borderRadius: 50,
-    marginHorizontal: 8,
-  },
-  cancelButtonText: {
-    color: '#ffffff',
-    fontSize: 18,
-    fontWeight: '600',
-  },
-  permissionDenied: {
-    padding: 24,
-    alignItems: 'center',
-  },
-  permissionText: {
-    fontSize: 14,
-    color: '#dc2626',
-    textAlign: 'center',
-    marginBottom: 16,
-    lineHeight: 20,
-  },
-  retryButton: {
-    backgroundColor: '#3b82f6',
-    paddingHorizontal: 20,
-    paddingVertical: 10,
-    borderRadius: 6,
-  },
-  retryButtonText: {
-    color: '#ffffff',
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  fallbackSection: {
-    marginTop: 20,
-    alignItems: 'center',
-  },
-  fallbackText: {
-    fontSize: 14,
-    color: '#6b7280',
-    marginBottom: 10,
-    textAlign: 'center',
-  },
-  optionsContainer: {
-    flexDirection: 'row',
-    gap: 16,
-    marginBottom: 20,
-    zIndex: 1,
-  },
-  optionButton: {
-    flex: 1,
-    backgroundColor: '#3b82f6',
-    paddingVertical: 16,
-    paddingHorizontal: 24,
-    borderRadius: 12,
-    alignItems: 'center',
-  },
-  optionButtonDisabled: {
-    backgroundColor: '#9ca3af',
-  },
-  optionButtonText: {
-    color: '#ffffff',
-    fontSize: 16,
-    fontWeight: '600',
-    textAlign: 'center',
-  },
-  loadingContainer: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 40,
-    paddingHorizontal: 24,
-  },
-  loadingText: {
-    fontSize: 16,
-    color: '#6b7280',
-    marginTop: 12,
-    textAlign: 'center',
+    right: 20,
   },
   debugPanel: {
-    backgroundColor: '#f3f4f6',
-    padding: 12,
+    backgroundColor: '#fef3c7',
+    borderTopWidth: 3,
+    borderTopColor: '#f59e0b',
+    padding: 16,
+    marginHorizontal: 24,
     marginBottom: 16,
     borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#d1d5db',
-    position: 'relative',
   },
   debugTitle: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#374151',
+    color: '#92400e',
     marginBottom: 8,
   },
   debugText: {
     fontSize: 12,
-    color: '#4b5563',
+    color: '#78350f',
     marginBottom: 4,
     fontFamily: 'monospace',
   },
@@ -705,38 +742,138 @@ const styles = StyleSheet.create({
     fontFamily: 'monospace',
     fontWeight: '600',
   },
-  hidden: {
+  debugToggle: {
     position: 'absolute',
-    top: -10000,
-    left: -10000,
-    opacity: 0,
+    top: 16,
+    right: 16,
+    backgroundColor: 'rgba(0, 0, 0, 0.1)',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+    zIndex: 10,
   },
-  hiddenCanvas: {
+  debugToggleText: {
+    fontSize: 12,
+    color: '#64748b',
+    fontWeight: '500',
+  },
+  loadingOverlay: {
     position: 'absolute',
-    top: -10000,
-    left: -10000,
-    opacity: 0,
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 100,
+  },
+  loadingCard: {
+    backgroundColor: '#ffffff',
+    borderRadius: 16,
+    padding: 32,
+    alignItems: 'center',
+    marginHorizontal: 24,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.3,
+    shadowRadius: 16,
+    elevation: 8,
+  },
+  loadingTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#1e293b',
+    marginTop: 16,
+    marginBottom: 4,
+  },
+  loadingSubtext: {
+    fontSize: 14,
+    color: '#64748b',
+    textAlign: 'center',
+  },
+  cameraControls: {
+    position: 'fixed' as any,
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    width: '100vw' as any,
+    height: '100vh' as any,
+    justifyContent: 'space-between',
+    zIndex: 1001,
+    paddingVertical: 40,
+    paddingHorizontal: 20,
+  },
+  topControls: {
+    alignItems: 'center',
+  },
+  bottomControls: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 20,
   },
   switchButton: {
-    backgroundColor: 'rgba(255, 255, 255, 0.2)' as any,
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
     paddingVertical: 12,
-    paddingHorizontal: 24,
+    paddingHorizontal: 20,
     borderRadius: 25,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.3)' as any,
-    marginBottom: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backdropFilter: 'blur(10px)' as any,
   },
   switchButtonText: {
     color: '#ffffff',
-    fontSize: 16,
-    fontWeight: '600',
-    textAlign: 'center',
+    fontSize: 14,
+    fontWeight: '500',
+    marginLeft: 8,
   },
-  mainControls: {
-    flexDirection: 'row',
+  controlIcon: {
+    fontSize: 18,
+    color: '#ffffff',
+  },
+  cancelControlButton: {
+    backgroundColor: 'rgba(220, 38, 38, 0.9)',
+    width: 60,
+    height: 60,
+    borderRadius: 30,
     justifyContent: 'center',
     alignItems: 'center',
-    width: '100%',
+    shadowColor: '#dc2626',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.4,
+    shadowRadius: 8,
+  },
+  captureControlButton: {
+    backgroundColor: '#ffffff',
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    borderWidth: 4,
+    borderColor: 'rgba(255, 255, 255, 0.3)',
+  },
+  captureInner: {
+    backgroundColor: '#ef4444',
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+  },
+  controlButtonText: {
+    color: '#ffffff',
+    fontSize: 12,
+    fontWeight: '500',
+    marginTop: 4,
+  },
+  placeholderButton: {
+    width: 60,
+    height: 60,
   },
   guideOverlay: {
     position: 'fixed' as any,
@@ -754,55 +891,188 @@ const styles = StyleSheet.create({
     pointerEvents: 'none' as any,
   } as ViewStyle,
   rectangleGuide: {
-    width: '80%',
-    height: '50%',
-    maxWidth: 350,
-    maxHeight: 220,
-    borderWidth: 4,
+    width: '85%',
+    height: '55%',
+    maxWidth: 400,
+    maxHeight: 250,
+    borderWidth: 3,
     borderColor: '#10b981',
-    borderStyle: 'dashed',
-    borderRadius: 20,
-    alignItems: 'center',
+    borderStyle: 'solid',
+    borderRadius: 16,
     justifyContent: 'flex-end',
-    paddingBottom: 30,
-    alignSelf: 'center',
-    shadowColor: '#000000',
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.8,
-    shadowRadius: 10,
+    paddingBottom: 20,
+    position: 'relative',
+  },
+  guideCorners: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+  },
+  corner: {
+    position: 'absolute',
+    width: 20,
+    height: 20,
+    borderColor: '#ffffff',
+    borderWidth: 3,
+  },
+  topLeft: {
+    top: -3,
+    left: -3,
+    borderTopWidth: 3,
+    borderLeftWidth: 3,
+    borderRightWidth: 0,
+    borderBottomWidth: 0,
+  },
+  topRight: {
+    top: -3,
+    right: -3,
+    borderTopWidth: 3,
+    borderRightWidth: 3,
+    borderLeftWidth: 0,
+    borderBottomWidth: 0,
+  },
+  bottomLeft: {
+    bottom: -3,
+    left: -3,
+    borderBottomWidth: 3,
+    borderLeftWidth: 3,
+    borderRightWidth: 0,
+    borderTopWidth: 0,
+  },
+  bottomRight: {
+    bottom: -3,
+    right: -3,
+    borderBottomWidth: 3,
+    borderRightWidth: 3,
+    borderLeftWidth: 0,
+    borderTopWidth: 0,
   },
   ovalGuide: {
-    width: '65%',
-    height: '45%',
-    maxWidth: 280,
-    maxHeight: 350,
-    borderWidth: 4,
+    width: '70%',
+    height: '50%',
+    maxWidth: 300,
+    maxHeight: 400,
+    borderWidth: 3,
     borderColor: '#10b981',
-    borderStyle: 'dashed',
-    borderRadius: 140,
-    alignItems: 'center',
+    borderStyle: 'solid',
+    borderRadius: 150,
     justifyContent: 'flex-end',
-    paddingBottom: 50,
-    alignSelf: 'center',
-    shadowColor: '#000000',
+    paddingBottom: 40,
+    shadowColor: '#10b981',
     shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.8,
-    shadowRadius: 10,
+    shadowOpacity: 0.3,
+    shadowRadius: 20,
+  },
+  guideTextContainer: {
+    alignItems: 'center',
+    backgroundColor: 'rgba(16, 185, 129, 0.95)',
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderRadius: 20,
+    marginHorizontal: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
   },
   guideText: {
     color: '#ffffff',
     fontSize: 16,
     fontWeight: '700',
     textAlign: 'center',
-    backgroundColor: 'rgba(16, 185, 129, 0.9)' as any,
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 20,
-    overflow: 'hidden',
-    maxWidth: '95%',
-    shadowColor: '#000000',
+    marginBottom: 2,
+  },
+  guideSubtext: {
+    color: 'rgba(255, 255, 255, 0.9)',
+    fontSize: 12,
+    textAlign: 'center',
+    fontWeight: '500',
+  },
+  permissionScreen: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 24,
+    zIndex: 200,
+  },
+  permissionCard: {
+    backgroundColor: '#ffffff',
+    borderRadius: 16,
+    padding: 32,
+    alignItems: 'center',
+    width: '100%',
+    maxWidth: 400,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.3,
+    shadowRadius: 16,
+    elevation: 8,
+  },
+  permissionIcon: {
+    fontSize: 48,
+    marginBottom: 16,
+  },
+  permissionTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#1e293b',
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  permissionMessage: {
+    fontSize: 14,
+    color: '#64748b',
+    textAlign: 'center',
+    lineHeight: 20,
+    marginBottom: 24,
+  },
+  retryButton: {
+    backgroundColor: '#3b82f6',
+    paddingHorizontal: 32,
+    paddingVertical: 12,
+    borderRadius: 8,
+    marginBottom: 24,
+    shadowColor: '#3b82f6',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.5,
+    shadowOpacity: 0.3,
     shadowRadius: 4,
+  },
+  retryButtonText: {
+    color: '#ffffff',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  alternativeSection: {
+    width: '100%',
+    borderTopWidth: 1,
+    borderTopColor: '#e2e8f0',
+    paddingTop: 24,
+  },
+  alternativeTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#374151',
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  alternativeText: {
+    fontSize: 14,
+    color: '#64748b',
+    textAlign: 'center',
+    lineHeight: 20,
+    marginBottom: 16,
+  },
+  hiddenCanvas: {
+    position: 'absolute',
+    top: -10000,
+    left: -10000,
+    opacity: 0,
   },
 });
