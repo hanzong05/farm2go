@@ -363,7 +363,17 @@ export default function WebCamera({ onPhotoTaken, type }: WebCameraProps) {
             video: {
               facingMode: { ideal: currentCamera }
             }
-          }
+          },
+          // Mobile: force environment camera for ID verification with higher priority
+          ...(currentCamera === 'environment' ? [
+            {
+              video: {
+                facingMode: { exact: 'environment' },
+                width: { ideal: 1920, max: 3840 },
+                height: { ideal: 1080, max: 2160 }
+              }
+            }
+          ] : [])
         );
 
         // Add device-specific constraints for mobile as secondary options
@@ -933,6 +943,14 @@ export default function WebCamera({ onPhotoTaken, type }: WebCameraProps) {
                   : `⚠️ Using ${actualCamera === 'user' ? 'front' : 'back'} camera instead of ${currentCamera === 'user' ? 'front' : 'back'} camera`
                 }
               </Text>
+              {actualCamera !== 'unknown' && actualCamera !== currentCamera && (
+                <Text style={styles.warningSubtext}>
+                  {currentCamera === 'environment'
+                    ? 'Switch to back camera for better ID document capture'
+                    : 'Switch to front camera for face verification'
+                  }
+                </Text>
+              )}
               <TouchableOpacity style={styles.warningButton} onPress={switchCamera}>
                 <Text style={styles.warningButtonText}>Switch Camera</Text>
               </TouchableOpacity>
@@ -1537,7 +1555,14 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
     textAlign: 'center',
+    marginBottom: 8,
+  },
+  warningSubtext: {
+    color: 'rgba(255, 255, 255, 0.9)',
+    fontSize: 12,
+    textAlign: 'center',
     marginBottom: 12,
+    lineHeight: 16,
   },
   warningButton: {
     backgroundColor: '#ffffff',
