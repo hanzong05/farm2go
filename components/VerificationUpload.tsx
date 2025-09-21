@@ -12,6 +12,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import Swal from 'sweetalert2';
 import { supabase } from '../lib/supabase';
 import { Database } from '../types/database';
 import VisionCamera from './VisionCamera';
@@ -65,11 +66,13 @@ export default function VerificationUpload({
   const requestCameraPermission = async () => {
     const { status } = await ImagePicker.requestCameraPermissionsAsync();
     if (status !== 'granted') {
-      Alert.alert(
-        'Camera Permission Required',
-        'Please allow camera access to take verification photos.',
-        [{ text: 'OK' }]
-      );
+      Swal.fire({
+        title: 'Camera Permission Required',
+        text: 'Please allow camera access to take verification photos.',
+        icon: 'warning',
+        confirmButtonText: 'OK',
+        confirmButtonColor: '#10b981'
+      });
       return false;
     }
     return true;
@@ -78,11 +81,13 @@ export default function VerificationUpload({
   const requestMediaLibraryPermission = async () => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (status !== 'granted') {
-      Alert.alert(
-        'Media Library Permission Required',
-        'Please allow media library access to select photos.',
-        [{ text: 'OK' }]
-      );
+      Swal.fire({
+        title: 'Media Library Permission Required',
+        text: 'Please allow media library access to select photos.',
+        icon: 'warning',
+        confirmButtonText: 'OK',
+        confirmButtonColor: '#10b981'
+      });
       return false;
     }
     return true;
@@ -114,7 +119,13 @@ export default function VerificationUpload({
       }
     } catch (error) {
       console.error('Error taking photo:', error);
-      Alert.alert('Error', 'Failed to take photo. Please try again.');
+      Swal.fire({
+        title: 'Error',
+        text: 'Failed to take photo. Please try again.',
+        icon: 'error',
+        confirmButtonText: 'OK',
+        confirmButtonColor: '#ef4444'
+      });
     }
   };
 
@@ -135,7 +146,13 @@ export default function VerificationUpload({
       }
     } catch (error) {
       console.error('Error picking image:', error);
-      Alert.alert('Error', 'Failed to select image. Please try again.');
+      Swal.fire({
+        title: 'Error',
+        text: 'Failed to select image. Please try again.',
+        icon: 'error',
+        confirmButtonText: 'OK',
+        confirmButtonColor: '#ef4444'
+      });
     }
   };
 
@@ -186,7 +203,13 @@ export default function VerificationUpload({
       }
     } catch (error) {
       console.error('📸 Error handling vision camera photo:', error);
-      Alert.alert('Error', 'Failed to process photo. Please try again.');
+      Swal.fire({
+        title: 'Error',
+        text: 'Failed to process photo. Please try again.',
+        icon: 'error',
+        confirmButtonText: 'OK',
+        confirmButtonColor: '#ef4444'
+      });
       setShowVisionCamera(null);
     }
   };
@@ -244,7 +267,13 @@ export default function VerificationUpload({
 
   const submitVerification = async () => {
     if (!verificationData.idDocument.uri || !verificationData.facePhoto.uri) {
-      Alert.alert('Missing Photos', 'Please upload both ID document and face photo.');
+      Swal.fire({
+        title: 'Missing Photos',
+        text: 'Please upload both ID document and face photo.',
+        icon: 'warning',
+        confirmButtonText: 'OK',
+        confirmButtonColor: '#f59e0b'
+      });
       return;
     }
 
@@ -301,22 +330,44 @@ export default function VerificationUpload({
         throw profileError;
       }
 
-      Alert.alert(
-        'Verification Submitted',
-        'Your verification documents have been submitted successfully. You will be notified once an admin reviews your submission.',
-        [{
-          text: 'OK',
-          onPress: () => {
-            // Add a small delay to ensure alert dismisses cleanly before navigation
-            setTimeout(() => {
-              onVerificationSubmitted();
-            }, 200);
-          }
-        }]
-      );
+      Swal.fire({
+        title: 'Verification Submitted!',
+        text: 'Your verification documents have been submitted successfully. You will be notified once an admin reviews your submission.',
+        icon: 'success',
+        confirmButtonText: 'OK',
+        confirmButtonColor: '#10b981',
+        timer: 5000,
+        timerProgressBar: true
+      }).then(() => {
+        setTimeout(() => {
+          onVerificationSubmitted();
+        }, 200);
+      });
     } catch (error) {
       console.error('Error submitting verification:', error);
-      Alert.alert('Error', 'Failed to submit verification. Please try again.');
+
+      // Provide more specific error messages
+      let errorMessage = 'Failed to submit verification. Please try again.';
+      if (error instanceof Error) {
+        if (error.message.includes('Storage bucket not configured')) {
+          errorMessage = 'Storage configuration error. Please contact support.';
+        } else if (error.message.includes('verification_submissions')) {
+          errorMessage = 'Database configuration error. Please contact support.';
+        } else if (error.message.includes('network') || error.message.includes('connection')) {
+          errorMessage = 'Network error. Please check your internet connection and try again.';
+        }
+      }
+
+      Swal.fire({
+        title: 'Submission Failed',
+        text: errorMessage,
+        icon: 'error',
+        confirmButtonText: 'Try Again',
+        confirmButtonColor: '#ef4444',
+        showCancelButton: true,
+        cancelButtonText: 'Cancel',
+        cancelButtonColor: '#6b7280'
+      });
     } finally {
       setUploading(false);
       setUploadProgress('');
@@ -324,20 +375,34 @@ export default function VerificationUpload({
   };
 
   const selectIdDocumentType = () => {
-    Alert.alert(
-      'Select ID Document Type',
-      'Choose the type of ID document you want to upload',
-      [
-        ...ID_DOCUMENT_TYPES.map(type => ({
-          text: type.label,
-          onPress: () => setVerificationData(prev => ({
-            ...prev,
-            idDocument: { ...prev.idDocument, type: type.key },
-          })),
-        })),
-        { text: 'Cancel', style: 'cancel' },
-      ]
-    );
+    const options = ID_DOCUMENT_TYPES.map(type => `<option value="${type.key}">${type.label}</option>`).join('');
+
+    Swal.fire({
+      title: 'Select ID Document Type',
+      text: 'Choose the type of ID document you want to upload',
+      html: `
+        <select id="documentType" class="swal2-input" style="font-size: 16px; padding: 10px;">
+          ${options}
+        </select>
+      `,
+      icon: 'question',
+      showCancelButton: true,
+      confirmButtonText: 'Select',
+      confirmButtonColor: '#10b981',
+      cancelButtonText: 'Cancel',
+      cancelButtonColor: '#6b7280',
+      preConfirm: () => {
+        const select = document.getElementById('documentType') as HTMLSelectElement;
+        return select.value;
+      }
+    }).then((result) => {
+      if (result.isConfirmed && result.value) {
+        setVerificationData(prev => ({
+          ...prev,
+          idDocument: { ...prev.idDocument, type: result.value },
+        }));
+      }
+    });
   };
 
   if (showVisionCamera) {
