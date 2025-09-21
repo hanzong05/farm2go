@@ -91,13 +91,36 @@ export default function WebCamera({ onPhotoTaken, type }: WebCameraProps) {
       const devices = await navigator.mediaDevices.enumerateDevices();
       const videoDevices = devices.filter(device => device.kind === 'videoinput');
 
+      console.log('📱 Available video devices:', videoDevices.map(d => ({
+        label: d.label || 'Camera',
+        deviceId: d.deviceId.substring(0, 8) + '...'
+      })));
+
       if (videoDevices.length === 0) {
         throw new Error('No camera found on this device');
       }
 
+      console.log(`📷 Attempting to use ${currentCamera} camera (${videoDevices.length} devices available)`);
+
       // Try different constraint sets, starting with the most specific
       const constraintSets: MediaStreamConstraints[] = [
-        // Try with current camera selection first
+        // Try with exact facingMode first
+        {
+          video: {
+            width: { ideal: 1920, max: 1920 },
+            height: { ideal: 1080, max: 1080 },
+            facingMode: { exact: currentCamera }
+          }
+        },
+        // Try with ideal facingMode
+        {
+          video: {
+            width: { ideal: 1920, max: 1920 },
+            height: { ideal: 1080, max: 1080 },
+            facingMode: { ideal: currentCamera }
+          }
+        },
+        // Try with just facingMode
         {
           video: {
             width: { ideal: 1920, max: 1920 },
@@ -105,15 +128,15 @@ export default function WebCamera({ onPhotoTaken, type }: WebCameraProps) {
             facingMode: currentCamera
           }
         },
-        // Fallback to type-based camera selection
+        // Try with reduced quality but specific camera
         {
           video: {
-            width: { ideal: 1920, max: 1920 },
-            height: { ideal: 1080, max: 1080 },
-            facingMode: type === 'face' ? 'user' : 'environment'
+            width: { ideal: 1280, max: 1920 },
+            height: { ideal: 720, max: 1080 },
+            facingMode: currentCamera
           }
         },
-        // Fallback to any camera without facing mode constraint
+        // Fallback to any camera with good quality
         {
           video: {
             width: { ideal: 1920, max: 1920 },
@@ -133,7 +156,18 @@ export default function WebCamera({ onPhotoTaken, type }: WebCameraProps) {
         try {
           console.log('🔄 Trying camera with constraints:', constraints);
           stream = await navigator.mediaDevices.getUserMedia(constraints);
-          console.log('✅ Camera stream obtained successfully');
+
+          // Log which camera we actually got
+          const videoTrack = stream.getVideoTracks()[0];
+          if (videoTrack) {
+            const settings = videoTrack.getSettings();
+            console.log('✅ Camera stream obtained:', {
+              facingMode: settings.facingMode || 'unknown',
+              width: settings.width,
+              height: settings.height,
+              deviceId: settings.deviceId?.substring(0, 8) + '...' || 'unknown'
+            });
+          }
           break;
         } catch (error) {
           lastError = error as Error;
@@ -269,12 +303,15 @@ export default function WebCamera({ onPhotoTaken, type }: WebCameraProps) {
   const switchCamera = useCallback(async () => {
     if (!isStreaming) return;
 
-    console.log('📱 Switching camera from', currentCamera, 'to', currentCamera === 'user' ? 'environment' : 'user');
-    setCurrentCamera(currentCamera === 'user' ? 'environment' : 'user');
+    const newCamera = currentCamera === 'user' ? 'environment' : 'user';
+    console.log('📱 Switching camera from', currentCamera, 'to', newCamera);
+
+    // Update camera state first
+    setCurrentCamera(newCamera);
 
     // Restart camera with new settings
     stopCamera();
-    setTimeout(() => startCamera(), 100);
+    setTimeout(() => startCamera(), 200);
   }, [currentCamera, isStreaming, stopCamera, startCamera]);
 
   const takePhoto = useCallback(() => {
@@ -702,55 +739,70 @@ const styles = StyleSheet.create({
     width: '100%',
   },
   guideOverlay: {
-    position: 'absolute',
+    position: 'fixed' as any,
     top: 0,
     left: 0,
     right: 0,
     bottom: 0,
+    width: '100vw' as any,
+    height: '100vh' as any,
     alignItems: 'center',
     justifyContent: 'center',
-    zIndex: 5,
+    zIndex: 1001,
     paddingHorizontal: 20,
     paddingVertical: 20,
+    pointerEvents: 'none' as any,
   } as ViewStyle,
   rectangleGuide: {
-    width: '85%',
-    height: '60%',
-    maxWidth: 400,
-    maxHeight: 300,
-    borderWidth: 3,
-    borderColor: '#10b981',
-    borderStyle: 'dashed',
-    borderRadius: 16,
-    alignItems: 'center',
-    justifyContent: 'flex-end',
-    paddingBottom: 20,
-    alignSelf: 'center',
-  },
-  ovalGuide: {
-    width: '70%',
+    width: '80%',
     height: '50%',
     maxWidth: 350,
-    maxHeight: 450,
-    borderWidth: 3,
+    maxHeight: 220,
+    borderWidth: 4,
     borderColor: '#10b981',
     borderStyle: 'dashed',
-    borderRadius: 175,
+    borderRadius: 20,
     alignItems: 'center',
     justifyContent: 'flex-end',
-    paddingBottom: 40,
+    paddingBottom: 30,
     alignSelf: 'center',
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.8,
+    shadowRadius: 10,
+  },
+  ovalGuide: {
+    width: '65%',
+    height: '45%',
+    maxWidth: 280,
+    maxHeight: 350,
+    borderWidth: 4,
+    borderColor: '#10b981',
+    borderStyle: 'dashed',
+    borderRadius: 140,
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+    paddingBottom: 50,
+    alignSelf: 'center',
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.8,
+    shadowRadius: 10,
   },
   guideText: {
     color: '#ffffff',
-    fontSize: 14,
-    fontWeight: '600',
+    fontSize: 16,
+    fontWeight: '700',
     textAlign: 'center',
-    backgroundColor: 'rgba(0, 0, 0, 0.8)' as any,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 16,
+    backgroundColor: 'rgba(16, 185, 129, 0.9)' as any,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 20,
     overflow: 'hidden',
-    maxWidth: '90%',
+    maxWidth: '95%',
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.5,
+    shadowRadius: 4,
   },
 });
