@@ -245,7 +245,10 @@ export default function VisionCamera({ onPhotoTaken, type }: VisionCameraProps) 
       // Convert file path to URI format
       const photoUri = Platform.OS === 'ios' ? photo.path : `file://${photo.path}`;
 
+      console.log('📸 Calling onPhotoTaken with URI:', photoUri);
       onPhotoTaken(photoUri);
+
+      console.log('📸 Stopping camera after photo taken');
       stopCamera();
 
     } catch (error) {

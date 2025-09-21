@@ -140,23 +140,43 @@ export default function VerificationUpload({
   };
 
   const updateVerificationData = (type: 'id' | 'face', uri: string) => {
+    console.log('📸 updateVerificationData called:', { type, uri: uri?.substring(0, 50) + '...' });
+
     if (type === 'id') {
-      setVerificationData(prev => ({
-        ...prev,
-        idDocument: { ...prev.idDocument, uri },
-      }));
+      setVerificationData(prev => {
+        const newData = {
+          ...prev,
+          idDocument: { ...prev.idDocument, uri },
+        };
+        console.log('📸 Updated ID document data:', newData.idDocument);
+        return newData;
+      });
     } else {
-      setVerificationData(prev => ({
-        ...prev,
-        facePhoto: { uri },
-      }));
+      setVerificationData(prev => {
+        const newData = {
+          ...prev,
+          facePhoto: { uri },
+        };
+        console.log('📸 Updated face photo data:', newData.facePhoto);
+        return newData;
+      });
     }
   };
 
   const handleVisionCameraPhoto = (photoUri: string) => {
+    console.log('📸 handleVisionCameraPhoto called with:', {
+      photoUri: photoUri?.substring(0, 50) + '...',
+      showVisionCamera,
+      currentPhotoType: showVisionCamera
+    });
+
     if (showVisionCamera) {
+      console.log('📸 Updating verification data for type:', showVisionCamera);
       updateVerificationData(showVisionCamera, photoUri);
+      console.log('📸 Setting showVisionCamera to null to return to main view');
       setShowVisionCamera(null);
+    } else {
+      console.warn('📸 No showVisionCamera state, cannot process photo');
     }
   };
 
@@ -283,7 +303,7 @@ export default function VerificationUpload({
   };
 
   if (showVisionCamera) {
-    console.log('Rendering VisionCamera for type:', showVisionCamera);
+    console.log('📸 Rendering VisionCamera for type:', showVisionCamera);
     return (
       <ScrollView style={styles.container} contentContainerStyle={styles.content}>
         <View style={styles.header}>
@@ -341,6 +361,8 @@ export default function VerificationUpload({
       </ScrollView>
     );
   }
+
+  console.log('📸 Rendering main upload view - showVisionCamera:', showVisionCamera, 'showFileInput:', showFileInput);
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
