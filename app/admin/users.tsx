@@ -16,6 +16,7 @@ import {
 } from 'react-native';
 import { LineChart } from 'react-native-chart-kit';
 import Icon from 'react-native-vector-icons/FontAwesome5';
+import { Camera, useCameraDevices, useCodeScanner } from 'react-native-vision-camera';
 import HeaderComponent from '../../components/HeaderComponent';
 import { supabase } from '../../lib/supabase';
 import { getUserWithProfile } from '../../services/auth';
@@ -162,6 +163,23 @@ export default function AdminUsers() {
   const [qrScannerVisible, setQrScannerVisible] = useState(false);
   const [orderProcessingVisible, setOrderProcessingVisible] = useState(false);
   const [scannedOrderData, setScannedOrderData] = useState<any>(null);
+  const [hasPermission, setHasPermission] = useState<boolean | null>(null);
+  const [isScanning, setIsScanning] = useState(true);
+
+  // Camera setup
+  const devices = useCameraDevices();
+  const device = devices.back;
+
+  // Code scanner setup
+  const codeScanner = useCodeScanner({
+    codeTypes: ['qr', 'ean-13'],
+    onCodeScanned: (codes) => {
+      if (isScanning && codes.length > 0) {
+        setIsScanning(false);
+        handleQrCodeScanned(codes[0].value || '');
+      }
+    }
+  });
   
   // Create User Modal states
   const [createUserModalVisible, setCreateUserModalVisible] = useState(false);
@@ -210,6 +228,15 @@ export default function AdminUsers() {
       }));
     }
   }, [activeTab, profile]);
+
+  // Camera permission check
+  useEffect(() => {
+    const checkPermissions = async () => {
+      const permission = await Camera.requestCameraPermission();
+      setHasPermission(permission === 'authorized');
+    };
+    checkPermissions();
+  }, []);
 
   const loadData = async () => {
     try {
@@ -703,6 +730,7 @@ export default function AdminUsers() {
 
   // QR Scanner Functions
   const handleQrScan = () => {
+    setIsScanning(true);
     setQrScannerVisible(true);
   };
 
@@ -1770,30 +1798,56 @@ export default function AdminUsers() {
           </View>
 
           <View style={styles.qrCameraContainer}>
-            <Text style={styles.qrCameraMockText}>
-              QR Scanner Camera
-            </Text>
-            <TouchableOpacity
-              style={styles.qrMockScanButton}
-              onPress={() => {
-                // Simulate QR code scan for testing
-                const mockQrData = JSON.stringify({
-                  orderId: '123-test-order',
-                  buyerId: 'test-buyer-id'
-                });
-                handleQrCodeScanned(mockQrData);
-              }}
-            >
-              <Icon name="qrcode" size={24} color={colors.white} />
-              <Text style={styles.qrMockScanButtonText}>Simulate QR Scan</Text>
-            </TouchableOpacity>
+            {hasPermission === null ? (
+              <View style={styles.qrPermissionContainer}>
+                <ActivityIndicator size="large" color={colors.white} />
+                <Text style={styles.qrPermissionText}>Requesting camera permission...</Text>
+              </View>
+            ) : hasPermission === false ? (
+              <View style={styles.qrPermissionContainer}>
+                <Icon name="camera" size={48} color={colors.white} />
+                <Text style={styles.qrPermissionText}>Camera permission is required to scan QR codes</Text>
+                <TouchableOpacity
+                  style={styles.qrPermissionButton}
+                  onPress={async () => {
+                    const permission = await Camera.requestCameraPermission();
+                    setHasPermission(permission === 'authorized');
+                  }}
+                >
+                  <Text style={styles.qrPermissionButtonText}>Grant Permission</Text>
+                </TouchableOpacity>
+              </View>
+            ) : device == null ? (
+              <View style={styles.qrPermissionContainer}>
+                <Icon name="camera" size={48} color={colors.white} />
+                <Text style={styles.qrPermissionText}>No camera available</Text>
+              </View>
+            ) : (
+              <>
+                <Camera
+                  style={styles.camera}
+                  device={device}
+                  isActive={qrScannerVisible}
+                  codeScanner={codeScanner}
+                />
 
-            <View style={styles.qrOverlay}>
-              <View style={styles.qrFrame} />
-              <Text style={styles.qrInstructions}>
-                Position the QR code within the frame
-              </Text>
-            </View>
+                <View style={styles.qrOverlay}>
+                  <View style={styles.qrFrame} />
+                  <Text style={styles.qrInstructions}>
+                    Position the QR code within the frame
+                  </Text>
+                  {!isScanning && (
+                    <TouchableOpacity
+                      style={styles.qrRescanButton}
+                      onPress={() => setIsScanning(true)}
+                    >
+                      <Icon name="redo" size={20} color={colors.white} />
+                      <Text style={styles.qrRescanButtonText}>Scan Again</Text>
+                    </TouchableOpacity>
+                  )}
+                </View>
+              </>
+            )}
           </View>
         </View>
       </Modal>
@@ -2710,26 +2764,44 @@ const styles = StyleSheet.create({
     marginTop: 30,
     paddingHorizontal: 40,
   },
-  qrCameraMockText: {
-    fontSize: 18,
+  qrPermissionContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 40,
+  },
+  qrPermissionText: {
+    fontSize: 16,
     color: colors.white,
     textAlign: 'center',
-    marginTop: 100,
+    marginTop: 20,
+    lineHeight: 24,
   },
-  qrMockScanButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
+  qrPermissionButton: {
     backgroundColor: colors.primary,
     paddingVertical: 15,
     paddingHorizontal: 30,
     borderRadius: 25,
-    marginTop: 50,
-    marginHorizontal: 50,
-    gap: 10,
+    marginTop: 30,
   },
-  qrMockScanButtonText: {
+  qrPermissionButtonText: {
     fontSize: 16,
+    fontWeight: '600',
+    color: colors.white,
+  },
+  qrRescanButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.primary,
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+    borderRadius: 20,
+    marginTop: 30,
+    gap: 8,
+  },
+  qrRescanButtonText: {
+    fontSize: 14,
     fontWeight: '600',
     color: colors.white,
   },
