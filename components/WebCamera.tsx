@@ -100,24 +100,24 @@ export default function WebCamera({ onPhotoTaken, type }: WebCameraProps) {
         // Try with current camera selection first
         {
           video: {
-            width: { ideal: 1280, max: 1920 },
-            height: { ideal: 720, max: 1080 },
+            width: { ideal: 1920, max: 1920 },
+            height: { ideal: 1080, max: 1080 },
             facingMode: currentCamera
           }
         },
         // Fallback to type-based camera selection
         {
           video: {
-            width: { ideal: 1280, max: 1920 },
-            height: { ideal: 720, max: 1080 },
+            width: { ideal: 1920, max: 1920 },
+            height: { ideal: 1080, max: 1080 },
             facingMode: type === 'face' ? 'user' : 'environment'
           }
         },
         // Fallback to any camera without facing mode constraint
         {
           video: {
-            width: { ideal: 1280, max: 1920 },
-            height: { ideal: 720, max: 1080 }
+            width: { ideal: 1920, max: 1920 },
+            height: { ideal: 1080, max: 1080 }
           }
         },
         // Final fallback with minimal constraints
@@ -167,11 +167,14 @@ export default function WebCamera({ onPhotoTaken, type }: WebCameraProps) {
 
         // Create new video element
         const videoElement = document.createElement('video');
-        videoElement.style.width = '100%';
-        videoElement.style.height = '100%';
+        videoElement.style.width = '100vw';
+        videoElement.style.height = '100vh';
         videoElement.style.objectFit = 'cover';
         videoElement.style.backgroundColor = '#000000';
-        videoElement.style.borderRadius = '8px';
+        videoElement.style.position = 'absolute';
+        videoElement.style.top = '0';
+        videoElement.style.left = '0';
+        videoElement.style.zIndex = '1';
         videoElement.autoplay = true;
         videoElement.playsInline = true;
         videoElement.muted = true;
@@ -333,7 +336,7 @@ export default function WebCamera({ onPhotoTaken, type }: WebCameraProps) {
   return (
     <View style={styles.container}>
       {/* Debug Panel for Mobile - Show camera states */}
-      <View style={styles.debugPanel}>
+      <View style={[styles.debugPanel, { zIndex: 10 }]}>
         <Text style={styles.debugTitle}>📱 Camera Debug Info:</Text>
         <Text style={styles.debugText}>
           • isStreaming: {isStreaming ? '✅' : '❌'} {isStreaming.toString()}
@@ -387,22 +390,21 @@ export default function WebCamera({ onPhotoTaken, type }: WebCameraProps) {
         </View>
       )}
 
-      {/* Always render video container but only show it when streaming */}
-      <View style={[styles.cameraContainer, !isStreaming && styles.hidden]}>
+      {/* Fullscreen Video Container */}
+      <View style={[styles.fullscreenCameraContainer, !isStreaming && styles.hidden]}>
         {React.createElement('div', {
           ref: videoContainerRef,
           style: {
-            width: '100%',
-            height: '100%',
-            position: 'relative',
-            borderRadius: 8,
-            overflow: 'hidden',
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            width: '100vw',
+            height: '100vh',
             backgroundColor: '#000000',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            maxHeight: '70vh',
-            minHeight: '300px',
+            zIndex: 1000,
           },
         }, 'Camera Loading...')}
 
@@ -429,7 +431,7 @@ export default function WebCamera({ onPhotoTaken, type }: WebCameraProps) {
         })}
 
         {isStreaming && (
-          <View style={styles.controls}>
+          <View style={styles.fullscreenControls}>
             {/* Camera Switch Button */}
             <TouchableOpacity
               style={styles.switchButton}
@@ -528,47 +530,49 @@ const styles = StyleSheet.create({
     color: '#374151',
     textAlign: 'center',
   },
-  cameraContainer: {
-    position: 'relative',
-    width: '100%',
-    height: 400,
-    maxHeight: '60vh' as any,
-    minHeight: 300,
-    borderRadius: 12,
-    overflow: 'hidden',
+  fullscreenCameraContainer: {
+    position: 'fixed' as any,
+    top: 0,
+    left: 0,
+    width: '100vw' as any,
+    height: '100vh' as any,
+    zIndex: 1000,
     backgroundColor: '#000000',
   },
-  controls: {
+  fullscreenControls: {
     position: 'absolute',
     bottom: 0,
     left: 0,
     right: 0,
     backgroundColor: 'rgba(0, 0, 0, 0.8)' as any,
-    paddingVertical: 16,
+    paddingVertical: 20,
     paddingHorizontal: 16,
     flexDirection: 'column',
     alignItems: 'center',
+    zIndex: 10,
   },
   captureButton: {
     backgroundColor: '#10b981',
-    paddingHorizontal: 24,
-    paddingVertical: 12,
-    borderRadius: 8,
+    paddingHorizontal: 32,
+    paddingVertical: 16,
+    borderRadius: 50,
+    marginHorizontal: 8,
   },
   captureButtonText: {
     color: '#ffffff',
-    fontSize: 16,
+    fontSize: 18,
     fontWeight: '600',
   },
   cancelButton: {
     backgroundColor: '#dc2626',
-    paddingHorizontal: 24,
-    paddingVertical: 12,
-    borderRadius: 8,
+    paddingHorizontal: 32,
+    paddingVertical: 16,
+    borderRadius: 50,
+    marginHorizontal: 8,
   },
   cancelButtonText: {
     color: '#ffffff',
-    fontSize: 16,
+    fontSize: 18,
     fontWeight: '600',
   },
   permissionDenied: {
@@ -607,6 +611,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: 16,
     marginBottom: 20,
+    zIndex: 1,
   },
   optionButton: {
     flex: 1,
@@ -644,6 +649,7 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     borderWidth: 1,
     borderColor: '#d1d5db',
+    position: 'relative',
   },
   debugTitle: {
     fontSize: 14,
@@ -678,23 +684,24 @@ const styles = StyleSheet.create({
   },
   switchButton: {
     backgroundColor: 'rgba(255, 255, 255, 0.2)' as any,
-    paddingVertical: 8,
-    paddingHorizontal: 16,
-    borderRadius: 20,
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+    borderRadius: 25,
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.3)' as any,
+    marginBottom: 16,
   },
   switchButtonText: {
     color: '#ffffff',
-    fontSize: 14,
+    fontSize: 16,
     fontWeight: '600',
     textAlign: 'center',
   },
   mainControls: {
     flexDirection: 'row',
-    justifyContent: 'space-around',
+    justifyContent: 'center',
+    alignItems: 'center',
     width: '100%',
-    marginTop: 12,
   },
   guideOverlay: {
     position: 'absolute',
@@ -704,47 +711,47 @@ const styles = StyleSheet.create({
     bottom: 0,
     alignItems: 'center',
     justifyContent: 'center',
-    zIndex: 10,
+    zIndex: 5,
     paddingHorizontal: 20,
     paddingVertical: 20,
   } as ViewStyle,
   rectangleGuide: {
     width: '85%',
-    height: '70%',
-    maxWidth: 320,
-    maxHeight: 240,
-    borderWidth: 2,
+    height: '60%',
+    maxWidth: 400,
+    maxHeight: 300,
+    borderWidth: 3,
     borderColor: '#10b981',
     borderStyle: 'dashed',
-    borderRadius: 12,
+    borderRadius: 16,
     alignItems: 'center',
     justifyContent: 'flex-end',
-    paddingBottom: 15,
+    paddingBottom: 20,
     alignSelf: 'center',
   },
   ovalGuide: {
-    width: '75%',
-    height: '80%',
-    maxWidth: 280,
-    maxHeight: 350,
-    borderWidth: 2,
+    width: '70%',
+    height: '50%',
+    maxWidth: 350,
+    maxHeight: 450,
+    borderWidth: 3,
     borderColor: '#10b981',
     borderStyle: 'dashed',
-    borderRadius: 140,
+    borderRadius: 175,
     alignItems: 'center',
     justifyContent: 'flex-end',
-    paddingBottom: 30,
+    paddingBottom: 40,
     alignSelf: 'center',
   },
   guideText: {
     color: '#ffffff',
-    fontSize: 12,
+    fontSize: 14,
     fontWeight: '600',
     textAlign: 'center',
     backgroundColor: 'rgba(0, 0, 0, 0.8)' as any,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
     overflow: 'hidden',
     maxWidth: '90%',
   },
