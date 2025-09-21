@@ -86,48 +86,31 @@ export default function VerificationUpload({
 
   const showImagePickerOptions = (type: 'id' | 'face') => {
     console.log('Platform.OS:', Platform.OS);
+    console.log('showImagePickerOptions called for type:', type);
 
-    // For web platforms, show web-specific options
+    // For web platforms, directly show options without Alert
     if (Platform.OS === 'web' || typeof window !== 'undefined') {
-      Alert.alert(
-        `${type === 'id' ? 'ID Document' : 'Face Photo'}`,
-        'Choose how you want to add your photo',
-        [
-          {
-            text: 'Use Web Camera',
-            onPress: () => {
-              console.log('Setting showWebCamera to:', type);
-              setShowWebCamera(type);
-            },
-          },
-          {
-            text: 'Select File',
-            onPress: () => {
-              console.log('Setting showFileInput to:', type);
-              setShowFileInput(type);
-            },
-          },
-          { text: 'Cancel', style: 'cancel' },
-        ]
-      );
-    } else {
-      // For mobile platforms, show mobile-specific options
-      Alert.alert(
-        `${type === 'id' ? 'ID Document' : 'Face Photo'}`,
-        'Choose how you want to add your photo',
-        [
-          {
-            text: 'Take Photo',
-            onPress: () => takePhoto(type),
-          },
-          {
-            text: 'Choose from Gallery',
-            onPress: () => pickImage(type),
-          },
-          { text: 'Cancel', style: 'cancel' },
-        ]
-      );
+      console.log('Web platform detected, setting showWebCamera directly');
+      setShowWebCamera(type);
+      return;
     }
+
+    // For mobile platforms, show mobile-specific options
+    Alert.alert(
+      `${type === 'id' ? 'ID Document' : 'Face Photo'}`,
+      'Choose how you want to add your photo',
+      [
+        {
+          text: 'Take Photo',
+          onPress: () => takePhoto(type),
+        },
+        {
+          text: 'Choose from Gallery',
+          onPress: () => pickImage(type),
+        },
+        { text: 'Cancel', style: 'cancel' },
+      ]
+    );
   };
 
   const takePhoto = async (type: 'id' | 'face') => {

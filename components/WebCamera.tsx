@@ -115,17 +115,42 @@ export default function WebCamera({ onPhotoTaken, type }: WebCameraProps) {
 
   return (
     <View style={styles.container}>
-      {!isStreaming ? (
+      <View style={styles.optionsContainer}>
         <TouchableOpacity
-          style={styles.startButton}
+          style={styles.optionButton}
           onPress={startCamera}
           activeOpacity={0.8}
         >
-          <Text style={styles.startButtonText}>
-            📷 Open Camera for {type === 'id' ? 'ID Document' : 'Face Photo'}
+          <Text style={styles.optionButtonText}>
+            📷 Use Camera
           </Text>
         </TouchableOpacity>
-      ) : (
+
+        <TouchableOpacity
+          style={styles.optionButton}
+          onPress={() => {
+            // Create file input dynamically
+            const input = document.createElement('input');
+            input.type = 'file';
+            input.accept = 'image/*';
+            input.onchange = (e: any) => {
+              const file = e.target.files?.[0];
+              if (file) {
+                const photoUri = URL.createObjectURL(file);
+                onPhotoTaken(photoUri);
+              }
+            };
+            input.click();
+          }}
+          activeOpacity={0.8}
+        >
+          <Text style={styles.optionButtonText}>
+            📁 Choose File
+          </Text>
+        </TouchableOpacity>
+      </View>
+
+      {isStreaming && (
         <View style={styles.cameraContainer}>
           {React.createElement('video', {
             ref: videoRef,
@@ -156,6 +181,7 @@ export default function WebCamera({ onPhotoTaken, type }: WebCameraProps) {
           </View>
         </View>
       )}
+
 
       {hasPermission === false && (
         <View style={styles.permissionDenied}>
@@ -299,6 +325,25 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#6b7280',
     marginBottom: 10,
+    textAlign: 'center',
+  },
+  optionsContainer: {
+    flexDirection: 'row',
+    gap: 16,
+    marginBottom: 20,
+  },
+  optionButton: {
+    flex: 1,
+    backgroundColor: '#3b82f6',
+    paddingVertical: 16,
+    paddingHorizontal: 24,
+    borderRadius: 12,
+    alignItems: 'center',
+  },
+  optionButtonText: {
+    color: '#ffffff',
+    fontSize: 16,
+    fontWeight: '600',
     textAlign: 'center',
   },
 });
