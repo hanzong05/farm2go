@@ -63,24 +63,50 @@ export default function VerificationStatusScreen() {
 
   const loadVerificationData = async (userId: string) => {
     try {
+      // Get the latest verification submission for accurate data
       const { data, error } = await supabase
-        .from('profiles')
+        .from('verification_submissions')
         .select(`
-          verification_status,
-          verification_submitted_at,
-          verification_approved_at,
-          verification_rejected_at,
-          verification_admin_notes,
+          status,
+          submitted_at,
+          reviewed_at,
+          admin_notes,
           id_document_url,
           face_photo_url,
           id_document_type
         `)
-        .eq('id', userId)
-        .single();
+        .eq('user_id', userId)
+        .order('submitted_at', { ascending: false })
+        .limit(1);
 
       if (error) throw error;
 
-      setVerificationData(data);
+      if (data && data.length > 0) {
+        const submission = data[0];
+        // Map verification_submissions fields to the expected format
+        setVerificationData({
+          verification_status: submission.status,
+          verification_submitted_at: submission.submitted_at,
+          verification_approved_at: submission.status === 'approved' ? submission.reviewed_at : null,
+          verification_rejected_at: submission.status === 'rejected' ? submission.reviewed_at : null,
+          verification_admin_notes: submission.admin_notes,
+          id_document_url: submission.id_document_url,
+          face_photo_url: submission.face_photo_url,
+          id_document_type: submission.id_document_type,
+        });
+      } else {
+        // No verification submission found
+        setVerificationData({
+          verification_status: 'not_submitted',
+          verification_submitted_at: null,
+          verification_approved_at: null,
+          verification_rejected_at: null,
+          verification_admin_notes: null,
+          id_document_url: null,
+          face_photo_url: null,
+          id_document_type: null,
+        });
+      }
     } catch (error) {
       console.error('Error loading verification data:', error);
       throw error;

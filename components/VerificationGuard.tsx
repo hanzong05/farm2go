@@ -35,15 +35,20 @@ export default function VerificationGuard({
 
   const checkVerificationStatus = async () => {
     try {
+      // Check verification_submissions table for the most accurate status
       const { data, error } = await supabase
-        .from('profiles')
-        .select('verification_status')
-        .eq('id', userId)
-        .single();
+        .from('verification_submissions')
+        .select('status')
+        .eq('user_id', userId)
+        .order('submitted_at', { ascending: false })
+        .limit(1);
 
       if (error) throw error;
 
-      setVerificationStatus(data?.verification_status || 'not_submitted');
+      // If user has no verification submission, status is 'not_submitted'
+      // Otherwise, use the latest submission status
+      const latestSubmission = data && data.length > 0 ? data[0] : null;
+      setVerificationStatus(latestSubmission?.status || 'not_submitted');
     } catch (error) {
       console.error('Error checking verification status:', error);
       Alert.alert('Error', 'Failed to check verification status');

@@ -315,20 +315,8 @@ export default function VerificationUpload({
         throw error;
       }
 
-      // Update profile verification status
-      const profileUpdate: ProfileUpdate = {
-        verification_status: 'pending',
-        verification_submitted_at: new Date().toISOString(),
-      };
-
-      const { error: profileError } = await (supabase
-        .from('profiles') as any)
-        .update(profileUpdate)
-        .eq('id', userId);
-
-      if (profileError) {
-        throw profileError;
-      }
+      // Note: We no longer update the profiles table directly here.
+      // The verification_submissions table is now the source of truth.
 
       Swal.fire({
         title: 'Verification Submitted!',
