@@ -18,6 +18,7 @@ export default function WebCamera({ onPhotoTaken, type }: WebCameraProps) {
   const [isInitializing, setIsInitializing] = useState(false);
   const [lastError, setLastError] = useState<string>('');
   const [currentCamera, setCurrentCamera] = useState<'user' | 'environment'>('environment');
+  const [actualCamera, setActualCamera] = useState<'user' | 'environment' | 'unknown'>('unknown');
   const [showDebug, setShowDebug] = useState(false);
 
   // Debug logging for state changes
@@ -65,6 +66,7 @@ export default function WebCamera({ onPhotoTaken, type }: WebCameraProps) {
     setIsStreaming(false);
     setIsInitializing(false);
     setShowPermissionDenied(false);
+    setActualCamera('unknown');
     console.log('📹 Camera stopped');
   }, []);
 
@@ -102,6 +104,12 @@ export default function WebCamera({ onPhotoTaken, type }: WebCameraProps) {
       }
 
       console.log(`📷 Attempting to use ${currentCamera} camera (${videoDevices.length} devices available)`);
+      console.log('📷 Current camera state:', {
+        currentCamera,
+        type,
+        isInitializing,
+        isStreaming
+      });
 
       // Try different constraint sets, starting with the most specific
       const constraintSets: MediaStreamConstraints[] = [
@@ -162,12 +170,27 @@ export default function WebCamera({ onPhotoTaken, type }: WebCameraProps) {
           const videoTrack = stream.getVideoTracks()[0];
           if (videoTrack) {
             const settings = videoTrack.getSettings();
+            const actualFacingMode = settings.facingMode || 'unknown';
             console.log('✅ Camera stream obtained:', {
-              facingMode: settings.facingMode || 'unknown',
+              requestedFacingMode: currentCamera,
+              actualFacingMode: actualFacingMode,
+              matchesRequest: actualFacingMode === currentCamera,
               width: settings.width,
               height: settings.height,
               deviceId: settings.deviceId?.substring(0, 8) + '...' || 'unknown'
             });
+
+            // Update actual camera state
+            if (actualFacingMode === 'user' || actualFacingMode === 'environment') {
+              setActualCamera(actualFacingMode);
+            } else {
+              setActualCamera('unknown');
+            }
+
+            // If we didn't get the requested camera, log a warning
+            if (actualFacingMode !== currentCamera && actualFacingMode !== 'unknown') {
+              console.warn(`⚠️ Requested ${currentCamera} camera but got ${actualFacingMode} camera`);
+            }
           }
           break;
         } catch (error) {
@@ -302,18 +325,27 @@ export default function WebCamera({ onPhotoTaken, type }: WebCameraProps) {
   }, [isWebPlatform, type, currentCamera]);
 
   const switchCamera = useCallback(async () => {
-    if (!isStreaming) return;
+    if (!isStreaming || isInitializing) return;
 
     const newCamera = currentCamera === 'user' ? 'environment' : 'user';
     console.log('📱 Switching camera from', currentCamera, 'to', newCamera);
 
-    // Update camera state first
-    setCurrentCamera(newCamera);
+    try {
+      // Stop current camera first
+      stopCamera();
 
-    // Restart camera with new settings
-    stopCamera();
-    setTimeout(() => startCamera(), 200);
-  }, [currentCamera, isStreaming, stopCamera, startCamera]);
+      // Update camera state
+      setCurrentCamera(newCamera);
+
+      // Wait a bit longer before restarting to ensure cleanup is complete
+      setTimeout(() => {
+        console.log('📱 Starting camera with new setting:', newCamera);
+        startCamera();
+      }, 500);
+    } catch (error) {
+      console.error('Error switching camera:', error);
+    }
+  }, [currentCamera, isStreaming, isInitializing, stopCamera, startCamera]);
 
   const takePhoto = useCallback(() => {
     if (!isWebPlatform || !videoRef.current || !canvasRef.current) return;
@@ -400,7 +432,13 @@ export default function WebCamera({ onPhotoTaken, type }: WebCameraProps) {
             • Initializing: {isInitializing ? '⏳ Yes' : '✅ No'}
           </Text>
           <Text style={styles.debugText}>
-            • Camera: {currentCamera === 'user' ? '📷 Front' : '📷 Back'}
+            • Requested: {currentCamera === 'user' ? '📷 Front (user)' : '📷 Back (environment)'}
+          </Text>
+          <Text style={styles.debugText}>
+            • Actual: {actualCamera === 'user' ? '📷 Front' : actualCamera === 'environment' ? '📷 Back' : '❓ Unknown'}
+          </Text>
+          <Text style={styles.debugText}>
+            • Type: {type === 'face' ? '👤 Face' : '📄 ID'} verification
           </Text>
           {lastError && (
             <Text style={styles.debugTextError}>
@@ -541,7 +579,7 @@ export default function WebCamera({ onPhotoTaken, type }: WebCameraProps) {
             >
               <Text style={styles.controlIcon}>🔄</Text>
               <Text style={styles.switchButtonText}>
-                Switch to {currentCamera === 'user' ? 'Back' : 'Front'}
+                {currentCamera === 'user' ? 'Switch to Back' : 'Switch to Front'}
               </Text>
             </TouchableOpacity>
           </View>
