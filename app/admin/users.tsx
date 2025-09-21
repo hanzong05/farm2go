@@ -41,7 +41,7 @@ interface OrderResponse {
   id: string;
   buyer_id: string;
   farmer_id: string;
-  total_amount: number;
+  total_price: number;
   quantity: number;
   status: string;
   created_at: string;
@@ -275,7 +275,7 @@ export default function AdminUsers() {
       // Fetch all delivered orders for lifetime total
       const { data: allOrders, error: allOrdersError } = await supabase
         .from('orders')
-        .select('total_amount')
+        .select('total_price')
         .eq('buyer_id', userId)
         .in('status', ['delivered']);
 
@@ -286,20 +286,20 @@ export default function AdminUsers() {
       // Fetch orders for this user (last 7 days)
       const { data: orders, error } = await supabase
         .from('orders')
-        .select('total_amount, created_at, status')
+        .select('total_price, created_at, status')
         .eq('buyer_id', userId)
         .gte('created_at', startDate.toISOString())
         .lte('created_at', endDate.toISOString())
         .in('status', ['delivered']);
 
       type OrderData = {
-        total_amount: number;
+        total_price: number;
         created_at: string;
         status: string;
       };
 
       type AllOrderData = {
-        total_amount: number;
+        total_price: number;
       };
 
       if (error) {
@@ -323,7 +323,7 @@ export default function AdminUsers() {
           day: 'numeric'
         });
         if (salesByDate.hasOwnProperty(orderDate)) {
-          salesByDate[orderDate] += order.total_amount || 0;
+          salesByDate[orderDate] += order.total_price || 0;
         }
       });
 
@@ -334,7 +334,7 @@ export default function AdminUsers() {
       }));
 
       const totalSales = chartData.reduce((sum, day) => sum + day.amount, 0);
-      const totalLifetime = (allOrders as AllOrderData[] | null)?.reduce((sum, order) => sum + (order.total_amount || 0), 0) || 0;
+      const totalLifetime = (allOrders as AllOrderData[] | null)?.reduce((sum, order) => sum + (order.total_price || 0), 0) || 0;
 
       return {
         totalSales,
@@ -1447,7 +1447,7 @@ export default function AdminUsers() {
                     <Text style={styles.itemDetail}>
                       Buyer: {order.buyer_profile?.first_name} {order.buyer_profile?.last_name}
                     </Text>
-                    <Text style={styles.itemDetail}>Total: {formatCurrency(order.total_amount)}</Text>
+                    <Text style={styles.itemDetail}>Total: {formatCurrency(order.total_price)}</Text>
                     <Text style={styles.itemDetail}>
                       Date: {new Date(order.created_at).toLocaleDateString()}
                     </Text>
@@ -1554,7 +1554,7 @@ export default function AdminUsers() {
                       </View>
                       <View style={styles.buyerOrderRightInfo}>
                         <Text style={styles.buyerOrderTotal}>TOTAL</Text>
-                        <Text style={styles.buyerOrderAmount}>{formatCurrency(order.total_amount)}</Text>
+                        <Text style={styles.buyerOrderAmount}>{formatCurrency(order.total_price)}</Text>
                       </View>
                     </View>
 
@@ -1615,7 +1615,7 @@ export default function AdminUsers() {
                       </View>
                       <View style={styles.buyerOrderRightInfo}>
                         <Text style={styles.buyerOrderTotal}>TOTAL</Text>
-                        <Text style={styles.buyerOrderAmount}>{formatCurrency(order.total_amount)}</Text>
+                        <Text style={styles.buyerOrderAmount}>{formatCurrency(order.total_price)}</Text>
                       </View>
                     </View>
 
