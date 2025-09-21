@@ -177,6 +177,11 @@ export default function VisionCamera({ onPhotoTaken, type }: VisionCameraProps) 
     console.log('📹 Stopping camera...');
     setIsActive(false);
     setIsInitializing(false);
+
+    // Clear any pending device selection to prevent race conditions
+    setTimeout(() => {
+      setSelectedDeviceId(null);
+    }, 500);
   }, []);
 
   const switchCamera = useCallback(async () => {
@@ -245,11 +250,14 @@ export default function VisionCamera({ onPhotoTaken, type }: VisionCameraProps) 
       // Convert file path to URI format
       const photoUri = Platform.OS === 'ios' ? photo.path : `file://${photo.path}`;
 
-      console.log('📸 Calling onPhotoTaken with URI:', photoUri);
-      onPhotoTaken(photoUri);
-
-      console.log('📸 Stopping camera after photo taken');
+      console.log('📸 Stopping camera before calling onPhotoTaken');
       stopCamera();
+
+      // Add a small delay to ensure camera cleanup completes before navigation
+      setTimeout(() => {
+        console.log('📸 Calling onPhotoTaken with URI:', photoUri);
+        onPhotoTaken(photoUri);
+      }, 300);
 
     } catch (error) {
       console.error('❌ Error taking photo:', error);

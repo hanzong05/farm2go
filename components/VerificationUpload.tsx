@@ -170,13 +170,24 @@ export default function VerificationUpload({
       currentPhotoType: showVisionCamera
     });
 
-    if (showVisionCamera) {
-      console.log('📸 Updating verification data for type:', showVisionCamera);
-      updateVerificationData(showVisionCamera, photoUri);
-      console.log('📸 Setting showVisionCamera to null to return to main view');
+    try {
+      if (showVisionCamera) {
+        console.log('📸 Updating verification data for type:', showVisionCamera);
+        updateVerificationData(showVisionCamera, photoUri);
+
+        // Add a small delay before setting showVisionCamera to null
+        // to ensure the photo URI is properly processed
+        setTimeout(() => {
+          console.log('📸 Setting showVisionCamera to null to return to main view');
+          setShowVisionCamera(null);
+        }, 100);
+      } else {
+        console.warn('📸 No showVisionCamera state, cannot process photo');
+      }
+    } catch (error) {
+      console.error('📸 Error handling vision camera photo:', error);
+      Alert.alert('Error', 'Failed to process photo. Please try again.');
       setShowVisionCamera(null);
-    } else {
-      console.warn('📸 No showVisionCamera state, cannot process photo');
     }
   };
 
@@ -274,7 +285,15 @@ export default function VerificationUpload({
       Alert.alert(
         'Verification Submitted',
         'Your verification documents have been submitted successfully. You will be notified once an admin reviews your submission.',
-        [{ text: 'OK', onPress: onVerificationSubmitted }]
+        [{
+          text: 'OK',
+          onPress: () => {
+            // Add a small delay to ensure alert dismisses cleanly before navigation
+            setTimeout(() => {
+              onVerificationSubmitted();
+            }, 200);
+          }
+        }]
       );
     } catch (error) {
       console.error('Error submitting verification:', error);

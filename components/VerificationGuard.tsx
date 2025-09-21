@@ -63,12 +63,16 @@ export default function VerificationGuard({
   };
 
   const handleVerificationSubmitted = () => {
-    setShowUpload(false);
-    setVerificationStatus('pending');
-    Alert.alert(
-      'Verification Submitted',
-      'Your verification has been submitted and is pending admin approval.',
-    );
+    try {
+      setShowUpload(false);
+      setVerificationStatus('pending');
+      // Add success feedback without immediately showing another alert
+      // since the VerificationUpload component already shows one
+      console.log('✅ Verification submitted successfully, status updated to pending');
+    } catch (error) {
+      console.error('Error handling verification submission:', error);
+      Alert.alert('Error', 'Failed to update verification status. Please refresh the page.');
+    }
   };
 
   if (loading) {

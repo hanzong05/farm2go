@@ -160,7 +160,7 @@ export default function AdminVerificationsScreen() {
     try {
       setProcessing(true);
 
-      const { error } = await supabase
+      const { error } = await (supabase as any)
         .from('verification_submissions')
         .update({
           status: action === 'approve' ? 'approved' : 'rejected',
