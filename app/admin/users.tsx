@@ -272,12 +272,12 @@ export default function AdminUsers() {
       const startDate = new Date();
       startDate.setDate(endDate.getDate() - 7); // Last 7 days
 
-      // Fetch all completed orders for lifetime total
+      // Fetch all delivered orders for lifetime total
       const { data: allOrders, error: allOrdersError } = await supabase
         .from('orders')
         .select('total_amount')
         .eq('buyer_id', userId)
-        .in('status', ['completed', 'delivered']);
+        .in('status', ['delivered']);
 
       if (allOrdersError) {
         console.error(`Error fetching all orders for user ${userId}:`, allOrdersError);
@@ -290,7 +290,7 @@ export default function AdminUsers() {
         .eq('buyer_id', userId)
         .gte('created_at', startDate.toISOString())
         .lte('created_at', endDate.toISOString())
-        .in('status', ['completed', 'delivered']);
+        .in('status', ['delivered']);
 
       type OrderData = {
         total_amount: number;

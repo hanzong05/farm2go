@@ -50,7 +50,7 @@ interface Sale {
   id: string;
   buyer_id: string;
   total_amount: number;
-  status: 'completed';
+  status: 'delivered';
   created_at: string;
   delivery_date: string | null;
   buyer_profile?: {
@@ -167,7 +167,7 @@ export default function FarmerSalesHistoryScreen() {
           )
         `)
         .in('id', orderIds)
-        .eq('status', 'completed')
+        .eq('status', 'delivered')
         .order('created_at', { ascending: false });
 
       if (ordersError) throw ordersError;
@@ -194,7 +194,7 @@ export default function FarmerSalesHistoryScreen() {
           id: order.id,
           buyer_id: order.buyer_id,
           total_amount: farmerRevenue, // Override with farmer's actual revenue
-          status: 'completed' as const,
+          status: 'delivered' as const,
           created_at: order.created_at,
           delivery_date: order.delivery_date,
           buyer_profile: order.profiles ? {

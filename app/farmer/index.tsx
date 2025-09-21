@@ -106,7 +106,7 @@ export default function FarmerDashboard() {
         .from('orders')
         .select('total_price')
         .eq('farmer_id', farmerId)
-        .in('status', ['completed', 'delivered'])
+        .in('status', ['delivered'])
         .gte('created_at', firstDayOfMonth.toISOString());
 
       const monthlyRevenue = monthlyOrders?.reduce((sum: number, order: any) => {

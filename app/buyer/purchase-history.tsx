@@ -120,7 +120,7 @@ export default function BuyerPurchaseHistoryScreen() {
           )
         `)
         .eq('buyer_id', buyerId)
-        .eq('status', 'completed')
+        .eq('status', 'delivered')
         .order('created_at', { ascending: false });
 
       if (ordersError) throw ordersError;
