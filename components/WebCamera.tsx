@@ -19,6 +19,8 @@ export default function WebCamera({ onPhotoTaken, type }: WebCameraProps) {
   const [lastError, setLastError] = useState<string>('');
   const [currentCamera, setCurrentCamera] = useState<'user' | 'environment'>('environment');
   const [actualCamera, setActualCamera] = useState<'user' | 'environment' | 'unknown'>('unknown');
+  const [availableDevices, setAvailableDevices] = useState<MediaDeviceInfo[]>([]);
+  const [selectedDeviceId, setSelectedDeviceId] = useState<string | null>(null);
   const [showDebug, setShowDebug] = useState(false);
 
   // Debug logging for state changes
@@ -67,7 +69,67 @@ export default function WebCamera({ onPhotoTaken, type }: WebCameraProps) {
     setIsInitializing(false);
     setShowPermissionDenied(false);
     setActualCamera('unknown');
+    setSelectedDeviceId(null);
     console.log('📹 Camera stopped');
+  }, []);
+
+  const findBestCameraDevice = useCallback((devices: MediaDeviceInfo[], facingMode: 'user' | 'environment'): string | null => {
+    console.log('🔍 Finding best camera device for facingMode:', facingMode);
+    console.log('🔍 Available devices:', devices.map(d => ({
+      deviceId: d.deviceId.substring(0, 8) + '...',
+      label: d.label || 'Unnamed Camera',
+      kind: d.kind
+    })));
+
+    // Filter for video input devices only
+    const videoDevices = devices.filter(device => device.kind === 'videoinput');
+
+    if (videoDevices.length === 0) {
+      console.warn('❌ No video input devices found');
+      return null;
+    }
+
+    // For mobile devices, try to identify cameras by their labels or position
+    const backCameraKeywords = ['back', 'rear', 'environment', 'world', 'main', 'camera2', 'camera 1'];
+    const frontCameraKeywords = ['front', 'user', 'face', 'selfie', 'camera0', 'camera 0'];
+
+    if (facingMode === 'environment') {
+      // Look for back camera
+      const backCamera = videoDevices.find(device => {
+        const label = device.label.toLowerCase();
+        return backCameraKeywords.some(keyword => label.includes(keyword));
+      });
+
+      if (backCamera) {
+        console.log('✅ Found back camera:', backCamera.label);
+        return backCamera.deviceId;
+      }
+
+      // If no back camera found by label, try the last device (often the back camera)
+      if (videoDevices.length > 1) {
+        console.log('⚠️ Using last device as back camera fallback');
+        return videoDevices[videoDevices.length - 1].deviceId;
+      }
+    } else {
+      // Look for front camera
+      const frontCamera = videoDevices.find(device => {
+        const label = device.label.toLowerCase();
+        return frontCameraKeywords.some(keyword => label.includes(keyword));
+      });
+
+      if (frontCamera) {
+        console.log('✅ Found front camera:', frontCamera.label);
+        return frontCamera.deviceId;
+      }
+
+      // If no front camera found by label, use the first device (often the front camera)
+      console.log('⚠️ Using first device as front camera fallback');
+      return videoDevices[0].deviceId;
+    }
+
+    // Last resort - use any available device
+    console.log('⚠️ Using any available device as fallback');
+    return videoDevices[0].deviceId;
   }, []);
 
   const startCamera = useCallback(async () => {
@@ -99,6 +161,8 @@ export default function WebCamera({ onPhotoTaken, type }: WebCameraProps) {
         deviceId: d.deviceId.substring(0, 8) + '...'
       })));
 
+      setAvailableDevices(devices);
+
       if (videoDevices.length === 0) {
         throw new Error('No camera found on this device');
       }
@@ -111,9 +175,42 @@ export default function WebCamera({ onPhotoTaken, type }: WebCameraProps) {
         isStreaming
       });
 
-      // Try different constraint sets, starting with the most specific
-      const constraintSets: MediaStreamConstraints[] = [
-        // Try with exact facingMode first
+      // Find the best device for the requested camera
+      const targetDeviceId = selectedDeviceId || findBestCameraDevice(devices, currentCamera);
+      console.log('🎯 Target device ID:', targetDeviceId?.substring(0, 8) + '...');
+
+      if (targetDeviceId) {
+        setSelectedDeviceId(targetDeviceId);
+      }
+
+      // Try different constraint sets, starting with explicit device selection
+      const constraintSets: MediaStreamConstraints[] = [];
+
+      // If we found a specific device, try using it first
+      if (targetDeviceId) {
+        constraintSets.push(
+          // Try with exact device ID
+          {
+            video: {
+              deviceId: { exact: targetDeviceId },
+              width: { ideal: 1920, max: 1920 },
+              height: { ideal: 1080, max: 1080 }
+            }
+          },
+          // Try with ideal device ID
+          {
+            video: {
+              deviceId: { ideal: targetDeviceId },
+              width: { ideal: 1280, max: 1920 },
+              height: { ideal: 720, max: 1080 }
+            }
+          }
+        );
+      }
+
+      // Add facingMode-based constraints as fallbacks
+      constraintSets.push(
+        // Try with exact facingMode
         {
           video: {
             width: { ideal: 1920, max: 1920 },
@@ -132,14 +229,6 @@ export default function WebCamera({ onPhotoTaken, type }: WebCameraProps) {
         // Try with just facingMode
         {
           video: {
-            width: { ideal: 1920, max: 1920 },
-            height: { ideal: 1080, max: 1080 },
-            facingMode: currentCamera
-          }
-        },
-        // Try with reduced quality but specific camera
-        {
-          video: {
             width: { ideal: 1280, max: 1920 },
             height: { ideal: 720, max: 1080 },
             facingMode: currentCamera
@@ -156,7 +245,7 @@ export default function WebCamera({ onPhotoTaken, type }: WebCameraProps) {
         {
           video: true
         }
-      ];
+      );
 
       let stream: MediaStream | null = null;
       let lastError: Error | null = null;
@@ -334,8 +423,9 @@ export default function WebCamera({ onPhotoTaken, type }: WebCameraProps) {
       // Stop current camera first
       stopCamera();
 
-      // Update camera state
+      // Update camera state and reset selected device so it finds a new one
       setCurrentCamera(newCamera);
+      setSelectedDeviceId(null); // Reset so it finds the best device for new camera
 
       // Wait a bit longer before restarting to ensure cleanup is complete
       setTimeout(() => {
@@ -440,6 +530,14 @@ export default function WebCamera({ onPhotoTaken, type }: WebCameraProps) {
           <Text style={styles.debugText}>
             • Type: {type === 'face' ? '👤 Face' : '📄 ID'} verification
           </Text>
+          <Text style={styles.debugText}>
+            • Devices: {availableDevices.filter(d => d.kind === 'videoinput').length} camera(s)
+          </Text>
+          {selectedDeviceId && (
+            <Text style={styles.debugText}>
+              • Selected: {selectedDeviceId.substring(0, 8)}...
+            </Text>
+          )}
           {lastError && (
             <Text style={styles.debugTextError}>
               • Error: {lastError.split(':')[0]}
