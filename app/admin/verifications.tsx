@@ -195,7 +195,8 @@ export default function AdminVerificationsScreen() {
     try {
       setProcessing(true);
 
-      const { error } = await (supabase as any)
+      // Update verification submission
+      const { error: submissionError } = await (supabase as any)
         .from('verification_submissions')
         .update({
           status: action === 'approve' ? 'approved' : 'rejected',
@@ -205,7 +206,43 @@ export default function AdminVerificationsScreen() {
         })
         .eq('id', submission.id);
 
-      if (error) throw error;
+      if (submissionError) throw submissionError;
+
+      // Also update the profile table directly (in case trigger doesn't work)
+      if (action === 'approve') {
+        const { error: profileError } = await (supabase as any)
+          .from('profiles')
+          .update({
+            verification_status: 'approved',
+            verification_approved_at: new Date().toISOString(),
+            verification_rejected_at: null,
+            verification_admin_notes: adminNotes || null,
+            id_document_url: submission.id_document_url,
+            face_photo_url: submission.face_photo_url,
+            id_document_type: submission.id_document_type
+          })
+          .eq('id', submission.user_id);
+
+        if (profileError) {
+          console.error('Error updating profile:', profileError);
+          // Don't throw here - the submission was already updated
+        }
+      } else if (action === 'reject') {
+        const { error: profileError } = await (supabase as any)
+          .from('profiles')
+          .update({
+            verification_status: 'rejected',
+            verification_rejected_at: new Date().toISOString(),
+            verification_approved_at: null,
+            verification_admin_notes: adminNotes || null
+          })
+          .eq('id', submission.user_id);
+
+        if (profileError) {
+          console.error('Error updating profile:', profileError);
+          // Don't throw here - the submission was already updated
+        }
+      }
 
       Swal.fire({
         title: 'Success!',
