@@ -1,5 +1,5 @@
-import React, { useRef, useState, useCallback, useEffect } from 'react';
-import { View, TouchableOpacity, Text, StyleSheet, Alert, Platform, ActivityIndicator } from 'react-native';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { ActivityIndicator, Alert, Platform, StyleSheet, Text, TouchableOpacity, View, ViewStyle } from 'react-native';
 
 interface WebCameraProps {
   onPhotoTaken: (photoUri: string) => void;
@@ -7,16 +7,17 @@ interface WebCameraProps {
 }
 
 export default function WebCamera({ onPhotoTaken, type }: WebCameraProps) {
-  const videoRef = useRef<any>(null);
-  const canvasRef = useRef<any>(null);
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
-  const videoContainerRef = useRef<any>(null);
+  const videoContainerRef = useRef<HTMLDivElement | null>(null);
   const [isStreaming, setIsStreaming] = useState(false);
   const [hasPermission, setHasPermission] = useState<boolean | null>(null);
   const [showPermissionDenied, setShowPermissionDenied] = useState(false);
   const [isWebPlatform, setIsWebPlatform] = useState(false);
   const [isInitializing, setIsInitializing] = useState(false);
   const [lastError, setLastError] = useState<string>('');
+  const [currentCamera, setCurrentCamera] = useState<'user' | 'environment'>('environment');
 
   // Debug logging for state changes
   useEffect(() => {
@@ -33,6 +34,37 @@ export default function WebCamera({ onPhotoTaken, type }: WebCameraProps) {
     const webPlatform = Platform.OS === 'web' || typeof window !== 'undefined';
     console.log('WebCamera Platform.OS:', Platform.OS, 'isWebPlatform:', webPlatform);
     setIsWebPlatform(webPlatform);
+
+    // Set initial camera based on type
+    setCurrentCamera(type === 'face' ? 'user' : 'environment');
+  }, [type]);
+
+  const stopCamera = useCallback(() => {
+    console.log('📹 Stopping camera...');
+
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach(track => track.stop());
+      streamRef.current = null;
+    }
+
+    // Clean up video element
+    if (videoRef.current) {
+      videoRef.current.srcObject = null;
+      videoRef.current = null;
+    }
+
+    // Remove video element from container
+    if (videoContainerRef.current) {
+      const videoElement = videoContainerRef.current.querySelector('video');
+      if (videoElement) {
+        videoElement.remove();
+      }
+    }
+
+    setIsStreaming(false);
+    setIsInitializing(false);
+    setShowPermissionDenied(false);
+    console.log('📹 Camera stopped');
   }, []);
 
   const startCamera = useCallback(async () => {
@@ -64,8 +96,16 @@ export default function WebCamera({ onPhotoTaken, type }: WebCameraProps) {
       }
 
       // Try different constraint sets, starting with the most specific
-      const constraintSets = [
-        // Try with specific facing mode first
+      const constraintSets: MediaStreamConstraints[] = [
+        // Try with current camera selection first
+        {
+          video: {
+            width: { ideal: 1280, max: 1920 },
+            height: { ideal: 720, max: 1080 },
+            facingMode: currentCamera
+          }
+        },
+        // Fallback to type-based camera selection
         {
           video: {
             width: { ideal: 1280, max: 1920 },
@@ -86,8 +126,8 @@ export default function WebCamera({ onPhotoTaken, type }: WebCameraProps) {
         }
       ];
 
-      let stream = null;
-      let lastError = null;
+      let stream: MediaStream | null = null;
+      let lastError: Error | null = null;
 
       for (const constraints of constraintSets) {
         try {
@@ -96,7 +136,7 @@ export default function WebCamera({ onPhotoTaken, type }: WebCameraProps) {
           console.log('✅ Camera stream obtained successfully');
           break;
         } catch (error) {
-          lastError = error;
+          lastError = error as Error;
           console.warn('❌ Failed with constraints:', constraints, error);
         }
       }
@@ -221,35 +261,18 @@ export default function WebCamera({ onPhotoTaken, type }: WebCameraProps) {
       setShowPermissionDenied(shouldShowPermissionDenied);
       Alert.alert('Camera Access Error', errorMessage, [{ text: 'OK' }]);
     }
-  }, [isWebPlatform, type]);
+  }, [isWebPlatform, type, currentCamera]);
 
-  const stopCamera = useCallback(() => {
-    console.log('📹 Stopping camera...');
+  const switchCamera = useCallback(async () => {
+    if (!isStreaming) return;
 
-    if (streamRef.current) {
-      streamRef.current.getTracks().forEach(track => track.stop());
-      streamRef.current = null;
-    }
+    console.log('📱 Switching camera from', currentCamera, 'to', currentCamera === 'user' ? 'environment' : 'user');
+    setCurrentCamera(currentCamera === 'user' ? 'environment' : 'user');
 
-    // Clean up video element
-    if (videoRef.current) {
-      videoRef.current.srcObject = null;
-      videoRef.current = null;
-    }
-
-    // Remove video element from container
-    if (videoContainerRef.current) {
-      const videoElement = videoContainerRef.current.querySelector('video');
-      if (videoElement) {
-        videoElement.remove();
-      }
-    }
-
-    setIsStreaming(false);
-    setIsInitializing(false);
-    setShowPermissionDenied(false);
-    console.log('📹 Camera stopped');
-  }, []);
+    // Restart camera with new settings
+    stopCamera();
+    setTimeout(() => startCamera(), 100);
+  }, [currentCamera, isStreaming, stopCamera, startCamera]);
 
   const takePhoto = useCallback(() => {
     if (!isWebPlatform || !videoRef.current || !canvasRef.current) return;
@@ -287,6 +310,22 @@ export default function WebCamera({ onPhotoTaken, type }: WebCameraProps) {
     }
   }, [isWebPlatform, onPhotoTaken, stopCamera]);
 
+  const handleFileUpload = useCallback(() => {
+    // Create file input dynamically
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = 'image/*';
+    input.onchange = (e: Event) => {
+      const target = e.target as HTMLInputElement;
+      const file = target.files?.[0];
+      if (file) {
+        const photoUri = URL.createObjectURL(file);
+        onPhotoTaken(photoUri);
+      }
+    };
+    input.click();
+  }, [onPhotoTaken]);
+
   if (!isWebPlatform) {
     return null;
   }
@@ -320,7 +359,7 @@ export default function WebCamera({ onPhotoTaken, type }: WebCameraProps) {
 
       <View style={styles.optionsContainer}>
         <TouchableOpacity
-          style={[styles.optionButton, isInitializing && styles.optionButtonDisabled]}
+          style={isInitializing ? [styles.optionButton, styles.optionButtonDisabled] : styles.optionButton}
           onPress={startCamera}
           disabled={isInitializing}
           activeOpacity={0.8}
@@ -332,20 +371,7 @@ export default function WebCamera({ onPhotoTaken, type }: WebCameraProps) {
 
         <TouchableOpacity
           style={styles.optionButton}
-          onPress={() => {
-            // Create file input dynamically
-            const input = document.createElement('input');
-            input.type = 'file';
-            input.accept = 'image/*';
-            input.onchange = (e: any) => {
-              const file = e.target.files?.[0];
-              if (file) {
-                const photoUri = URL.createObjectURL(file);
-                onPhotoTaken(photoUri);
-              }
-            };
-            input.click();
-          }}
+          onPress={handleFileUpload}
           activeOpacity={0.8}
         >
           <Text style={styles.optionButtonText}>
@@ -375,33 +401,65 @@ export default function WebCamera({ onPhotoTaken, type }: WebCameraProps) {
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            border: '2px solid #3b82f6',
+            maxHeight: '70vh',
+            minHeight: '300px',
           },
         }, 'Camera Loading...')}
+
+        {/* Camera Guide Overlay */}
+        {isStreaming && (
+          <View style={styles.guideOverlay}>
+            {type === 'id' ? (
+              // Rectangle guide for ID
+              <View style={styles.rectangleGuide}>
+                <Text style={styles.guideText}>Position your ID within this frame</Text>
+              </View>
+            ) : (
+              // Oval guide for face
+              <View style={styles.ovalGuide}>
+                <Text style={styles.guideText}>Position your face within this oval</Text>
+              </View>
+            )}
+          </View>
+        )}
+
         {React.createElement('canvas', {
           ref: canvasRef,
           style: styles.hiddenCanvas,
         })}
+
         {isStreaming && (
           <View style={styles.controls}>
+            {/* Camera Switch Button */}
             <TouchableOpacity
-              style={styles.captureButton}
-              onPress={takePhoto}
+              style={styles.switchButton}
+              onPress={switchCamera}
               activeOpacity={0.8}
             >
-              <Text style={styles.captureButtonText}>📷 Take Photo</Text>
+              <Text style={styles.switchButtonText}>
+                🔄 {currentCamera === 'user' ? 'Back' : 'Front'}
+              </Text>
             </TouchableOpacity>
-            <TouchableOpacity
-              style={styles.cancelButton}
-              onPress={stopCamera}
-              activeOpacity={0.8}
-            >
-              <Text style={styles.cancelButtonText}>✕ Cancel</Text>
-            </TouchableOpacity>
+
+            <View style={styles.mainControls}>
+              <TouchableOpacity
+                style={styles.captureButton}
+                onPress={takePhoto}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.captureButtonText}>📷 Take Photo</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.cancelButton}
+                onPress={stopCamera}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.cancelButtonText}>✕ Cancel</Text>
+              </TouchableOpacity>
+            </View>
           </View>
         )}
       </View>
-
 
       {showPermissionDenied && (
         <View style={styles.permissionDenied}>
@@ -416,15 +474,15 @@ export default function WebCamera({ onPhotoTaken, type }: WebCameraProps) {
             <Text style={styles.retryButtonText}>Try Again</Text>
           </TouchableOpacity>
 
-          {/* Fallback file input for browsers without camera support */}
           <View style={styles.fallbackSection}>
             <Text style={styles.fallbackText}>Or select image from files:</Text>
             {React.createElement('input', {
               type: 'file',
               accept: 'image/*',
               capture: type === 'face' ? 'user' : 'environment',
-              onChange: (e: any) => {
-                const file = e.target.files?.[0];
+              onChange: (e: Event) => {
+                const target = e.target as HTMLInputElement;
+                const file = target.files?.[0];
                 if (file) {
                   const photoUri = URL.createObjectURL(file);
                   onPhotoTaken(photoUri);
@@ -474,26 +532,22 @@ const styles = StyleSheet.create({
     position: 'relative',
     width: '100%',
     height: 400,
-  },
-  video: {
-    width: '100%',
-    height: '100%',
-    objectFit: 'cover',
+    maxHeight: '70vh' as any,
+    minHeight: 300,
+    borderRadius: 12,
+    overflow: 'hidden',
     backgroundColor: '#000000',
-    borderRadius: 8,
-  } as any,
-  hiddenCanvas: {
-    display: 'none',
-  } as any,
+  },
   controls: {
     position: 'absolute',
     bottom: 0,
     left: 0,
     right: 0,
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    padding: 20,
-    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    backgroundColor: 'rgba(0, 0, 0, 0.8)' as any,
+    paddingVertical: 16,
+    paddingHorizontal: 16,
+    flexDirection: 'column',
+    alignItems: 'center',
   },
   captureButton: {
     backgroundColor: '#10b981',
@@ -611,6 +665,78 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   hidden: {
-    display: 'none',
+    position: 'absolute',
+    top: -10000,
+    left: -10000,
+    opacity: 0,
+  },
+  hiddenCanvas: {
+    position: 'absolute',
+    top: -10000,
+    left: -10000,
+    opacity: 0,
+  },
+  switchButton: {
+    backgroundColor: 'rgba(255, 255, 255, 0.2)' as any,
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.3)' as any,
+  },
+  switchButtonText: {
+    color: '#ffffff',
+    fontSize: 14,
+    fontWeight: '600',
+    textAlign: 'center',
+  },
+  mainControls: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    width: '100%',
+    marginTop: 12,
+  },
+  guideOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 10,
+  } as ViewStyle,
+  rectangleGuide: {
+    width: '80%',
+    height: '60%',
+    borderWidth: 3,
+    borderColor: '#10b981',
+    borderStyle: 'dashed',
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+    paddingBottom: 20,
+  },
+  ovalGuide: {
+    width: 250,
+    height: 320,
+    borderWidth: 3,
+    borderColor: '#10b981',
+    borderStyle: 'dashed',
+    borderRadius: 125,
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+    paddingBottom: 40,
+  },
+  guideText: {
+    color: '#ffffff',
+    fontSize: 14,
+    fontWeight: '600',
+    textAlign: 'center',
+    backgroundColor: 'rgba(0, 0, 0, 0.7)' as any,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+    overflow: 'hidden',
   },
 });
