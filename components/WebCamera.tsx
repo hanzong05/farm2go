@@ -34,6 +34,63 @@ export default function WebCamera({ onPhotoTaken, type }: WebCameraProps) {
     });
   }, [isStreaming, hasPermission, showPermissionDenied, isInitializing, isWebPlatform]);
 
+  // Test camera capabilities to validate device availability
+  const testCameraCapabilities = useCallback(async () => {
+    if (!isWebPlatform) return;
+
+    try {
+      const devices = await navigator.mediaDevices.enumerateDevices();
+      const videoDevices = devices.filter(device => device.kind === 'videoinput');
+
+      console.log('📱 Testing camera capabilities...');
+      console.log('📱 Available video devices:', videoDevices.length);
+
+      // Test if we can actually access cameras with different facingModes
+      const testResults = {
+        front: false,
+        back: false,
+        deviceCount: videoDevices.length
+      };
+
+      // Quick test for front camera
+      try {
+        const frontStream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: 'user' }
+        });
+        testResults.front = true;
+        frontStream.getTracks().forEach(track => track.stop());
+        console.log('✅ Front camera test: SUCCESS');
+      } catch (error) {
+        console.log('❌ Front camera test: FAILED');
+      }
+
+      // Quick test for back camera
+      try {
+        const backStream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: 'environment' }
+        });
+        testResults.back = true;
+        backStream.getTracks().forEach(track => track.stop());
+        console.log('✅ Back camera test: SUCCESS');
+      } catch (error) {
+        console.log('❌ Back camera test: FAILED');
+      }
+
+      console.log('📱 Camera capabilities test results:', testResults);
+
+      // If the requested camera type isn't available but the other is, log a warning
+      const requestedCamera = type === 'face' ? 'user' : 'environment';
+      if (requestedCamera === 'environment' && !testResults.back && testResults.front) {
+        console.warn('⚠️ Back camera not available, but front camera is. Consider fallback strategy.');
+      } else if (requestedCamera === 'user' && !testResults.front && testResults.back) {
+        console.warn('⚠️ Front camera not available, but back camera is. Consider fallback strategy.');
+      }
+
+    } catch (error) {
+      console.error('❌ Camera capabilities test failed:', error);
+    }
+  }, [isWebPlatform, type]);
+
   useEffect(() => {
     const webPlatform = Platform.OS === 'web' || typeof window !== 'undefined';
     console.log('WebCamera Platform.OS:', Platform.OS, 'isWebPlatform:', webPlatform);
@@ -41,7 +98,14 @@ export default function WebCamera({ onPhotoTaken, type }: WebCameraProps) {
 
     // Set initial camera based on type
     setCurrentCamera(type === 'face' ? 'user' : 'environment');
-  }, [type]);
+
+    // Test camera capabilities when component mounts
+    if (webPlatform) {
+      setTimeout(() => {
+        testCameraCapabilities();
+      }, 100);
+    }
+  }, [type, testCameraCapabilities]);
 
   const stopCamera = useCallback(() => {
     console.log('📹 Stopping camera...');
@@ -99,12 +163,13 @@ export default function WebCamera({ onPhotoTaken, type }: WebCameraProps) {
     const backCameraKeywords = [
       'back', 'rear', 'environment', 'world', 'main', 'primary',
       'camera2', 'camera 1', 'camera1', 'wide', 'telephoto',
-      'back facing', 'rear facing', 'outward', 'external'
+      'back facing', 'rear facing', 'outward', 'external',
+      '0,1,0', 'facing back'
     ];
     const frontCameraKeywords = [
       'front', 'user', 'face', 'selfie', 'facetime', 'inner',
       'camera0', 'camera 0', 'camera0', 'front facing',
-      'forward', 'internal', 'self', 'portrait'
+      'forward', 'internal', 'self', 'portrait', 'facing front'
     ];
 
     if (facingMode === 'environment') {
@@ -130,10 +195,12 @@ export default function WebCamera({ onPhotoTaken, type }: WebCameraProps) {
         return nonFrontCameras[0].deviceId;
       }
 
-      // If multiple cameras and no clear back camera found, try the last device
+      // For mobile devices, try to use device index heuristics (back camera often has higher index)
       if (videoDevices.length > 1) {
-        console.log('⚠️ Using last device as back camera fallback:', videoDevices[videoDevices.length - 1].label);
-        return videoDevices[videoDevices.length - 1].deviceId;
+        // Try the second device first (common pattern: front=0, back=1)
+        const secondDevice = videoDevices[1];
+        console.log('⚠️ Using second device as back camera (mobile heuristic):', secondDevice.label);
+        return secondDevice.deviceId;
       }
     } else {
       // Look for front camera by label
@@ -158,8 +225,8 @@ export default function WebCamera({ onPhotoTaken, type }: WebCameraProps) {
         return nonBackCameras[0].deviceId;
       }
 
-      // If multiple cameras and no clear front camera found, use the first device
-      console.log('⚠️ Using first device as front camera fallback:', videoDevices[0].label);
+      // For mobile devices, front camera is often the first device
+      console.log('⚠️ Using first device as front camera (mobile heuristic):', videoDevices[0].label);
       return videoDevices[0].deviceId;
     }
 
@@ -219,60 +286,107 @@ export default function WebCamera({ onPhotoTaken, type }: WebCameraProps) {
         setSelectedDeviceId(targetDeviceId);
       }
 
-      // Try different constraint sets, starting with explicit device selection
+      // Try different constraint sets, starting with mobile-optimized approaches
       const constraintSets: MediaStreamConstraints[] = [];
 
-      // If we found a specific device, try using it first with exact deviceId
-      if (targetDeviceId) {
+      // Check if we're on mobile (basic heuristic)
+      const isMobile = /Android|iPhone|iPad|iPod|BlackBerry|Windows Phone/i.test(navigator.userAgent);
+
+      if (isMobile) {
+        // Mobile-first constraints - start with facingMode which is more reliable on mobile
         constraintSets.push(
-          // Try with exact device ID and minimal constraints for mobile compatibility
+          // Mobile: exact facingMode only (most reliable on mobile)
           {
             video: {
-              deviceId: { exact: targetDeviceId }
+              facingMode: { exact: currentCamera }
             }
           },
-          // Try with exact device ID and basic resolution
+          // Mobile: exact facingMode with basic constraints
           {
             video: {
-              deviceId: { exact: targetDeviceId },
+              facingMode: { exact: currentCamera },
+              width: { min: 640, ideal: 1280, max: 1920 },
+              height: { min: 480, ideal: 720, max: 1080 }
+            }
+          },
+          // Mobile: ideal facingMode (allows fallback)
+          {
+            video: {
+              facingMode: { ideal: currentCamera }
+            }
+          }
+        );
+
+        // Add device-specific constraints for mobile as secondary options
+        if (targetDeviceId) {
+          constraintSets.push(
+            {
+              video: {
+                deviceId: { exact: targetDeviceId }
+              }
+            },
+            {
+              video: {
+                deviceId: { ideal: targetDeviceId },
+                facingMode: { ideal: currentCamera }
+              }
+            }
+          );
+        }
+      } else {
+        // Desktop/Web constraints - device selection more reliable
+        if (targetDeviceId) {
+          constraintSets.push(
+            // Desktop: exact device ID (most reliable on desktop)
+            {
+              video: {
+                deviceId: { exact: targetDeviceId }
+              }
+            },
+            // Desktop: exact device ID with resolution
+            {
+              video: {
+                deviceId: { exact: targetDeviceId },
+                width: { ideal: 1280 },
+                height: { ideal: 720 }
+              }
+            },
+            // Desktop: ideal device ID
+            {
+              video: {
+                deviceId: { ideal: targetDeviceId },
+                width: { ideal: 1280 },
+                height: { ideal: 720 }
+              }
+            }
+          );
+        }
+
+        // Add facingMode constraints for desktop as secondary
+        constraintSets.push(
+          {
+            video: {
+              facingMode: { exact: currentCamera }
+            }
+          },
+          {
+            video: {
+              facingMode: { exact: currentCamera },
               width: { ideal: 1280 },
               height: { ideal: 720 }
             }
           },
-          // Try with ideal device ID
           {
             video: {
-              deviceId: { ideal: targetDeviceId },
-              width: { ideal: 1280 },
-              height: { ideal: 720 }
+              facingMode: { ideal: currentCamera }
             }
           }
         );
       }
 
-      // Add facingMode-based constraints as fallbacks
+      // Universal fallbacks for both mobile and desktop
       constraintSets.push(
-        // Try with exact facingMode only (best for mobile switching)
-        {
-          video: {
-            facingMode: { exact: currentCamera }
-          }
-        },
-        // Try with exact facingMode and basic resolution
-        {
-          video: {
-            facingMode: { exact: currentCamera },
-            width: { ideal: 1280 },
-            height: { ideal: 720 }
-          }
-        },
-        // Try with ideal facingMode
-        {
-          video: {
-            facingMode: { ideal: currentCamera }
-          }
-        },
-        // Try with just facingMode
+        // Basic constraints with facingMode
         {
           video: {
             width: { ideal: 1280 },
@@ -280,14 +394,21 @@ export default function WebCamera({ onPhotoTaken, type }: WebCameraProps) {
             facingMode: currentCamera
           }
         },
-        // Fallback to any camera with basic quality
+        // Basic quality fallback
         {
           video: {
             width: { ideal: 1280 },
             height: { ideal: 720 }
           }
         },
-        // Final fallback with minimal constraints
+        // Minimal constraints fallback
+        {
+          video: {
+            width: { min: 320 },
+            height: { min: 240 }
+          }
+        },
+        // Last resort - any video
         {
           video: true
         }
@@ -493,10 +614,31 @@ export default function WebCamera({ onPhotoTaken, type }: WebCameraProps) {
         }
 
         // Start the camera with new settings
-        startCamera();
-      }, 300);
+        try {
+          await startCamera();
+        } catch (startError) {
+          console.error('Failed to start camera after switch:', startError);
+          // If switching fails, try to go back to the previous camera
+          console.log('📱 Attempting to revert to previous camera...');
+          setCurrentCamera(currentCamera);
+          setSelectedDeviceId(null);
+
+          setTimeout(async () => {
+            try {
+              await startCamera();
+            } catch (revertError) {
+              console.error('Failed to revert camera:', revertError);
+              // If everything fails, show permission denied screen
+              setShowPermissionDenied(true);
+              setLastError('Camera switching failed. Please try refreshing the page.');
+            }
+          }, 300);
+        }
+      }, 500); // Increased delay for better mobile compatibility
     } catch (error) {
       console.error('Error switching camera:', error);
+      setLastError('Camera switch failed');
+      setShowPermissionDenied(true);
     }
   }, [currentCamera, isStreaming, isInitializing, stopCamera, startCamera, findBestCameraDevice]);
 
@@ -589,6 +731,9 @@ export default function WebCamera({ onPhotoTaken, type }: WebCameraProps) {
           </Text>
           <Text style={styles.debugText}>
             • Actual: {actualCamera === 'user' ? '📷 Front' : actualCamera === 'environment' ? '📷 Back' : '❓ Unknown'}
+          </Text>
+          <Text style={styles.debugText}>
+            • Match: {actualCamera === currentCamera ? '✅ Yes' : actualCamera === 'unknown' ? '❓ Unknown' : '❌ No'}
           </Text>
           <Text style={styles.debugText}>
             • Type: {type === 'face' ? '👤 Face' : '📄 ID'} verification
@@ -697,6 +842,18 @@ export default function WebCamera({ onPhotoTaken, type }: WebCameraProps) {
       {/* Camera Guide Overlay */}
       {isStreaming && (
         <View style={styles.guideOverlay}>
+          {/* Camera mismatch warning */}
+          {actualCamera !== 'unknown' && actualCamera !== currentCamera && (
+            <View style={styles.cameraWarning}>
+              <Text style={styles.warningText}>
+                ⚠️ Using {actualCamera === 'user' ? 'front' : 'back'} camera instead of {currentCamera === 'user' ? 'front' : 'back'} camera
+              </Text>
+              <TouchableOpacity style={styles.warningButton} onPress={switchCamera}>
+                <Text style={styles.warningButtonText}>Switch Camera</Text>
+              </TouchableOpacity>
+            </View>
+          )}
+
           {type === 'id' ? (
             // Rectangle guide for ID
             <View style={styles.rectangleGuide}>
@@ -1273,5 +1430,39 @@ const styles = StyleSheet.create({
     top: -10000,
     left: -10000,
     opacity: 0,
+  },
+  cameraWarning: {
+    position: 'absolute',
+    top: 60,
+    left: 20,
+    right: 20,
+    backgroundColor: 'rgba(251, 146, 60, 0.95)',
+    borderRadius: 12,
+    padding: 16,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    borderWidth: 2,
+    borderColor: '#f59e0b',
+  },
+  warningText: {
+    color: '#ffffff',
+    fontSize: 14,
+    fontWeight: '600',
+    textAlign: 'center',
+    marginBottom: 12,
+  },
+  warningButton: {
+    backgroundColor: '#ffffff',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 8,
+  },
+  warningButtonText: {
+    color: '#f59e0b',
+    fontSize: 14,
+    fontWeight: '600',
   },
 });
