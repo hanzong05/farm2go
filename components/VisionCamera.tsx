@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Alert, Platform, StyleSheet, Text, TouchableOpacity, View, ViewStyle } from 'react-native';
 
 // Conditionally import vision-camera only on native platforms
-let Camera: any, useCameraDevice: any, useCameraPermission: any;
+let Camera: any, useCameraDevice: any, useCameraPermission: any, useCameraDevices: any;
 
 if (Platform.OS === 'ios' || Platform.OS === 'android') {
   try {
@@ -10,6 +10,7 @@ if (Platform.OS === 'ios' || Platform.OS === 'android') {
     Camera = visionCamera.Camera;
     useCameraDevice = visionCamera.useCameraDevice;
     useCameraPermission = visionCamera.useCameraPermission;
+    useCameraDevices = visionCamera.useCameraDevices;
   } catch (error) {
     console.warn('Failed to import react-native-vision-camera:', error);
   }
@@ -29,13 +30,22 @@ export default function VisionCamera({ onPhotoTaken, type }: VisionCameraProps) 
   );
   const [showPermissionDenied, setShowPermissionDenied] = useState(false);
   const [isNativePlatform, setIsNativePlatform] = useState(false);
+  const [availableDevices, setAvailableDevices] = useState<any[]>([]);
+  const [selectedDeviceId, setSelectedDeviceId] = useState<string | null>(null);
 
   // Get camera permission status and request function (only on native platforms)
   const visionCameraHooks = useCameraPermission ? useCameraPermission() : { hasPermission: null, requestPermission: () => Promise.resolve(false) };
   const { hasPermission, requestPermission } = visionCameraHooks;
 
-  // Get camera device based on current position (only on native platforms)
-  const device = useCameraDevice ? useCameraDevice(currentCameraPosition) : null;
+  // Get all available camera devices (only on native platforms)
+  const devices = useCameraDevices ? useCameraDevices() : [];
+
+  // Get camera device based on selected device ID or fallback to position
+  const device = useCameraDevice ? (
+    selectedDeviceId
+      ? devices.find((d: any) => d.id === selectedDeviceId)
+      : useCameraDevice(currentCameraPosition)
+  ) : null;
 
   // Check if we're on a native platform
   useEffect(() => {
@@ -46,6 +56,40 @@ export default function VisionCamera({ onPhotoTaken, type }: VisionCameraProps) 
     // Set initial camera position based on type
     setCurrentCameraPosition(type === 'face' ? 'front' : 'back');
   }, [type]);
+
+  // Log available devices when they change
+  useEffect(() => {
+    if (devices && devices.length > 0) {
+      console.log('📱 Available VisionCamera devices:', devices.map((d: any) => ({
+        id: d.id,
+        position: d.position,
+        name: d.name || 'Unknown',
+        hasFlash: d.hasFlash,
+        hasTorch: d.hasTorch,
+        isMultiCam: d.isMultiCam
+      })));
+      setAvailableDevices(devices);
+
+      // Auto-select the best device for current position
+      const preferredDevice = devices.find((d: any) => d.position === currentCameraPosition);
+      if (preferredDevice && preferredDevice.id !== selectedDeviceId) {
+        console.log('📱 Auto-selecting device:', preferredDevice.id, 'for position:', currentCameraPosition);
+        setSelectedDeviceId(preferredDevice.id);
+      }
+    }
+  }, [devices, currentCameraPosition, selectedDeviceId]);
+
+  // Log when the selected device changes
+  useEffect(() => {
+    if (device && isNativePlatform) {
+      console.log('📷 Camera device prop updated:', {
+        id: device.id,
+        position: device.position,
+        name: device.name || 'Unknown',
+        isActive: isActive
+      });
+    }
+  }, [device, isNativePlatform, isActive]);
 
   // Handle camera permission
   useEffect(() => {
@@ -101,10 +145,12 @@ export default function VisionCamera({ onPhotoTaken, type }: VisionCameraProps) 
         throw new Error(`No ${currentCameraPosition} camera found on this device`);
       }
 
-      console.log('📱 Using camera device:', {
+      console.log('📱 Starting camera with device:', {
         position: device.position,
         id: device.id,
-        name: device.name || 'Unknown'
+        name: device.name || 'Unknown',
+        selectedDeviceId: selectedDeviceId,
+        currentCameraPosition: currentCameraPosition
       });
 
       setIsActive(true);
@@ -148,24 +194,39 @@ export default function VisionCamera({ onPhotoTaken, type }: VisionCameraProps) 
       // Wait a bit for cleanup
       await new Promise(resolve => setTimeout(resolve, 300));
 
-      // Update camera position
-      setCurrentCameraPosition(newPosition);
+      // Find the device for the new position
+      const targetDevice = availableDevices.find((d: any) => d.position === newPosition);
 
-      // Wait for device to update
-      await new Promise(resolve => setTimeout(resolve, 500));
+      if (targetDevice) {
+        console.log('📱 Selecting device for', newPosition, ':', {
+          id: targetDevice.id,
+          name: targetDevice.name,
+          position: targetDevice.position
+        });
 
-      // Start with new position
-      setIsActive(true);
-      setIsInitializing(false);
+        // Update both position and device ID
+        setCurrentCameraPosition(newPosition);
+        setSelectedDeviceId(targetDevice.id);
 
-      console.log('✅ Camera switched successfully to', newPosition);
+        // Wait for state updates to propagate
+        await new Promise(resolve => setTimeout(resolve, 500));
+
+        // Start with new device
+        setIsActive(true);
+        setIsInitializing(false);
+
+        console.log('✅ Camera switched successfully to', newPosition, 'device:', targetDevice.id);
+      } else {
+        throw new Error(`No ${newPosition} camera found`);
+      }
 
     } catch (error) {
       console.error('❌ Error switching camera:', error);
       setIsInitializing(false);
-      Alert.alert('Camera Switch Error', 'Failed to switch camera. Please try again.', [{ text: 'OK' }]);
+      setIsActive(true); // Restore previous state
+      Alert.alert('Camera Switch Error', `Failed to switch to ${newPosition} camera. ${error instanceof Error ? error.message : 'Please try again.'}`, [{ text: 'OK' }]);
     }
-  }, [currentCameraPosition, isActive, isInitializing]);
+  }, [currentCameraPosition, isActive, isInitializing, availableDevices]);
 
   const takePhoto = useCallback(async () => {
     if (!cameraRef.current || !isActive) return;
