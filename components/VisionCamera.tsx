@@ -194,23 +194,63 @@ export default function VisionCamera({ onPhotoTaken, type }: VisionCameraProps) 
   }, [isActive, onPhotoTaken, stopCamera]);
 
   const handleFileUpload = useCallback(() => {
-    // For file upload, we'll use the existing expo-image-picker logic
-    Alert.alert(
-      'Upload Photo',
-      'File upload is handled by the parent component.',
-      [{ text: 'OK' }]
-    );
-  }, []);
+    // Create file input for web
+    if (typeof window !== 'undefined') {
+      const input = document.createElement('input');
+      input.type = 'file';
+      input.accept = 'image/*';
+      input.capture = type === 'face' ? 'user' : 'environment';
+      input.onchange = (e: Event) => {
+        const target = e.target as HTMLInputElement;
+        const file = target.files?.[0];
+        if (file) {
+          const photoUri = URL.createObjectURL(file);
+          onPhotoTaken(photoUri);
+        }
+      };
+      input.click();
+    } else {
+      Alert.alert(
+        'Upload Photo',
+        'File upload is not available on this platform.',
+        [{ text: 'OK' }]
+      );
+    }
+  }, [type, onPhotoTaken]);
 
-  // If not on native platform, show message
+  // If not on native platform, provide web fallback
   if (!isNativePlatform) {
     return (
       <View style={styles.container}>
-        <View style={styles.messageContainer}>
-          <Text style={styles.messageTitle}>Camera Not Available</Text>
-          <Text style={styles.messageText}>
-            Vision Camera requires iOS or Android platform. Please use the file upload option instead.
+        {/* Header with type indicator */}
+        <View style={styles.header}>
+          <Text style={styles.headerTitle}>
+            {type === 'id' ? '📄 ID Document Verification' : '👤 Face Verification'}
           </Text>
+          <Text style={styles.headerSubtitle}>
+            Web camera functionality - please use browser permissions
+          </Text>
+        </View>
+
+        <View style={styles.messageContainer}>
+          <Text style={styles.messageTitle}>📷 Web Camera Mode</Text>
+          <Text style={styles.messageText}>
+            VisionCamera is optimized for mobile. On web, please use the "Choose File" option to upload photos, or access this app on a mobile device for the best camera experience.
+          </Text>
+
+          <TouchableOpacity
+            style={styles.primaryButton}
+            onPress={handleFileUpload}
+            activeOpacity={0.8}
+          >
+            <View style={styles.buttonContent}>
+              <Text style={styles.buttonIcon}>📁</Text>
+              <View style={styles.buttonTextContainer}>
+                <Text style={styles.primaryButtonText}>Choose File</Text>
+                <Text style={styles.buttonSubtext}>Upload from device</Text>
+              </View>
+            </View>
+          </TouchableOpacity>
         </View>
       </View>
     );

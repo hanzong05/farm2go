@@ -15,7 +15,6 @@ import {
 import { supabase } from '../lib/supabase';
 import { Database } from '../types/database';
 import VisionCamera from './VisionCamera';
-import WebCamera from './WebCamera';
 import WebFileInput from './WebFileInput';
 
 const { width } = Dimensions.get('window');
@@ -61,7 +60,6 @@ export default function VerificationUpload({
   const [uploading, setUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState('');
   const [showVisionCamera, setShowVisionCamera] = useState<'id' | 'face' | null>(null);
-  const [showWebCamera, setShowWebCamera] = useState<'id' | 'face' | null>(null);
   const [showFileInput, setShowFileInput] = useState<'id' | 'face' | null>(null);
 
   const requestCameraPermission = async () => {
@@ -94,14 +92,9 @@ export default function VerificationUpload({
     console.log('Platform.OS:', Platform.OS);
     console.log('showImagePickerOptions called for type:', type);
 
-    // Use VisionCamera for native platforms, WebCamera for web
-    if (Platform.OS === 'ios' || Platform.OS === 'android') {
-      console.log('Native platform detected, using VisionCamera');
-      setShowVisionCamera(type);
-    } else {
-      console.log('Web platform detected, using WebCamera');
-      setShowWebCamera(type);
-    }
+    // Use VisionCamera for all platforms
+    console.log('Using VisionCamera for platform:', Platform.OS);
+    setShowVisionCamera(type);
   };
 
   const takePhoto = async (type: 'id' | 'face') => {
@@ -164,13 +157,6 @@ export default function VerificationUpload({
     if (showVisionCamera) {
       updateVerificationData(showVisionCamera, photoUri);
       setShowVisionCamera(null);
-    }
-  };
-
-  const handleWebCameraPhoto = (photoUri: string) => {
-    if (showWebCamera) {
-      updateVerificationData(showWebCamera, photoUri);
-      setShowWebCamera(null);
     }
   };
 
@@ -319,38 +305,6 @@ export default function VerificationUpload({
           onPress={() => {
             console.log('Back button pressed');
             setShowVisionCamera(null);
-          }}
-          activeOpacity={0.8}
-        >
-          <Text style={styles.backButtonText}>← Back to Upload Options</Text>
-        </TouchableOpacity>
-      </ScrollView>
-    );
-  }
-
-  if (showWebCamera) {
-    console.log('Rendering WebCamera for type:', showWebCamera);
-    return (
-      <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-        <View style={styles.header}>
-          <Text style={styles.title}>
-            {showWebCamera === 'id' ? 'Capture ID Document' : 'Take Face Photo'}
-          </Text>
-          <Text style={styles.subtitle}>
-            Position your {showWebCamera === 'id' ? 'ID document' : 'face'} in the camera frame and take a photo
-          </Text>
-        </View>
-
-        <WebCamera
-          type={showWebCamera}
-          onPhotoTaken={handleWebCameraPhoto}
-        />
-
-        <TouchableOpacity
-          style={styles.backButton}
-          onPress={() => {
-            console.log('Back button pressed');
-            setShowWebCamera(null);
           }}
           activeOpacity={0.8}
         >
