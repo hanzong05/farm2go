@@ -112,6 +112,7 @@ export default function FarmerSalesHistoryScreen() {
       }
 
       setProfile(userData.profile);
+      console.log('🔍 User data:', { userId: userData.user.id, profileId: userData.profile.id });
       await loadSales(userData.user.id);
     } catch (error) {
       console.error('Error loading data:', error);
@@ -123,6 +124,16 @@ export default function FarmerSalesHistoryScreen() {
 
   const loadSales = async (farmerId: string) => {
     try {
+      console.log('🔍 Loading sales for farmer:', farmerId);
+
+      // First, let's check if there are any products for this farmer
+      const { data: farmerProducts, error: productsError } = await supabase
+        .from('products')
+        .select('id, name, farmer_id')
+        .eq('farmer_id', farmerId);
+
+      console.log('🔍 Farmer products check:', { farmerProducts, productsError });
+
       // Get completed orders with items from this farmer's products
       const { data: orderItems, error: itemsError } = await supabase
         .from('order_items')
@@ -138,14 +149,18 @@ export default function FarmerSalesHistoryScreen() {
         `)
         .eq('products.farmer_id', farmerId);
 
+      console.log('🔍 Order items query result:', { orderItems, itemsError });
+
       if (itemsError) throw itemsError;
 
       const typedOrderItems = orderItems as DatabaseOrderItem[] | null;
 
       // Get unique order IDs
       const orderIds = [...new Set(typedOrderItems?.map(item => item.order_id) || [])];
+      console.log('🔍 Unique order IDs found:', orderIds);
 
       if (orderIds.length === 0) {
+        console.log('🔍 No order IDs found, setting empty sales');
         setSales([]);
         return;
       }
@@ -169,9 +184,12 @@ export default function FarmerSalesHistoryScreen() {
         .in('id', orderIds)
         .order('created_at', { ascending: false });
 
+      console.log('🔍 Orders query result:', { ordersData, ordersError });
+
       if (ordersError) throw ordersError;
 
       const typedOrdersData = ordersData as DatabaseOrder[] | null;
+      console.log('🔍 Typed orders data:', typedOrdersData?.length || 0, 'orders found');
 
       // Combine orders with their items and calculate totals
       const salesWithItems: Sale[] = typedOrdersData?.map(order => {
@@ -204,6 +222,9 @@ export default function FarmerSalesHistoryScreen() {
           order_items: items,
         };
       }) || [];
+
+      console.log('🔍 Final sales with items:', salesWithItems.length, 'sales processed');
+      console.log('🔍 Sales data:', JSON.stringify(salesWithItems, null, 2));
 
       setSales(salesWithItems);
     } catch (error) {

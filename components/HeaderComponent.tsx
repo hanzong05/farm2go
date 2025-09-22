@@ -120,6 +120,13 @@ const NAV_ITEMS: NavItem[] = [
 
   // Admin items
   {
+    id: 'admin-dashboard',
+    title: 'Dashboard',
+    icon: 'tachometer-alt',
+    route: '/admin',
+    userTypes: ['admin'],
+  },
+  {
     id: 'admin-users',
     title: 'Users',
     icon: 'users',

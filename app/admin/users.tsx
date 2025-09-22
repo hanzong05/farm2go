@@ -6,6 +6,7 @@ import {
   Dimensions,
   FlatList,
   Modal,
+  Platform,
   RefreshControl,
   ScrollView,
   StyleSheet,
@@ -16,13 +17,28 @@ import {
 } from 'react-native';
 import { LineChart } from 'react-native-chart-kit';
 import Icon from 'react-native-vector-icons/FontAwesome5';
-import { Camera, useCameraDevices, useCodeScanner } from 'react-native-vision-camera';
 import HeaderComponent from '../../components/HeaderComponent';
 import { supabase } from '../../lib/supabase';
 import { getUserWithProfile } from '../../services/auth';
 import { Database } from '../../types/database';
 
 const { width: screenWidth } = Dimensions.get('window');
+
+// Conditional VisionCamera imports for mobile platforms only
+let Camera: any = null;
+let useCameraDevices: any = () => ({});
+let useCodeScanner: any = () => ({});
+
+if (Platform.OS === 'ios' || Platform.OS === 'android') {
+  try {
+    const visionCamera = require('react-native-vision-camera');
+    Camera = visionCamera.Camera;
+    useCameraDevices = visionCamera.useCameraDevices;
+    useCodeScanner = visionCamera.useCodeScanner;
+  } catch (error) {
+    console.warn('VisionCamera not available on this platform:', error);
+  }
+}
 
 type Profile = Database['public']['Tables']['profiles']['Row'];
 
@@ -166,11 +182,11 @@ export default function AdminUsers() {
   const [hasPermission, setHasPermission] = useState<boolean | null>(null);
   const [isScanning, setIsScanning] = useState(true);
 
-  // Camera setup
+  // Camera setup (mobile only)
   const devices = useCameraDevices();
-  const device = devices.back;
+  const device = devices?.back;
 
-  // Code scanner setup
+  // Code scanner setup (mobile only)
   const codeScanner = useCodeScanner({
     codeTypes: ['qr', 'ean-13'],
     onCodeScanned: (codes) => {
@@ -229,11 +245,20 @@ export default function AdminUsers() {
     }
   }, [activeTab, profile]);
 
-  // Camera permission check
+  // Camera permission check (mobile only)
   useEffect(() => {
     const checkPermissions = async () => {
-      const permission = await Camera.requestCameraPermission();
-      setHasPermission(permission === 'authorized');
+      if (Camera && (Platform.OS === 'ios' || Platform.OS === 'android')) {
+        try {
+          const permission = await Camera.requestCameraPermission();
+          setHasPermission(permission === 'authorized');
+        } catch (error) {
+          console.warn('Camera permission error:', error);
+          setHasPermission(false);
+        }
+      } else {
+        setHasPermission(false); // No camera support on web
+      }
     };
     checkPermissions();
   }, []);
@@ -1810,8 +1835,14 @@ export default function AdminUsers() {
                 <TouchableOpacity
                   style={styles.qrPermissionButton}
                   onPress={async () => {
-                    const permission = await Camera.requestCameraPermission();
-                    setHasPermission(permission === 'authorized');
+                    if (Camera && (Platform.OS === 'ios' || Platform.OS === 'android')) {
+                      try {
+                        const permission = await Camera.requestCameraPermission();
+                        setHasPermission(permission === 'authorized');
+                      } catch (error) {
+                        console.warn('Camera permission error:', error);
+                      }
+                    }
                   }}
                 >
                   <Text style={styles.qrPermissionButtonText}>Grant Permission</Text>
@@ -1824,12 +1855,19 @@ export default function AdminUsers() {
               </View>
             ) : (
               <>
-                <Camera
-                  style={styles.camera}
-                  device={device}
-                  isActive={qrScannerVisible}
-                  codeScanner={codeScanner}
-                />
+                {Camera && (Platform.OS === 'ios' || Platform.OS === 'android') ? (
+                  <Camera
+                    style={styles.camera}
+                    device={device}
+                    isActive={qrScannerVisible}
+                    codeScanner={codeScanner}
+                  />
+                ) : (
+                  <View style={styles.qrPermissionContainer}>
+                    <Icon name="camera" size={48} color={colors.white} />
+                    <Text style={styles.qrPermissionText}>QR Scanner not available on web platform</Text>
+                  </View>
+                )}
 
                 <View style={styles.qrOverlay}>
                   <View style={styles.qrFrame} />

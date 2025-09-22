@@ -121,7 +121,7 @@ export default function RootLayout() {
                 router.replace('/super-admin' as any);
                 break;
               case 'admin':
-                router.replace('/admin/users' as any);
+                router.replace('/admin' as any);
                 break;
               case 'farmer':
                 router.replace('/farmer');
@@ -329,6 +329,10 @@ export default function RootLayout() {
           />
 
           {/* Admin Dashboard - Management Console */}
+          <Stack.Screen
+            name="admin"
+            options={getDashboardScreenOptions('Admin Dashboard')}
+          />
           <Stack.Screen
             name="admin/dashboard"
             options={getDashboardScreenOptions('Admin Dashboard')}
