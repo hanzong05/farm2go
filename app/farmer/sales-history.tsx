@@ -50,7 +50,7 @@ interface Sale {
   id: string;
   buyer_id: string;
   total_amount: number;
-  status: 'delivered';
+  status: 'pending' | 'confirmed' | 'processing' | 'ready' | 'delivered' | 'cancelled';
   created_at: string;
   delivery_date: string | null;
   buyer_profile?: {
@@ -150,7 +150,7 @@ export default function FarmerSalesHistoryScreen() {
         return;
       }
 
-      // Get completed orders only
+      // Get all orders (not just delivered) to show current order status
       const { data: ordersData, error: ordersError } = await supabase
         .from('orders')
         .select(`
@@ -167,7 +167,6 @@ export default function FarmerSalesHistoryScreen() {
           )
         `)
         .in('id', orderIds)
-        .eq('status', 'delivered')
         .order('created_at', { ascending: false });
 
       if (ordersError) throw ordersError;
@@ -194,7 +193,7 @@ export default function FarmerSalesHistoryScreen() {
           id: order.id,
           buyer_id: order.buyer_id,
           total_amount: farmerRevenue, // Override with farmer's actual revenue
-          status: 'delivered' as const,
+          status: order.status as Sale['status'],
           created_at: order.created_at,
           delivery_date: order.delivery_date,
           buyer_profile: order.profiles ? {
@@ -318,6 +317,30 @@ export default function FarmerSalesHistoryScreen() {
     return ((current - previous) / previous) * 100;
   };
 
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case 'pending': return '#f59e0b';
+      case 'confirmed': return '#3b82f6';
+      case 'processing': return '#8b5cf6';
+      case 'ready': return '#10b981';
+      case 'delivered': return '#059669';
+      case 'cancelled': return '#dc2626';
+      default: return '#6b7280';
+    }
+  };
+
+  const getStatusLabel = (status: string) => {
+    switch (status) {
+      case 'pending': return 'PENDING';
+      case 'confirmed': return 'CONFIRMED';
+      case 'processing': return 'PROCESSING';
+      case 'ready': return 'READY';
+      case 'delivered': return 'DELIVERED';
+      case 'cancelled': return 'CANCELLED';
+      default: return 'UNKNOWN';
+    }
+  };
+
 
   const renderSaleCard = ({ item: sale }: { item: Sale }) => (
     <View style={styles.saleCard}>
@@ -328,8 +351,8 @@ export default function FarmerSalesHistoryScreen() {
         </View>
         <View style={styles.saleAmountContainer}>
           <Text style={styles.saleAmount}>{formatPrice(sale.total_amount)}</Text>
-          <View style={styles.completedBadge}>
-            <Text style={styles.completedText}>COMPLETED</Text>
+          <View style={[styles.statusBadge, { backgroundColor: getStatusColor(sale.status) }]}>
+            <Text style={styles.statusText}>{getStatusLabel(sale.status)}</Text>
           </View>
         </View>
       </View>
@@ -469,11 +492,11 @@ export default function FarmerSalesHistoryScreen() {
           </ScrollView>
         </View>
 
-        {/* Sales List */}
+        {/* Orders List */}
         <View style={styles.salesSection}>
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionTitle}>
-              Sales History {filteredSales.length > 0 && `(${filteredSales.length})`}
+              Order History {filteredSales.length > 0 && `(${filteredSales.length})`}
             </Text>
           </View>
 
@@ -635,8 +658,7 @@ const styles = StyleSheet.create({
     color: '#059669',
     marginBottom: 8,
   },
-  completedBadge: {
-    backgroundColor: '#059669',
+  statusBadge: {
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 16,
@@ -646,7 +668,7 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 4,
   },
-  completedText: {
+  statusText: {
     fontSize: 10,
     color: '#ffffff',
     fontWeight: 'bold',
