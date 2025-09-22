@@ -6,11 +6,14 @@ import {
   Text,
   TextInput,
   TouchableOpacity,
-  View
+  View,
+  Platform,
+  Linking
 } from 'react-native';
 import Icon from 'react-native-vector-icons/FontAwesome5';
 import { logoutUser } from '../services/auth';
 import { Database } from '../types/database';
+import { supabase } from '../lib/supabase';
 import MessageComponent, { Conversation } from './MessageComponent';
 import NotificationComponent, { Notification } from './NotificationComponent';
 
@@ -315,6 +318,64 @@ export default function HeaderComponent({
     }
   };
 
+  const handleDownloadApp = () => {
+    if (Platform.OS === 'web') {
+      // For web users, show download options
+      const userAgent = navigator.userAgent || navigator.vendor || (window as any).opera;
+
+      // Multiple download options (prioritized)
+      const downloadUrls = [
+        // Option 1: GitHub Releases (recommended for large files)
+        'https://github.com/hanz-pillerva/farm2go/releases/latest/download/farm2go.apk',
+
+        // Option 2: Direct link (if you host on a server)
+        'https://farm2go.vercel.app/downloads/farm2go.apk',
+
+        // Option 3: Google Drive direct download (if you use Google Drive)
+        // 'https://drive.google.com/uc?export=download&id=YOUR_FILE_ID',
+
+        // Option 4: Supabase (fallback for smaller files)
+        (() => {
+          const { data: apkData } = supabase.storage.from('app').getPublicUrl('farm2go.apk');
+          return apkData.publicUrl;
+        })()
+      ];
+
+      if (/android/i.test(userAgent)) {
+        // Android device - try downloads in order
+        console.log('Android detected - downloading APK');
+        tryDownloads(downloadUrls);
+      } else if (/iPad|iPhone|iPod/.test(userAgent) && !(window as any).MSStream) {
+        // iOS device - show message that APK is for Android only
+        if (confirm('Farm2Go app is currently available for Android devices only. Download APK anyway?')) {
+          tryDownloads(downloadUrls);
+        }
+      } else {
+        // Desktop - download APK with instructions
+        const confirmed = confirm('Download Farm2Go APK for Android? This file can be transferred to your Android device for installation.');
+        if (confirmed) {
+          tryDownloads(downloadUrls);
+        }
+      }
+    } else {
+      // Already in the app - show about page
+      router.push('/about' as any);
+    }
+  };
+
+  // Helper function to try multiple download URLs
+  const tryDownloads = (urls: string[]) => {
+    // Try the first URL (GitHub releases)
+    const primaryUrl = urls[0];
+
+    // Open the primary download URL
+    window.open(primaryUrl, '_blank');
+
+    // Show alternative options
+    console.log('Primary download:', primaryUrl);
+    console.log('Alternative downloads available:', urls.slice(1));
+  };
+
   const filteredNavItems = NAV_ITEMS.filter(item =>
     item.userTypes.includes(resolvedUserType)
   );
@@ -396,6 +457,19 @@ export default function HeaderComponent({
             onMarkAllAsRead={onMarkAllNotificationsAsRead}
             onClearAll={onClearAllNotifications}
           />
+
+          {/* Download App Button - only show on web */}
+          {Platform.OS === 'web' && (
+            <TouchableOpacity style={styles.downloadButton} onPress={handleDownloadApp}>
+              <Icon
+                name="download"
+                size={12}
+                color={colors.white}
+                style={styles.downloadIcon}
+              />
+              <Text style={styles.downloadText}>Get App</Text>
+            </TouchableOpacity>
+          )}
 
           {showAddButton && (
             <TouchableOpacity
@@ -614,6 +688,28 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: 'bold',
     color: colors.primary,
+  },
+
+  downloadButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255,255,255,0.15)',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 6,
+    gap: 4,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.3)',
+  },
+
+  downloadIcon: {
+    marginRight: 0,
+  },
+
+  downloadText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: colors.white,
   },
 
   authButton: {

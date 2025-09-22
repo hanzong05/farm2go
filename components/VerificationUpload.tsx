@@ -221,22 +221,36 @@ export default function VerificationUpload({
     }
   };
 
-  const uploadImageToSupabase = async (uri: string, fileName: string): Promise<string> => {
+  const uploadImageToSupabase = async (uri: string, fileName: string, retryCount = 0): Promise<string> => {
+    const maxRetries = 2;
+    const isMobile = Platform.OS !== 'web' || /Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator?.userAgent || '');
+    const timeoutDuration = isMobile ? 30000 : 45000; // 30s for mobile, 45s for desktop
+
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 60000); // 60 second timeout
+    const timeoutId = setTimeout(() => {
+      console.log(`Upload timeout reached (${timeoutDuration}ms) for:`, fileName);
+      controller.abort();
+    }, timeoutDuration);
 
     try {
-      console.log('Starting upload for:', fileName);
+      console.log(`Starting upload attempt ${retryCount + 1}/${maxRetries + 1} for:`, fileName);
+      console.log('Platform detected as mobile:', isMobile);
+      console.log('Using timeout:', timeoutDuration + 'ms');
 
-      // Add timeout to fetch request
+      // Add timeout to fetch request with mobile optimization
       const response = await fetch(uri, {
-        signal: controller.signal
+        signal: controller.signal,
+        method: 'GET',
+        headers: {
+          'Cache-Control': 'no-cache',
+        }
       });
 
       if (!response.ok) {
         throw new Error(`Failed to fetch image: ${response.status} ${response.statusText}`);
       }
 
+      console.log('Fetch completed, creating blob...');
       const blob = await response.blob();
 
       // Check file size (max 20MB)
@@ -244,19 +258,25 @@ export default function VerificationUpload({
         throw new Error('File size too large. Please select an image smaller than 20MB.');
       }
 
-      console.log('File blob created, size:', blob.size);
+      console.log('File blob created, size:', Math.round(blob.size / 1024) + 'KB');
 
       const fileExt = uri.split('.').pop();
       const filePath = `${userId}/${fileName}.${fileExt}`;
 
-      console.log('Uploading to Supabase:', filePath);
+      console.log('Starting Supabase upload:', filePath);
+
+      // For mobile, use smaller chunk size and different upload options
+      const uploadOptions = isMobile ? {
+        cacheControl: '300', // Shorter cache for mobile
+        upsert: true,
+      } : {
+        cacheControl: '3600',
+        upsert: true,
+      };
 
       const { data, error } = await supabase.storage
         .from('verification-documents')
-        .upload(filePath, blob, {
-          cacheControl: '3600',
-          upsert: true,
-        });
+        .upload(filePath, blob, uploadOptions);
 
       if (error) {
         console.error('Storage upload error:', error);
@@ -279,9 +299,28 @@ export default function VerificationUpload({
     } catch (uploadError) {
       console.error('Upload process error:', uploadError);
 
-      // Handle timeout/abort errors
+      // Handle timeout/abort errors with retry logic
       if (uploadError instanceof Error && uploadError.name === 'AbortError') {
-        throw new Error('Upload timeout. Please check your internet connection and try again.');
+        if (retryCount < maxRetries) {
+          console.log(`Upload timeout, retrying... (${retryCount + 1}/${maxRetries})`);
+          clearTimeout(timeoutId);
+          // Wait a bit before retrying
+          await new Promise(resolve => setTimeout(resolve, 2000));
+          return uploadImageToSupabase(uri, fileName, retryCount + 1);
+        }
+        throw new Error('Upload timeout after retries. Please try with a smaller image or better internet connection.');
+      }
+
+      // Retry on network errors (but not on other errors)
+      if (uploadError instanceof Error &&
+          (uploadError.message.includes('fetch') ||
+           uploadError.message.includes('network') ||
+           uploadError.message.includes('Failed to fetch')) &&
+          retryCount < maxRetries) {
+        console.log(`Network error, retrying... (${retryCount + 1}/${maxRetries})`);
+        clearTimeout(timeoutId);
+        await new Promise(resolve => setTimeout(resolve, 2000));
+        return uploadImageToSupabase(uri, fileName, retryCount + 1);
       }
 
       // If it's our custom bucket error, throw it as-is
@@ -289,13 +328,13 @@ export default function VerificationUpload({
         throw uploadError;
       }
 
-      // Handle network errors
-      if (uploadError instanceof Error && (uploadError.message.includes('fetch') || uploadError.message.includes('network'))) {
-        throw new Error('Network error. Please check your internet connection and try again.');
+      // For other errors, provide a specific message
+      if (uploadError instanceof Error && uploadError.message.includes('Failed to fetch')) {
+        throw new Error('Network connection failed. Please check your internet and try again.');
       }
 
-      // For other errors, provide a generic message
-      throw new Error('Failed to upload image. Please check your internet connection and try again.');
+      // Generic error message
+      throw new Error('Failed to upload image. Please try again.');
     } finally {
       clearTimeout(timeoutId);
     }
@@ -313,23 +352,28 @@ export default function VerificationUpload({
       return;
     }
 
-    const controller = new AbortController();
+    const isMobile = Platform.OS !== 'web' || /Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator?.userAgent || '');
+    const totalTimeout = isMobile ? 90000 : 120000; // 1.5min for mobile, 2min for desktop
     let timeoutId: number | undefined;
 
     try {
       setUploading(true);
       setUploadProgress('Preparing upload... (1/4)');
 
+      console.log('Starting verification submission...');
+      console.log('Platform detected as mobile:', isMobile);
+      console.log('Total timeout set to:', totalTimeout + 'ms');
+
       // Set overall timeout for the entire submission process
       timeoutId = setTimeout(() => {
-        controller.abort();
-        setUploadProgress('Upload timeout - Please try again');
-      }, 120000); // 2 minute total timeout
+        setUploadProgress('Overall timeout reached - Please try again');
+        throw new Error('Overall submission timeout');
+      }, totalTimeout);
 
       setUploadProgress('Uploading ID document... (2/4)');
       console.log('Starting ID document upload');
 
-      // Upload ID document
+      // Upload ID document with automatic retries
       const idDocumentUrl = await uploadImageToSupabase(
         verificationData.idDocument.uri,
         `id_document_${Date.now()}`
@@ -338,7 +382,7 @@ export default function VerificationUpload({
       console.log('ID document uploaded successfully');
       setUploadProgress('Uploading face photo... (3/4)');
 
-      // Upload face photo
+      // Upload face photo with automatic retries
       const facePhotoUrl = await uploadImageToSupabase(
         verificationData.facePhoto.uri,
         `face_photo_${Date.now()}`
@@ -367,6 +411,12 @@ export default function VerificationUpload({
 
       console.log('Verification submitted successfully');
 
+      // Clear timeout since we succeeded
+      if (timeoutId !== undefined) {
+        clearTimeout(timeoutId);
+        timeoutId = undefined;
+      }
+
       // Note: We no longer update the profiles table directly here.
       // The verification_submissions table is now the source of truth.
 
@@ -392,7 +442,9 @@ export default function VerificationUpload({
 
       if (error instanceof Error) {
         if (error.name === 'AbortError' || error.message.includes('timeout')) {
-          errorMessage = 'Upload timeout. This may happen on slow connections. Please try again with a better internet connection.';
+          errorMessage = isMobile
+            ? 'Upload timeout on mobile. Try using WiFi, reduce image size, or try again later.'
+            : 'Upload timeout. Please check your internet connection and try again.';
         } else if (error.message.includes('File size too large')) {
           errorMessage = error.message;
           showRetry = false;
@@ -403,7 +455,11 @@ export default function VerificationUpload({
           errorMessage = 'Database configuration error. Please contact support.';
           showRetry = false;
         } else if (error.message.includes('network') || error.message.includes('connection') || error.message.includes('fetch')) {
-          errorMessage = 'Network error. Please check your internet connection and try again. If using mobile data, try switching to WiFi.';
+          errorMessage = isMobile
+            ? 'Network error on mobile. Try switching to WiFi or better signal area.'
+            : 'Network error. Please check your internet connection and try again.';
+        } else if (error.message.includes('retries')) {
+          errorMessage = 'Upload failed after multiple attempts. Please try with a smaller image or better connection.';
         }
       }
 
