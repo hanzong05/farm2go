@@ -11,6 +11,8 @@ export default function WebFileInput({ onFileSelected, type }: WebFileInputProps
     return null;
   }
 
+  const isMobile = /Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator?.userAgent || '');
+
   return (
     <View style={styles.container}>
       <Text style={styles.title}>
@@ -23,28 +25,52 @@ export default function WebFileInput({ onFileSelected, type }: WebFileInputProps
       {React.createElement('input', {
         type: 'file',
         accept: 'image/*',
+        capture: isMobile ? (type === 'face' ? 'user' : 'environment') : undefined,
+        multiple: false,
         onChange: (e: any) => {
           const file = e.target.files?.[0];
           if (file) {
+            // Validate file size (max 20MB)
+            if (file.size > 20 * 1024 * 1024) {
+              alert('File size too large. Please select an image smaller than 20MB.');
+              return;
+            }
+
+            // Validate file type
+            if (!file.type.startsWith('image/')) {
+              alert('Please select a valid image file.');
+              return;
+            }
+
             const fileUri = URL.createObjectURL(file);
             onFileSelected(fileUri);
           }
         },
         style: {
           width: '100%',
-          padding: 16,
+          padding: isMobile ? 20 : 16,
           borderRadius: 8,
           border: '2px dashed #d1d5db',
           backgroundColor: '#f9fafb',
           cursor: 'pointer',
-          fontSize: 16,
+          fontSize: isMobile ? 18 : 16,
           color: '#374151',
+          minHeight: isMobile ? 60 : 'auto',
         },
       })}
 
       <Text style={styles.hint}>
-        Supported formats: JPG, PNG, GIF (Max 20MB)
+        {isMobile
+          ? `Tap to ${type === 'face' ? 'take selfie or' : 'capture ID or'} choose from gallery`
+          : 'Supported formats: JPG, PNG, GIF (Max 20MB)'
+        }
       </Text>
+
+      {isMobile && (
+        <Text style={styles.mobileHint}>
+          📱 Mobile tip: For best results, ensure good lighting and hold device steady
+        </Text>
+      )}
     </View>
   );
 }
@@ -77,5 +103,12 @@ const styles = StyleSheet.create({
     color: '#9ca3af',
     marginTop: 12,
     textAlign: 'center',
+  },
+  mobileHint: {
+    fontSize: 11,
+    color: '#6b7280',
+    marginTop: 8,
+    textAlign: 'center',
+    fontStyle: 'italic',
   },
 });

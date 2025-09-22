@@ -19,7 +19,11 @@
       "Bash(npx expo start:*)",
       "Bash(pkill:*)",
       "Bash(npx supabase:*)",
-      "WebFetch(domain:lipviwhsjgvcmdggecqn.supabase.co)"
+      "WebFetch(domain:lipviwhsjgvcmdggecqn.supabase.co)",
+      "Bash(npx expo:*)",
+      "Bash(npx:*)",
+      "Bash(./gradlew:*)",
+      "mcp__ide__getDiagnostics"
     ],
     "deny": [],
     "ask": []

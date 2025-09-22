@@ -2,8 +2,6 @@ import * as ImagePicker from 'expo-image-picker';
 import React, { useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
-  Dimensions,
   Image,
   Platform,
   ScrollView,
@@ -18,10 +16,8 @@ import { Database } from '../types/database';
 import VisionCamera from './VisionCamera';
 import WebFileInput from './WebFileInput';
 
-const { width } = Dimensions.get('window');
 
 type VerificationSubmission = Database['public']['Tables']['verification_submissions']['Insert'];
-type ProfileUpdate = Database['public']['Tables']['profiles']['Update'];
 
 interface VerificationUploadProps {
   userId: string;
@@ -47,6 +43,58 @@ const ID_DOCUMENT_TYPES = [
   { key: 'voters_id', label: 'Voter\'s ID' },
   { key: 'postal_id', label: 'Postal ID' },
 ];
+
+const compressImage = async (blob: Blob, quality: number = 0.8): Promise<Blob> => {
+  return new Promise((resolve, reject) => {
+    if (typeof window === 'undefined') {
+      resolve(blob);
+      return;
+    }
+
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d');
+    const img = new (window as any).Image() as HTMLImageElement;
+
+    img.onload = () => {
+      // Calculate new dimensions (max 1920x1080 for mobile)
+      const maxWidth = 1920;
+      const maxHeight = 1080;
+      let { width, height } = img;
+
+      if (width > height) {
+        if (width > maxWidth) {
+          height = (height * maxWidth) / width;
+          width = maxWidth;
+        }
+      } else {
+        if (height > maxHeight) {
+          width = (width * maxHeight) / height;
+          height = maxHeight;
+        }
+      }
+
+      canvas.width = width;
+      canvas.height = height;
+
+      // Draw and compress
+      ctx?.drawImage(img, 0, 0, width, height);
+      canvas.toBlob(
+        (compressedBlob) => {
+          if (compressedBlob) {
+            resolve(compressedBlob);
+          } else {
+            reject(new Error('Image compression failed'));
+          }
+        },
+        'image/jpeg',
+        quality
+      );
+    };
+
+    img.onerror = () => reject(new Error('Image load failed'));
+    img.src = URL.createObjectURL(blob);
+  });
+};
 
 export default function VerificationUpload({
   userId,
@@ -97,9 +145,17 @@ export default function VerificationUpload({
     console.log('Platform.OS:', Platform.OS);
     console.log('showImagePickerOptions called for type:', type);
 
-    // Use VisionCamera for all platforms
-    console.log('Using VisionCamera for platform:', Platform.OS);
-    setShowVisionCamera(type);
+    // Check if on mobile web or native platform
+    const isMobileWeb = Platform.OS === 'web' && /Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator?.userAgent || '');
+
+    if (Platform.OS === 'web' && !isMobileWeb) {
+      // Desktop web - use file input
+      setShowFileInput(type);
+    } else {
+      // Mobile native or mobile web - use camera
+      console.log('Using VisionCamera for platform:', Platform.OS);
+      setShowVisionCamera(type);
+    }
   };
 
   const takePhoto = async (type: 'id' | 'face') => {
@@ -108,7 +164,7 @@ export default function VerificationUpload({
 
     try {
       const result = await ImagePicker.launchCameraAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        mediaTypes: 'images' as any,
         allowsEditing: true,
         aspect: type === 'id' ? [4, 3] : [1, 1],
         quality: 0.8,
@@ -135,7 +191,7 @@ export default function VerificationUpload({
 
     try {
       const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        mediaTypes: 'images' as any,
         allowsEditing: true,
         aspect: type === 'id' ? [4, 3] : [1, 1],
         quality: 0.8,
@@ -222,9 +278,9 @@ export default function VerificationUpload({
   };
 
   const uploadImageToSupabase = async (uri: string, fileName: string, retryCount = 0): Promise<string> => {
-    const maxRetries = 2;
+    const maxRetries = 3;
     const isMobile = Platform.OS !== 'web' || /Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator?.userAgent || '');
-    const timeoutDuration = isMobile ? 30000 : 45000; // 30s for mobile, 45s for desktop
+    const timeoutDuration = isMobile ? 60000 : 90000; // 60s for mobile, 90s for desktop
 
     const controller = new AbortController();
     const timeoutId = setTimeout(() => {
@@ -238,13 +294,20 @@ export default function VerificationUpload({
       console.log('Using timeout:', timeoutDuration + 'ms');
 
       // Add timeout to fetch request with mobile optimization
-      const response = await fetch(uri, {
-        signal: controller.signal,
-        method: 'GET',
-        headers: {
-          'Cache-Control': 'no-cache',
-        }
-      });
+      const response = await Promise.race([
+        fetch(uri, {
+          signal: controller.signal,
+          method: 'GET',
+          headers: {
+            'Cache-Control': 'no-cache',
+            'Accept': 'image/*',
+            'User-Agent': isMobile ? 'Mozilla/5.0 (Mobile)' : 'Mozilla/5.0 (Desktop)'
+          }
+        }),
+        new Promise((_, reject) =>
+          setTimeout(() => reject(new Error('Request timeout')), timeoutDuration - 5000)
+        )
+      ]) as Response;
 
       if (!response.ok) {
         throw new Error(`Failed to fetch image: ${response.status} ${response.statusText}`);
@@ -260,14 +323,27 @@ export default function VerificationUpload({
 
       console.log('File blob created, size:', Math.round(blob.size / 1024) + 'KB');
 
-      const fileExt = uri.split('.').pop();
+      // Compress image if too large (mobile optimization)
+      let finalBlob = blob;
+      if (blob.size > 5 * 1024 * 1024 && isMobile) { // 5MB threshold for mobile
+        console.log('Compressing large image for mobile upload...');
+        try {
+          finalBlob = await compressImage(blob, 0.7); // 70% quality
+          console.log('Compressed image size:', Math.round(finalBlob.size / 1024) + 'KB');
+        } catch (compressError) {
+          console.warn('Image compression failed, using original:', compressError);
+          finalBlob = blob;
+        }
+      }
+
+      const fileExt = uri.split('.').pop() || 'jpg';
       const filePath = `${userId}/${fileName}.${fileExt}`;
 
       console.log('Starting Supabase upload:', filePath);
 
       // For mobile, use smaller chunk size and different upload options
       const uploadOptions = isMobile ? {
-        cacheControl: '300', // Shorter cache for mobile
+        cacheControl: '300',
         upsert: true,
       } : {
         cacheControl: '3600',
@@ -276,7 +352,7 @@ export default function VerificationUpload({
 
       const { data, error } = await supabase.storage
         .from('verification-documents')
-        .upload(filePath, blob, uploadOptions);
+        .upload(filePath, finalBlob, uploadOptions);
 
       if (error) {
         console.error('Storage upload error:', error);
@@ -300,12 +376,13 @@ export default function VerificationUpload({
       console.error('Upload process error:', uploadError);
 
       // Handle timeout/abort errors with retry logic
-      if (uploadError instanceof Error && uploadError.name === 'AbortError') {
+      if (uploadError instanceof Error && (uploadError.name === 'AbortError' || uploadError.message.includes('timeout'))) {
         if (retryCount < maxRetries) {
           console.log(`Upload timeout, retrying... (${retryCount + 1}/${maxRetries})`);
           clearTimeout(timeoutId);
-          // Wait a bit before retrying
-          await new Promise(resolve => setTimeout(resolve, 2000));
+          // Exponential backoff for retries
+          const backoffTime = Math.min(2000 * Math.pow(2, retryCount), 10000);
+          await new Promise(resolve => setTimeout(resolve, backoffTime));
           return uploadImageToSupabase(uri, fileName, retryCount + 1);
         }
         throw new Error('Upload timeout after retries. Please try with a smaller image or better internet connection.');
@@ -353,7 +430,7 @@ export default function VerificationUpload({
     }
 
     const isMobile = Platform.OS !== 'web' || /Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator?.userAgent || '');
-    const totalTimeout = isMobile ? 90000 : 120000; // 1.5min for mobile, 2min for desktop
+    const totalTimeout = isMobile ? 180000 : 240000; // 3min for mobile, 4min for desktop
     let timeoutId: number | undefined;
 
     try {
