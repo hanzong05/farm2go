@@ -21,24 +21,22 @@ const { width } = Dimensions.get('window');
 type Profile = Database['public']['Tables']['profiles']['Row'];
 
 // Database response types
-interface DatabaseOrderItem {
-  order_id: string;
-  quantity: number;
-  unit_price: number;
-  products: {
-    farmer_id: string;
-    name: string;
-    unit: string;
-  } | null;
-}
-
 interface DatabaseOrder {
   id: string;
   buyer_id: string;
-  total_amount: number;
+  farmer_id: string;
+  product_id: string;
+  quantity: number;
+  total_price: number;
   status: string;
+  delivery_address: string;
+  notes: string | null;
   created_at: string;
-  delivery_date: string | null;
+  products: {
+    name: string;
+    unit: string;
+    price: number;
+  } | null;
   profiles: {
     first_name: string | null;
     last_name: string | null;
@@ -126,94 +124,65 @@ export default function FarmerSalesHistoryScreen() {
     try {
       console.log('🔍 Loading sales for farmer:', farmerId);
 
-      // First, let's check if there are any products for this farmer
-      const { data: farmerProducts, error: productsError } = await supabase
-        .from('products')
-        .select('id, name, farmer_id')
-        .eq('farmer_id', farmerId);
-
-      console.log('🔍 Farmer products check:', { farmerProducts, productsError });
-
-      // Get completed orders with items from this farmer's products
-      const { data: orderItems, error: itemsError } = await supabase
-        .from('order_items')
-        .select(`
-          order_id,
-          quantity,
-          unit_price,
-          products!inner (
-            farmer_id,
-            name,
-            unit
-          )
-        `)
-        .eq('products.farmer_id', farmerId);
-
-      console.log('🔍 Order items query result:', { orderItems, itemsError });
-
-      if (itemsError) throw itemsError;
-
-      const typedOrderItems = orderItems as DatabaseOrderItem[] | null;
-
-      // Get unique order IDs
-      const orderIds = [...new Set(typedOrderItems?.map(item => item.order_id) || [])];
-      console.log('🔍 Unique order IDs found:', orderIds);
-
-      if (orderIds.length === 0) {
-        console.log('🔍 No order IDs found, setting empty sales');
-        setSales([]);
-        return;
-      }
-
-      // Get all orders (not just delivered) to show current order status
+      // Get all orders for this farmer with product and buyer information
       const { data: ordersData, error: ordersError } = await supabase
         .from('orders')
         .select(`
           id,
           buyer_id,
-          total_amount,
+          farmer_id,
+          product_id,
+          quantity,
+          total_price,
           status,
+          delivery_address,
+          notes,
           created_at,
-          delivery_date,
+          products (
+            name,
+            unit,
+            price
+          ),
           profiles!orders_buyer_id_fkey (
             first_name,
             last_name,
             company_name
           )
         `)
-        .in('id', orderIds)
+        .eq('farmer_id', farmerId)
         .order('created_at', { ascending: false });
 
       console.log('🔍 Orders query result:', { ordersData, ordersError });
 
       if (ordersError) throw ordersError;
 
-      const typedOrdersData = ordersData as DatabaseOrder[] | null;
-      console.log('🔍 Typed orders data:', typedOrdersData?.length || 0, 'orders found');
+      if (!ordersData || ordersData.length === 0) {
+        console.log('🔍 No orders found for farmer');
+        setSales([]);
+        return;
+      }
 
-      // Combine orders with their items and calculate totals
-      const salesWithItems: Sale[] = typedOrdersData?.map(order => {
-        const items = typedOrderItems?.filter(item => item.order_id === order.id).map(item => ({
-          order_id: item.order_id,
-          quantity: item.quantity,
-          unit_price: item.unit_price,
-          total_price: item.quantity * item.unit_price,
+      // Transform orders into sales format
+      const salesWithItems: Sale[] = ordersData.map(order => {
+        // Create a single order item since each order is for one product
+        const items = [{
+          order_id: order.id,
+          quantity: order.quantity,
+          unit_price: order.products?.price || 0,
+          total_price: order.total_price,
           product: {
-            name: item.products?.name || '',
-            unit: item.products?.unit || '',
+            name: order.products?.name || '',
+            unit: order.products?.unit || '',
           },
-        })) || [];
-
-        // Calculate farmer's revenue for this order (only their products)
-        const farmerRevenue = items.reduce((sum, item) => sum + item.total_price, 0);
+        }];
 
         return {
           id: order.id,
           buyer_id: order.buyer_id,
-          total_amount: farmerRevenue, // Override with farmer's actual revenue
+          total_amount: order.total_price,
           status: order.status as Sale['status'],
           created_at: order.created_at,
-          delivery_date: order.delivery_date,
+          delivery_date: order.delivery_address, // Using delivery_address as delivery info
           buyer_profile: order.profiles ? {
             first_name: order.profiles.first_name,
             last_name: order.profiles.last_name,
@@ -221,10 +190,10 @@ export default function FarmerSalesHistoryScreen() {
           } : undefined,
           order_items: items,
         };
-      }) || [];
+      });
 
-      console.log('🔍 Final sales with items:', salesWithItems.length, 'sales processed');
-      console.log('🔍 Sales data:', JSON.stringify(salesWithItems, null, 2));
+      console.log('🔍 Final sales processed:', salesWithItems.length, 'sales found');
+      console.log('🔍 Sales data sample:', JSON.stringify(salesWithItems.slice(0, 2), null, 2));
 
       setSales(salesWithItems);
     } catch (error) {
