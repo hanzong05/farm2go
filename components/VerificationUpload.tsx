@@ -146,15 +146,13 @@ export default function VerificationUpload({
     console.log('Platform.OS:', Platform.OS);
     console.log('showImagePickerOptions called for type:', type);
 
-    // Check if on mobile web or native platform
-    const isMobileWeb = Platform.OS === 'web' && /Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator?.userAgent || '');
-
-    if (Platform.OS === 'web' && !isMobileWeb) {
-      // Desktop web - use file input
+    // Always use file input on web (desktop or mobile)
+    if (Platform.OS === 'web') {
+      console.log('Using WebFileInput for web platform');
       setShowFileInput(type);
     } else {
-      // Mobile native or mobile web - use camera
-      console.log('Using VisionCamera for platform:', Platform.OS);
+      // Native platforms - use VisionCamera
+      console.log('Using VisionCamera for native platform:', Platform.OS);
       setShowVisionCamera(type);
     }
   };

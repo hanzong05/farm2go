@@ -4,6 +4,7 @@ import { ActivityIndicator, Alert, Platform, StyleSheet, Text, TouchableOpacity,
 // Conditionally import vision-camera only on native platforms
 let Camera: any, useCameraDevice: any, useCameraPermission: any, useCameraDevices: any;
 
+// Only import VisionCamera on native platforms, never on web
 if (Platform.OS === 'ios' || Platform.OS === 'android') {
   try {
     const visionCamera = require('react-native-vision-camera');
@@ -13,7 +14,17 @@ if (Platform.OS === 'ios' || Platform.OS === 'android') {
     useCameraDevices = visionCamera.useCameraDevices;
   } catch (error) {
     console.warn('Failed to import react-native-vision-camera:', error);
+    Camera = null;
+    useCameraDevice = null;
+    useCameraPermission = null;
+    useCameraDevices = null;
   }
+} else {
+  // Web platform - don't import VisionCamera at all
+  Camera = null;
+  useCameraDevice = null;
+  useCameraPermission = null;
+  useCameraDevices = null;
 }
 
 interface VisionCameraProps {
@@ -34,14 +45,14 @@ export default function VisionCamera({ onPhotoTaken, type }: VisionCameraProps) 
   const [selectedDeviceId, setSelectedDeviceId] = useState<string | null>(null);
 
   // Get camera permission status and request function (only on native platforms)
-  const visionCameraHooks = useCameraPermission ? useCameraPermission() : { hasPermission: null, requestPermission: () => Promise.resolve(false) };
+  const visionCameraHooks = (useCameraPermission && isNativePlatform) ? useCameraPermission() : { hasPermission: null, requestPermission: () => Promise.resolve(false) };
   const { hasPermission, requestPermission } = visionCameraHooks;
 
   // Get all available camera devices (only on native platforms)
-  const devices = useCameraDevices ? useCameraDevices() : [];
+  const devices = (useCameraDevices && isNativePlatform) ? useCameraDevices() : [];
 
   // Get camera device based on selected device ID or fallback to position
-  const device = useCameraDevice ? (
+  const device = (useCameraDevice && isNativePlatform) ? (
     selectedDeviceId
       ? devices.find((d: any) => d.id === selectedDeviceId)
       : useCameraDevice(currentCameraPosition)
@@ -290,8 +301,8 @@ export default function VisionCamera({ onPhotoTaken, type }: VisionCameraProps) 
     }
   }, [type, onPhotoTaken]);
 
-  // If not on native platform, provide web fallback
-  if (!isNativePlatform) {
+  // If not on native platform or VisionCamera failed to load, provide web fallback
+  if (!isNativePlatform || !Camera) {
     return (
       <View style={styles.container}>
         {/* Header with type indicator */}
