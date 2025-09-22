@@ -2,6 +2,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Session, User } from '@supabase/supabase-js';
 import { supabase } from '../lib/supabase';
 import { Database } from '../types/database';
+import { safeLocalStorage, memoryUtils } from '../utils/platformUtils';
 
 type Profile = Database['public']['Tables']['profiles']['Row'];
 
@@ -26,9 +27,10 @@ class SessionManager {
   private static instance: SessionManager;
   private sessionData: SessionData | null = null;
   private sessionTimeout = 24 * 60 * 60 * 1000; // 24 hours
-  private refreshTimer: NodeJS.Timeout | null = null;
-  private activityTimer: NodeJS.Timeout | null = null;
+  private refreshTimer: number | null = null;
+  private activityTimer: number | null = null;
   private listeners: Array<(state: SessionState) => void> = [];
+  private isDestroyed = false;
 
   // Storage keys
   private readonly STORAGE_KEYS = {
@@ -54,9 +56,18 @@ class SessionManager {
 
   // Subscribe to session state changes
   public subscribe(callback: (state: SessionState) => void): () => void {
+    if (this.isDestroyed) {
+      console.warn('SessionManager is destroyed, cannot subscribe');
+      return () => {};
+    }
+
     this.listeners.push(callback);
     // Immediately call with current state
-    callback(this.getSessionState());
+    try {
+      callback(this.getSessionState());
+    } catch (error) {
+      console.error('Error in initial session state callback:', error);
+    }
 
     return () => {
       this.listeners = this.listeners.filter(listener => listener !== callback);
@@ -65,6 +76,8 @@ class SessionManager {
 
   // Notify all listeners of state changes
   private notifyListeners(): void {
+    if (this.isDestroyed) return;
+
     const state = this.getSessionState();
     this.listeners.forEach(listener => {
       try {
@@ -409,11 +422,9 @@ class SessionManager {
       ]);
 
       // Clear localStorage for web
-      if (typeof window !== 'undefined') {
-        localStorage.removeItem('oauth_user_type');
-        localStorage.removeItem('oauth_intent');
-        localStorage.removeItem('oauth_timestamp');
-      }
+      safeLocalStorage.removeItem('oauth_user_type');
+      safeLocalStorage.removeItem('oauth_intent');
+      safeLocalStorage.removeItem('oauth_timestamp');
     } catch (error) {
       console.error('❌ Error clearing stored session:', error);
     }

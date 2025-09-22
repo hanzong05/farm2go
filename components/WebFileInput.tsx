@@ -43,7 +43,7 @@ export default function WebFileInput({ onFileSelected, type }: WebFileInputProps
       })}
 
       <Text style={styles.hint}>
-        Supported formats: JPG, PNG, GIF (Max 10MB)
+        Supported formats: JPG, PNG, GIF (Max 20MB)
       </Text>
     </View>
   );

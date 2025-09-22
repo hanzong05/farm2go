@@ -222,12 +222,34 @@ export default function VerificationUpload({
   };
 
   const uploadImageToSupabase = async (uri: string, fileName: string): Promise<string> => {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 60000); // 60 second timeout
+
     try {
-      const response = await fetch(uri);
+      console.log('Starting upload for:', fileName);
+
+      // Add timeout to fetch request
+      const response = await fetch(uri, {
+        signal: controller.signal
+      });
+
+      if (!response.ok) {
+        throw new Error(`Failed to fetch image: ${response.status} ${response.statusText}`);
+      }
+
       const blob = await response.blob();
+
+      // Check file size (max 20MB)
+      if (blob.size > 20 * 1024 * 1024) {
+        throw new Error('File size too large. Please select an image smaller than 20MB.');
+      }
+
+      console.log('File blob created, size:', blob.size);
 
       const fileExt = uri.split('.').pop();
       const filePath = `${userId}/${fileName}.${fileExt}`;
+
+      console.log('Uploading to Supabase:', filePath);
 
       const { data, error } = await supabase.storage
         .from('verification-documents')
@@ -247,6 +269,8 @@ export default function VerificationUpload({
         throw error;
       }
 
+      console.log('Upload successful:', data.path);
+
       const { data: urlData } = supabase.storage
         .from('verification-documents')
         .getPublicUrl(data.path);
@@ -255,13 +279,25 @@ export default function VerificationUpload({
     } catch (uploadError) {
       console.error('Upload process error:', uploadError);
 
+      // Handle timeout/abort errors
+      if (uploadError instanceof Error && uploadError.name === 'AbortError') {
+        throw new Error('Upload timeout. Please check your internet connection and try again.');
+      }
+
       // If it's our custom bucket error, throw it as-is
       if (uploadError instanceof Error && uploadError.message.includes('Storage bucket not configured')) {
         throw uploadError;
       }
 
+      // Handle network errors
+      if (uploadError instanceof Error && (uploadError.message.includes('fetch') || uploadError.message.includes('network'))) {
+        throw new Error('Network error. Please check your internet connection and try again.');
+      }
+
       // For other errors, provide a generic message
       throw new Error('Failed to upload image. Please check your internet connection and try again.');
+    } finally {
+      clearTimeout(timeoutId);
     }
   };
 
@@ -277,9 +313,21 @@ export default function VerificationUpload({
       return;
     }
 
+    const controller = new AbortController();
+    let timeoutId: number | undefined;
+
     try {
       setUploading(true);
-      setUploadProgress('Uploading ID document...');
+      setUploadProgress('Preparing upload... (1/4)');
+
+      // Set overall timeout for the entire submission process
+      timeoutId = setTimeout(() => {
+        controller.abort();
+        setUploadProgress('Upload timeout - Please try again');
+      }, 120000); // 2 minute total timeout
+
+      setUploadProgress('Uploading ID document... (2/4)');
+      console.log('Starting ID document upload');
 
       // Upload ID document
       const idDocumentUrl = await uploadImageToSupabase(
@@ -287,7 +335,8 @@ export default function VerificationUpload({
         `id_document_${Date.now()}`
       );
 
-      setUploadProgress('Uploading face photo...');
+      console.log('ID document uploaded successfully');
+      setUploadProgress('Uploading face photo... (3/4)');
 
       // Upload face photo
       const facePhotoUrl = await uploadImageToSupabase(
@@ -295,7 +344,8 @@ export default function VerificationUpload({
         `face_photo_${Date.now()}`
       );
 
-      setUploadProgress('Submitting verification...');
+      console.log('Face photo uploaded successfully');
+      setUploadProgress('Submitting verification... (4/4)');
 
       // Submit verification to database
       const submissionData: VerificationSubmission = {
@@ -314,6 +364,8 @@ export default function VerificationUpload({
       if (error) {
         throw error;
       }
+
+      console.log('Verification submitted successfully');
 
       // Note: We no longer update the profiles table directly here.
       // The verification_submissions table is now the source of truth.
@@ -334,29 +386,46 @@ export default function VerificationUpload({
     } catch (error) {
       console.error('Error submitting verification:', error);
 
-      // Provide more specific error messages
+      // Provide more specific error messages for mobile users
       let errorMessage = 'Failed to submit verification. Please try again.';
+      let showRetry = true;
+
       if (error instanceof Error) {
-        if (error.message.includes('Storage bucket not configured')) {
+        if (error.name === 'AbortError' || error.message.includes('timeout')) {
+          errorMessage = 'Upload timeout. This may happen on slow connections. Please try again with a better internet connection.';
+        } else if (error.message.includes('File size too large')) {
+          errorMessage = error.message;
+          showRetry = false;
+        } else if (error.message.includes('Storage bucket not configured')) {
           errorMessage = 'Storage configuration error. Please contact support.';
+          showRetry = false;
         } else if (error.message.includes('verification_submissions')) {
           errorMessage = 'Database configuration error. Please contact support.';
-        } else if (error.message.includes('network') || error.message.includes('connection')) {
-          errorMessage = 'Network error. Please check your internet connection and try again.';
+          showRetry = false;
+        } else if (error.message.includes('network') || error.message.includes('connection') || error.message.includes('fetch')) {
+          errorMessage = 'Network error. Please check your internet connection and try again. If using mobile data, try switching to WiFi.';
         }
       }
 
-      Swal.fire({
+      const swalConfig: any = {
         title: 'Submission Failed',
         text: errorMessage,
         icon: 'error',
-        confirmButtonText: 'Try Again',
+        confirmButtonText: showRetry ? 'Try Again' : 'OK',
         confirmButtonColor: '#ef4444',
-        showCancelButton: true,
-        cancelButtonText: 'Cancel',
-        cancelButtonColor: '#6b7280'
-      });
+      };
+
+      if (showRetry) {
+        swalConfig.showCancelButton = true;
+        swalConfig.cancelButtonText = 'Cancel';
+        swalConfig.cancelButtonColor = '#6b7280';
+      }
+
+      Swal.fire(swalConfig);
     } finally {
+      if (timeoutId !== undefined) {
+        clearTimeout(timeoutId);
+      }
       setUploading(false);
       setUploadProgress('');
     }

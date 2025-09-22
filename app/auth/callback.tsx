@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { router } from 'expo-router';
-import { View, Text, ActivityIndicator, StyleSheet } from 'react-native';
+import { View, Text, ActivityIndicator, StyleSheet, Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from '../../lib/supabase';
 
@@ -19,25 +19,29 @@ export default function AuthCallback() {
         console.log('🔄 Processing OAuth callback...');
 
         // Clear any stale localStorage state first (Chrome desktop fix)
-        if (typeof window !== 'undefined') {
-          console.log('🧹 Clearing any stale localStorage state...');
-          // Check if we have stale data from previous sessions
-          const storedTimestamp = localStorage.getItem('oauth_timestamp');
-          const currentTime = Date.now();
-          const fiveMinutesAgo = currentTime - (5 * 60 * 1000);
+        if (Platform.OS === 'web' && typeof window !== 'undefined' && window.localStorage) {
+          try {
+            console.log('🧹 Clearing any stale localStorage state...');
+            // Check if we have stale data from previous sessions
+            const storedTimestamp = localStorage.getItem('oauth_timestamp');
+            const currentTime = Date.now();
+            const fiveMinutesAgo = currentTime - (5 * 60 * 1000);
 
-          if (storedTimestamp && parseInt(storedTimestamp) < fiveMinutesAgo) {
-            console.log('🧹 Found stale localStorage data, clearing...');
-            localStorage.removeItem('oauth_user_type');
-            localStorage.removeItem('oauth_intent');
-            localStorage.removeItem('oauth_timestamp');
+            if (storedTimestamp && parseInt(storedTimestamp) < fiveMinutesAgo) {
+              console.log('🧹 Found stale localStorage data, clearing...');
+              localStorage.removeItem('oauth_user_type');
+              localStorage.removeItem('oauth_intent');
+              localStorage.removeItem('oauth_timestamp');
+            }
+
+            console.log('🌐 Platform info:', {
+              userAgent: navigator.userAgent,
+              url: window.location.href,
+              hash: window.location.hash
+            });
+          } catch (error) {
+            console.log('🧹 Error accessing localStorage:', error);
           }
-
-          console.log('🌐 Platform info:', {
-            userAgent: navigator.userAgent,
-            url: window.location.href,
-            hash: window.location.hash
-          });
         }
 
         // Get the stored user type from sessionManager first, then fallback to legacy storage
@@ -57,13 +61,21 @@ export default function AuthCallback() {
           oauthIntent = oauthIntent || await AsyncStorage.getItem('oauth_intent');
 
           // If not in AsyncStorage, try localStorage (for web)
-          if (!storedUserType && typeof window !== 'undefined') {
-            storedUserType = localStorage.getItem('oauth_user_type');
-            console.log('📱 Checking localStorage for user type:', storedUserType);
+          if (!storedUserType && Platform.OS === 'web' && typeof window !== 'undefined' && window.localStorage) {
+            try {
+              storedUserType = localStorage.getItem('oauth_user_type');
+              console.log('📱 Checking localStorage for user type:', storedUserType);
+            } catch (error) {
+              console.log('📱 Error accessing localStorage for user type:', error);
+            }
           }
 
-          if (!oauthIntent && typeof window !== 'undefined') {
-            oauthIntent = localStorage.getItem('oauth_intent');
+          if (!oauthIntent && Platform.OS === 'web' && typeof window !== 'undefined' && window.localStorage) {
+            try {
+              oauthIntent = localStorage.getItem('oauth_intent');
+            } catch (error) {
+              console.log('📱 Error accessing localStorage for intent:', error);
+            }
           }
         }
 
@@ -71,11 +83,15 @@ export default function AuthCallback() {
         console.log('📱 OAuth intent:', oauthIntent);
 
         // Debug: Log all localStorage OAuth-related keys
-        if (typeof window !== 'undefined') {
-          console.log('🔍 All localStorage OAuth keys:');
-          console.log('  - oauth_user_type:', localStorage.getItem('oauth_user_type'));
-          console.log('  - oauth_intent:', localStorage.getItem('oauth_intent'));
-          console.log('  - oauth_timestamp:', localStorage.getItem('oauth_timestamp'));
+        if (Platform.OS === 'web' && typeof window !== 'undefined' && window.localStorage) {
+          try {
+            console.log('🔍 All localStorage OAuth keys:');
+            console.log('  - oauth_user_type:', localStorage.getItem('oauth_user_type'));
+            console.log('  - oauth_intent:', localStorage.getItem('oauth_intent'));
+            console.log('  - oauth_timestamp:', localStorage.getItem('oauth_timestamp'));
+          } catch (error) {
+            console.log('🔍 Error accessing localStorage for debug:', error);
+          }
         }
 
         // For sign-in attempts or when intent is unclear, always look up user type from database

@@ -126,13 +126,15 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   };
 
   useEffect(() => {
+    let isMounted = true;
+
     // Get initial session
     const getInitialSession = async () => {
       try {
         // If in demo mode, skip Supabase initialization
         if (isDemoMode) {
           console.log('🚀 Running in demo mode - Supabase authentication disabled');
-          setLoading(false);
+          if (isMounted) setLoading(false);
           return;
         }
 
@@ -140,19 +142,19 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
         if (error) {
           console.error('Error getting session:', error);
-        } else {
+        } else if (isMounted) {
           setSession(session);
           setUser(session?.user ?? null);
 
           if (session?.user) {
             const profileData = await fetchProfile(session.user.id);
-            setProfile(profileData);
+            if (isMounted) setProfile(profileData);
           }
         }
       } catch (error) {
         console.error('Initial session error:', error);
       } finally {
-        setLoading(false);
+        if (isMounted) setLoading(false);
       }
     };
 
@@ -162,26 +164,41 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     if (!isDemoMode) {
       const { data: { subscription } } = supabase.auth.onAuthStateChange(
         async (event, session) => {
+          if (!isMounted) return;
+
           console.log('Auth state changed:', event, session?.user?.id);
 
+          // Prevent unnecessary loading states on token refresh
+          if (event === 'TOKEN_REFRESHED') {
+            setSession(session);
+            setUser(session?.user ?? null);
+            return;
+          }
+
+          setLoading(true);
           setSession(session);
           setUser(session?.user ?? null);
 
           if (session?.user) {
             const profileData = await fetchProfile(session.user.id);
-            setProfile(profileData);
+            if (isMounted) setProfile(profileData);
           } else {
-            setProfile(null);
+            if (isMounted) setProfile(null);
           }
 
-          setLoading(false);
+          if (isMounted) setLoading(false);
         }
       );
 
       return () => {
+        isMounted = false;
         subscription?.unsubscribe();
       };
     }
+
+    return () => {
+      isMounted = false;
+    };
   }, []);
 
   const value = {

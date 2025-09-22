@@ -10,6 +10,7 @@ import { AuthProvider } from '../contexts/AuthContext';
 import { SessionProvider } from '../contexts/SessionContext';
 import { supabase } from '../lib/supabase';
 import { getUserWithProfile } from '../services/auth';
+import ErrorBoundary from '../components/ErrorBoundary';
 
 // Farm2Go green theme
 const Farm2GoTheme = {
@@ -88,267 +89,86 @@ export default function RootLayout() {
   const appStateRef = useRef(AppState.currentState);
   const hasInitialized = useRef(false);
 
-  // Session-based routing guard for automatic user type redirection and route protection
+  // Simplified session-based routing guard
   useEffect(() => {
+    let isMounted = true;
+
     const checkUserSessionAndRedirect = async () => {
+      if (hasInitialized.current || !isMounted) return;
+
       try {
-        // Skip session check only if already initialized AND user data is available
-        // This ensures that mobile browser refreshes still trigger proper session checks
-        if (hasInitialized.current) {
-          try {
-            const existingUserData = await getUserWithProfile();
-            if (existingUserData?.profile) {
-              console.log('🔍 Skipping session check - already initialized with valid user data');
-              return;
-            } else {
-              console.log('🔍 User data not found despite initialization, running session check');
-              hasInitialized.current = false; // Reset to allow proper session check
-            }
-          } catch (error) {
-            console.log('🔍 Error checking existing user data, running session check');
-            hasInitialized.current = false; // Reset to allow proper session check
-          }
-        }
-
         const userData = await getUserWithProfile();
-        const currentPath = window?.location?.pathname || '';
+        const currentPath = Platform.OS === 'web' && typeof window !== 'undefined'
+          ? window.location.pathname
+          : '';
 
-        console.log('🔍 Session check - Current path:', currentPath);
-        console.log('🔍 Session check - User data:', userData?.profile ? 'Logged in' : 'Not logged in');
+        if (!isMounted) return;
 
-        // Define public routes that don't require authentication
-        const publicRoutes = [
-          '/',
-          '/index',
-          '/buyer/marketplace',
-          '/about',
-          '/contact',
-          '/terms',
-          '/privacy',
-          '/features',
-          '/pricing',
-          '/demo',
-          '/blog',
-          '/careers',
-          '/case-studies',
-          '/cookies',
-          '/docs',
-          '/integrations',
-          '/press',
-          '/security',
-          '/support',
-          '/onboarding',
-          '/maintenance'
-        ];
+        console.log('🔍 Session check - Current path:', currentPath, 'User:', userData?.profile?.user_type || 'None');
 
-        // Define protected routes that require authentication
-        const protectedRoutes = [
-          '/admin',
-          '/super-admin',
-          '/farmer',
-          '/buyer/my-orders',
-          '/buyer/purchase-history',
-          '/buyer/wishlist',
-          '/buyer/settings',
-          '/buyer/cart',
-          '/buyer/checkout',
-          '/shared'
-        ];
-
-        const isPublicRoute = publicRoutes.some(route =>
-          currentPath === route || currentPath.startsWith('/auth/')
-        );
-
-        const isProtectedRoute = protectedRoutes.some(route =>
-          currentPath.startsWith(route)
-        );
+        const protectedRoutes = ['/admin', '/super-admin', '/farmer', '/buyer/my-orders', '/buyer/purchase-history', '/buyer/wishlist', '/buyer/settings', '/buyer/cart', '/buyer/checkout', '/shared'];
+        const isProtectedRoute = protectedRoutes.some(route => currentPath.startsWith(route));
 
         if (userData?.profile) {
-          // User is logged in
-          console.log('🔍 Session check - User type:', userData.profile.user_type);
-          console.log('🔍 Session check - User email:', userData.profile.email);
+          // User is logged in - only redirect from root/auth pages
+          const shouldRedirect = currentPath === '/' || currentPath === '/index' || currentPath.startsWith('/auth/');
 
-          // Only redirect if user is on root, auth pages, or wrong user type section
-          const shouldRedirect = currentPath === '/' ||
-                                 currentPath === '/index' ||
-                                 currentPath.startsWith('/auth/') ||
-                                 (userData.profile.user_type === 'farmer' && currentPath.startsWith('/buyer/marketplace'));
-
-          console.log('🔍 Should redirect authenticated user?', shouldRedirect, 'Current path:', currentPath, 'User type:', userData.profile.user_type);
-
-          if (shouldRedirect) {
-            // Import router dynamically to avoid circular dependencies
+          if (shouldRedirect && isMounted) {
             const { router } = await import('expo-router');
 
             switch (userData.profile.user_type) {
               case 'super-admin':
-                console.log('🚀 Auto-redirecting super admin to dashboard');
                 router.replace('/super-admin' as any);
                 break;
               case 'admin':
-                console.log('🚀 Auto-redirecting admin to dashboard');
-                try {
-                  router.replace('/admin/users' as any);
-                  console.log('✅ Admin redirect completed to /admin/users');
-                } catch (error) {
-                  console.error('❌ Admin redirect failed:', error);
-                }
+                router.replace('/admin/users' as any);
                 break;
               case 'farmer':
-                console.log('🚀 Auto-redirecting farmer to dashboard');
                 router.replace('/farmer');
                 break;
               case 'buyer':
-                console.log('🚀 Auto-redirecting buyer to marketplace');
                 router.replace('/buyer/marketplace');
                 break;
               default:
-                console.log('🚀 Default redirect to marketplace');
                 router.replace('/buyer/marketplace');
             }
           }
-        } else {
-          // User is NOT logged in
-          console.log('🔒 No active session detected');
-
-          if (isProtectedRoute) {
-            // User trying to access protected route without authentication
-            console.log('🚨 Unauthorized access attempt to protected route:', currentPath);
-            console.log('🔄 Redirecting to marketplace...');
-
-            const { router } = await import('expo-router');
-            router.replace('/buyer/marketplace' as any);
-            console.log('✅ Redirected unauthorized user to marketplace');
-          } else if (isPublicRoute) {
-            // User is on public route, allow access
-            console.log('✅ Access allowed to public route:', currentPath);
-          } else {
-            // Unknown route, redirect to marketplace for safety
-            console.log('⚠️ Unknown route accessed by unauthenticated user:', currentPath);
-            console.log('🔄 Redirecting to marketplace for safety...');
-
-            const { router } = await import('expo-router');
-            router.replace('/buyer/marketplace' as any);
-          }
+        } else if (isProtectedRoute && isMounted) {
+          // Redirect unauthenticated users from protected routes
+          const { router } = await import('expo-router');
+          router.replace('/buyer/marketplace' as any);
         }
 
-        // Mark as initialized after first successful check
         hasInitialized.current = true;
       } catch (error) {
-        console.log('🔍 Error checking session or redirecting:', error);
-        // On error, assume user is not logged in and allow only public access
-        const currentPath = window?.location?.pathname || '';
-        const publicRoutes = ['/', '/index', '/buyer/marketplace', '/about', '/contact', '/terms', '/privacy'];
-        const isPublicRoute = publicRoutes.some(route =>
-          currentPath === route || currentPath.startsWith('/auth/')
-        );
-
-        if (!isPublicRoute) {
-          console.log('🔄 Error state: Redirecting to marketplace...');
-          try {
-            const { router } = await import('expo-router');
-            router.replace('/buyer/marketplace' as any);
-          } catch (redirectError) {
-            console.error('❌ Failed to redirect on error:', redirectError);
-          }
-        }
+        console.log('🔍 Session check error:', error);
         hasInitialized.current = true;
       }
     };
 
-    // Only run on initial mount, not on every app focus
-    if (!hasInitialized.current) {
-      checkUserSessionAndRedirect();
-    }
+    const timeoutId = setTimeout(checkUserSessionAndRedirect, 100); // Small delay to prevent race conditions
+
+    return () => {
+      isMounted = false;
+      clearTimeout(timeoutId);
+    };
   }, []);
 
-  // Additional auth state listener for immediate redirects (only on actual auth events)
+  // Simplified auth state listener - only handle sign out
   useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      console.log('🔄 Auth state change detected:', event, session?.user?.email);
+      console.log('🔄 Auth state change:', event);
 
-      // Only handle actual sign in/out events, not token refreshes
-      if (event === 'SIGNED_IN' && session?.user && appStateRef.current === 'active') {
-        console.log('🚀 User just signed in, checking for immediate redirect');
+      if (event === 'SIGNED_OUT') {
+        const currentPath = Platform.OS === 'web' && typeof window !== 'undefined'
+          ? window.location.pathname
+          : '';
+        const protectedRoutes = ['/admin', '/super-admin', '/farmer', '/buyer/my-orders', '/buyer/purchase-history', '/buyer/wishlist', '/buyer/settings', '/buyer/cart', '/buyer/checkout', '/shared'];
+        const isProtectedRoute = protectedRoutes.some(route => currentPath.startsWith(route));
 
-        try {
-          // Small delay to ensure profile is loaded
-          setTimeout(async () => {
-            const userData = await getUserWithProfile();
-            if (userData?.profile) {
-              const { router } = await import('expo-router');
-
-              console.log('🔄 Immediate redirect for user type:', userData.profile.user_type);
-
-              switch (userData.profile.user_type) {
-                case 'super-admin':
-                  console.log('🚀 Immediate redirect: super-admin');
-                  router.replace('/super-admin' as any);
-                  break;
-                case 'admin':
-                  console.log('🚀 Immediate redirect: admin');
-                  router.replace('/admin/users' as any);
-                  break;
-                case 'farmer':
-                  console.log('🚀 Immediate redirect: farmer');
-                  router.replace('/farmer' as any);
-                  break;
-                case 'buyer':
-                  console.log('🚀 Immediate redirect: buyer');
-                  router.replace('/buyer/marketplace' as any);
-                  break;
-              }
-            }
-          }, 200);
-        } catch (error) {
-          console.error('❌ Immediate redirect failed:', error);
-        }
-      } else if (event === 'SIGNED_OUT') {
-        console.log('🚪 User signed out, checking current route...');
-
-        try {
-          const currentPath = window?.location?.pathname || '';
+        if (isProtectedRoute) {
           const { router } = await import('expo-router');
-
-          // Define routes that logged out users can access
-          const allowedLoggedOutRoutes = [
-            '/',
-            '/index',
-            '/buyer/marketplace',
-            '/about',
-            '/contact',
-            '/terms',
-            '/privacy',
-            '/features',
-            '/pricing',
-            '/demo',
-            '/blog',
-            '/careers',
-            '/case-studies',
-            '/cookies',
-            '/docs',
-            '/integrations',
-            '/press',
-            '/security',
-            '/support',
-            '/onboarding',
-            '/maintenance'
-          ];
-
-          const isAllowedRoute = allowedLoggedOutRoutes.some(route =>
-            currentPath === route || currentPath.startsWith('/auth/')
-          );
-
-          if (isAllowedRoute) {
-            console.log('✅ User signed out but on allowed route:', currentPath);
-            // Stay on current route if it's allowed for logged out users
-          } else {
-            console.log('🔄 User signed out from protected route, redirecting to marketplace');
-            router.replace('/buyer/marketplace' as any);
-            console.log('✅ Logout redirect to marketplace successful');
-          }
-        } catch (error) {
-          console.error('❌ Logout redirect failed:', error);
+          router.replace('/buyer/marketplace' as any);
         }
       }
     });
@@ -356,82 +176,14 @@ export default function RootLayout() {
     return () => subscription.unsubscribe();
   }, []);
 
-  // AppState monitoring to handle mobile browser refresh scenarios
+  // Minimal AppState monitoring - just track current state
   useEffect(() => {
     const handleAppStateChange = (nextAppState: any) => {
-      console.log('🔄 App state changing from', appStateRef.current, 'to', nextAppState);
-
-      if (appStateRef.current.match(/inactive|background/) && nextAppState === 'active') {
-        console.log('🔄 App came to foreground - checking if session needs refresh');
-
-        // On mobile browsers, when switching back to the app, we might need to refresh user state
-        // if the page was reloaded/reset
-        if (Platform.OS === 'web' && typeof window !== 'undefined') {
-          // Check if the current user is still valid after potential page refresh
-          setTimeout(async () => {
-            try {
-              const userData = await getUserWithProfile();
-              const currentPath = window?.location?.pathname || '';
-
-              console.log('🔄 Foreground check - Current path:', currentPath, 'User:', userData?.profile ? 'Valid' : 'Invalid');
-
-              // If user data exists but we're not on the right path, redirect
-              if (userData?.profile && currentPath.startsWith('/buyer/marketplace')) {
-                const { router } = await import('expo-router');
-
-                console.log('🔄 Mobile refresh detected - redirecting farmer from marketplace');
-                if (userData.profile.user_type === 'farmer') {
-                  router.replace('/farmer');
-                }
-              }
-            } catch (error) {
-              console.log('🔄 Error during foreground session check:', error);
-            }
-          }, 500); // Small delay to allow page to stabilize
-        }
-      }
-
       appStateRef.current = nextAppState;
     };
 
     const subscription = AppState.addEventListener('change', handleAppStateChange);
     return () => subscription?.remove();
-  }, []);
-
-  // Page visibility handler for mobile browser refresh detection
-  useEffect(() => {
-    if (Platform.OS === 'web' && typeof window !== 'undefined') {
-      const handleVisibilityChange = () => {
-        if (document.visibilityState === 'visible') {
-          console.log('🔄 Page became visible - checking user session');
-
-          // Small delay to allow any page refresh to complete
-          setTimeout(async () => {
-            try {
-              const userData = await getUserWithProfile();
-              const currentPath = window?.location?.pathname || '';
-
-              console.log('🔄 Visibility check - Current path:', currentPath, 'User type:', userData?.profile?.user_type);
-
-              // If user is a farmer but ended up on marketplace, redirect back
-              if (userData?.profile?.user_type === 'farmer' && currentPath.startsWith('/buyer/marketplace')) {
-                console.log('🔄 Farmer detected on marketplace after page refresh - redirecting to farmer dashboard');
-                const { router } = await import('expo-router');
-                router.replace('/farmer');
-              }
-            } catch (error) {
-              console.log('🔄 Error during visibility session check:', error);
-            }
-          }, 1000); // Longer delay for page refresh scenarios
-        }
-      };
-
-      document.addEventListener('visibilitychange', handleVisibilityChange);
-
-      return () => {
-        document.removeEventListener('visibilitychange', handleVisibilityChange);
-      };
-    }
   }, []);
 
   // Enhanced deep linking for OAuth and marketplace navigation
@@ -480,11 +232,12 @@ export default function RootLayout() {
   }, []);
 
   return (
-    <SessionProvider>
-      <AuthProvider>
-        <ThemeProvider
-          value={colorScheme === 'dark' ? Farm2GoDarkTheme : Farm2GoTheme}
-        >
+    <ErrorBoundary>
+      <SessionProvider>
+        <AuthProvider>
+          <ThemeProvider
+            value={colorScheme === 'dark' ? Farm2GoDarkTheme : Farm2GoTheme}
+          >
         <Stack
           screenOptions={{
             headerShown: false,
@@ -789,7 +542,8 @@ export default function RootLayout() {
           translucent={Platform.OS === 'android'}
         />
         </ThemeProvider>
-      </AuthProvider>
-    </SessionProvider>
+        </AuthProvider>
+      </SessionProvider>
+    </ErrorBoundary>
   );
 }
