@@ -3,7 +3,6 @@ import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
-  Dimensions,
   RefreshControl,
   ScrollView,
   StyleSheet,
@@ -16,7 +15,7 @@ import { supabase } from '../../lib/supabase';
 import { getUserWithProfile } from '../../services/auth';
 import { Database } from '../../types/database';
 
-const { width } = Dimensions.get('window');
+// Remove unused width variable
 
 type Profile = Database['public']['Tables']['profiles']['Row'];
 
@@ -40,7 +39,6 @@ interface DatabaseOrder {
   profiles: {
     first_name: string | null;
     last_name: string | null;
-    company_name: string | null;
   } | null;
 }
 
@@ -54,7 +52,6 @@ interface Sale {
   buyer_profile?: {
     first_name: string | null;
     last_name: string | null;
-    company_name: string | null;
   };
   order_items?: Array<{
     order_id: string;
@@ -145,8 +142,7 @@ export default function FarmerSalesHistoryScreen() {
           ),
           profiles!orders_buyer_id_fkey (
             first_name,
-            last_name,
-            company_name
+            last_name
           )
         `)
         .eq('farmer_id', farmerId)
@@ -156,14 +152,16 @@ export default function FarmerSalesHistoryScreen() {
 
       if (ordersError) throw ordersError;
 
-      if (!ordersData || ordersData.length === 0) {
+      const typedOrdersData = ordersData as DatabaseOrder[] | null;
+
+      if (!typedOrdersData || typedOrdersData.length === 0) {
         console.log('🔍 No orders found for farmer');
         setSales([]);
         return;
       }
 
       // Transform orders into sales format
-      const salesWithItems: Sale[] = ordersData.map(order => {
+      const salesWithItems: Sale[] = typedOrdersData.map(order => {
         // Create a single order item since each order is for one product
         const items = [{
           order_id: order.id,
@@ -186,7 +184,6 @@ export default function FarmerSalesHistoryScreen() {
           buyer_profile: order.profiles ? {
             first_name: order.profiles.first_name,
             last_name: order.profiles.last_name,
-            company_name: order.profiles.company_name,
           } : undefined,
           order_items: items,
         };
@@ -302,10 +299,7 @@ export default function FarmerSalesHistoryScreen() {
     }).format(price);
   };
 
-  const getGrowthPercentage = (current: number, previous: number) => {
-    if (previous === 0) return current > 0 ? 100 : 0;
-    return ((current - previous) / previous) * 100;
-  };
+  // Removed unused getGrowthPercentage function
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -351,8 +345,7 @@ export default function FarmerSalesHistoryScreen() {
         <Text style={styles.buyerIcon}>👤</Text>
         <View style={styles.buyerInfo}>
           <Text style={styles.buyerName}>
-            {sale.buyer_profile?.company_name ||
-             `${sale.buyer_profile?.first_name || ''} ${sale.buyer_profile?.last_name || ''}`.trim() ||
+            {`${sale.buyer_profile?.first_name || ''} ${sale.buyer_profile?.last_name || ''}`.trim() ||
              'Unknown Buyer'}
           </Text>
         </View>
@@ -416,7 +409,7 @@ export default function FarmerSalesHistoryScreen() {
     </View>
   );
 
-  const stats = getSalesStats();
+  // Removed unused stats variable
 
   if (loading) {
     return (
