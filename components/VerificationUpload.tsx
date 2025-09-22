@@ -110,6 +110,7 @@ export default function VerificationUpload({
   const [uploadProgress, setUploadProgress] = useState('');
   const [showVisionCamera, setShowVisionCamera] = useState<'id' | 'face' | null>(null);
   const [showFileInput, setShowFileInput] = useState<'id' | 'face' | null>(null);
+  const [debugInfo, setDebugInfo] = useState<string[]>([]);
 
   const requestCameraPermission = async () => {
     const { status } = await ImagePicker.requestCameraPermissionsAsync();
@@ -418,7 +419,15 @@ export default function VerificationUpload({
   };
 
   const submitVerification = async () => {
+    console.log('📄 Submit verification started');
+    console.log('📄 Current verification data:', {
+      hasIdDocument: !!verificationData.idDocument.uri,
+      hasFacePhoto: !!verificationData.facePhoto.uri,
+      idDocumentType: verificationData.idDocument.type
+    });
+
     if (!verificationData.idDocument.uri || !verificationData.facePhoto.uri) {
+      console.log('❌ Missing photos, showing warning');
       Swal.fire({
         title: 'Missing Photos',
         text: 'Please upload both ID document and face photo.',
