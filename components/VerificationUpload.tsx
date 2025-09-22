@@ -13,7 +13,10 @@ import {
 import Swal from 'sweetalert2';
 import { supabase } from '../lib/supabase';
 import { Database } from '../types/database';
-import VisionCamera from './VisionCamera';
+// Platform-specific import to prevent VisionCamera loading on web
+const VisionCamera = Platform.OS === 'web'
+  ? require('./VisionCameraMock').default
+  : require('./VisionCamera').default;
 import WebFileInput from './WebFileInput';
 
 
