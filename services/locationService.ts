@@ -34,6 +34,69 @@ class LocationService {
   private lastRequestTime = 0;
   private minRequestInterval = 1000; // 1 second
 
+  // Fallback data for Tarlac City barangays when API is not available
+  private tarlacBarangays: BarangayResult[] = [
+    { name: 'Aguso', fullName: 'Barangay Aguso, Tarlac City, Tarlac', lat: '15.4803', lon: '120.5979', placeId: 'aguso' },
+    { name: 'Alvindia Primero', fullName: 'Barangay Alvindia Primero, Tarlac City, Tarlac', lat: '15.4703', lon: '120.5879', placeId: 'alvindia-primero' },
+    { name: 'Alvindia Segundo', fullName: 'Barangay Alvindia Segundo, Tarlac City, Tarlac', lat: '15.4703', lon: '120.5879', placeId: 'alvindia-segundo' },
+    { name: 'Amucao', fullName: 'Barangay Amucao, Tarlac City, Tarlac', lat: '15.4903', lon: '120.6079', placeId: 'amucao' },
+    { name: 'Armenia', fullName: 'Barangay Armenia, Tarlac City, Tarlac', lat: '15.4603', lon: '120.5779', placeId: 'armenia' },
+    { name: 'Asturias', fullName: 'Barangay Asturias, Tarlac City, Tarlac', lat: '15.4803', lon: '120.5879', placeId: 'asturias' },
+    { name: 'Atioc', fullName: 'Barangay Atioc, Tarlac City, Tarlac', lat: '15.4703', lon: '120.5979', placeId: 'atioc' },
+    { name: 'Balanti', fullName: 'Barangay Balanti, Tarlac City, Tarlac', lat: '15.4603', lon: '120.5879', placeId: 'balanti' },
+    { name: 'Balete', fullName: 'Barangay Balete, Tarlac City, Tarlac', lat: '15.4803', lon: '120.5779', placeId: 'balete' },
+    { name: 'Bantog', fullName: 'Barangay Bantog, Tarlac City, Tarlac', lat: '15.4903', lon: '120.5879', placeId: 'bantog' },
+    { name: 'Batang-batang', fullName: 'Barangay Batang-batang, Tarlac City, Tarlac', lat: '15.4703', lon: '120.5779', placeId: 'batang-batang' },
+    { name: 'Binauganan', fullName: 'Barangay Binauganan, Tarlac City, Tarlac', lat: '15.4803', lon: '120.6079', placeId: 'binauganan' },
+    { name: 'Bora', fullName: 'Barangay Bora, Tarlac City, Tarlac', lat: '15.4603', lon: '120.6079', placeId: 'bora' },
+    { name: 'Burot', fullName: 'Barangay Burot, Tarlac City, Tarlac', lat: '15.4903', lon: '120.5779', placeId: 'burot' },
+    { name: 'Carangian', fullName: 'Barangay Carangian, Tarlac City, Tarlac', lat: '15.4703', lon: '120.6079', placeId: 'carangian' },
+    { name: 'Care', fullName: 'Barangay Care, Tarlac City, Tarlac', lat: '15.4803', lon: '120.5979', placeId: 'care' },
+    { name: 'Central', fullName: 'Barangay Central, Tarlac City, Tarlac', lat: '15.4803', lon: '120.5929', placeId: 'central' },
+    { name: 'Culipaat', fullName: 'Barangay Culipaat, Tarlac City, Tarlac', lat: '15.4603', lon: '120.5779', placeId: 'culipaat' },
+    { name: 'Cut-cut Primero', fullName: 'Barangay Cut-cut Primero, Tarlac City, Tarlac', lat: '15.4703', lon: '120.5879', placeId: 'cut-cut-primero' },
+    { name: 'Cut-cut Segundo', fullName: 'Barangay Cut-cut Segundo, Tarlac City, Tarlac', lat: '15.4703', lon: '120.5879', placeId: 'cut-cut-segundo' },
+    { name: 'Dela Paz', fullName: 'Barangay Dela Paz, Tarlac City, Tarlac', lat: '15.4803', lon: '120.5879', placeId: 'dela-paz' },
+    { name: 'Dolores', fullName: 'Barangay Dolores, Tarlac City, Tarlac', lat: '15.4903', lon: '120.5979', placeId: 'dolores' },
+    { name: 'Laoang', fullName: 'Barangay Laoang, Tarlac City, Tarlac', lat: '15.4603', lon: '120.5879', placeId: 'laoang' },
+    { name: 'Ligtasan', fullName: 'Barangay Ligtasan, Tarlac City, Tarlac', lat: '15.4803', lon: '120.6079', placeId: 'ligtasan' },
+    { name: 'Lourdes', fullName: 'Barangay Lourdes, Tarlac City, Tarlac', lat: '15.4703', lon: '120.5929', placeId: 'lourdes' },
+    { name: 'Mabini', fullName: 'Barangay Mabini, Tarlac City, Tarlac', lat: '15.4803', lon: '120.5929', placeId: 'mabini' },
+    { name: 'Maligaya', fullName: 'Barangay Maligaya, Tarlac City, Tarlac', lat: '15.4903', lon: '120.5879', placeId: 'maligaya' },
+    { name: 'Mapalacsiao', fullName: 'Barangay Mapalacsiao, Tarlac City, Tarlac', lat: '15.4603', lon: '120.6079', placeId: 'mapalacsiao' },
+    { name: 'Mapatag', fullName: 'Barangay Mapatag, Tarlac City, Tarlac', lat: '15.4703', lon: '120.5779', placeId: 'mapatag' },
+    { name: 'Paraiso', fullName: 'Barangay Paraiso, Tarlac City, Tarlac', lat: '15.4803', lon: '120.5829', placeId: 'paraiso' },
+    { name: 'Poblacion', fullName: 'Barangay Poblacion, Tarlac City, Tarlac', lat: '15.4803', lon: '120.5929', placeId: 'poblacion' },
+    { name: 'Salapungan', fullName: 'Barangay Salapungan, Tarlac City, Tarlac', lat: '15.4903', lon: '120.6079', placeId: 'salapungan' },
+    { name: 'San Carlos', fullName: 'Barangay San Carlos, Tarlac City, Tarlac', lat: '15.4603', lon: '120.5929', placeId: 'san-carlos' },
+    { name: 'San Francisco', fullName: 'Barangay San Francisco, Tarlac City, Tarlac', lat: '15.4703', lon: '120.5829', placeId: 'san-francisco' },
+    { name: 'San Isidro', fullName: 'Barangay San Isidro, Tarlac City, Tarlac', lat: '15.4803', lon: '120.5779', placeId: 'san-isidro' },
+    { name: 'San Jose', fullName: 'Barangay San Jose, Tarlac City, Tarlac', lat: '15.4903', lon: '120.5929', placeId: 'san-jose' },
+    { name: 'San Luis', fullName: 'Barangay San Luis, Tarlac City, Tarlac', lat: '15.4603', lon: '120.5829', placeId: 'san-luis' },
+    { name: 'San Manuel', fullName: 'Barangay San Manuel, Tarlac City, Tarlac', lat: '15.4703', lon: '120.6079', placeId: 'san-manuel' },
+    { name: 'San Miguel', fullName: 'Barangay San Miguel, Tarlac City, Tarlac', lat: '15.4803', lon: '120.6029', placeId: 'san-miguel' },
+    { name: 'San Nicolas', fullName: 'Barangay San Nicolas, Tarlac City, Tarlac', lat: '15.4903', lon: '120.5829', placeId: 'san-nicolas' },
+    { name: 'San Pablo', fullName: 'Barangay San Pablo, Tarlac City, Tarlac', lat: '15.4603', lon: '120.5979', placeId: 'san-pablo' },
+    { name: 'San Pascual', fullName: 'Barangay San Pascual, Tarlac City, Tarlac', lat: '15.4703', lon: '120.5979', placeId: 'san-pascual' },
+    { name: 'San Rafael', fullName: 'Barangay San Rafael, Tarlac City, Tarlac', lat: '15.4803', lon: '120.5879', placeId: 'san-rafael' },
+    { name: 'San Roque', fullName: 'Barangay San Roque, Tarlac City, Tarlac', lat: '15.4903', lon: '120.6029', placeId: 'san-roque' },
+    { name: 'San Sebastian', fullName: 'Barangay San Sebastian, Tarlac City, Tarlac', lat: '15.4603', lon: '120.6029', placeId: 'san-sebastian' },
+    { name: 'San Vicente', fullName: 'Barangay San Vicente, Tarlac City, Tarlac', lat: '15.4703', lon: '120.5829', placeId: 'san-vicente' },
+    { name: 'Santa Cruz', fullName: 'Barangay Santa Cruz, Tarlac City, Tarlac', lat: '15.4803', lon: '120.6129', placeId: 'santa-cruz' },
+    { name: 'Santa Maria', fullName: 'Barangay Santa Maria, Tarlac City, Tarlac', lat: '15.4903', lon: '120.6179', placeId: 'santa-maria' },
+    { name: 'Santo Cristo', fullName: 'Barangay Santo Cristo, Tarlac City, Tarlac', lat: '15.4603', lon: '120.5729', placeId: 'santo-cristo' },
+    { name: 'Santo Domingo', fullName: 'Barangay Santo Domingo, Tarlac City, Tarlac', lat: '15.4703', lon: '120.6129', placeId: 'santo-domingo' },
+    { name: 'Santo Niño', fullName: 'Barangay Santo Niño, Tarlac City, Tarlac', lat: '15.4803', lon: '120.5729', placeId: 'santo-nino' },
+    { name: 'Sepung Calzada', fullName: 'Barangay Sepung Calzada, Tarlac City, Tarlac', lat: '15.4903', lon: '120.5729', placeId: 'sepung-calzada' },
+    { name: 'Sinait', fullName: 'Barangay Sinait, Tarlac City, Tarlac', lat: '15.4603', lon: '120.6179', placeId: 'sinait' },
+    { name: 'Suizo', fullName: 'Barangay Suizo, Tarlac City, Tarlac', lat: '15.4703', lon: '120.6179', placeId: 'suizo' },
+    { name: 'Tariji', fullName: 'Barangay Tariji, Tarlac City, Tarlac', lat: '15.4803', lon: '120.6179', placeId: 'tariji' },
+    { name: 'Tibag', fullName: 'Barangay Tibag, Tarlac City, Tarlac', lat: '15.4903', lon: '120.6129', placeId: 'tibag' },
+    { name: 'Trinidad', fullName: 'Barangay Trinidad, Tarlac City, Tarlac', lat: '15.4603', lon: '120.6129', placeId: 'trinidad' },
+    { name: 'Ungot', fullName: 'Barangay Ungot, Tarlac City, Tarlac', lat: '15.4703', lon: '120.5729', placeId: 'ungot' },
+    { name: 'Villa Bacolor', fullName: 'Barangay Villa Bacolor, Tarlac City, Tarlac', lat: '15.4803', lon: '120.6229', placeId: 'villa-bacolor' }
+  ];
+
   private async makeRequest(url: string): Promise<any> {
     const now = Date.now();
     const timeSinceLastRequest = now - this.lastRequestTime;
@@ -66,6 +129,13 @@ class LocationService {
       return data;
     } catch (error) {
       console.error('Location API error:', error);
+
+      // Check if it's a CORS error (common when running in web browser)
+      if (error instanceof TypeError && error.message.includes('fetch')) {
+        console.log('🚫 CORS error detected, will use fallback data');
+        throw new Error('CORS_ERROR');
+      }
+
       throw error;
     }
   }
@@ -175,6 +245,22 @@ class LocationService {
       return results;
     } catch (error) {
       console.error('Error searching barangays:', error);
+
+      // If CORS error or API is unavailable, use fallback data with search
+      if (error instanceof Error && (error.message === 'CORS_ERROR' || error.message.includes('fetch'))) {
+        console.log('🔄 Using fallback barangay data for search due to CORS/API error');
+
+        const filteredResults = this.tarlacBarangays.filter(barangay =>
+          barangay.name.toLowerCase().includes(query.toLowerCase())
+        );
+
+        // Cache filtered results for 2 minutes (shorter than normal since it's fallback)
+        this.cache.set(cacheKey, filteredResults);
+        setTimeout(() => this.cache.delete(cacheKey), 2 * 60 * 1000);
+
+        return filteredResults;
+      }
+
       return [];
     }
   }
@@ -359,6 +445,18 @@ class LocationService {
       return uniqueResults;
     } catch (error) {
       console.error('Error fetching all barangays:', error);
+
+      // If CORS error or API is unavailable, use fallback data
+      if (error instanceof Error && (error.message === 'CORS_ERROR' || error.message.includes('fetch'))) {
+        console.log('🔄 Using fallback barangay data due to CORS/API error');
+
+        // Cache fallback results for 5 minutes (shorter than normal since it's fallback)
+        this.cache.set(cacheKey, this.tarlacBarangays);
+        setTimeout(() => this.cache.delete(cacheKey), 5 * 60 * 1000);
+
+        return this.tarlacBarangays;
+      }
+
       return [];
     }
   }
