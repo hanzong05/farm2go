@@ -1,6 +1,6 @@
 import { router } from 'expo-router';
 import React, { useEffect, useState } from 'react';
-import { ActivityIndicator, Alert, Dimensions, FlatList, Image, RefreshControl, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Alert, Dimensions, FlatList, Image, RefreshControl, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import HeaderComponent from '../../components/HeaderComponent';
 import { supabase } from '../../lib/supabase';
 import { getUserWithProfile } from '../../services/auth';
@@ -30,16 +30,7 @@ interface Product {
 
 type Profile = Database['public']['Tables']['profiles']['Row'];
 
-const categories = [
-  'All',
-  'Vegetables',
-  'Fruits',
-  'Grains',
-  'Herbs',
-  'Dairy',
-  'Meat',
-  'Others'
-];
+
 
 export default function MarketplaceScreen() {
   const [products, setProducts] = useState<Product[]>([]);
@@ -127,34 +118,7 @@ export default function MarketplaceScreen() {
     }).format(price);
   };
 
-  const renderCategoryFilter = () => (
-    <View style={styles.categorySection}>
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={styles.categoryContainer}
-      >
-        {categories.map((category) => (
-          <TouchableOpacity
-            key={category}
-            style={[
-              styles.categoryButton,
-              selectedCategory === category && styles.categoryButtonActive
-            ]}
-            onPress={() => setSelectedCategory(category)}
-            activeOpacity={0.7}
-          >
-            <Text style={[
-              styles.categoryButtonText,
-              selectedCategory === category && styles.categoryButtonTextActive
-            ]}>
-              {category}
-            </Text>
-          </TouchableOpacity>
-        ))}
-      </ScrollView>
-    </View>
-  );
+ 
 
 
   const renderProduct = (product: Product) => (
@@ -332,12 +296,7 @@ export default function MarketplaceScreen() {
   }
 
   // Convert categories to match header component format
-  const headerCategories = categories.map(cat => ({
-    key: cat.toLowerCase(),
-    label: cat,
-    color: '#059669'
-  }));
-
+ 
   return (
     <View style={styles.container}>
       <HeaderComponent
@@ -347,7 +306,6 @@ export default function MarketplaceScreen() {
         onSearchChange={setSearchQuery}
         searchPlaceholder="Search fresh products..."
         showCategories={true}
-        categories={headerCategories}
         selectedCategory={selectedCategory.toLowerCase()}
         onCategoryChange={(category) => setSelectedCategory(category === 'all' ? 'All' : category.charAt(0).toUpperCase() + category.slice(1))}
         showFilterButton={true}
@@ -366,31 +324,7 @@ export default function MarketplaceScreen() {
         }
         showsVerticalScrollIndicator={false}
       >
-        {/* Enhanced Search */}
-        <View style={styles.searchSection}>
-          <View style={styles.searchContainer}>
-            <Text style={styles.searchIcon}>🔍</Text>
-            <TextInput
-              style={styles.searchInput}
-              placeholder="Search products, farms, categories..."
-              value={searchQuery}
-              onChangeText={setSearchQuery}
-              placeholderTextColor="#9ca3af"
-            />
-            {searchQuery.length > 0 && (
-              <TouchableOpacity
-                style={styles.clearSearchButton}
-                onPress={() => setSearchQuery('')}
-                activeOpacity={0.7}
-              >
-                <Text style={styles.clearSearchText}>✕</Text>
-              </TouchableOpacity>
-            )}
-          </View>
-        </View>
-
-        {renderCategoryFilter()}
-
+    
         {/* Products Section */}
         <View style={styles.productsSection}>
           <View style={styles.sectionHeader}>
