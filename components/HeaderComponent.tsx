@@ -285,13 +285,13 @@ export default function HeaderComponent({
   onAddButtonPress,
   showFilterButton = false,
   onFilterPress,
-  showNotifications = true,
+  showNotifications = false,
   notifications = [],
   onNotificationPress,
   onMarkNotificationAsRead,
   onMarkAllNotificationsAsRead,
   onClearAllNotifications,
-  showMessages = true,
+  showMessages = false,
   conversations = [],
   onConversationPress,
   onSendMessage,
@@ -301,6 +301,9 @@ export default function HeaderComponent({
   // Use state to track screen dimensions
   const [screenData, setScreenData] = useState(getScreenDimensions());
   const [showMobileNav, setShowMobileNav] = useState(false);
+  
+  // State to manage message and notification panel visibility
+  const [activePanel, setActivePanel] = useState<'messages' | 'notifications' | null>(null);
 
   // Update dimensions on window resize
   useEffect(() => {
