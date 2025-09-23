@@ -143,8 +143,7 @@ export default function FarmerOrdersScreen() {
           profiles!orders_buyer_id_fkey (
             first_name,
             last_name,
-            phone,
-            company_name
+            phone
           )
         `)
         .eq('farmer_id', farmerId);
