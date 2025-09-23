@@ -41,8 +41,7 @@ const colors = {
   info: '#3b82f6',
   white: '#ffffff',
   black: '#000000',
-  gray50: '#f9fafb',
-  gray100: '#f3f4f6',
+  gray100: '#f9fafb',
   gray200: '#e5e7eb',
   gray300: '#d1d5db',
   gray400: '#9ca3af',
@@ -103,13 +102,11 @@ export default function NotificationComponent({
     if (diffInMinutes < 1) {
       return 'Just now';
     } else if (diffInMinutes < 60) {
-      return `${diffInMinutes}m`;
+      return `${diffInMinutes}m ago`;
     } else if (diffInMinutes < 1440) {
-      return `${Math.floor(diffInMinutes / 60)}h`;
-    } else if (diffInMinutes < 10080) {
-      return `${Math.floor(diffInMinutes / 1440)}d`;
+      return `${Math.floor(diffInMinutes / 60)}h ago`;
     } else {
-      return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+      return date.toLocaleDateString();
     }
   };
 
@@ -123,15 +120,6 @@ export default function NotificationComponent({
   };
 
   const unreadCount = notifications.filter(n => !n.read).length;
-  const recentNotifications = notifications.filter(n => {
-    const diffInDays = Math.floor((new Date().getTime() - new Date(n.timestamp).getTime()) / (1000 * 60 * 60 * 24));
-    return diffInDays === 0;
-  });
-
-  const earlierNotifications = notifications.filter(n => {
-    const diffInDays = Math.floor((new Date().getTime() - new Date(n.timestamp).getTime()) / (1000 * 60 * 60 * 24));
-    return diffInDays > 0;
-  });
 
   const handleToggleNotifications = () => {
     if (isDesktop) {
@@ -177,165 +165,109 @@ export default function NotificationComponent({
 
   const renderEmptyState = () => (
     <View style={[styles.emptyContainer, isDesktop && styles.dropdownEmptyContainer]}>
-      <Icon name="bell-slash" size={isDesktop ? 40 : 48} color={colors.gray400} />
+      <Icon name="bell-slash" size={isDesktop ? 32 : 48} color={colors.gray400} />
       <Text style={[styles.emptyTitle, isDesktop && styles.dropdownEmptyTitle]}>No Notifications</Text>
       <Text style={[styles.emptyDescription, isDesktop && styles.dropdownEmptyDescription]}>
-        {isDesktop ? 'Your notifications will appear here' : "You're all caught up! New notifications will appear here."}
+        You're all caught up! New notifications will appear here.
       </Text>
     </View>
   );
 
-  const renderDesktopDropdownContent = () => (
-    <View style={styles.desktopDropdownContainer}>
-      <View style={styles.desktopDropdownHeader}>
-        <Text style={styles.desktopDropdownTitle}>Notifications</Text>
-        <TouchableOpacity
-          style={styles.desktopOptionsButton}
-          onPress={() => {
-            setDropdownVisible(false);
-            setModalVisible(true);
-          }}
-        >
-          <Icon name="ellipsis-h" size={16} color={colors.gray600} />
-        </TouchableOpacity>
+  const renderDropdownContent = () => (
+    <View style={styles.dropdownContainer}>
+      <View style={styles.dropdownHeader}>
+        <Text style={styles.dropdownTitle}>Notifications</Text>
+        <View style={styles.dropdownHeaderActions}>
+          {unreadCount > 0 && (
+            <TouchableOpacity
+              style={styles.dropdownHeaderButton}
+              onPress={onMarkAllAsRead}
+            >
+              <Text style={styles.dropdownHeaderButtonText}>Mark All Read</Text>
+            </TouchableOpacity>
+          )}
+          <TouchableOpacity
+            style={styles.dropdownCloseButton}
+            onPress={() => setDropdownVisible(false)}
+          >
+            <Icon name="times" size={14} color={colors.gray600} />
+          </TouchableOpacity>
+        </View>
       </View>
 
       {notifications.length === 0 ? (
         renderEmptyState()
       ) : (
-        <>
-          {/* New Section */}
-          {recentNotifications.length > 0 && (
-            <View style={styles.desktopNotificationSection}>
-              <View style={styles.desktopSectionHeader}>
-                <Text style={styles.desktopSectionTitle}>New</Text>
-              </View>
-              <View style={styles.desktopNotificationsList}>
-                {recentNotifications.slice(0, 4).map((item) => (
-                  <TouchableOpacity
-                    key={item.id}
-                    style={[
-                      styles.desktopNotificationItem,
-                      !item.read && styles.desktopNotificationItemUnread
-                    ]}
-                    onPress={() => {
-                      handleNotificationPress(item);
-                      setDropdownVisible(false);
-                    }}
-                    activeOpacity={0.9}
-                  >
-                    <View style={styles.desktopNotificationIconContainer}>
-                      <View style={[
-                        styles.desktopNotificationIcon,
-                        { backgroundColor: getTypeColor(item.type) + '20' }
-                      ]}>
-                        <Icon
-                          name={getTypeIcon(item.type)}
-                          size={20}
-                          color={getTypeColor(item.type)}
-                        />
-                      </View>
-                      {!item.read && (
-                        <View style={styles.desktopUnreadIndicator} />
-                      )}
-                    </View>
-
-                    <View style={styles.desktopNotificationContent}>
-                      <Text style={[
-                        styles.desktopNotificationTitle,
-                        !item.read && styles.desktopNotificationTitleUnread
-                      ]}>
-                        {item.title}
-                      </Text>
-                      <Text style={[
-                        styles.desktopNotificationMessage,
-                        !item.read && styles.desktopNotificationMessageUnread
-                      ]} numberOfLines={2}>
-                        {item.message}
-                      </Text>
-                      <Text style={styles.desktopTimestamp}>
-                        {formatTimestamp(item.timestamp)}
-                      </Text>
-                    </View>
-                  </TouchableOpacity>
-                ))}
-              </View>
-            </View>
-          )}
-
-          {/* Earlier Section */}
-          {earlierNotifications.length > 0 && (
-            <View style={styles.desktopNotificationSection}>
-              <View style={styles.desktopSectionHeader}>
-                <Text style={styles.desktopSectionTitle}>Earlier</Text>
-              </View>
-              <View style={styles.desktopNotificationsList}>
-                {earlierNotifications.slice(0, 3).map((item) => (
-                  <TouchableOpacity
-                    key={item.id}
-                    style={[
-                      styles.desktopNotificationItem,
-                      !item.read && styles.desktopNotificationItemUnread
-                    ]}
-                    onPress={() => {
-                      handleNotificationPress(item);
-                      setDropdownVisible(false);
-                    }}
-                    activeOpacity={0.9}
-                  >
-                    <View style={styles.desktopNotificationIconContainer}>
-                      <View style={[
-                        styles.desktopNotificationIcon,
-                        { backgroundColor: getTypeColor(item.type) + '20' }
-                      ]}>
-                        <Icon
-                          name={getTypeIcon(item.type)}
-                          size={20}
-                          color={getTypeColor(item.type)}
-                        />
-                      </View>
-                      {!item.read && (
-                        <View style={styles.desktopUnreadIndicator} />
-                      )}
-                    </View>
-
-                    <View style={styles.desktopNotificationContent}>
-                      <Text style={[
-                        styles.desktopNotificationTitle,
-                        !item.read && styles.desktopNotificationTitleUnread
-                      ]}>
-                        {item.title}
-                      </Text>
-                      <Text style={[
-                        styles.desktopNotificationMessage,
-                        !item.read && styles.desktopNotificationMessageUnread
-                      ]} numberOfLines={2}>
-                        {item.message}
-                      </Text>
-                      <Text style={styles.desktopTimestamp}>
-                        {formatTimestamp(item.timestamp)}
-                      </Text>
-                    </View>
-                  </TouchableOpacity>
-                ))}
-              </View>
-            </View>
-          )}
-
-          {notifications.length > 7 && (
-            <View style={styles.desktopDropdownFooter}>
+        <View style={styles.dropdownList}>
+          <FlatList
+            data={notifications.slice(0, 8)} // Limit to 8 notifications for dropdown
+            renderItem={({ item }) => (
               <TouchableOpacity
-                style={styles.desktopViewAllButton}
+                style={[
+                  styles.dropdownNotificationItem,
+                  !item.read && styles.dropdownNotificationItemUnread
+                ]}
                 onPress={() => {
+                  handleNotificationPress(item);
                   setDropdownVisible(false);
-                  setModalVisible(true);
                 }}
+                activeOpacity={0.7}
               >
-                <Text style={styles.desktopViewAllText}>See all notifications</Text>
+                <View style={styles.dropdownNotificationIcon}>
+                  <Icon
+                    name={getTypeIcon(item.type)}
+                    size={12}
+                    color={getTypeColor(item.type)}
+                  />
+                </View>
+                <View style={styles.dropdownNotificationContent}>
+                  <Text style={[
+                    styles.dropdownNotificationTitle,
+                    !item.read && styles.dropdownNotificationTitleUnread
+                  ]} numberOfLines={1}>
+                    {item.title}
+                  </Text>
+                  <Text style={styles.dropdownNotificationMessage} numberOfLines={2}>
+                    {item.message}
+                  </Text>
+                  <Text style={styles.dropdownNotificationTime}>
+                    {formatTimestamp(item.timestamp)}
+                  </Text>
+                </View>
+                {!item.read && <View style={styles.dropdownUnreadDot} />}
               </TouchableOpacity>
-            </View>
+            )}
+            keyExtractor={(item) => item.id}
+            showsVerticalScrollIndicator={false}
+            style={styles.dropdownFlatList}
+          />
+
+          {notifications.length > 8 && (
+            <TouchableOpacity
+              style={styles.dropdownViewAllButton}
+              onPress={() => {
+                setDropdownVisible(false);
+                setModalVisible(true);
+              }}
+            >
+              <Text style={styles.dropdownViewAllText}>View All ({notifications.length})</Text>
+            </TouchableOpacity>
           )}
-        </>
+        </View>
+      )}
+
+      {notifications.length > 0 && (
+        <View style={styles.dropdownFooter}>
+          <TouchableOpacity
+            style={styles.dropdownClearAllButton}
+            onPress={() => {
+              onClearAll?.();
+              setDropdownVisible(false);
+            }}
+          >
+            <Text style={styles.dropdownClearAllText}>Clear All</Text>
+          </TouchableOpacity>
+        </View>
       )}
     </View>
   );
@@ -366,7 +298,7 @@ export default function NotificationComponent({
             activeOpacity={1}
             onPress={() => setDropdownVisible(false)}
           />
-          {renderDesktopDropdownContent()}
+          {renderDropdownContent()}
         </>
       )}
 
@@ -463,218 +395,6 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
 
-  // Desktop Dropdown Styles (Facebook-like)
-  dropdownBackdrop: {
-    position: 'fixed',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: 'transparent',
-    zIndex: 5,
-    ...Platform.select({
-      web: {},
-      default: {
-        position: 'absolute',
-      },
-    }),
-  },
-
-  desktopDropdownContainer: {
-    position: 'absolute',
-    top: 45,
-    right: 0,
-    width: 380,
-    maxHeight: 500,
-    backgroundColor: colors.white,
-    borderRadius: 8,
-    ...Platform.select({
-      web: {
-        boxShadow: '0 8px 32px rgba(0,0,0,0.12), 0 4px 16px rgba(0,0,0,0.08)',
-      },
-      default: {
-        elevation: 8,
-        shadowColor: colors.shadow,
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.15,
-        shadowRadius: 12,
-      },
-    }),
-    borderWidth: 1,
-    borderColor: colors.gray200,
-  },
-
-  desktopDropdownHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingVertical: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.gray200,
-  },
-
-  desktopDropdownTitle: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: colors.text,
-  },
-
-  desktopOptionsButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: colors.gray100,
-    alignItems: 'center',
-    justifyContent: 'center',
-    ...Platform.select({
-      web: {
-        cursor: 'pointer',
-        transition: 'background-color 0.2s ease',
-      },
-    }),
-  },
-
-  desktopNotificationSection: {
-    paddingVertical: 8,
-  },
-
-  desktopSectionHeader: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.gray100,
-  },
-
-  desktopSectionTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: colors.text,
-  },
-
-  desktopNotificationsList: {
-    paddingVertical: 4,
-  },
-
-  desktopNotificationItem: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    paddingHorizontal: 8,
-    paddingVertical: 8,
-    marginHorizontal: 8,
-    borderRadius: 8,
-    ...Platform.select({
-      web: {
-        cursor: 'pointer',
-        transition: 'background-color 0.2s ease',
-      },
-    }),
-  },
-
-  desktopNotificationItemUnread: {
-    backgroundColor: colors.gray50,
-  },
-
-  desktopNotificationIconContainer: {
-    position: 'relative',
-    marginRight: 12,
-  },
-
-  desktopNotificationIcon: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-
-  desktopUnreadIndicator: {
-    position: 'absolute',
-    bottom: 2,
-    right: 2,
-    width: 16,
-    height: 16,
-    borderRadius: 8,
-    backgroundColor: colors.primary,
-    borderWidth: 2,
-    borderColor: colors.white,
-  },
-
-  desktopNotificationContent: {
-    flex: 1,
-    paddingTop: 2,
-  },
-
-  desktopNotificationTitle: {
-    fontSize: 15,
-    fontWeight: '500',
-    color: colors.text,
-    marginBottom: 4,
-    lineHeight: 20,
-  },
-
-  desktopNotificationTitleUnread: {
-    fontWeight: '600',
-  },
-
-  desktopNotificationMessage: {
-    fontSize: 13,
-    color: colors.gray600,
-    lineHeight: 18,
-    marginBottom: 4,
-  },
-
-  desktopNotificationMessageUnread: {
-    color: colors.text,
-    fontWeight: '500',
-  },
-
-  desktopTimestamp: {
-    fontSize: 13,
-    color: colors.primary,
-    fontWeight: '500',
-  },
-
-  desktopDropdownFooter: {
-    borderTopWidth: 1,
-    borderTopColor: colors.gray200,
-    paddingVertical: 8,
-  },
-
-  desktopViewAllButton: {
-    alignItems: 'center',
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-  },
-
-  desktopViewAllText: {
-    fontSize: 15,
-    color: colors.primary,
-    fontWeight: '500',
-  },
-
-  // Empty state adjustments for dropdown
-  dropdownEmptyContainer: {
-    paddingVertical: 60,
-    paddingHorizontal: 20,
-    alignItems: 'center',
-  },
-
-  dropdownEmptyTitle: {
-    fontSize: 20,
-    fontWeight: '600',
-    marginTop: 16,
-    marginBottom: 8,
-  },
-
-  dropdownEmptyDescription: {
-    fontSize: 14,
-    lineHeight: 20,
-    textAlign: 'center',
-    color: colors.gray600,
-  },
-
-  // Mobile Modal Styles
   modalContainer: {
     flex: 1,
     backgroundColor: colors.white,
@@ -827,5 +547,220 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: colors.danger,
     fontWeight: '600',
+  },
+
+  // Desktop Dropdown Styles
+  dropdownOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    zIndex: 10,
+  },
+
+  dropdownBackdrop: {
+    position: 'fixed',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'transparent',
+    zIndex: 5,
+    ...Platform.select({
+      web: {},
+      default: {
+        position: 'absolute',
+      },
+    }),
+  },
+
+  dropdownContainer: {
+    position: 'absolute',
+    top: 45,
+    right: 0,
+    width: 380,
+    maxHeight: 500,
+    backgroundColor: colors.white,
+    borderRadius: 12,
+    ...Platform.select({
+      web: {
+        boxShadow: '0 8px 32px rgba(0,0,0,0.12), 0 2px 8px rgba(0,0,0,0.08)',
+      },
+      default: {
+        elevation: 8,
+        shadowColor: colors.shadow,
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.15,
+        shadowRadius: 12,
+      },
+    }),
+    borderWidth: 1,
+    borderColor: colors.gray200,
+  },
+
+  dropdownHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.gray200,
+    backgroundColor: colors.gray50,
+    borderTopLeftRadius: 12,
+    borderTopRightRadius: 12,
+  },
+
+  dropdownTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: colors.text,
+  },
+
+  dropdownHeaderActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+
+  dropdownHeaderButton: {
+    backgroundColor: colors.primary,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+
+  dropdownHeaderButtonText: {
+    color: colors.white,
+    fontSize: 11,
+    fontWeight: '600',
+  },
+
+  dropdownCloseButton: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: colors.gray200,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  dropdownList: {
+    maxHeight: 320,
+  },
+
+  dropdownFlatList: {
+    maxHeight: 320,
+  },
+
+  dropdownNotificationItem: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.gray100,
+    backgroundColor: colors.white,
+  },
+
+  dropdownNotificationItemUnread: {
+    backgroundColor: colors.gray50,
+  },
+
+  dropdownNotificationIcon: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: colors.gray200,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 10,
+    marginTop: 2,
+  },
+
+  dropdownNotificationContent: {
+    flex: 1,
+  },
+
+  dropdownNotificationTitle: {
+    fontSize: 13,
+    fontWeight: '500',
+    color: colors.text,
+    marginBottom: 2,
+  },
+
+  dropdownNotificationTitleUnread: {
+    fontWeight: '600',
+  },
+
+  dropdownNotificationMessage: {
+    fontSize: 12,
+    color: colors.textSecondary,
+    lineHeight: 16,
+    marginBottom: 2,
+  },
+
+  dropdownNotificationTime: {
+    fontSize: 10,
+    color: colors.gray500,
+  },
+
+  dropdownUnreadDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: colors.primary,
+    marginLeft: 6,
+    marginTop: 6,
+  },
+
+  dropdownViewAllButton: {
+    alignItems: 'center',
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.gray200,
+    backgroundColor: colors.gray50,
+  },
+
+  dropdownViewAllText: {
+    fontSize: 13,
+    color: colors.primary,
+    fontWeight: '600',
+  },
+
+  dropdownFooter: {
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderBottomLeftRadius: 12,
+    borderBottomRightRadius: 12,
+  },
+
+  dropdownClearAllButton: {
+    alignItems: 'center',
+    paddingVertical: 8,
+  },
+
+  dropdownClearAllText: {
+    fontSize: 12,
+    color: colors.danger,
+    fontWeight: '600',
+  },
+
+  // Empty state adjustments for dropdown
+  dropdownEmptyContainer: {
+    paddingVertical: 40,
+    paddingHorizontal: 20,
+  },
+
+  dropdownEmptyTitle: {
+    fontSize: 16,
+    marginTop: 12,
+    marginBottom: 6,
+  },
+
+  dropdownEmptyDescription: {
+    fontSize: 13,
+    lineHeight: 18,
   },
 });
