@@ -1,5 +1,5 @@
 import { router } from 'expo-router';
-import React from 'react';
+import React, { useState } from 'react';
 import {
   ScrollView,
   StyleSheet,
@@ -291,6 +291,7 @@ export default function HeaderComponent({
   onMarkMessageAsRead,
   onNewConversation,
 }: HeaderComponentProps) {
+  const [showMobileNav, setShowMobileNav] = useState(false);
 
   // Determine user type from profile if not explicitly passed
   const resolvedUserType = userType || profile?.user_type || 'buyer';
@@ -417,41 +418,57 @@ export default function HeaderComponent({
           <Text style={styles.brandText}>Farm2Go</Text>
         </View>
 
-        {/* Navigation Items in Top Bar */}
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          style={styles.topNavScroll}
-          contentContainerStyle={styles.topNavContent}
-        >
-          {filteredNavItems.map((item) => {
-            const isActive = currentRoute === item.route;
+        {/* Navigation Items in Top Bar - Desktop */}
+        {!isMobile && (
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            style={styles.topNavScroll}
+            contentContainerStyle={styles.topNavContent}
+          >
+            {filteredNavItems.map((item) => {
+              const isActive = currentRoute === item.route;
 
-            return (
-              <TouchableOpacity
-                key={item.id}
-                style={[
-                  styles.topNavItem,
-                  isActive && styles.topNavItemActive
-                ]}
-                onPress={() => handleNavigation(item.route)}
-              >
-                <Icon
-                  name={item.icon}
-                  size={14}
-                  color={isActive ? colors.primary : colors.white}
-                  style={styles.topNavIcon}
-                />
-                <Text style={[
-                  styles.topNavText,
-                  isActive && styles.topNavTextActive
-                ]}>
-                  {item.title}
-                </Text>
-              </TouchableOpacity>
-            );
-          })}
-        </ScrollView>
+              return (
+                <TouchableOpacity
+                  key={item.id}
+                  style={[
+                    styles.topNavItem,
+                    isActive && styles.topNavItemActive
+                  ]}
+                  onPress={() => handleNavigation(item.route)}
+                >
+                  <Icon
+                    name={item.icon}
+                    size={14}
+                    color={isActive ? colors.primary : colors.white}
+                    style={styles.topNavIcon}
+                  />
+                  <Text style={[
+                    styles.topNavText,
+                    isActive && styles.topNavTextActive
+                  ]}>
+                    {item.title}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </ScrollView>
+        )}
+
+        {/* Mobile Menu Button */}
+        {isMobile && (
+          <TouchableOpacity
+            style={styles.mobileMenuButton}
+            onPress={() => setShowMobileNav(!showMobileNav)}
+          >
+            <Icon
+              name={showMobileNav ? "times" : "bars"}
+              size={16}
+              color={colors.white}
+            />
+          </TouchableOpacity>
+        )}
 
         <View style={styles.headerActions}>
           {/* Messages and Notifications */}
@@ -506,6 +523,48 @@ export default function HeaderComponent({
           </TouchableOpacity>
         </View>
       </View>
+
+      {/* Mobile Navigation Menu */}
+      {isMobile && showMobileNav && (
+        <View style={styles.mobileNavMenu}>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.mobileNavContent}
+          >
+            {filteredNavItems.map((item) => {
+              const isActive = currentRoute === item.route;
+
+              return (
+                <TouchableOpacity
+                  key={item.id}
+                  style={[
+                    styles.mobileNavItem,
+                    isActive && styles.mobileNavItemActive
+                  ]}
+                  onPress={() => {
+                    handleNavigation(item.route);
+                    setShowMobileNav(false);
+                  }}
+                >
+                  <Icon
+                    name={item.icon}
+                    size={16}
+                    color={isActive ? colors.primary : colors.white}
+                    style={styles.mobileNavIcon}
+                  />
+                  <Text style={[
+                    styles.mobileNavText,
+                    isActive && styles.mobileNavTextActive
+                  ]}>
+                    {item.title}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </ScrollView>
+        </View>
+      )}
 
       {/* Search Bar and Categories Combined */}
       {showSearch && (
@@ -624,7 +683,6 @@ const styles = StyleSheet.create({
   topNavScroll: {
     flex: 1,
     marginHorizontal: isMobile ? 8 : 16,
-    display: isMobile ? 'none' : 'flex',
   },
 
   topNavContent: {
@@ -823,5 +881,59 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255,255,255,0.3)',
     marginHorizontal: isMobile ? 8 : 12,
     alignSelf: 'center',
+  },
+
+  // Mobile Navigation
+  mobileMenuButton: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+
+  mobileNavMenu: {
+    backgroundColor: colors.primary,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255,255,255,0.2)',
+  },
+
+  mobileNavContent: {
+    alignItems: 'center',
+    paddingHorizontal: 4,
+  },
+
+  mobileNavItem: {
+    flexDirection: 'column',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
+    backgroundColor: 'transparent',
+    marginRight: 8,
+    minWidth: 60,
+  },
+
+  mobileNavItemActive: {
+    backgroundColor: 'rgba(255,255,255,0.2)',
+  },
+
+  mobileNavIcon: {
+    marginBottom: 4,
+  },
+
+  mobileNavText: {
+    fontSize: 10,
+    fontWeight: '500',
+    color: colors.white,
+    textAlign: 'center',
+  },
+
+  mobileNavTextActive: {
+    color: colors.white,
+    fontWeight: '600',
   },
 });
