@@ -1,14 +1,15 @@
 import { router } from 'expo-router';
 import React, { useState } from 'react';
 import {
-  Dimensions,
-  Platform,
   ScrollView,
   StyleSheet,
   Text,
   TextInput,
   TouchableOpacity,
-  View
+  View,
+  Platform,
+  Linking,
+  Dimensions
 } from 'react-native';
 
 const { width } = Dimensions.get('window');
@@ -17,9 +18,9 @@ const isTablet = width >= 768 && width < 1024;
 const isDesktop = width >= 1024;
 
 import Icon from 'react-native-vector-icons/FontAwesome5';
-import { supabase } from '../lib/supabase';
 import { logoutUser } from '../services/auth';
 import { Database } from '../types/database';
+import { supabase } from '../lib/supabase';
 import MessageComponent, { Conversation } from './MessageComponent';
 import NotificationComponent, { Notification } from './NotificationComponent';
 
@@ -451,25 +452,21 @@ export default function HeaderComponent({
         {/* Header Actions */}
         <View style={styles.headerActions}>
           {/* Messages and Notifications - Show on all devices */}
-          {showMessages && (
-            <MessageComponent
-              conversations={conversations}
-              onConversationPress={onConversationPress}
-              onSendMessage={onSendMessage}
-              onMarkAsRead={onMarkMessageAsRead}
-              onNewConversation={onNewConversation}
-            />
-          )}
+          <MessageComponent
+            conversations={conversations}
+            onConversationPress={onConversationPress}
+            onSendMessage={onSendMessage}
+            onMarkAsRead={onMarkMessageAsRead}
+            onNewConversation={onNewConversation}
+          />
 
-          {showNotifications && (
-            <NotificationComponent
-              notifications={notifications}
-              onNotificationPress={onNotificationPress}
-              onMarkAsRead={onMarkNotificationAsRead}
-              onMarkAllAsRead={onMarkAllNotificationsAsRead}
-              onClearAll={onClearAllNotifications}
-            />
-          )}
+          <NotificationComponent
+            notifications={notifications}
+            onNotificationPress={onNotificationPress}
+            onMarkAsRead={onMarkNotificationAsRead}
+            onMarkAllAsRead={onMarkAllNotificationsAsRead}
+            onClearAll={onClearAllNotifications}
+          />
 
           {/* Download App Button - only show on web */}
           {Platform.OS === 'web' && (
@@ -607,7 +604,7 @@ export default function HeaderComponent({
               </TouchableOpacity>
             )}
           </View>
-          
+
           {/* Category Tabs */}
           {showCategories && categories.length > 0 && (
             <ScrollView
