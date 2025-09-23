@@ -1,13 +1,18 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import {
+  Dimensions,
   FlatList,
   Modal,
+  Platform,
   StyleSheet,
   Text,
   TouchableOpacity,
   View
 } from 'react-native';
 import Icon from 'react-native-vector-icons/FontAwesome5';
+
+const { width } = Dimensions.get('window');
+const isDesktop = width >= 1024;
 
 export interface Notification {
   id: string;
@@ -60,6 +65,8 @@ export default function NotificationComponent({
   onClearAll,
 }: NotificationComponentProps) {
   const [modalVisible, setModalVisible] = useState(false);
+  const [dropdownVisible, setDropdownVisible] = useState(false);
+  const buttonRef = useRef<View>(null);
 
   const getTypeIcon = (type: Notification['type']) => {
     switch (type) {
@@ -114,6 +121,14 @@ export default function NotificationComponent({
 
   const unreadCount = notifications.filter(n => !n.read).length;
 
+  const handleToggleNotifications = () => {
+    if (isDesktop) {
+      setDropdownVisible(!dropdownVisible);
+    } else {
+      setModalVisible(true);
+    }
+  };
+
   const renderNotificationItem = ({ item }: { item: Notification }) => (
     <TouchableOpacity
       style={[
@@ -149,31 +164,145 @@ export default function NotificationComponent({
   );
 
   const renderEmptyState = () => (
-    <View style={styles.emptyContainer}>
-      <Icon name="bell-slash" size={48} color={colors.gray400} />
-      <Text style={styles.emptyTitle}>No Notifications</Text>
-      <Text style={styles.emptyDescription}>
+    <View style={[styles.emptyContainer, isDesktop && styles.dropdownEmptyContainer]}>
+      <Icon name="bell-slash" size={isDesktop ? 32 : 48} color={colors.gray400} />
+      <Text style={[styles.emptyTitle, isDesktop && styles.dropdownEmptyTitle]}>No Notifications</Text>
+      <Text style={[styles.emptyDescription, isDesktop && styles.dropdownEmptyDescription]}>
         You're all caught up! New notifications will appear here.
       </Text>
     </View>
   );
 
-  return (
-    <View>
-      <TouchableOpacity
-        style={styles.bellButton}
-        onPress={() => setModalVisible(true)}
-      >
-        <Icon name="bell" size={18} color={colors.white} />
-        {unreadCount > 0 && (
-          <View style={styles.badge}>
-            <Text style={styles.badgeText}>
-              {unreadCount > 99 ? '99+' : unreadCount}
-            </Text>
-          </View>
-        )}
-      </TouchableOpacity>
+  const renderDropdownContent = () => (
+    <View style={styles.dropdownContainer}>
+      <View style={styles.dropdownHeader}>
+        <Text style={styles.dropdownTitle}>Notifications</Text>
+        <View style={styles.dropdownHeaderActions}>
+          {unreadCount > 0 && (
+            <TouchableOpacity
+              style={styles.dropdownHeaderButton}
+              onPress={onMarkAllAsRead}
+            >
+              <Text style={styles.dropdownHeaderButtonText}>Mark All Read</Text>
+            </TouchableOpacity>
+          )}
+          <TouchableOpacity
+            style={styles.dropdownCloseButton}
+            onPress={() => setDropdownVisible(false)}
+          >
+            <Icon name="times" size={14} color={colors.gray600} />
+          </TouchableOpacity>
+        </View>
+      </View>
 
+      {notifications.length === 0 ? (
+        renderEmptyState()
+      ) : (
+        <View style={styles.dropdownList}>
+          <FlatList
+            data={notifications.slice(0, 8)} // Limit to 8 notifications for dropdown
+            renderItem={({ item }) => (
+              <TouchableOpacity
+                style={[
+                  styles.dropdownNotificationItem,
+                  !item.read && styles.dropdownNotificationItemUnread
+                ]}
+                onPress={() => {
+                  handleNotificationPress(item);
+                  setDropdownVisible(false);
+                }}
+                activeOpacity={0.7}
+              >
+                <View style={styles.dropdownNotificationIcon}>
+                  <Icon
+                    name={getTypeIcon(item.type)}
+                    size={12}
+                    color={getTypeColor(item.type)}
+                  />
+                </View>
+                <View style={styles.dropdownNotificationContent}>
+                  <Text style={[
+                    styles.dropdownNotificationTitle,
+                    !item.read && styles.dropdownNotificationTitleUnread
+                  ]} numberOfLines={1}>
+                    {item.title}
+                  </Text>
+                  <Text style={styles.dropdownNotificationMessage} numberOfLines={2}>
+                    {item.message}
+                  </Text>
+                  <Text style={styles.dropdownNotificationTime}>
+                    {formatTimestamp(item.timestamp)}
+                  </Text>
+                </View>
+                {!item.read && <View style={styles.dropdownUnreadDot} />}
+              </TouchableOpacity>
+            )}
+            keyExtractor={(item) => item.id}
+            showsVerticalScrollIndicator={false}
+            style={styles.dropdownFlatList}
+          />
+
+          {notifications.length > 8 && (
+            <TouchableOpacity
+              style={styles.dropdownViewAllButton}
+              onPress={() => {
+                setDropdownVisible(false);
+                setModalVisible(true);
+              }}
+            >
+              <Text style={styles.dropdownViewAllText}>View All ({notifications.length})</Text>
+            </TouchableOpacity>
+          )}
+        </View>
+      )}
+
+      {notifications.length > 0 && (
+        <View style={styles.dropdownFooter}>
+          <TouchableOpacity
+            style={styles.dropdownClearAllButton}
+            onPress={() => {
+              onClearAll?.();
+              setDropdownVisible(false);
+            }}
+          >
+            <Text style={styles.dropdownClearAllText}>Clear All</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+    </View>
+  );
+
+  return (
+    <View style={styles.notificationWrapper}>
+      <View ref={buttonRef}>
+        <TouchableOpacity
+          style={styles.bellButton}
+          onPress={handleToggleNotifications}
+        >
+          <Icon name="bell" size={18} color={colors.white} />
+          {unreadCount > 0 && (
+            <View style={styles.badge}>
+              <Text style={styles.badgeText}>
+                {unreadCount > 99 ? '99+' : unreadCount}
+              </Text>
+            </View>
+          )}
+        </TouchableOpacity>
+      </View>
+
+      {/* Desktop Dropdown */}
+      {isDesktop && dropdownVisible && (
+        <View style={styles.dropdownOverlay}>
+          <TouchableOpacity
+            style={styles.dropdownBackdrop}
+            activeOpacity={1}
+            onPress={() => setDropdownVisible(false)}
+          />
+          {renderDropdownContent()}
+        </View>
+      )}
+
+      {/* Mobile/Tablet Modal */}
       <Modal
         visible={modalVisible}
         animationType="slide"
@@ -230,6 +359,10 @@ export default function NotificationComponent({
 }
 
 const styles = StyleSheet.create({
+  notificationWrapper: {
+    position: 'relative',
+  },
+
   bellButton: {
     width: 32,
     height: 32,
@@ -414,5 +547,218 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: colors.danger,
     fontWeight: '600',
+  },
+
+  // Desktop Dropdown Styles
+  dropdownOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    zIndex: 1000,
+    ...Platform.select({
+      web: {
+        position: 'fixed',
+      },
+    }),
+  },
+
+  dropdownBackdrop: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'transparent',
+  },
+
+  dropdownContainer: {
+    position: 'absolute',
+    top: 45,
+    right: 0,
+    width: 380,
+    maxHeight: 500,
+    backgroundColor: colors.white,
+    borderRadius: 12,
+    ...Platform.select({
+      web: {
+        boxShadow: '0 8px 32px rgba(0,0,0,0.12), 0 2px 8px rgba(0,0,0,0.08)',
+      },
+      default: {
+        elevation: 8,
+        shadowColor: colors.shadow,
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.15,
+        shadowRadius: 12,
+      },
+    }),
+    borderWidth: 1,
+    borderColor: colors.gray200,
+  },
+
+  dropdownHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.gray200,
+    backgroundColor: colors.gray50,
+    borderTopLeftRadius: 12,
+    borderTopRightRadius: 12,
+  },
+
+  dropdownTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: colors.text,
+  },
+
+  dropdownHeaderActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+
+  dropdownHeaderButton: {
+    backgroundColor: colors.primary,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+
+  dropdownHeaderButtonText: {
+    color: colors.white,
+    fontSize: 11,
+    fontWeight: '600',
+  },
+
+  dropdownCloseButton: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: colors.gray200,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  dropdownList: {
+    maxHeight: 320,
+  },
+
+  dropdownFlatList: {
+    maxHeight: 320,
+  },
+
+  dropdownNotificationItem: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.gray100,
+    backgroundColor: colors.white,
+  },
+
+  dropdownNotificationItemUnread: {
+    backgroundColor: colors.gray50,
+  },
+
+  dropdownNotificationIcon: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: colors.gray200,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 10,
+    marginTop: 2,
+  },
+
+  dropdownNotificationContent: {
+    flex: 1,
+  },
+
+  dropdownNotificationTitle: {
+    fontSize: 13,
+    fontWeight: '500',
+    color: colors.text,
+    marginBottom: 2,
+  },
+
+  dropdownNotificationTitleUnread: {
+    fontWeight: '600',
+  },
+
+  dropdownNotificationMessage: {
+    fontSize: 12,
+    color: colors.textSecondary,
+    lineHeight: 16,
+    marginBottom: 2,
+  },
+
+  dropdownNotificationTime: {
+    fontSize: 10,
+    color: colors.gray500,
+  },
+
+  dropdownUnreadDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: colors.primary,
+    marginLeft: 6,
+    marginTop: 6,
+  },
+
+  dropdownViewAllButton: {
+    alignItems: 'center',
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.gray200,
+    backgroundColor: colors.gray50,
+  },
+
+  dropdownViewAllText: {
+    fontSize: 13,
+    color: colors.primary,
+    fontWeight: '600',
+  },
+
+  dropdownFooter: {
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderBottomLeftRadius: 12,
+    borderBottomRightRadius: 12,
+  },
+
+  dropdownClearAllButton: {
+    alignItems: 'center',
+    paddingVertical: 8,
+  },
+
+  dropdownClearAllText: {
+    fontSize: 12,
+    color: colors.danger,
+    fontWeight: '600',
+  },
+
+  // Empty state adjustments for dropdown
+  dropdownEmptyContainer: {
+    paddingVertical: 40,
+    paddingHorizontal: 20,
+  },
+
+  dropdownEmptyTitle: {
+    fontSize: 16,
+    marginTop: 12,
+    marginBottom: 6,
+  },
+
+  dropdownEmptyDescription: {
+    fontSize: 13,
+    lineHeight: 18,
   },
 });

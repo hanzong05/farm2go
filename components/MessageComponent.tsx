@@ -1,7 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import {
+  Dimensions,
   FlatList,
   Modal,
+  Platform,
   StyleSheet,
   Text,
   TextInput,
@@ -9,6 +11,9 @@ import {
   View
 } from 'react-native';
 import Icon from 'react-native-vector-icons/FontAwesome5';
+
+const { width } = Dimensions.get('window');
+const isDesktop = width >= 1024;
 
 export interface Message {
   id: string;
@@ -78,8 +83,10 @@ export default function MessageComponent({
   onNewConversation,
 }: MessageComponentProps) {
   const [modalVisible, setModalVisible] = useState(false);
+  const [dropdownVisible, setDropdownVisible] = useState(false);
   const [selectedConversation, setSelectedConversation] = useState<Conversation | null>(null);
   const [messageText, setMessageText] = useState('');
+  const buttonRef = useRef<View>(null);
 
   const formatTimestamp = (timestamp: string) => {
     const date = new Date(timestamp);
@@ -141,6 +148,14 @@ export default function MessageComponent({
   };
 
   const totalUnreadCount = conversations.reduce((sum, conv) => sum + conv.unreadCount, 0);
+
+  const handleToggleMessages = () => {
+    if (isDesktop) {
+      setDropdownVisible(!dropdownVisible);
+    } else {
+      setModalVisible(true);
+    }
+  };
 
   const renderConversationItem = ({ item }: { item: Conversation }) => (
     <TouchableOpacity
@@ -220,38 +235,156 @@ export default function MessageComponent({
   };
 
   const renderEmptyState = () => (
-    <View style={styles.emptyContainer}>
-      <Icon name="comments" size={48} color={colors.gray400} />
-      <Text style={styles.emptyTitle}>No Messages</Text>
-      <Text style={styles.emptyDescription}>
+    <View style={[styles.emptyContainer, isDesktop && styles.dropdownEmptyContainer]}>
+      <Icon name="comments" size={isDesktop ? 32 : 48} color={colors.gray400} />
+      <Text style={[styles.emptyTitle, isDesktop && styles.dropdownEmptyTitle]}>No Messages</Text>
+      <Text style={[styles.emptyDescription, isDesktop && styles.dropdownEmptyDescription]}>
         Start a conversation with farmers or buyers to get your business growing!
       </Text>
-      <TouchableOpacity
-        style={styles.newMessageButton}
-        onPress={onNewConversation}
-      >
-        <Icon name="plus" size={16} color={colors.white} />
-        <Text style={styles.newMessageButtonText}>Start New Conversation</Text>
-      </TouchableOpacity>
+      {!isDesktop && (
+        <TouchableOpacity
+          style={styles.newMessageButton}
+          onPress={onNewConversation}
+        >
+          <Icon name="plus" size={16} color={colors.white} />
+          <Text style={styles.newMessageButtonText}>Start New Conversation</Text>
+        </TouchableOpacity>
+      )}
+    </View>
+  );
+
+  const renderDropdownContent = () => (
+    <View style={styles.dropdownContainer}>
+      <View style={styles.dropdownHeader}>
+        <Text style={styles.dropdownTitle}>Messages</Text>
+        <View style={styles.dropdownHeaderActions}>
+          <TouchableOpacity
+            style={styles.dropdownHeaderButton}
+            onPress={() => {
+              onNewConversation?.();
+              setDropdownVisible(false);
+            }}
+          >
+            <Icon name="plus" size={12} color={colors.white} />
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.dropdownCloseButton}
+            onPress={() => setDropdownVisible(false)}
+          >
+            <Icon name="times" size={14} color={colors.gray600} />
+          </TouchableOpacity>
+        </View>
+      </View>
+
+      {conversations.length === 0 ? (
+        renderEmptyState()
+      ) : (
+        <View style={styles.dropdownList}>
+          <FlatList
+            data={conversations.slice(0, 6)} // Limit to 6 conversations for dropdown
+            renderItem={({ item }) => (
+              <TouchableOpacity
+                style={[
+                  styles.dropdownConversationItem,
+                  item.unreadCount > 0 && styles.dropdownConversationItemUnread
+                ]}
+                onPress={() => {
+                  handleConversationPress(item);
+                  setDropdownVisible(false);
+                  setModalVisible(true); // Open full modal for conversation
+                }}
+                activeOpacity={0.7}
+              >
+                <View style={styles.dropdownAvatarContainer}>
+                  <View style={[
+                    styles.dropdownAvatar,
+                    { backgroundColor: getUserIconColor(item.participantType) + '20' }
+                  ]}>
+                    <Icon
+                      name={getUserIcon(item.participantType)}
+                      size={12}
+                      color={getUserIconColor(item.participantType)}
+                    />
+                  </View>
+                  {item.unreadCount > 0 && (
+                    <View style={styles.dropdownUnreadBadge}>
+                      <Text style={styles.dropdownUnreadBadgeText}>
+                        {item.unreadCount > 9 ? '9+' : item.unreadCount}
+                      </Text>
+                    </View>
+                  )}
+                </View>
+
+                <View style={styles.dropdownConversationContent}>
+                  <View style={styles.dropdownConversationHeader}>
+                    <Text style={[
+                      styles.dropdownParticipantName,
+                      item.unreadCount > 0 && styles.dropdownParticipantNameUnread
+                    ]} numberOfLines={1}>
+                      {item.participantName}
+                    </Text>
+                    <Text style={styles.dropdownTimestamp}>
+                      {formatTimestamp(item.lastMessage.timestamp)}
+                    </Text>
+                  </View>
+                  <Text style={styles.dropdownLastMessage} numberOfLines={1}>
+                    {item.lastMessage.content}
+                  </Text>
+                </View>
+              </TouchableOpacity>
+            )}
+            keyExtractor={(item) => item.id}
+            showsVerticalScrollIndicator={false}
+            style={styles.dropdownFlatList}
+          />
+
+          {conversations.length > 6 && (
+            <TouchableOpacity
+              style={styles.dropdownViewAllButton}
+              onPress={() => {
+                setDropdownVisible(false);
+                setModalVisible(true);
+              }}
+            >
+              <Text style={styles.dropdownViewAllText}>View All Messages ({conversations.length})</Text>
+            </TouchableOpacity>
+          )}
+        </View>
+      )}
     </View>
   );
 
   return (
-    <View>
-      <TouchableOpacity
-        style={styles.messageButton}
-        onPress={() => setModalVisible(true)}
-      >
-        <Icon name="comment" size={18} color={colors.white} />
-        {totalUnreadCount > 0 && (
-          <View style={styles.badge}>
-            <Text style={styles.badgeText}>
-              {totalUnreadCount > 99 ? '99+' : totalUnreadCount}
-            </Text>
-          </View>
-        )}
-      </TouchableOpacity>
+    <View style={styles.messageWrapper}>
+      <View ref={buttonRef}>
+        <TouchableOpacity
+          style={styles.messageButton}
+          onPress={handleToggleMessages}
+        >
+          <Icon name="comment" size={18} color={colors.white} />
+          {totalUnreadCount > 0 && (
+            <View style={styles.badge}>
+              <Text style={styles.badgeText}>
+                {totalUnreadCount > 99 ? '99+' : totalUnreadCount}
+              </Text>
+            </View>
+          )}
+        </TouchableOpacity>
+      </View>
 
+      {/* Desktop Dropdown */}
+      {isDesktop && dropdownVisible && (
+        <View style={styles.dropdownOverlay}>
+          <TouchableOpacity
+            style={styles.dropdownBackdrop}
+            activeOpacity={1}
+            onPress={() => setDropdownVisible(false)}
+          />
+          {renderDropdownContent()}
+        </View>
+      )}
+
+      {/* Mobile/Tablet Modal */}
       <Modal
         visible={modalVisible}
         animationType="slide"
@@ -365,6 +498,10 @@ export default function MessageComponent({
 }
 
 const styles = StyleSheet.create({
+  messageWrapper: {
+    position: 'relative',
+  },
+
   messageButton: {
     width: 32,
     height: 32,
@@ -702,5 +839,215 @@ const styles = StyleSheet.create({
     color: colors.white,
     fontSize: 16,
     fontWeight: '600',
+  },
+
+  // Desktop Dropdown Styles
+  dropdownOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    zIndex: 1000,
+    ...Platform.select({
+      web: {
+        position: 'fixed',
+      },
+    }),
+  },
+
+  dropdownBackdrop: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'transparent',
+  },
+
+  dropdownContainer: {
+    position: 'absolute',
+    top: 45,
+    right: 0,
+    width: 360,
+    maxHeight: 450,
+    backgroundColor: colors.white,
+    borderRadius: 12,
+    ...Platform.select({
+      web: {
+        boxShadow: '0 8px 32px rgba(0,0,0,0.12), 0 2px 8px rgba(0,0,0,0.08)',
+      },
+      default: {
+        elevation: 8,
+        shadowColor: colors.shadow,
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.15,
+        shadowRadius: 12,
+      },
+    }),
+    borderWidth: 1,
+    borderColor: colors.gray200,
+  },
+
+  dropdownHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.gray200,
+    backgroundColor: colors.gray50,
+    borderTopLeftRadius: 12,
+    borderTopRightRadius: 12,
+  },
+
+  dropdownTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: colors.text,
+  },
+
+  dropdownHeaderActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+
+  dropdownHeaderButton: {
+    backgroundColor: colors.primary,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+
+  dropdownCloseButton: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: colors.gray200,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  dropdownList: {
+    maxHeight: 300,
+  },
+
+  dropdownFlatList: {
+    maxHeight: 300,
+  },
+
+  dropdownConversationItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.gray100,
+    backgroundColor: colors.white,
+  },
+
+  dropdownConversationItemUnread: {
+    backgroundColor: colors.gray50,
+  },
+
+  dropdownAvatarContainer: {
+    position: 'relative',
+    marginRight: 10,
+  },
+
+  dropdownAvatar: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  dropdownUnreadBadge: {
+    position: 'absolute',
+    top: -2,
+    right: -2,
+    backgroundColor: colors.danger,
+    borderRadius: 8,
+    minWidth: 16,
+    height: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 4,
+    borderWidth: 2,
+    borderColor: colors.white,
+  },
+
+  dropdownUnreadBadgeText: {
+    color: colors.white,
+    fontSize: 9,
+    fontWeight: 'bold',
+  },
+
+  dropdownConversationContent: {
+    flex: 1,
+  },
+
+  dropdownConversationHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 2,
+  },
+
+  dropdownParticipantName: {
+    fontSize: 13,
+    fontWeight: '500',
+    color: colors.text,
+    flex: 1,
+  },
+
+  dropdownParticipantNameUnread: {
+    fontWeight: '600',
+  },
+
+  dropdownTimestamp: {
+    fontSize: 10,
+    color: colors.gray500,
+    marginLeft: 8,
+  },
+
+  dropdownLastMessage: {
+    fontSize: 12,
+    color: colors.textSecondary,
+    lineHeight: 16,
+  },
+
+  dropdownViewAllButton: {
+    alignItems: 'center',
+    paddingVertical: 12,
+    borderBottomLeftRadius: 12,
+    borderBottomRightRadius: 12,
+    backgroundColor: colors.gray50,
+  },
+
+  dropdownViewAllText: {
+    fontSize: 13,
+    color: colors.primary,
+    fontWeight: '600',
+  },
+
+  // Empty state adjustments for dropdown
+  dropdownEmptyContainer: {
+    paddingVertical: 40,
+    paddingHorizontal: 20,
+  },
+
+  dropdownEmptyTitle: {
+    fontSize: 16,
+    marginTop: 12,
+    marginBottom: 6,
+  },
+
+  dropdownEmptyDescription: {
+    fontSize: 13,
+    lineHeight: 18,
   },
 });
