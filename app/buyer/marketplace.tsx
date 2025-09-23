@@ -139,6 +139,16 @@ export default function MarketplaceScreen() {
     }).format(price);
   };
 
+  const checkAuthAndNavigate = (route: string) => {
+    if (!profile) {
+      // User is not logged in, redirect to login
+      router.push('/auth/login');
+      return;
+    }
+    // User is logged in, proceed with navigation
+    router.push(route as any);
+  };
+
  
 
 
@@ -146,7 +156,7 @@ export default function MarketplaceScreen() {
     <TouchableOpacity
       key={product.id}
       style={styles.productCard}
-      onPress={() => router.push(`/buyer/products/${product.id}` as any)}
+      onPress={() => checkAuthAndNavigate(`/buyer/products/${product.id}`)}
       activeOpacity={0.7}
     >
       <View style={styles.productHeader}>
@@ -190,7 +200,7 @@ export default function MarketplaceScreen() {
           style={styles.contactButton}
           onPress={(e) => {
             e.stopPropagation();
-            router.push(`/buyer/contact-farmer/${product.farmer_id}` as any);
+            checkAuthAndNavigate(`/buyer/contact-farmer/${product.farmer_id}`);
           }}
           activeOpacity={0.7}
         >
@@ -200,7 +210,7 @@ export default function MarketplaceScreen() {
           style={styles.orderButton}
           onPress={(e) => {
             e.stopPropagation();
-            router.push(`/buyer/order/${product.id}` as any);
+            checkAuthAndNavigate(`/buyer/order/${product.id}`);
           }}
           activeOpacity={0.7}
         >
@@ -213,7 +223,7 @@ export default function MarketplaceScreen() {
   const renderGridProduct = (product: Product) => (
     <TouchableOpacity
       style={styles.gridProductCard}
-      onPress={() => router.push(`/buyer/products/${product.id}` as any)}
+      onPress={() => checkAuthAndNavigate(`/buyer/products/${product.id}`)}
       activeOpacity={0.8}
     >
       {/* Product Image */}
@@ -259,7 +269,7 @@ export default function MarketplaceScreen() {
           style={styles.gridOrderButton}
           onPress={(e) => {
             e.stopPropagation();
-            router.push(`/buyer/order/${product.id}` as any);
+            checkAuthAndNavigate(`/buyer/order/${product.id}`);
           }}
           activeOpacity={0.7}
         >

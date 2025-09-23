@@ -1,12 +1,49 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { router, useLocalSearchParams } from 'expo-router';
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Dimensions, KeyboardAvoidingView, Modal, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import Icon from 'react-native-vector-icons/FontAwesome5';
 import LocationPicker from '../../components/LocationPicker';
 import { supabase } from '../../lib/supabase';
 import { Database } from '../../types/database';
 
 const { width, height } = Dimensions.get('window');
+const isMobile = width < 768;
+const isTablet = width >= 768 && width < 1024;
+const isDesktop = width >= 1024;
+
+// Farm2Go color scheme
+const colors = {
+  primary: '#059669',
+  secondary: '#10b981',
+  success: '#10b981',
+  warning: '#f59e0b',
+  danger: '#ef4444',
+  white: '#ffffff',
+  black: '#000000',
+  gray50: '#f9fafb',
+  gray100: '#f3f4f6',
+  gray200: '#e5e7eb',
+  gray300: '#d1d5db',
+  gray400: '#9ca3af',
+  gray500: '#6b7280',
+  gray600: '#4b5563',
+  gray700: '#374151',
+  gray800: '#1f2937',
+  gray900: '#111827',
+  green50: '#f0f9f4',
+  green100: '#d1fae5',
+  green200: '#a7f3d0',
+  green500: '#10b981',
+  green600: '#059669',
+  green700: '#047857',
+  background: '#f0f9f4',
+  surface: '#ffffff',
+  text: '#0f172a',
+  textSecondary: '#6b7280',
+  border: '#d1fae5',
+  shadow: 'rgba(0,0,0,0.1)',
+};
 
 export default function CompleteProfileScreen() {
   const params = useLocalSearchParams();
@@ -18,6 +55,8 @@ export default function CompleteProfileScreen() {
   const [errorTitle, setErrorTitle] = useState('');
   const [userType, setUserType] = useState<'farmer' | 'buyer' | null>(null);
   const [oauthUser, setOauthUser] = useState<any>(null);
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
   const [formData, setFormData] = useState({
     password: '',
@@ -164,9 +203,9 @@ export default function CompleteProfileScreen() {
   };
 
   const getPasswordStrength = (password: string) => {
-    if (password.length < 4) return { strength: 'weak', color: '#dc2626', width: 0.25 };
-    if (password.length < 8) return { strength: 'medium', color: '#d97706', width: 0.65 };
-    return { strength: 'strong', color: '#059669', width: 1 };
+    if (password.length < 4) return { strength: 'weak', color: colors.danger, width: 0.25 };
+    if (password.length < 8) return { strength: 'medium', color: colors.warning, width: 0.65 };
+    return { strength: 'strong', color: colors.success, width: 1 };
   };
 
   const handleCompleteProfile = async () => {
@@ -201,14 +240,7 @@ export default function CompleteProfileScreen() {
 
     if (userType === 'farmer' && !formData.farmName) {
       setErrorTitle('Required Fields');
-      setErrorMessage('Please fill in all required farm information');
-      setShowErrorModal(true);
-      return;
-    }
-
-    if (userType === 'buyer' && !formData.companyName) {
-      setErrorTitle('Required Fields');
-      setErrorMessage('Please fill in all required business information');
+      setErrorMessage('Please fill in your farm name');
       setShowErrorModal(true);
       return;
     }
@@ -228,7 +260,6 @@ export default function CompleteProfileScreen() {
                       oauthUser.user_metadata?.last_name || '';
 
       // Create complete profile data
-      // For mock users, create a UUID-like ID that Supabase will accept
       const generateStableId = () => {
         const timestamp = new Date().getTime().toString();
         return `00000000-0000-0000-0000-${timestamp.padStart(12, '0')}`;
@@ -242,25 +273,16 @@ export default function CompleteProfileScreen() {
         id: userId,
         email: oauthUser.email || '',
         first_name: firstName,
-        middle_name: null, // Can be added to form if needed
+        middle_name: null,
         last_name: lastName,
         phone: formData.phone,
         barangay: formData.barangay,
         user_type: userType,
-        // Farmer fields
         farm_name: formData.farmName || null,
-        barangay: formData.barangay, // Use barangay as farm location
         farm_size: formData.farmSize || null,
-        crop_types: formData.cropTypes || null,
-        // Buyer fields
-        company_name: formData.companyName || null,
-        business_type: formData.businessType || null,
-        business_location: formData.barangay, // Use barangay as business location
       };
 
       console.log('📝 Creating complete profile:', profileData);
-      console.log('📝 Profile data ID:', profileData.id);
-      console.log('📝 Profile data type:', typeof profileData.id);
 
       // Insert profile into database with better error handling
       const { data: insertResult, error: profileError } = await supabase
@@ -338,6 +360,7 @@ export default function CompleteProfileScreen() {
     field: string,
     label: string,
     placeholder: string,
+    iconName: string,
     options: {
       required?: boolean;
       keyboardType?: any;
@@ -349,6 +372,7 @@ export default function CompleteProfileScreen() {
     const isFocused = focusedInput === field;
     const hasValue = formData[field as keyof typeof formData];
     const isPassword = field === 'password';
+    const isConfirmPassword = field === 'confirmPassword';
     const passwordStrength = isPassword && formData.password ? getPasswordStrength(formData.password) : null;
 
     return (
@@ -359,18 +383,45 @@ export default function CompleteProfileScreen() {
         <View style={[
           styles.inputWrapper,
           isFocused && styles.inputWrapperFocused,
-          hasValue && styles.inputWrapperFilled
+          hasValue && styles.inputWrapperFilled,
+          options.multiline && styles.textAreaWrapper
         ]}>
+          <Icon 
+            name={iconName} 
+            size={16} 
+            color={isFocused ? colors.primary : colors.gray400} 
+            style={styles.inputIcon}
+          />
           <TextInput
             style={[styles.input, options.multiline && styles.textArea]}
             value={formData[field as keyof typeof formData]}
             onChangeText={(value) => handleInputChange(field, value)}
             placeholder={placeholder}
-            placeholderTextColor="#9ca3af"
+            placeholderTextColor={colors.gray400}
             onFocus={() => setFocusedInput(field)}
             onBlur={() => setFocusedInput(null)}
+            secureTextEntry={isPassword ? !showPassword : isConfirmPassword ? !showConfirmPassword : options.secureTextEntry}
             {...options}
           />
+          {(isPassword || isConfirmPassword) && (
+            <TouchableOpacity 
+              onPress={() => {
+                if (isPassword) setShowPassword(!showPassword);
+                if (isConfirmPassword) setShowConfirmPassword(!showConfirmPassword);
+              }}
+              style={styles.passwordToggle}
+            >
+              <Icon 
+                name={
+                  isPassword 
+                    ? (showPassword ? 'eye-slash' : 'eye')
+                    : (showConfirmPassword ? 'eye-slash' : 'eye')
+                } 
+                size={14} 
+                color={colors.gray400} 
+              />
+            </TouchableOpacity>
+          )}
         </View>
         {isPassword && formData.password && (
           <View style={styles.passwordStrength}>
@@ -378,12 +429,12 @@ export default function CompleteProfileScreen() {
               <View style={[
                 styles.strengthBar,
                 {
-                  backgroundColor: passwordStrength?.color || '#e5e7eb',
+                  backgroundColor: passwordStrength?.color || colors.gray200,
                   width: `${((passwordStrength?.width || 0) * 100)}%`
                 }
               ]} />
             </View>
-            <Text style={[styles.strengthText, { color: passwordStrength?.color || '#6b7280' }]}>
+            <Text style={[styles.strengthText, { color: passwordStrength?.color || colors.gray500 }]}>
               {passwordStrength?.strength || 'weak'} password
             </Text>
           </View>
@@ -401,8 +452,8 @@ export default function CompleteProfileScreen() {
     >
       <View style={styles.modalOverlay}>
         <View style={styles.modalContent}>
-          <View style={styles.successIcon}>
-            <Text style={styles.checkmark}>✓</Text>
+          <View style={styles.successIconContainer}>
+            <Icon name="check" size={32} color={colors.white} />
           </View>
           <Text style={styles.modalTitle}>Profile Completed!</Text>
           <Text style={styles.modalMessage}>
@@ -436,8 +487,8 @@ export default function CompleteProfileScreen() {
     >
       <View style={styles.modalOverlay}>
         <View style={styles.modalContent}>
-          <View style={styles.errorIcon}>
-            <Text style={styles.errorMark}>✕</Text>
+          <View style={styles.errorIconContainer}>
+            <Icon name="times" size={32} color={colors.white} />
           </View>
           <Text style={styles.modalTitle}>{errorTitle}</Text>
           <Text style={styles.modalMessage}>{errorMessage}</Text>
@@ -455,9 +506,11 @@ export default function CompleteProfileScreen() {
   if (!userType || !oauthUser) {
     return (
       <View style={styles.loadingContainer}>
-        <Text style={styles.loadingText}>Loading complete profile...</Text>
-        <Text style={styles.loadingSubText}>This should only take a moment</Text>
-
+        <View style={styles.loadingCard}>
+          <View style={styles.loadingSpinner} />
+          <Text style={styles.loadingText}>Completing your profile setup...</Text>
+          <Text style={styles.loadingSubText}>This should only take a moment</Text>
+        </View>
       </View>
     );
   }
@@ -473,110 +526,149 @@ export default function CompleteProfileScreen() {
           showsVerticalScrollIndicator={false}
           bounces={false}
           keyboardShouldPersistTaps="handled"
+          contentContainerStyle={styles.scrollContent}
         >
+          {/* Background Pattern */}
+          <View style={styles.backgroundPattern}>
+            <View style={[styles.patternCircle, styles.circle1]} />
+            <View style={[styles.patternCircle, styles.circle2]} />
+            <View style={[styles.patternCircle, styles.circle3]} />
+          </View>
+
+          {/* Header */}
           <View style={styles.headerContainer}>
-            <View style={styles.header}>
+            <View style={styles.logoContainer}>
+              <View style={styles.logo}>
+                <Text style={styles.logoText}>F2G</Text>
+              </View>
               <Text style={styles.brandName}>Farm2Go</Text>
-              <Text style={styles.title}>Complete Your Profile</Text>
-              <Text style={styles.subtitle}>
+            </View>
+            
+            <View style={styles.welcomeSection}>
+              <Text style={styles.welcomeTitle}>Complete Your Profile</Text>
+              <Text style={styles.welcomeSubtitle}>
                 Welcome {oauthUser.user_metadata?.full_name || oauthUser.email}!
-                Please complete your profile to get started.
+                {'\n'}Complete your profile to get started.
               </Text>
             </View>
           </View>
 
+          {/* Content */}
           <View style={styles.contentContainer}>
-            <View style={styles.formSection}>
-              {/* User Type Selection (if not already stored) */}
-              {!userType ? (
-                <View style={styles.userTypeSelection}>
-                  <Text style={styles.userTypeTitle}>Select Your Account Type</Text>
-                  <Text style={styles.userTypeSubtitle}>Choose the option that best describes you</Text>
-
-                  <View style={styles.userTypeButtons}>
-                    <TouchableOpacity
-                      style={styles.userTypeButton}
-                      onPress={() => setUserType('farmer')}
-                    >
-                      <Text style={styles.userTypeButtonIcon}>🌱</Text>
-                      <Text style={styles.userTypeButtonText}>Farmer/Producer</Text>
-                    </TouchableOpacity>
-
-                    <TouchableOpacity
-                      style={styles.userTypeButton}
-                      onPress={() => setUserType('buyer')}
-                    >
-                      <Text style={styles.userTypeButtonIcon}>🏢</Text>
-                      <Text style={styles.userTypeButtonText}>Buyer/Distributor</Text>
-                    </TouchableOpacity>
-                  </View>
-                </View>
-              ) : (
-                <Text style={styles.selectedUserType}>
+            <View style={styles.profileCard}>
+              {/* User Type Badge */}
+              <View style={styles.userTypeBadge}>
+                <Icon 
+                  name={userType === 'farmer' ? 'seedling' : 'shopping-cart'} 
+                  size={16} 
+                  color={colors.white} 
+                />
+                <Text style={styles.userTypeBadgeText}>
                   {userType === 'farmer' ? 'Farmer Account' : 'Business Account'}
                 </Text>
-              )}
-
-              {/* Password Section */}
-              <View style={styles.formGroup}>
-                <Text style={styles.groupTitle}>Security</Text>
-                {renderFormInput('password', 'Password', 'Create a password', {
-                  required: true,
-                  secureTextEntry: true
-                })}
-                {renderFormInput('confirmPassword', 'Confirm Password', 'Confirm your password', {
-                  required: true,
-                  secureTextEntry: true
-                })}
               </View>
 
-              {/* Contact Information */}
-              <View style={styles.formGroup}>
-                <Text style={styles.groupTitle}>Contact Information</Text>
-                {renderFormInput('phone', 'Phone Number', 'Enter phone number', {
-                  required: true,
-                  keyboardType: 'phone-pad'
-                })}
-                <LocationPicker
-                  onLocationSelect={(barangay) => {
-                    handleInputChange('barangay', barangay);
-                  }}
-                  initialBarangay={formData.barangay}
-                  focusedInput={focusedInput}
-                  setFocusedInput={setFocusedInput}
-                />
-              </View>
-
-              {/* Account Specific Information */}
-              {userType === 'farmer' && (
-                <View style={styles.formGroup}>
-                  <Text style={styles.groupTitle}>Farm Information</Text>
-                  {renderFormInput('farmName', 'Farm Name', 'Enter farm name', { required: true })}
-                  {renderFormInput('farmSize', 'Farm Size', 'e.g., 50 acres or 20 hectares')}
-                  {renderFormInput('cropTypes', 'Primary Crop Types', 'e.g., Vegetables, Fruits, Grains', {
-                    multiline: true
+              <ScrollView
+                showsVerticalScrollIndicator={false}
+                bounces={false}
+                keyboardShouldPersistTaps="handled"
+              >
+                {/* Security Section */}
+                <View style={styles.formSection}>
+                  <Text style={styles.sectionTitle}>
+                    <Icon name="shield-alt" size={16} color={colors.primary} style={styles.sectionIcon} />
+                    Security Information
+                  </Text>
+                  {renderFormInput('password', 'Password', 'Create a secure password', 'lock', {
+                    required: true,
+                    secureTextEntry: true
+                  })}
+                  {renderFormInput('confirmPassword', 'Confirm Password', 'Confirm your password', 'lock', {
+                    required: true,
+                    secureTextEntry: true
                   })}
                 </View>
-              )}
 
-              {userType === 'buyer' && (
-                <View style={styles.formGroup}>
-                  <Text style={styles.groupTitle}>Business Information</Text>
-                  {renderFormInput('companyName', 'Company Name', 'Enter company name', { required: true })}
-                  {renderFormInput('businessType', 'Business Type', 'e.g., Restaurant, Grocery Store, Distributor')}
+                {/* Contact Information */}
+                <View style={styles.formSection}>
+                  <Text style={styles.sectionTitle}>
+                    <Icon name="address-book" size={16} color={colors.primary} style={styles.sectionIcon} />
+                    Contact Information
+                  </Text>
+                  {renderFormInput('phone', 'Phone Number', 'Enter your phone number', 'phone', {
+                    required: true,
+                    keyboardType: 'phone-pad'
+                  })}
+                  <View style={styles.locationPickerContainer}>
+                    <Text style={styles.label}>
+                      Location <Text style={styles.required}>*</Text>
+                    </Text>
+                    <LocationPicker
+                      onLocationSelect={(barangay) => {
+                        handleInputChange('barangay', barangay);
+                      }}
+                      initialBarangay={formData.barangay}
+                      focusedInput={focusedInput}
+                      setFocusedInput={setFocusedInput}
+                    />
+                  </View>
                 </View>
-              )}
 
-              {/* Complete Button */}
-              <TouchableOpacity
-                style={[styles.completeButton, isCompleting && styles.completeButtonDisabled]}
-                onPress={handleCompleteProfile}
-                disabled={isCompleting}
-              >
-                <Text style={styles.completeButtonText}>
-                  {isCompleting ? 'Completing Profile...' : 'Complete Profile'}
-                </Text>
-              </TouchableOpacity>
+                {/* Account Specific Information */}
+                {userType === 'farmer' && (
+                  <View style={styles.formSection}>
+                    <Text style={styles.sectionTitle}>
+                      <Icon name="seedling" size={16} color={colors.primary} style={styles.sectionIcon} />
+                      Farm Information
+                    </Text>
+                    {renderFormInput('farmName', 'Farm Name', 'Enter your farm name', 'seedling', { 
+                      required: true 
+                    })}
+                    {renderFormInput('farmSize', 'Farm Size', 'e.g., 50 acres or 20 hectares', 'expand-arrows-alt')}
+                    
+                    <View style={styles.infoNote}>
+                      <Icon name="info-circle" size={14} color={colors.primary} />
+                      <Text style={styles.infoNoteText}>
+                        Additional farm details can be added later in your profile settings
+                      </Text>
+                    </View>
+                  </View>
+                )}
+
+                {userType === 'buyer' && (
+                  <View style={styles.formSection}>
+                    <Text style={styles.sectionTitle}>
+                      <Icon name="building" size={16} color={colors.primary} style={styles.sectionIcon} />
+                      Business Information
+                    </Text>
+                    <View style={styles.infoNote}>
+                      <Icon name="info-circle" size={14} color={colors.primary} />
+                      <Text style={styles.infoNoteText}>
+                        Business details are optional and can be added later in your profile settings
+                      </Text>
+                    </View>
+                  </View>
+                )}
+
+                {/* Complete Button */}
+                <TouchableOpacity
+                  style={[styles.completeButton, isCompleting && styles.completeButtonDisabled]}
+                  onPress={handleCompleteProfile}
+                  disabled={isCompleting}
+                >
+                  {isCompleting ? (
+                    <View style={styles.loadingContainer2}>
+                      <View style={styles.buttonSpinner} />
+                      <Text style={styles.completeButtonText}>Completing Profile...</Text>
+                    </View>
+                  ) : (
+                    <>
+                      <Icon name="user-check" size={16} color={colors.white} style={styles.buttonIcon} />
+                      <Text style={styles.completeButtonText}>Complete Profile</Text>
+                    </>
+                  )}
+                </TouchableOpacity>
+              </ScrollView>
             </View>
           </View>
         </ScrollView>
@@ -590,358 +682,528 @@ export default function CompleteProfileScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f8fafc',
+    backgroundColor: colors.background,
   },
+
   scrollView: {
     flex: 1,
   },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: '#f8fafc',
+
+  scrollContent: {
+    flexGrow: 1,
+    minHeight: height,
   },
-  loadingText: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#111827',
-    textAlign: 'center',
-  },
-  loadingSubText: {
-    fontSize: 14,
-    color: '#6b7280',
-    textAlign: 'center',
-    marginTop: 8,
-  },
-  continueButton: {
-    backgroundColor: '#10b981',
-    borderRadius: 8,
-    paddingHorizontal: 24,
-    paddingVertical: 12,
-    alignItems: 'center',
-  },
-  continueButtonText: {
-    color: '#ffffff',
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  headerContainer: {
-    backgroundColor: '#1f2937',
-    paddingBottom: 30,
-  },
-  header: {
-    paddingTop: 60,
-    paddingHorizontal: 24,
-    alignItems: 'center',
-  },
-  brandName: {
-    fontSize: 32,
-    fontWeight: '700',
-    color: '#ffffff',
-    marginBottom: 12,
-    letterSpacing: -0.5,
-  },
-  title: {
-    fontSize: 28,
-    fontWeight: '600',
-    color: '#ffffff',
-    marginBottom: 8,
-    textAlign: 'center',
-  },
-  subtitle: {
-    fontSize: 16,
-    color: '#d1d5db',
-    textAlign: 'center',
-    lineHeight: 24,
-    marginBottom: 24,
-    maxWidth: width * 0.8,
-  },
-  contentContainer: {
-    flex: 1,
-    backgroundColor: '#ffffff',
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    marginTop: -15,
-    paddingTop: 32,
-    minHeight: height * 0.7,
-    shadowColor: '#000000',
-    shadowOffset: {
-      width: 0,
-      height: -2,
-    },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 5,
-  },
-  formSection: {
-    paddingHorizontal: 24,
-    paddingBottom: 32,
-  },
-  selectedUserType: {
-    fontSize: 20,
-    fontWeight: '600',
-    color: '#111827',
-    textAlign: 'center',
-    marginBottom: 32,
-    paddingVertical: 16,
-    paddingHorizontal: 24,
-    backgroundColor: '#f0fdf4',
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#10b981',
+
+  backgroundPattern: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    height: height * 0.6,
     overflow: 'hidden',
   },
-  userTypeSelection: {
-    marginBottom: 32,
+
+  patternCircle: {
+    position: 'absolute',
+    borderRadius: 1000,
+    backgroundColor: colors.green200,
+    opacity: 0.2,
+  },
+
+  circle1: {
+    width: 200,
+    height: 200,
+    top: -100,
+    right: -50,
+  },
+
+  circle2: {
+    width: 150,
+    height: 150,
+    top: 100,
+    left: -75,
+  },
+
+  circle3: {
+    width: 120,
+    height: 120,
+    top: 250,
+    right: isMobile ? -20 : 100,
+  },
+
+  headerContainer: {
+    paddingTop: Platform.OS === 'web' ? (isMobile ? 60 : 80) : (isMobile ? 80 : 100),
+    paddingHorizontal: isMobile ? 24 : isTablet ? 32 : 40,
+    paddingBottom: isMobile ? 40 : 60,
     alignItems: 'center',
   },
-  userTypeTitle: {
-    fontSize: 20,
-    fontWeight: '600',
-    color: '#111827',
-    marginBottom: 8,
-    textAlign: 'center',
-  },
-  userTypeSubtitle: {
-    fontSize: 16,
-    color: '#6b7280',
-    marginBottom: 24,
-    textAlign: 'center',
-  },
-  userTypeButtons: {
-    flexDirection: 'row',
-    gap: 16,
-    width: '100%',
-  },
-  userTypeButton: {
-    flex: 1,
-    backgroundColor: '#ffffff',
-    borderWidth: 2,
-    borderColor: '#e5e7eb',
-    borderRadius: 12,
-    padding: 20,
+
+  logoContainer: {
     alignItems: 'center',
-    minHeight: 120,
+    marginBottom: isMobile ? 32 : 40,
+    zIndex: 1,
+  },
+
+  logo: {
+    width: isMobile ? 56 : 72,
+    height: isMobile ? 56 : 72,
+    borderRadius: isMobile ? 14 : 18,
+    backgroundColor: colors.white,
+    alignItems: 'center',
     justifyContent: 'center',
-  },
-  userTypeButtonIcon: {
-    fontSize: 32,
     marginBottom: 12,
+    ...Platform.select({
+      web: {
+        boxShadow: '0 8px 32px rgba(16, 185, 129, 0.3)',
+      },
+      default: {
+        elevation: 8,
+        shadowColor: colors.primary,
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.3,
+        shadowRadius: 8,
+      },
+    }),
   },
-  userTypeButtonText: {
-    fontSize: 16,
+
+  logoText: {
+    fontSize: isMobile ? 20 : 28,
+    fontWeight: 'bold',
+    color: colors.primary,
+    letterSpacing: -1,
+  },
+
+  brandName: {
+    fontSize: isMobile ? 24 : 32,
+    fontWeight: '700',
+    color: colors.gray800,
+    letterSpacing: -0.5,
+  },
+
+  welcomeSection: {
+    alignItems: 'center',
+    zIndex: 1,
+  },
+
+  welcomeTitle: {
+    fontSize: isMobile ? 20 : 28,
     fontWeight: '600',
-    color: '#374151',
+    color: colors.gray800,
+    marginBottom: 8,
     textAlign: 'center',
   },
-  formGroup: {
-    marginBottom: 32,
-    padding: 20,
-    backgroundColor: '#f9fafb',
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#f3f4f6',
+
+  welcomeSubtitle: {
+    fontSize: isMobile ? 14 : 16,
+    color: colors.gray600,
+    textAlign: 'center',
+    lineHeight: isMobile ? 20 : 24,
+    maxWidth: isMobile ? width * 0.85 : 400,
   },
-  groupTitle: {
-    fontSize: 18,
+
+  contentContainer: {
+    flex: 1,
+    paddingHorizontal: isMobile ? 24 : isTablet ? 32 : 40,
+    paddingTop: 32,
+    paddingBottom: 32,
+    alignItems: 'center',
+  },
+
+  profileCard: {
+    backgroundColor: colors.white,
+    borderRadius: 20,
+    padding: isMobile ? 20 : 24,
+    width: '100%',
+    maxWidth: isMobile ? undefined : 600,
+    minHeight: 400,
+    ...Platform.select({
+      web: {
+        boxShadow: '0 20px 60px rgba(0, 0, 0, 0.1)',
+      },
+      default: {
+        elevation: 10,
+        shadowColor: colors.shadow,
+        shadowOffset: { width: 0, height: 10 },
+        shadowOpacity: 0.1,
+        shadowRadius: 20,
+      },
+    }),
+  },
+
+  userTypeBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.primary,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+    alignSelf: 'center',
+    marginBottom: 24,
+    gap: 8,
+  },
+
+  userTypeBadgeText: {
+    fontSize: 12,
     fontWeight: '600',
-    color: '#111827',
-    marginBottom: 20,
-    marginTop: -4,
-    paddingBottom: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#e5e7eb',
+    color: colors.white,
   },
+
+  formSection: {
+    marginBottom: 24,
+  },
+
+  sectionTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: colors.gray800,
+    marginBottom: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+
+  sectionIcon: {
+    marginRight: 8,
+  },
+
   inputContainer: {
-    marginBottom: 20,
+    marginBottom: 16,
   },
+
   label: {
-    fontSize: 15,
-    fontWeight: '500',
-    color: '#374151',
+    fontSize: 14,
+    fontWeight: '600',
+    color: colors.gray700,
     marginBottom: 8,
   },
+
   required: {
-    color: '#dc2626',
+    color: colors.danger,
   },
+
   inputWrapper: {
-    borderWidth: 1,
-    borderColor: '#d1d5db',
-    borderRadius: 8,
-    backgroundColor: '#ffffff',
-    shadowColor: '#000000',
-    shadowOffset: {
-      width: 0,
-      height: 1,
-    },
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
-    elevation: 1,
-  },
-  inputWrapperFocused: {
-    borderColor: '#10b981',
-    shadowColor: '#10b981',
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 2,
-  },
-  inputWrapperFilled: {
-    borderColor: '#9ca3af',
-  },
-  input: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: colors.gray200,
+    borderRadius: 12,
+    backgroundColor: colors.gray50,
     paddingHorizontal: 16,
-    paddingVertical: 14,
-    fontSize: 16,
-    color: '#111827',
     minHeight: 48,
+    ...Platform.select({
+      web: {
+        transition: 'all 0.2s ease-in-out',
+      },
+    }),
   },
+
+  inputWrapperFocused: {
+    borderColor: colors.primary,
+    backgroundColor: colors.white,
+    ...Platform.select({
+      web: {
+        boxShadow: '0 0 0 4px rgba(16, 185, 129, 0.1)',
+      },
+    }),
+  },
+
+  inputWrapperFilled: {
+    borderColor: colors.gray300,
+    backgroundColor: colors.white,
+  },
+
+  textAreaWrapper: {
+    alignItems: 'flex-start',
+    minHeight: 80,
+  },
+
+  inputIcon: {
+    marginRight: 12,
+    width: 16,
+  },
+
+  input: {
+    flex: 1,
+    fontSize: 15,
+    color: colors.gray800,
+    paddingVertical: 16,
+  },
+
   textArea: {
-    height: 80,
+    height: 60,
     textAlignVertical: 'top',
+    paddingTop: 16,
   },
+
+  passwordToggle: {
+    padding: 8,
+  },
+
   passwordStrength: {
     marginTop: 8,
     flexDirection: 'row',
     alignItems: 'center',
   },
+
   strengthBarContainer: {
     width: 60,
     height: 3,
-    backgroundColor: '#e5e7eb',
+    backgroundColor: colors.gray200,
     borderRadius: 2,
     marginRight: 8,
+    overflow: 'hidden',
   },
+
   strengthBar: {
     height: '100%',
     borderRadius: 2,
+    ...Platform.select({
+      web: {
+        transition: 'all 0.3s ease-in-out',
+      },
+    }),
   },
+
   strengthText: {
-    fontSize: 12,
-    fontWeight: '500',
+    fontSize: 11,
+    fontWeight: '600',
     textTransform: 'capitalize',
   },
-  completeButton: {
-    backgroundColor: '#10b981',
+
+  locationPickerContainer: {
+    marginBottom: 16,
+  },
+
+  infoNote: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    backgroundColor: colors.green50,
+    padding: 12,
     borderRadius: 8,
+    marginTop: 8,
+    gap: 8,
+  },
+
+  infoNoteText: {
+    flex: 1,
+    fontSize: 12,
+    color: colors.gray600,
+    lineHeight: 16,
+  },
+
+  completeButton: {
+    backgroundColor: colors.primary,
+    borderRadius: 12,
     paddingVertical: 16,
+    paddingHorizontal: 24,
     alignItems: 'center',
-    marginTop: 16,
-    shadowColor: '#10b981',
-    shadowOffset: {
-      width: 0,
-      height: 4,
-    },
-    shadowOpacity: 0.2,
-    shadowRadius: 8,
-    elevation: 4,
+    justifyContent: 'center',
+    marginTop: 24,
+    minHeight: 52,
+    flexDirection: 'row',
+    ...Platform.select({
+      web: {
+        transition: 'all 0.2s ease-in-out',
+        boxShadow: '0 4px 16px rgba(16, 185, 129, 0.3)',
+      },
+      default: {
+        elevation: 4,
+        shadowColor: colors.primary,
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.3,
+        shadowRadius: 8,
+      },
+    }),
   },
+
   completeButtonDisabled: {
-    backgroundColor: '#9ca3af',
-    shadowColor: '#9ca3af',
-    shadowOpacity: 0.1,
+    backgroundColor: colors.gray400,
+    ...Platform.select({
+      web: {
+        boxShadow: 'none',
+      },
+      default: {
+        elevation: 0,
+      },
+    }),
   },
+
   completeButtonText: {
-    color: '#ffffff',
+    color: colors.white,
     fontSize: 16,
     fontWeight: '600',
   },
-  // Modal styles (reused from register screen)
+
+  buttonIcon: {
+    marginRight: 8,
+  },
+
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: colors.background,
+    padding: 24,
+  },
+
+  loadingCard: {
+    backgroundColor: colors.white,
+    borderRadius: 20,
+    padding: 40,
+    alignItems: 'center',
+    maxWidth: 320,
+    width: '100%',
+    ...Platform.select({
+      web: {
+        boxShadow: '0 20px 60px rgba(0, 0, 0, 0.1)',
+      },
+      default: {
+        elevation: 10,
+        shadowColor: colors.shadow,
+        shadowOffset: { width: 0, height: 10 },
+        shadowOpacity: 0.1,
+        shadowRadius: 20,
+      },
+    }),
+  },
+
+  loadingSpinner: {
+    width: 40,
+    height: 40,
+    borderWidth: 4,
+    borderColor: colors.green100,
+    borderTopColor: colors.primary,
+    borderRadius: 20,
+    marginBottom: 24,
+    ...Platform.select({
+      web: {
+        animation: 'spin 1s linear infinite',
+      },
+    }),
+  },
+
+  loadingText: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: colors.gray800,
+    textAlign: 'center',
+    marginBottom: 8,
+  },
+
+  loadingSubText: {
+    fontSize: 14,
+    color: colors.gray600,
+    textAlign: 'center',
+  },
+
+  loadingContainer2: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+
+  buttonSpinner: {
+    width: 16,
+    height: 16,
+    borderWidth: 2,
+    borderColor: colors.white,
+    borderTopColor: 'transparent',
+    borderRadius: 8,
+    marginRight: 8,
+    ...Platform.select({
+      web: {
+        animation: 'spin 1s linear infinite',
+      },
+    }),
+  },
+
+  // Modal Styles
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
     justifyContent: 'center',
     alignItems: 'center',
     padding: 24,
   },
+
   modalContent: {
-    backgroundColor: '#ffffff',
-    borderRadius: 16,
+    backgroundColor: colors.white,
+    borderRadius: 20,
     padding: 32,
     alignItems: 'center',
     maxWidth: 400,
     width: '100%',
+    ...Platform.select({
+      web: {
+        boxShadow: '0 20px 60px rgba(0, 0, 0, 0.3)',
+      },
+      default: {
+        elevation: 20,
+        shadowColor: colors.black,
+        shadowOffset: { width: 0, height: 10 },
+        shadowOpacity: 0.3,
+        shadowRadius: 20,
+      },
+    }),
   },
-  successIcon: {
+
+  successIconContainer: {
     width: 64,
     height: 64,
     borderRadius: 32,
-    backgroundColor: '#10b981',
+    backgroundColor: colors.success,
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 24,
   },
-  checkmark: {
-    fontSize: 32,
-    color: '#ffffff',
-    fontWeight: 'bold',
+
+  errorIconContainer: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: colors.danger,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 24,
   },
+
   modalTitle: {
     fontSize: 24,
     fontWeight: '600',
-    color: '#111827',
+    color: colors.gray800,
     marginBottom: 16,
     textAlign: 'center',
   },
+
   modalMessage: {
     fontSize: 16,
-    color: '#4b5563',
+    color: colors.gray600,
     textAlign: 'center',
     lineHeight: 24,
     marginBottom: 32,
   },
+
   modalButton: {
-    backgroundColor: '#10b981',
-    borderRadius: 8,
+    backgroundColor: colors.success,
+    borderRadius: 12,
     paddingHorizontal: 32,
     paddingVertical: 14,
     alignItems: 'center',
     width: '100%',
-    shadowColor: '#10b981',
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
-    elevation: 3,
+    minHeight: 48,
   },
+
+  errorModalButton: {
+    backgroundColor: colors.danger,
+    borderRadius: 12,
+    paddingHorizontal: 32,
+    paddingVertical: 14,
+    alignItems: 'center',
+    width: '100%',
+    minHeight: 48,
+  },
+
   modalButtonText: {
-    color: '#ffffff',
+    color: colors.white,
     fontSize: 16,
     fontWeight: '600',
-  },
-  errorIcon: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    backgroundColor: '#dc2626',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 24,
-  },
-  errorMark: {
-    fontSize: 32,
-    color: '#ffffff',
-    fontWeight: 'bold',
-  },
-  errorModalButton: {
-    backgroundColor: '#dc2626',
-    borderRadius: 8,
-    paddingHorizontal: 32,
-    paddingVertical: 14,
-    alignItems: 'center',
-    width: '100%',
-    shadowColor: '#dc2626',
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
-    elevation: 3,
   },
 });

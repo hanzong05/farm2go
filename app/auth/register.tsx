@@ -2,12 +2,49 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Link, router } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import { Dimensions, KeyboardAvoidingView, Modal, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import Icon from 'react-native-vector-icons/FontAwesome5';
 import LocationPicker from '../../components/LocationPicker';
 import { supabase } from '../../lib/supabase';
 import { registerUser, signInWithFacebook, signInWithGoogle } from '../../services/auth';
 import { Database } from '../../types/database';
 
 const { width, height } = Dimensions.get('window');
+const isMobile = width < 768;
+const isTablet = width >= 768 && width < 1024;
+const isDesktop = width >= 1024;
+
+// Farm2Go color scheme
+const colors = {
+  primary: '#059669',
+  secondary: '#10b981',
+  success: '#10b981',
+  warning: '#f59e0b',
+  danger: '#ef4444',
+  white: '#ffffff',
+  black: '#000000',
+  gray50: '#f9fafb',
+  gray100: '#f3f4f6',
+  gray200: '#e5e7eb',
+  gray300: '#d1d5db',
+  gray400: '#9ca3af',
+  gray500: '#6b7280',
+  gray600: '#4b5563',
+  gray700: '#374151',
+  gray800: '#1f2937',
+  gray900: '#111827',
+  green50: '#f0f9f4',
+  green100: '#d1fae5',
+  green200: '#a7f3d0',
+  green500: '#10b981',
+  green600: '#059669',
+  green700: '#047857',
+  background: '#f0f9f4',
+  surface: '#ffffff',
+  text: '#0f172a',
+  textSecondary: '#6b7280',
+  border: '#d1fae5',
+  shadow: 'rgba(0,0,0,0.1)',
+};
 
 type UserType = 'farmer' | 'buyer' | null;
 
@@ -21,6 +58,9 @@ export default function RegisterScreen() {
   const [showErrorModal, setShowErrorModal] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
   const [errorTitle, setErrorTitle] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+
   useEffect(() => {
     console.log('🔍 Setting up React Native auth state listener...');
     console.log('🔍 Platform:', Platform.OS);
@@ -72,10 +112,7 @@ export default function RegisterScreen() {
           } else {
             console.log('🔍 No user session found yet, but checking for existing profile by email...');
 
-            // If we have stored user type but no session, try to find existing profile by email
-            // This can happen when users sign in with Gmail after previously registering
             if (typeof window !== 'undefined') {
-              // For web, we might have access to the email from URL or other sources
               const urlParams = new URLSearchParams(window.location.search);
               const emailFromUrl = urlParams.get('email');
 
@@ -88,7 +125,6 @@ export default function RegisterScreen() {
                   console.log('✅ Found existing profile, updating stored user type');
                   await AsyncStorage.setItem('oauth_user_type', existingProfile.user_type);
                   localStorage.setItem('oauth_user_type', existingProfile.user_type);
-                  // Continue with normal flow
                 }
               }
             }
@@ -101,7 +137,6 @@ export default function RegisterScreen() {
       }
     };
 
- 
     checkOAuthCompletion();
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
@@ -115,7 +150,6 @@ export default function RegisterScreen() {
           let storedUserType = await AsyncStorage.getItem('oauth_user_type');
           console.log('🔍 Stored user type:', storedUserType);
 
-          // If no stored user type, check database for existing profile
           if (!storedUserType && session.user.email) {
             console.log('🔍 No stored user type, checking database for existing profile...');
             const { checkExistingUserProfile } = await import('../../services/auth');
@@ -125,7 +159,6 @@ export default function RegisterScreen() {
               console.log('✅ Found existing profile with user type:', existingProfile.user_type);
               storedUserType = existingProfile.user_type;
 
-              // Store it for future reference
               await AsyncStorage.setItem('oauth_user_type', existingProfile.user_type);
               if (typeof window !== 'undefined') {
                 localStorage.setItem('oauth_user_type', existingProfile.user_type);
@@ -170,7 +203,6 @@ export default function RegisterScreen() {
       }
     });
 
-
     oauthPolling = setInterval(async () => {
       const found = await checkOAuthCompletion();
       if (found) {
@@ -190,6 +222,7 @@ export default function RegisterScreen() {
       if (checkTimeout) clearTimeout(checkTimeout);
     };
   }, []);
+
   const [formData, setFormData] = useState({
     firstName: '',
     middleName: '',
@@ -211,9 +244,9 @@ export default function RegisterScreen() {
   };
 
   const getPasswordStrength = (password: string) => {
-    if (password.length < 4) return { strength: 'weak', color: '#dc2626', width: 0.25 };
-    if (password.length < 8) return { strength: 'medium', color: '#d97706', width: 0.65 };
-    return { strength: 'strong', color: '#059669', width: 1 };
+    if (password.length < 4) return { strength: 'weak', color: colors.danger, width: 0.25 };
+    if (password.length < 8) return { strength: 'medium', color: colors.warning, width: 0.65 };
+    return { strength: 'strong', color: colors.success, width: 1 };
   };
 
   const handleRegister = async () => {
@@ -221,7 +254,6 @@ export default function RegisterScreen() {
       return;
     }
 
- 
     if (!userType) {
       setErrorTitle('Selection Required');
       setErrorMessage('Please select your account type');
@@ -353,10 +385,6 @@ export default function RegisterScreen() {
       console.log(`🚀 Starting ${provider} registration...`);
       console.log('🚀 User type selected:', userType);
 
-      // First, check if user already exists by initiating OAuth to get email
-      console.log('🔄 Initiating OAuth to check for existing user...');
-
-      // Store OAuth state using session manager
       const { sessionManager } = await import('../../services/sessionManager');
       await sessionManager.storeOAuthState({
         intent: 'registration',
@@ -380,7 +408,6 @@ export default function RegisterScreen() {
     } catch (error: any) {
       console.error(`❌ ${provider} registration error:`, error);
 
-      // Clean up OAuth state on error
       const { sessionManager } = await import('../../services/sessionManager');
       await sessionManager.clearOAuthState();
 
@@ -400,8 +427,8 @@ export default function RegisterScreen() {
     >
       <View style={styles.modalOverlay}>
         <View style={styles.modalContent}>
-          <View style={styles.successIcon}>
-            <Text style={styles.checkmark}>✓</Text>
+          <View style={styles.successIconContainer}>
+            <Icon name="check" size={32} color={colors.white} />
           </View>
           <Text style={styles.modalTitle}>Registration Successful</Text>
           <Text style={styles.modalMessage}>
@@ -431,8 +458,8 @@ export default function RegisterScreen() {
     >
       <View style={styles.modalOverlay}>
         <View style={styles.modalContent}>
-          <View style={styles.errorIcon}>
-            <Text style={styles.errorMark}>✕</Text>
+          <View style={styles.errorIconContainer}>
+            <Icon name="times" size={32} color={colors.white} />
           </View>
           <Text style={styles.modalTitle}>{errorTitle}</Text>
           <Text style={styles.modalMessage}>
@@ -470,79 +497,125 @@ export default function RegisterScreen() {
 
   const renderHeader = () => (
     <View style={styles.headerContainer}>
-      <View style={styles.header}>
+      {/* Background Pattern */}
+      <View style={styles.backgroundPattern}>
+        <View style={[styles.patternCircle, styles.circle1]} />
+        <View style={[styles.patternCircle, styles.circle2]} />
+        <View style={[styles.patternCircle, styles.circle3]} />
+      </View>
+
+      <View style={styles.logoContainer}>
+        <View style={styles.logo}>
+          <Text style={styles.logoText}>F2G</Text>
+        </View>
         <Text style={styles.brandName}>Farm2Go</Text>
-        <Text style={styles.title}>Create Account</Text>
-        <Text style={styles.subtitle}>
+      </View>
+      
+      <View style={styles.welcomeSection}>
+        <Text style={styles.welcomeTitle}>Create Account</Text>
+        <Text style={styles.welcomeSubtitle}>
           Join the agricultural marketplace connecting farmers and buyers
         </Text>
-        {userType && renderProgressBar()}
       </View>
+
+      {userType && renderProgressBar()}
     </View>
   );
 
   const renderUserTypeSelection = () => (
-    <View style={styles.userTypeSection}>
-      <Text style={styles.sectionTitle}>Select Account Type</Text>
-      <Text style={styles.sectionSubtitle}>
-        Choose the option that best describes your business role
-      </Text>
+    <View style={styles.contentContainer}>
+      <View style={styles.userTypeCard}>
+        <Text style={styles.sectionTitle}>Select Account Type</Text>
+        <Text style={styles.sectionSubtitle}>
+          Choose the option that best describes your business role
+        </Text>
 
-      <TouchableOpacity
-        style={[styles.userTypeCard, userType === 'farmer' && styles.selectedCard]}
-        onPress={() => {
-          setUserType('farmer');
-          setCurrentStep(2);
-        }}
-        activeOpacity={0.7}
-      >
-        <View style={styles.cardHeader}>
-          <View style={styles.cardIcon}>
-            <View style={styles.iconCircle}>
-              <Text style={styles.iconText}>F</Text>
+        <TouchableOpacity
+          style={[styles.userTypeOption, userType === 'farmer' && styles.selectedOption]}
+          onPress={() => {
+            setUserType('farmer');
+            setCurrentStep(2);
+          }}
+          activeOpacity={0.7}
+        >
+          <View style={styles.optionHeader}>
+            <View style={styles.optionIconContainer}>
+              <Icon name="seedling" size={24} color={userType === 'farmer' ? colors.white : colors.primary} />
+            </View>
+            <View style={styles.optionContent}>
+              <Text style={[styles.optionTitle, userType === 'farmer' && styles.selectedOptionTitle]}>
+                Farmer/Producer
+              </Text>
+              <Text style={[styles.optionDescription, userType === 'farmer' && styles.selectedOptionText]}>
+                Sell your agricultural products directly to buyers and distributors
+              </Text>
             </View>
           </View>
-          <View style={styles.cardContent}>
-            <Text style={styles.cardTitle}>Farmer/Producer</Text>
-            <Text style={styles.cardDescription}>
-              Sell your agricultural products directly to buyers and distributors
-            </Text>
-            <View style={styles.cardFeatures}>
-              <Text style={styles.featureItem}>• Direct sales platform</Text>
-              <Text style={styles.featureItem}>• Inventory management</Text>
-              <Text style={styles.featureItem}>• Order tracking system</Text>
+          <View style={styles.optionFeatures}>
+            <View style={styles.featureRow}>
+              <Icon name="check" size={12} color={userType === 'farmer' ? colors.green200 : colors.gray400} />
+              <Text style={[styles.featureText, userType === 'farmer' && styles.selectedFeatureText]}>
+                Direct sales platform
+              </Text>
+            </View>
+            <View style={styles.featureRow}>
+              <Icon name="check" size={12} color={userType === 'farmer' ? colors.green200 : colors.gray400} />
+              <Text style={[styles.featureText, userType === 'farmer' && styles.selectedFeatureText]}>
+                Inventory management
+              </Text>
+            </View>
+            <View style={styles.featureRow}>
+              <Icon name="check" size={12} color={userType === 'farmer' ? colors.green200 : colors.gray400} />
+              <Text style={[styles.featureText, userType === 'farmer' && styles.selectedFeatureText]}>
+                Order tracking system
+              </Text>
             </View>
           </View>
-        </View>
-      </TouchableOpacity>
+        </TouchableOpacity>
 
-      <TouchableOpacity
-        style={[styles.userTypeCard, userType === 'buyer' && styles.selectedCard]}
-        onPress={() => {
-          setUserType('buyer');
-          setCurrentStep(2);
-        }}
-        activeOpacity={0.7}
-      >
-        <View style={styles.cardHeader}>
-          <View style={styles.cardIcon}>
-            <View style={styles.iconCircle}>
-              <Text style={styles.iconText}>B</Text>
+        <TouchableOpacity
+          style={[styles.userTypeOption, userType === 'buyer' && styles.selectedOption]}
+          onPress={() => {
+            setUserType('buyer');
+            setCurrentStep(2);
+          }}
+          activeOpacity={0.7}
+        >
+          <View style={styles.optionHeader}>
+            <View style={styles.optionIconContainer}>
+              <Icon name="shopping-cart" size={24} color={userType === 'buyer' ? colors.white : colors.primary} />
+            </View>
+            <View style={styles.optionContent}>
+              <Text style={[styles.optionTitle, userType === 'buyer' && styles.selectedOptionTitle]}>
+                Buyer/Distributor
+              </Text>
+              <Text style={[styles.optionDescription, userType === 'buyer' && styles.selectedOptionText]}>
+                Source fresh produce directly from verified agricultural producers
+              </Text>
             </View>
           </View>
-          <View style={styles.cardContent}>
-            <Text style={styles.cardTitle}>Buyer/Distributor</Text>
-            <Text style={styles.cardDescription}>
-              Source fresh produce directly from verified agricultural producers
-            </Text>
-            <View style={styles.cardFeatures}>
-              <Text style={styles.featureItem}>• Direct farm sourcing</Text>
-              <Text style={styles.featureItem}>• Supplier verification</Text>
-              <Text style={styles.featureItem}>• Bulk order management</Text>
+          <View style={styles.optionFeatures}>
+            <View style={styles.featureRow}>
+              <Icon name="check" size={12} color={userType === 'buyer' ? colors.green200 : colors.gray400} />
+              <Text style={[styles.featureText, userType === 'buyer' && styles.selectedFeatureText]}>
+                Direct farm sourcing
+              </Text>
+            </View>
+            <View style={styles.featureRow}>
+              <Icon name="check" size={12} color={userType === 'buyer' ? colors.green200 : colors.gray400} />
+              <Text style={[styles.featureText, userType === 'buyer' && styles.selectedFeatureText]}>
+                Supplier verification
+              </Text>
+            </View>
+            <View style={styles.featureRow}>
+              <Icon name="check" size={12} color={userType === 'buyer' ? colors.green200 : colors.gray400} />
+              <Text style={[styles.featureText, userType === 'buyer' && styles.selectedFeatureText]}>
+                Bulk order management
+              </Text>
             </View>
           </View>
-        </View>
-      </TouchableOpacity>
+        </TouchableOpacity>
+      </View>
     </View>
   );
 
@@ -550,6 +623,7 @@ export default function RegisterScreen() {
     field: string,
     label: string,
     placeholder: string,
+    iconName: string,
     options: {
       required?: boolean;
       keyboardType?: any;
@@ -561,6 +635,7 @@ export default function RegisterScreen() {
     const isFocused = focusedInput === field;
     const hasValue = formData[field as keyof typeof formData];
     const isPassword = field === 'password';
+    const isConfirmPassword = field === 'confirmPassword';
     const passwordStrength = isPassword && formData.password ? getPasswordStrength(formData.password) : null;
 
     return (
@@ -571,18 +646,45 @@ export default function RegisterScreen() {
         <View style={[
           styles.inputWrapper,
           isFocused && styles.inputWrapperFocused,
-          hasValue && styles.inputWrapperFilled
+          hasValue && styles.inputWrapperFilled,
+          options.multiline && styles.textAreaWrapper
         ]}>
+          <Icon 
+            name={iconName} 
+            size={16} 
+            color={isFocused ? colors.primary : colors.gray400} 
+            style={styles.inputIcon}
+          />
           <TextInput
             style={[styles.input, options.multiline && styles.textArea]}
             value={formData[field as keyof typeof formData]}
             onChangeText={(value) => handleInputChange(field, value)}
             placeholder={placeholder}
-            placeholderTextColor="#9ca3af"
+            placeholderTextColor={colors.gray400}
             onFocus={() => setFocusedInput(field)}
             onBlur={() => setFocusedInput(null)}
+            secureTextEntry={isPassword ? !showPassword : isConfirmPassword ? !showConfirmPassword : options.secureTextEntry}
             {...options}
           />
+          {(isPassword || isConfirmPassword) && (
+            <TouchableOpacity 
+              onPress={() => {
+                if (isPassword) setShowPassword(!showPassword);
+                if (isConfirmPassword) setShowConfirmPassword(!showConfirmPassword);
+              }}
+              style={styles.passwordToggle}
+            >
+              <Icon 
+                name={
+                  isPassword 
+                    ? (showPassword ? 'eye-slash' : 'eye')
+                    : (showConfirmPassword ? 'eye-slash' : 'eye')
+                } 
+                size={14} 
+                color={colors.gray400} 
+              />
+            </TouchableOpacity>
+          )}
         </View>
         {isPassword && formData.password && (
           <View style={styles.passwordStrength}>
@@ -590,12 +692,12 @@ export default function RegisterScreen() {
               <View style={[
                 styles.strengthBar, 
                 { 
-                  backgroundColor: passwordStrength?.color || '#e5e7eb', 
+                  backgroundColor: passwordStrength?.color || colors.gray200, 
                   width: `${((passwordStrength?.width || 0) * 100)}%` 
                 }
               ]} />
             </View>
-            <Text style={[styles.strengthText, { color: passwordStrength?.color || '#6b7280' }]}>
+            <Text style={[styles.strengthText, { color: passwordStrength?.color || colors.gray500 }]}>
               {passwordStrength?.strength || 'weak'} password
             </Text>
           </View>
@@ -605,146 +707,173 @@ export default function RegisterScreen() {
   };
 
   const renderRegistrationForm = () => (
-    <View style={styles.formSection}>
-      <View style={styles.formHeader}>
-        <TouchableOpacity 
-          style={styles.backButton}
-          onPress={() => {
-            setUserType(null);
-            setCurrentStep(1);
-          }}
+    <View style={styles.contentContainer}>
+      <View style={styles.formCard}>
+        <View style={styles.formHeader}>
+          <TouchableOpacity 
+            style={styles.backButton}
+            onPress={() => {
+              setUserType(null);
+              setCurrentStep(1);
+            }}
+          >
+            <Icon name="arrow-left" size={16} color={colors.primary} />
+            <Text style={styles.backButtonText}>Back</Text>
+          </TouchableOpacity>
+          <View style={styles.userTypeBadge}>
+            <Icon 
+              name={userType === 'farmer' ? 'seedling' : 'shopping-cart'} 
+              size={14} 
+              color={colors.white} 
+            />
+            <Text style={styles.userTypeBadgeText}>
+              {userType === 'farmer' ? 'Farmer Account' : 'Business Account'}
+            </Text>
+          </View>
+        </View>
+
+        <ScrollView 
+          showsVerticalScrollIndicator={false}
+          bounces={false}
+          keyboardShouldPersistTaps="handled"
         >
-          <Text style={styles.backButtonText}>← Back</Text>
-        </TouchableOpacity>
-        <Text style={styles.selectedUserType}>
-          {userType === 'farmer' ? 'Farmer Account' : 'Business Account'}
-        </Text>
-      </View>
-
-      {/* Personal Information */}
-      <View style={styles.formGroup}>
-        <Text style={styles.groupTitle}>Personal Information</Text>
-        <View style={styles.nameRow}>
-          <View style={styles.nameInputHalf}>
-            {renderFormInput('firstName', 'First Name', 'Enter first name', { required: true })}
+          {/* Personal Information */}
+          <View style={styles.formSection}>
+            <Text style={styles.sectionTitle}>Personal Information</Text>
+            <View style={styles.nameRow}>
+              <View style={styles.nameInputHalf}>
+                {renderFormInput('firstName', 'First Name', 'Enter first name', 'user', { required: true })}
+              </View>
+              <View style={styles.nameInputHalf}>
+                {renderFormInput('lastName', 'Last Name', 'Enter last name', 'user', { required: true })}
+              </View>
+            </View>
+            {renderFormInput('middleName', 'Middle Name', 'Enter middle name (optional)', 'user')}
+            {renderFormInput('email', 'Email Address', 'Enter email address', 'envelope', {
+              required: true,
+              keyboardType: 'email-address',
+              autoCapitalize: 'none'
+            })}
+            {renderFormInput('phone', 'Phone Number', 'Enter phone number', 'phone', {
+              required: true,
+              keyboardType: 'phone-pad'
+            })}
+            {renderFormInput('password', 'Password', 'Enter password', 'lock', {
+              required: true,
+              secureTextEntry: true
+            })}
+            {renderFormInput('confirmPassword', 'Confirm Password', 'Confirm password', 'lock', {
+              required: true,
+              secureTextEntry: true
+            })}
           </View>
-          <View style={styles.nameInputHalf}>
-            {renderFormInput('lastName', 'Last Name', 'Enter last name', { required: true })}
+
+          {/* Address Information */}
+          <View style={styles.formSection}>
+            <Text style={styles.sectionTitle}>Address Information</Text>
+            <LocationPicker
+              onLocationSelect={(barangay) => {
+                handleInputChange('barangay', barangay);
+              }}
+              initialBarangay={formData.barangay}
+              focusedInput={focusedInput}
+              setFocusedInput={setFocusedInput}
+            />
           </View>
-        </View>
-        {renderFormInput('middleName', 'Middle Name', 'Enter middle name (optional)')}
-        {renderFormInput('email', 'Email Address', 'Enter email address', {
-          required: true,
-          keyboardType: 'email-address',
-          autoCapitalize: 'none'
-        })}
-        {renderFormInput('phone', 'Phone Number', 'Enter phone number', {
-          required: true,
-          keyboardType: 'phone-pad'
-        })}
-        {renderFormInput('password', 'Password', 'Enter password', {
-          required: true,
-          secureTextEntry: true
-        })}
-        {renderFormInput('confirmPassword', 'Confirm Password', 'Confirm password', {
-          required: true,
-          secureTextEntry: true
-        })}
-      </View>
 
-      {/* Address Information */}
-      <View style={styles.formGroup}>
-        <Text style={styles.groupTitle}>Address Information</Text>
-        <LocationPicker
-          onLocationSelect={(barangay) => {
-            handleInputChange('barangay', barangay);
-          }}
-          initialBarangay={formData.barangay}
-          focusedInput={focusedInput}
-          setFocusedInput={setFocusedInput}
-        />
-      </View>
+          {/* Account Specific Information */}
+          {userType === 'farmer' && (
+            <View style={styles.formSection}>
+              <Text style={styles.sectionTitle}>Farm Information</Text>
+              {renderFormInput('farmName', 'Farm Name', 'Enter farm name', 'seedling', { required: true })}
+              {renderFormInput('farmSize', 'Farm Size', 'e.g., 50 acres or 20 hectares', 'expand-arrows-alt')}
+              {renderFormInput('cropTypes', 'Primary Crop Types', 'e.g., Vegetables, Fruits, Grains', 'leaf', {
+                multiline: true
+              })}
+            </View>
+          )}
 
-      {/* Account Specific Information */}
-      {userType === 'farmer' && (
-        <View style={styles.formGroup}>
-          <Text style={styles.groupTitle}>Farm Information</Text>
-          {renderFormInput('farmName', 'Farm Name', 'Enter farm name', { required: true })}
-          {renderFormInput('farmSize', 'Farm Size', 'e.g., 50 acres or 20 hectares')}
-          {renderFormInput('cropTypes', 'Primary Crop Types', 'e.g., Vegetables, Fruits, Grains', {
-            multiline: true
-          })}
-        </View>
-      )}
+          {userType === 'buyer' && (
+            <View style={styles.formSection}>
+              <Text style={styles.sectionTitle}>Business Information</Text>
+              {renderFormInput('companyName', 'Company Name', 'Enter company name', 'building', { required: true })}
+              {renderFormInput('businessType', 'Business Type', 'e.g., Restaurant, Grocery Store, Distributor', 'briefcase')}
+            </View>
+          )}
 
-      {userType === 'buyer' && (
-        <View style={styles.formGroup}>
-          <Text style={styles.groupTitle}>Business Information</Text>
-          {renderFormInput('companyName', 'Company Name', 'Enter company name', { required: true })}
-          {renderFormInput('businessType', 'Business Type', 'e.g., Restaurant, Grocery Store, Distributor')}
-        </View>
-      )}
-
-      {/* Submit Button */}
-      <TouchableOpacity
-        style={[
-          styles.registerButton,
-          (isRegistering || rateLimitCooldown > 0) && styles.registerButtonDisabled
-        ]}
-        onPress={handleRegister}
-        disabled={isRegistering || rateLimitCooldown > 0}
-      >
-        <Text style={styles.registerButtonText}>
-          {isRegistering ? 'Creating Account...' : rateLimitCooldown > 0 ? `Wait ${rateLimitCooldown}s` : 'Create Account'}
-        </Text>
-      </TouchableOpacity>
-
-      {/* Divider - Only show when social buttons are enabled */}
-      {true && (
-        <View style={styles.dividerContainer}>
-          <View style={styles.dividerLine} />
-          <Text style={styles.dividerText}>or</Text>
-          <View style={styles.dividerLine} />
-        </View>
-      )}
-
-      {/* Social Login Buttons - Temporarily disabled until OAuth is configured */}
-      {true && (
-        <View style={styles.socialButtonsContainer}>
+          {/* Submit Button */}
           <TouchableOpacity
-            style={[styles.socialButton, styles.googleButton]}
-            onPress={() => handleSocialSignup('google')}
-            disabled={isRegistering}
+            style={[
+              styles.registerButton,
+              (isRegistering || rateLimitCooldown > 0) && styles.registerButtonDisabled
+            ]}
+            onPress={handleRegister}
+            disabled={isRegistering || rateLimitCooldown > 0}
           >
-            <Text style={[styles.socialButtonIcon, styles.googleIcon]}>G</Text>
-            <Text style={styles.socialButtonText}>Continue with Google</Text>
+            {isRegistering ? (
+              <View style={styles.loadingContainer}>
+                <View style={styles.loadingSpinner} />
+                <Text style={styles.registerButtonText}>Creating Account...</Text>
+              </View>
+            ) : rateLimitCooldown > 0 ? (
+              <Text style={styles.registerButtonText}>Wait {rateLimitCooldown}s</Text>
+            ) : (
+              <>
+                <Icon name="user-plus" size={16} color={colors.white} style={styles.buttonIcon} />
+                <Text style={styles.registerButtonText}>Create Account</Text>
+              </>
+            )}
           </TouchableOpacity>
 
-          <TouchableOpacity
-            style={[styles.socialButton, styles.facebookButton]}
-            onPress={() => handleSocialSignup('facebook')}
-            disabled={isRegistering}
-          >
-            <Text style={[styles.socialButtonIcon, styles.facebookIcon]}>f</Text>
-            <Text style={styles.socialButtonText}>Continue with Facebook</Text>
-          </TouchableOpacity>
+          {/* Divider */}
+          <View style={styles.dividerContainer}>
+            <View style={styles.dividerLine} />
+            <View style={styles.dividerTextContainer}>
+              <Text style={styles.dividerText}>or</Text>
+            </View>
+            <View style={styles.dividerLine} />
+          </View>
 
-        </View>
-      )}
+          {/* Social Login Buttons */}
+          <View style={styles.socialButtonsContainer}>
+            <TouchableOpacity
+              style={[styles.socialButton, isRegistering && styles.socialButtonDisabled]}
+              onPress={() => handleSocialSignup('google')}
+              disabled={isRegistering}
+            >
+              <View style={styles.googleIcon}>
+                <Text style={styles.googleIconText}>G</Text>
+              </View>
+              <Text style={styles.socialButtonText}>Continue with Google</Text>
+            </TouchableOpacity>
 
-      {/* Terms */}
-      <Text style={styles.termsText}>
-        By creating an account, you agree to our{' '}
-        <Text style={styles.linkText}>Terms of Service</Text> and{' '}
-        <Text style={styles.linkText}>Privacy Policy</Text>
-      </Text>
+            <TouchableOpacity
+              style={[styles.socialButton, isRegistering && styles.socialButtonDisabled]}
+              onPress={() => handleSocialSignup('facebook')}
+              disabled={isRegistering}
+            >
+              <View style={styles.facebookIcon}>
+                <Text style={styles.facebookIconText}>f</Text>
+              </View>
+              <Text style={styles.socialButtonText}>Continue with Facebook</Text>
+            </TouchableOpacity>
+          </View>
 
-      {/* Login Link */}
-      <View style={styles.loginSection}>
-        <Text style={styles.loginText}>Already have an account? </Text>
-        <Link href="/auth/login">
-          <Text style={styles.loginLink}>Sign In</Text>
-        </Link>
+          {/* Terms */}
+          <Text style={styles.termsText}>
+            By creating an account, you agree to our{' '}
+            <Text style={styles.linkText}>Terms of Service</Text> and{' '}
+            <Text style={styles.linkText}>Privacy Policy</Text>
+          </Text>
+
+          {/* Login Link */}
+          <View style={styles.loginSection}>
+            <Text style={styles.loginText}>Already have an account? </Text>
+            <Link href="/auth/login">
+              <Text style={styles.loginLink}>Sign In</Text>
+            </Link>
+          </View>
+        </ScrollView>
       </View>
     </View>
   );
@@ -760,11 +889,10 @@ export default function RegisterScreen() {
           showsVerticalScrollIndicator={false}
           bounces={false}
           keyboardShouldPersistTaps="handled"
+          contentContainerStyle={styles.scrollContent}
         >
           {renderHeader()}
-          <View style={styles.contentContainer}>
-            {!userType ? renderUserTypeSelection() : renderRegistrationForm()}
-          </View>
+          {!userType ? renderUserTypeSelection() : renderRegistrationForm()}
         </ScrollView>
       </KeyboardAvoidingView>
       {renderSuccessModal()}
@@ -776,432 +904,753 @@ export default function RegisterScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f8fafc',
+    backgroundColor: colors.background,
   },
+
   scrollView: {
     flex: 1,
   },
+
+  scrollContent: {
+    flexGrow: 1,
+    minHeight: height,
+  },
+
+  // Header Styles
   headerContainer: {
-    backgroundColor: '#1f2937',
-    paddingBottom: 30,
+    backgroundColor: colors.primary,
+    paddingTop: Platform.OS === 'web' ? (isMobile ? 60 : 80) : (isMobile ? 80 : 100),
+    paddingHorizontal: isMobile ? 24 : isTablet ? 32 : 40,
+    paddingBottom: isMobile ? 40 : 60,
+    position: 'relative',
   },
-  header: {
-    paddingTop: 60,
-    paddingHorizontal: 24,
+
+  backgroundPattern: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    overflow: 'hidden',
+  },
+
+  patternCircle: {
+    position: 'absolute',
+    borderRadius: 1000,
+    backgroundColor: colors.green200,
+    opacity: 0.2,
+  },
+
+  circle1: {
+    width: 200,
+    height: 200,
+    top: -100,
+    right: -50,
+  },
+
+  circle2: {
+    width: 150,
+    height: 150,
+    top: 100,
+    left: -75,
+  },
+
+  circle3: {
+    width: 120,
+    height: 120,
+    top: 250,
+    right: isMobile ? -20 : 100,
+  },
+
+  logoContainer: {
     alignItems: 'center',
+    marginBottom: isMobile ? 24 : 32,
+    zIndex: 1,
   },
-  brandName: {
-    fontSize: 32,
-    fontWeight: '700',
-    color: '#ffffff',
+
+  logo: {
+    width: isMobile ? 56 : 72,
+    height: isMobile ? 56 : 72,
+    borderRadius: isMobile ? 14 : 18,
+    backgroundColor: colors.white,
+    alignItems: 'center',
+    justifyContent: 'center',
     marginBottom: 12,
+    ...Platform.select({
+      web: {
+        boxShadow: '0 8px 32px rgba(16, 185, 129, 0.3)',
+      },
+      default: {
+        elevation: 8,
+        shadowColor: colors.primary,
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.3,
+        shadowRadius: 8,
+      },
+    }),
+  },
+
+  logoText: {
+    fontSize: isMobile ? 20 : 28,
+    fontWeight: 'bold',
+    color: colors.primary,
+    letterSpacing: -1,
+  },
+
+  brandName: {
+    fontSize: isMobile ? 24 : 32,
+    fontWeight: '700',
+    color: colors.white,
     letterSpacing: -0.5,
   },
-  title: {
-    fontSize: 28,
+
+  welcomeSection: {
+    alignItems: 'center',
+    marginBottom: isMobile ? 16 : 24,
+    zIndex: 1,
+  },
+
+  welcomeTitle: {
+    fontSize: isMobile ? 20 : 28,
     fontWeight: '600',
-    color: '#ffffff',
+    color: colors.white,
     marginBottom: 8,
     textAlign: 'center',
   },
-  subtitle: {
-    fontSize: 16,
-    color: '#d1d5db',
+
+  welcomeSubtitle: {
+    fontSize: isMobile ? 14 : 16,
+    color: colors.green100,
     textAlign: 'center',
-    lineHeight: 24,
-    marginBottom: 24,
-    maxWidth: width * 0.8,
+    lineHeight: isMobile ? 20 : 24,
+    maxWidth: isMobile ? width * 0.85 : 400,
   },
+
   progressContainer: {
-    width: '100%',
     alignItems: 'center',
+    zIndex: 1,
   },
+
   progressBarBg: {
-    width: width * 0.6,
-    height: 3,
-    backgroundColor: '#374151',
+    width: isMobile ? width * 0.6 : 240,
+    height: 4,
+    backgroundColor: 'rgba(255,255,255,0.2)',
     borderRadius: 2,
     overflow: 'hidden',
   },
+
   progressBar: {
     height: '100%',
-    backgroundColor: '#10b981',
+    backgroundColor: colors.white,
     borderRadius: 2,
+    ...Platform.select({
+      web: {
+        transition: 'width 0.3s ease-in-out',
+      },
+    }),
   },
+
   progressText: {
-    color: '#d1d5db',
-    fontSize: 14,
+    color: colors.green100,
+    fontSize: 12,
     marginTop: 8,
+    fontWeight: '500',
   },
+
+  // Content Styles
   contentContainer: {
     flex: 1,
-    backgroundColor: '#ffffff',
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    marginTop: -15,
+    paddingHorizontal: isMobile ? 24 : isTablet ? 32 : 40,
     paddingTop: 32,
-    minHeight: height * 0.7,
-  },
-  userTypeSection: {
-    paddingHorizontal: 24,
     paddingBottom: 32,
+    alignItems: 'center',
   },
+
+  // User Type Selection
+  userTypeCard: {
+    backgroundColor: colors.white,
+    borderRadius: 20,
+    padding: isMobile ? 24 : 32,
+    width: '100%',
+    maxWidth: isMobile ? undefined : 600,
+    ...Platform.select({
+      web: {
+        boxShadow: '0 20px 60px rgba(0, 0, 0, 0.1)',
+      },
+      default: {
+        elevation: 10,
+        shadowColor: colors.shadow,
+        shadowOffset: { width: 0, height: 10 },
+        shadowOpacity: 0.1,
+        shadowRadius: 20,
+      },
+    }),
+  },
+
   sectionTitle: {
-    fontSize: 24,
+    fontSize: isMobile ? 20 : 24,
     fontWeight: '600',
-    color: '#111827',
+    color: colors.gray800,
     marginBottom: 8,
     textAlign: 'center',
   },
+
   sectionSubtitle: {
-    fontSize: 16,
-    color: '#6b7280',
+    fontSize: isMobile ? 14 : 16,
+    color: colors.gray600,
     textAlign: 'center',
     marginBottom: 32,
-    lineHeight: 24,
+    lineHeight: isMobile ? 20 : 24,
   },
-  userTypeCard: {
+
+  userTypeOption: {
     marginBottom: 16,
-    borderRadius: 12,
-    backgroundColor: '#ffffff',
+    borderRadius: 16,
+    backgroundColor: colors.gray50,
     borderWidth: 2,
-    borderColor: '#e5e7eb',
+    borderColor: colors.gray200,
     padding: 20,
+    ...Platform.select({
+      web: {
+        transition: 'all 0.2s ease-in-out',
+      },
+    }),
   },
-  selectedCard: {
-    borderColor: '#10b981',
-    backgroundColor: '#f0fdf4',
+
+  selectedOption: {
+    borderColor: colors.primary,
+    backgroundColor: colors.primary,
+    ...Platform.select({
+      web: {
+        boxShadow: '0 8px 24px rgba(16, 185, 129, 0.3)',
+      },
+      default: {
+        elevation: 6,
+        shadowColor: colors.primary,
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.3,
+        shadowRadius: 8,
+      },
+    }),
   },
-  cardHeader: {
+
+  optionHeader: {
     flexDirection: 'row',
     alignItems: 'flex-start',
+    marginBottom: 16,
   },
-  cardIcon: {
-    marginRight: 16,
-  },
-  iconCircle: {
+
+  optionIconContainer: {
     width: 48,
     height: 48,
     borderRadius: 24,
-    backgroundColor: '#10b981',
-    justifyContent: 'center',
+    backgroundColor: colors.green100,
     alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 16,
   },
-  iconText: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: '#ffffff',
-  },
-  cardContent: {
+
+  optionContent: {
     flex: 1,
   },
-  cardTitle: {
-    fontSize: 20,
+
+  optionTitle: {
+    fontSize: isMobile ? 18 : 20,
     fontWeight: '600',
-    color: '#111827',
+    color: colors.gray800,
     marginBottom: 8,
   },
-  cardDescription: {
-    fontSize: 15,
-    color: '#4b5563',
-    lineHeight: 22,
-    marginBottom: 12,
+
+  selectedOptionTitle: {
+    color: colors.white,
   },
-  cardFeatures: {
-    gap: 4,
-  },
-  featureItem: {
+
+  optionDescription: {
     fontSize: 14,
-    color: '#6b7280',
+    color: colors.gray600,
     lineHeight: 20,
   },
-  formSection: {
-    paddingHorizontal: 24,
-    paddingBottom: 32,
+
+  selectedOptionText: {
+    color: colors.green100,
   },
+
+  optionFeatures: {
+    gap: 8,
+  },
+
+  featureRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+
+  featureText: {
+    fontSize: 13,
+    color: colors.gray600,
+    fontWeight: '500',
+  },
+
+  selectedFeatureText: {
+    color: colors.green200,
+  },
+
+  // Form Styles
+  formCard: {
+    backgroundColor: colors.white,
+    borderRadius: 20,
+    padding: isMobile ? 20 : 24,
+    width: '100%',
+    maxWidth: isMobile ? undefined : 600,
+    ...Platform.select({
+      web: {
+        boxShadow: '0 20px 60px rgba(0, 0, 0, 0.1)',
+      },
+      default: {
+        elevation: 10,
+        shadowColor: colors.shadow,
+        shadowOffset: { width: 0, height: 10 },
+        shadowOpacity: 0.1,
+        shadowRadius: 20,
+      },
+    }),
+  },
+
   formHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 32,
+    justifyContent: 'space-between',
+    marginBottom: 24,
     paddingBottom: 16,
     borderBottomWidth: 1,
-    borderBottomColor: '#e5e7eb',
+    borderBottomColor: colors.gray200,
   },
+
   backButton: {
-    marginRight: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    padding: 8,
   },
+
   backButtonText: {
-    fontSize: 16,
-    color: '#10b981',
+    fontSize: 14,
+    color: colors.primary,
     fontWeight: '600',
   },
-  selectedUserType: {
-    fontSize: 20,
+
+  userTypeBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.primary,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
+    gap: 6,
+  },
+
+  userTypeBadgeText: {
+    fontSize: 12,
     fontWeight: '600',
-    color: '#111827',
+    color: colors.white,
   },
-  formGroup: {
-    marginBottom: 32,
+
+  formSection: {
+    marginBottom: 24,
   },
-  groupTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#111827',
-    marginBottom: 20,
-    paddingBottom: 8,
-    borderBottomWidth: 1,
-    borderBottomColor: '#e5e7eb',
-  },
+
   nameRow: {
-    flexDirection: width < 600 ? 'column' : 'row',
+    flexDirection: isMobile ? 'column' : 'row',
     gap: 16,
-    marginBottom: 0,
   },
+
   nameInputHalf: {
     flex: 1,
   },
+
   inputContainer: {
-    marginBottom: 20,
+    marginBottom: 16,
   },
+
   label: {
-    fontSize: 15,
-    fontWeight: '500',
-    color: '#374151',
+    fontSize: 14,
+    fontWeight: '600',
+    color: colors.gray700,
     marginBottom: 8,
   },
+
   required: {
-    color: '#dc2626',
+    color: colors.danger,
   },
+
   inputWrapper: {
-    borderWidth: 1,
-    borderColor: '#d1d5db',
-    borderRadius: 8,
-    backgroundColor: '#ffffff',
-  },
-  inputWrapperFocused: {
-    borderColor: '#10b981',
-  },
-  inputWrapperFilled: {
-    borderColor: '#9ca3af',
-  },
-  input: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: colors.gray200,
+    borderRadius: 12,
+    backgroundColor: colors.gray50,
     paddingHorizontal: 16,
-    paddingVertical: 14,
-    fontSize: 16,
-    color: '#111827',
     minHeight: 48,
+    ...Platform.select({
+      web: {
+        transition: 'all 0.2s ease-in-out',
+      },
+    }),
   },
+
+  inputWrapperFocused: {
+    borderColor: colors.primary,
+    backgroundColor: colors.white,
+    ...Platform.select({
+      web: {
+        boxShadow: '0 0 0 4px rgba(16, 185, 129, 0.1)',
+      },
+    }),
+  },
+
+  inputWrapperFilled: {
+    borderColor: colors.gray300,
+    backgroundColor: colors.white,
+  },
+
+  textAreaWrapper: {
+    alignItems: 'flex-start',
+    minHeight: 80,
+  },
+
+  inputIcon: {
+    marginRight: 12,
+    width: 16,
+  },
+
+  input: {
+    flex: 1,
+    fontSize: 15,
+    color: colors.gray800,
+    paddingVertical: 16,
+  },
+
   textArea: {
-    height: 80,
+    height: 60,
     textAlignVertical: 'top',
+    paddingTop: 16,
   },
+
+  passwordToggle: {
+    padding: 8,
+  },
+
   passwordStrength: {
     marginTop: 8,
     flexDirection: 'row',
     alignItems: 'center',
   },
+
   strengthBarContainer: {
     width: 60,
     height: 3,
-    backgroundColor: '#e5e7eb',
+    backgroundColor: colors.gray200,
     borderRadius: 2,
     marginRight: 8,
+    overflow: 'hidden',
   },
+
   strengthBar: {
     height: '100%',
     borderRadius: 2,
+    ...Platform.select({
+      web: {
+        transition: 'all 0.3s ease-in-out',
+      },
+    }),
   },
+
   strengthText: {
-    fontSize: 12,
-    fontWeight: '500',
+    fontSize: 11,
+    fontWeight: '600',
     textTransform: 'capitalize',
   },
+
   registerButton: {
-    backgroundColor: '#10b981',
-    borderRadius: 8,
+    backgroundColor: colors.primary,
+    borderRadius: 12,
     paddingVertical: 16,
+    paddingHorizontal: 24,
     alignItems: 'center',
+    justifyContent: 'center',
     marginTop: 16,
+    marginBottom: 24,
+    minHeight: 52,
+    flexDirection: 'row',
+    ...Platform.select({
+      web: {
+        transition: 'all 0.2s ease-in-out',
+        boxShadow: '0 4px 16px rgba(16, 185, 129, 0.3)',
+      },
+      default: {
+        elevation: 4,
+        shadowColor: colors.primary,
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.3,
+        shadowRadius: 8,
+      },
+    }),
   },
+
   registerButtonDisabled: {
-    backgroundColor: '#9ca3af',
+    backgroundColor: colors.gray400,
+    ...Platform.select({
+      web: {
+        boxShadow: 'none',
+      },
+      default: {
+        elevation: 0,
+      },
+    }),
   },
+
   registerButtonText: {
-    color: '#ffffff',
+    color: colors.white,
     fontSize: 16,
     fontWeight: '600',
   },
+
+  buttonIcon: {
+    marginRight: 8,
+  },
+
+  loadingContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+
+  loadingSpinner: {
+    width: 16,
+    height: 16,
+    borderWidth: 2,
+    borderColor: colors.white,
+    borderTopColor: 'transparent',
+    borderRadius: 8,
+    marginRight: 8,
+    ...Platform.select({
+      web: {
+        animation: 'spin 1s linear infinite',
+      },
+    }),
+  },
+
   dividerContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginVertical: 24,
+    marginBottom: 20,
   },
+
   dividerLine: {
     flex: 1,
     height: 1,
-    backgroundColor: '#e5e7eb',
+    backgroundColor: colors.gray200,
   },
+
+  dividerTextContainer: {
+    backgroundColor: colors.white,
+    paddingHorizontal: 16,
+  },
+
   dividerText: {
-    marginHorizontal: 16,
     fontSize: 14,
-    color: '#6b7280',
+    color: colors.gray500,
     fontWeight: '500',
   },
+
   socialButtonsContainer: {
     gap: 12,
     marginBottom: 24,
   },
+
   socialButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: 14,
     paddingHorizontal: 16,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#d1d5db',
-    backgroundColor: '#ffffff',
+    borderRadius: 12,
+    borderWidth: 2,
+    borderColor: colors.gray200,
+    backgroundColor: colors.white,
+    minHeight: 48,
+    ...Platform.select({
+      web: {
+        transition: 'all 0.2s ease-in-out',
+      },
+    }),
   },
-  googleButton: {
-    borderColor: '#db4437',
+
+  socialButtonDisabled: {
+    opacity: 0.6,
   },
-  facebookButton: {
-    borderColor: '#4267b2',
-  },
-  socialButtonIcon: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    marginRight: 12,
-    color: '#ffffff',
+
+  googleIcon: {
     width: 24,
     height: 24,
-    textAlign: 'center',
-    lineHeight: 24,
     borderRadius: 12,
-  },
-  googleIcon: {
     backgroundColor: '#db4437',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
   },
-  facebookIcon: {
-    backgroundColor: '#4267b2',
-  },
-  socialButtonText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#374151',
-  },
-  disabledButton: {
-    opacity: 0.5,
-    backgroundColor: '#f3f4f6',
-  },
-  disabledText: {
-    color: '#9ca3af',
-  },
-  termsText: {
+
+  googleIconText: {
     fontSize: 14,
-    color: '#6b7280',
+    fontWeight: 'bold',
+    color: colors.white,
+  },
+
+  facebookIcon: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: '#4267b2',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+  },
+
+  facebookIconText: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    color: colors.white,
+  },
+
+  socialButtonText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: colors.gray700,
+  },
+
+  termsText: {
+    fontSize: 13,
+    color: colors.gray600,
     textAlign: 'center',
-    marginTop: 24,
-    lineHeight: 20,
+    marginTop: 16,
+    marginBottom: 20,
+    lineHeight: 18,
   },
+
   linkText: {
-    color: '#10b981',
-    fontWeight: '500',
+    color: colors.primary,
+    fontWeight: '600',
   },
+
   loginSection: {
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
-    marginTop: 24,
-    paddingTop: 24,
+    paddingTop: 16,
     borderTopWidth: 1,
-    borderTopColor: '#e5e7eb',
+    borderTopColor: colors.gray200,
   },
+
   loginText: {
-    fontSize: 15,
-    color: '#6b7280',
+    fontSize: 14,
+    color: colors.gray600,
   },
+
   loginLink: {
-    fontSize: 15,
-    color: '#10b981',
+    fontSize: 14,
+    color: colors.primary,
     fontWeight: '600',
   },
+
+  // Modal Styles
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
     justifyContent: 'center',
     alignItems: 'center',
     padding: 24,
   },
+
   modalContent: {
-    backgroundColor: '#ffffff',
-    borderRadius: 16,
+    backgroundColor: colors.white,
+    borderRadius: 20,
     padding: 32,
     alignItems: 'center',
     maxWidth: 400,
     width: '100%',
+    ...Platform.select({
+      web: {
+        boxShadow: '0 20px 60px rgba(0, 0, 0, 0.3)',
+      },
+      default: {
+        elevation: 20,
+        shadowColor: colors.black,
+        shadowOffset: { width: 0, height: 10 },
+        shadowOpacity: 0.3,
+        shadowRadius: 20,
+      },
+    }),
   },
-  successIcon: {
+
+  successIconContainer: {
     width: 64,
     height: 64,
     borderRadius: 32,
-    backgroundColor: '#10b981',
+    backgroundColor: colors.success,
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 24,
   },
-  checkmark: {
-    fontSize: 32,
-    color: '#ffffff',
-    fontWeight: 'bold',
+
+  errorIconContainer: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: colors.danger,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 24,
   },
+
   modalTitle: {
     fontSize: 24,
     fontWeight: '600',
-    color: '#111827',
+    color: colors.gray800,
     marginBottom: 16,
     textAlign: 'center',
   },
+
   modalMessage: {
     fontSize: 16,
-    color: '#4b5563',
+    color: colors.gray600,
     textAlign: 'center',
     lineHeight: 24,
     marginBottom: 32,
   },
+
   modalButton: {
-    backgroundColor: '#10b981',
-    borderRadius: 8,
+    backgroundColor: colors.success,
+    borderRadius: 12,
     paddingHorizontal: 32,
     paddingVertical: 14,
     alignItems: 'center',
     width: '100%',
+    minHeight: 48,
   },
+
+  errorModalButton: {
+    backgroundColor: colors.danger,
+    borderRadius: 12,
+    paddingHorizontal: 32,
+    paddingVertical: 14,
+    alignItems: 'center',
+    width: '100%',
+    minHeight: 48,
+  },
+
   modalButtonText: {
-    color: '#ffffff',
+    color: colors.white,
     fontSize: 16,
     fontWeight: '600',
-  },
-  errorIcon: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    backgroundColor: '#dc2626',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 24,
-  },
-  errorMark: {
-    fontSize: 32,
-    color: '#ffffff',
-    fontWeight: 'bold',
-  },
-  errorModalButton: {
-    backgroundColor: '#dc2626',
-    borderRadius: 8,
-    paddingHorizontal: 32,
-    paddingVertical: 14,
-    alignItems: 'center',
-    width: '100%',
   },
 });
