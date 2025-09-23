@@ -451,21 +451,25 @@ export default function HeaderComponent({
         {/* Header Actions */}
         <View style={styles.headerActions}>
           {/* Messages and Notifications - Show on all devices */}
-          <MessageComponent
-            conversations={conversations}
-            onConversationPress={onConversationPress}
-            onSendMessage={onSendMessage}
-            onMarkAsRead={onMarkMessageAsRead}
-            onNewConversation={onNewConversation}
-          />
+          {showMessages && (
+            <MessageComponent
+              conversations={conversations}
+              onConversationPress={onConversationPress}
+              onSendMessage={onSendMessage}
+              onMarkAsRead={onMarkMessageAsRead}
+              onNewConversation={onNewConversation}
+            />
+          )}
 
-          <NotificationComponent
-            notifications={notifications}
-            onNotificationPress={onNotificationPress}
-            onMarkAsRead={onMarkNotificationAsRead}
-            onMarkAllAsRead={onMarkAllNotificationsAsRead}
-            onClearAll={onClearAllNotifications}
-          />
+          {showNotifications && (
+            <NotificationComponent
+              notifications={notifications}
+              onNotificationPress={onNotificationPress}
+              onMarkAsRead={onMarkNotificationAsRead}
+              onMarkAllAsRead={onMarkAllNotificationsAsRead}
+              onClearAll={onClearAllNotifications}
+            />
+          )}
 
           {/* Download App Button - only show on web */}
           {Platform.OS === 'web' && (
