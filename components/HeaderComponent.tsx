@@ -519,7 +519,9 @@ export default function HeaderComponent({
       fontSize: isDesktop ? 14 : 12,
       fontWeight: '500',
       color: colors.white,
-      whiteSpace: 'nowrap' as any,
+      ...(Platform.OS === 'web' && {
+        whiteSpace: 'nowrap' as any,
+      }),
     },
 
     topNavTextActive: {
