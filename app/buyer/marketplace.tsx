@@ -296,7 +296,16 @@ export default function MarketplaceScreen() {
   }
 
   // Convert categories to match header component format
- 
+  const headerCategories = [
+    { key: 'all', label: 'All', color: '#6b7280' },
+    { key: 'vegetables', label: 'Vegetables', color: '#10b981' },
+    { key: 'fruits', label: 'Fruits', color: '#f59e0b' },
+    { key: 'grains', label: 'Grains', color: '#8b5cf6' },
+    { key: 'herbs', label: 'Herbs', color: '#059669' },
+    { key: 'dairy', label: 'Dairy', color: '#3b82f6' },
+    { key: 'meat', label: 'Meat', color: '#dc2626' },
+  ];
+
   return (
     <View style={styles.container}>
       <HeaderComponent
@@ -306,6 +315,7 @@ export default function MarketplaceScreen() {
         onSearchChange={setSearchQuery}
         searchPlaceholder="Search fresh products..."
         showCategories={true}
+        categories={headerCategories}
         selectedCategory={selectedCategory.toLowerCase()}
         onCategoryChange={(category) => setSelectedCategory(category === 'all' ? 'All' : category.charAt(0).toUpperCase() + category.slice(1))}
         showFilterButton={true}
