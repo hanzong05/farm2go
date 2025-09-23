@@ -1,15 +1,14 @@
 import { router } from 'expo-router';
 import React, { useState } from 'react';
 import {
+  Dimensions,
+  Platform,
   ScrollView,
   StyleSheet,
   Text,
   TextInput,
   TouchableOpacity,
-  View,
-  Platform,
-  Linking,
-  Dimensions
+  View
 } from 'react-native';
 
 const { width } = Dimensions.get('window');
@@ -18,9 +17,9 @@ const isTablet = width >= 768 && width < 1024;
 const isDesktop = width >= 1024;
 
 import Icon from 'react-native-vector-icons/FontAwesome5';
+import { supabase } from '../lib/supabase';
 import { logoutUser } from '../services/auth';
 import { Database } from '../types/database';
-import { supabase } from '../lib/supabase';
 import MessageComponent, { Conversation } from './MessageComponent';
 import NotificationComponent, { Notification } from './NotificationComponent';
 
@@ -338,18 +337,10 @@ export default function HeaderComponent({
       // For web users, show download options
       const userAgent = navigator.userAgent || navigator.vendor || (window as any).opera;
 
-      // Multiple download options (prioritized)
+      // Multiple download options
       const downloadUrls = [
-        // Option 1: GitHub Releases (recommended for large files)
         'https://github.com/hanz-pillerva/farm2go/releases/latest/download/farm2go.apk',
-
-        // Option 2: Direct link (if you host on a server)
         'https://farm2go.vercel.app/downloads/farm2go.apk',
-
-        // Option 3: Google Drive direct download (if you use Google Drive)
-        // 'https://drive.google.com/uc?export=download&id=YOUR_FILE_ID',
-
-        // Option 4: Supabase (fallback for smaller files)
         (() => {
           const { data: apkData } = supabase.storage.from('app').getPublicUrl('farm2go.apk');
           return apkData.publicUrl;
@@ -357,36 +348,26 @@ export default function HeaderComponent({
       ];
 
       if (/android/i.test(userAgent)) {
-        // Android device - try downloads in order
         console.log('Android detected - downloading APK');
         tryDownloads(downloadUrls);
       } else if (/iPad|iPhone|iPod/.test(userAgent) && !(window as any).MSStream) {
-        // iOS device - show message that APK is for Android only
         if (confirm('Farm2Go app is currently available for Android devices only. Download APK anyway?')) {
           tryDownloads(downloadUrls);
         }
       } else {
-        // Desktop - download APK with instructions
         const confirmed = confirm('Download Farm2Go APK for Android? This file can be transferred to your Android device for installation.');
         if (confirmed) {
           tryDownloads(downloadUrls);
         }
       }
     } else {
-      // Already in the app - show about page
       router.push('/about' as any);
     }
   };
 
-  // Helper function to try multiple download URLs
   const tryDownloads = (urls: string[]) => {
-    // Try the first URL (GitHub releases)
     const primaryUrl = urls[0];
-
-    // Open the primary download URL
     window.open(primaryUrl, '_blank');
-
-    // Show alternative options
     console.log('Primary download:', primaryUrl);
     console.log('Alternative downloads available:', urls.slice(1));
   };
@@ -451,22 +432,26 @@ export default function HeaderComponent({
 
         {/* Header Actions */}
         <View style={styles.headerActions}>
-          {/* Messages and Notifications - Show on all devices */}
-          <MessageComponent
-            conversations={conversations}
-            onConversationPress={onConversationPress}
-            onSendMessage={onSendMessage}
-            onMarkAsRead={onMarkMessageAsRead}
-            onNewConversation={onNewConversation}
-          />
+          {/* Messages and Notifications - Show on all devices if enabled */}
+          {showMessages && (
+            <MessageComponent
+              conversations={conversations}
+              onConversationPress={onConversationPress}
+              onSendMessage={onSendMessage}
+              onMarkAsRead={onMarkMessageAsRead}
+              onNewConversation={onNewConversation}
+            />
+          )}
 
-          <NotificationComponent
-            notifications={notifications}
-            onNotificationPress={onNotificationPress}
-            onMarkAsRead={onMarkNotificationAsRead}
-            onMarkAllAsRead={onMarkAllNotificationsAsRead}
-            onClearAll={onClearAllNotifications}
-          />
+          {showNotifications && (
+            <NotificationComponent
+              notifications={notifications}
+              onNotificationPress={onNotificationPress}
+              onMarkAsRead={onMarkNotificationAsRead}
+              onMarkAllAsRead={onMarkAllNotificationsAsRead}
+              onClearAll={onClearAllNotifications}
+            />
+          )}
 
           {/* Download App Button - only show on web */}
           {Platform.OS === 'web' && (
@@ -745,11 +730,10 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     backgroundColor: 'transparent',
     minHeight: 40,
-    ...Platform.select({
-      web: {
-        transition: 'all 0.2s ease-in-out',
-      },
-    }),
+    ...(Platform.OS === 'web' ? {
+      cursor: 'pointer',
+      transition: 'all 0.2s ease-in-out',
+    } : {}),
   },
 
   topNavItemActive: {
@@ -787,9 +771,9 @@ const styles = StyleSheet.create({
   headerActions: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: isMobile ? 8 : isTablet ? 12 : 16,
     flex: isMobile ? 0 : 0.3,
     justifyContent: 'flex-end',
+    gap: isMobile ? 8 : isTablet ? 12 : 16,
   },
 
   headerButton: {
@@ -1044,8 +1028,8 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
 
-  // Responsive breakpoint adjustments
-  ...(isDesktop && {
+  // Additional responsive fixes
+  ...(Platform.OS === 'web' && isDesktop && {
     topBar: {
       paddingHorizontal: 40,
       paddingVertical: 16,
@@ -1062,7 +1046,7 @@ const styles = StyleSheet.create({
   }),
 
   // Tablet-specific adjustments
-  ...(isTablet && !isDesktop && {
+  ...(Platform.OS === 'web' && isTablet && !isDesktop && {
     topBar: {
       paddingHorizontal: 28,
       paddingVertical: 14,
