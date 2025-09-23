@@ -8,8 +8,14 @@ import {
   TouchableOpacity,
   View,
   Platform,
-  Linking
+  Linking,
+  Dimensions
 } from 'react-native';
+
+const { width } = Dimensions.get('window');
+const isMobile = width < 768;
+const isTablet = width >= 768 && width < 1024;
+const isDesktop = width >= 1024;
 import Icon from 'react-native-vector-icons/FontAwesome5';
 import { logoutUser } from '../services/auth';
 import { Database } from '../types/database';
@@ -577,45 +583,48 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    paddingTop: 44, // Reduced from 50
+    paddingHorizontal: isMobile ? 12 : 16,
+    paddingVertical: isMobile ? 6 : 8,
+    paddingTop: isMobile ? 40 : 44,
     backgroundColor: colors.primary,
-    height: 70, // Fixed height for consistency
+    height: isMobile ? 60 : 70,
   },
 
   logoSection: {
     flexDirection: 'row',
     alignItems: 'center',
-    minWidth: 120, // Ensure logo section has minimum width
+    minWidth: isMobile ? 80 : 120,
+    flex: isMobile ? 0 : undefined,
   },
 
   logo: {
-    width: 28, // Slightly smaller
-    height: 28,
+    width: isMobile ? 24 : 28,
+    height: isMobile ? 24 : 28,
     borderRadius: 6,
     backgroundColor: colors.white,
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: 8,
+    marginRight: isMobile ? 6 : 8,
   },
 
   logoText: {
-    fontSize: 12, // Slightly smaller
+    fontSize: isMobile ? 10 : 12,
     fontWeight: 'bold',
     color: colors.primary,
   },
 
   brandText: {
-    fontSize: 16, // Slightly smaller
+    fontSize: isMobile ? 14 : 16,
     fontWeight: 'bold',
     color: colors.white,
+    display: isMobile ? 'none' : 'flex',
   },
 
   // Top Navigation in Header
   topNavScroll: {
     flex: 1,
-    marginHorizontal: 16,
+    marginHorizontal: isMobile ? 8 : 16,
+    display: isMobile ? 'none' : 'flex',
   },
 
   topNavContent: {
@@ -626,12 +635,12 @@ const styles = StyleSheet.create({
   topNavItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
+    paddingHorizontal: isMobile ? 8 : 12,
+    paddingVertical: isMobile ? 4 : 6,
     borderRadius: 4,
     backgroundColor: 'transparent',
-    marginRight: 8,
-    minHeight: 32,
+    marginRight: isMobile ? 4 : 8,
+    minHeight: isMobile ? 28 : 32,
   },
 
   topNavItemActive: {
@@ -643,7 +652,7 @@ const styles = StyleSheet.create({
   },
 
   topNavText: {
-    fontSize: 11,
+    fontSize: isMobile ? 9 : 11,
     fontWeight: '500',
     color: colors.white,
   },
@@ -656,19 +665,19 @@ const styles = StyleSheet.create({
   headerActions: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8, // Reduced gap
-    minWidth: 120, // Ensure actions section has minimum width
+    gap: isMobile ? 4 : 8,
+    minWidth: isMobile ? 80 : 120,
   },
 
   headerButton: {
     backgroundColor: colors.white,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
+    paddingHorizontal: isMobile ? 8 : 10,
+    paddingVertical: isMobile ? 4 : 6,
     borderRadius: 4,
   },
 
   headerButtonText: {
-    fontSize: 11,
+    fontSize: isMobile ? 9 : 11,
     fontWeight: '600',
     color: colors.primary,
   },
@@ -701,10 +710,10 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: 'rgba(255,255,255,0.15)',
-    paddingHorizontal: 10,
-    paddingVertical: 6,
+    paddingHorizontal: isMobile ? 6 : 10,
+    paddingVertical: isMobile ? 4 : 6,
     borderRadius: 6,
-    gap: 4,
+    gap: isMobile ? 2 : 4,
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.3)',
   },
@@ -714,19 +723,20 @@ const styles = StyleSheet.create({
   },
 
   downloadText: {
-    fontSize: 11,
+    fontSize: isMobile ? 9 : 11,
     fontWeight: '600',
     color: colors.white,
+    display: isMobile ? 'none' : 'flex',
   },
 
   authButton: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: 'rgba(255,255,255,0.2)',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
+    paddingHorizontal: isMobile ? 8 : 12,
+    paddingVertical: isMobile ? 4 : 6,
     borderRadius: 6,
-    gap: 6,
+    gap: isMobile ? 4 : 6,
   },
 
   authIcon: {
@@ -734,21 +744,22 @@ const styles = StyleSheet.create({
   },
 
   authText: {
-    fontSize: 12,
+    fontSize: isMobile ? 10 : 12,
     fontWeight: '600',
     color: colors.white,
+    display: isMobile ? 'none' : 'flex',
   },
 
   // Search Section
   searchSection: {
-    paddingHorizontal: 16,
-    paddingVertical: 12,
+    paddingHorizontal: isMobile ? 12 : 16,
+    paddingVertical: isMobile ? 8 : 12,
     backgroundColor: colors.primary,
   },
 
   searchContainer: {
     flexDirection: 'row',
-    gap: 8,
+    gap: isMobile ? 6 : 8,
   },
 
   searchInputContainer: {
@@ -757,23 +768,23 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     backgroundColor: colors.white,
     borderRadius: 8,
-    paddingHorizontal: 12,
-    height: 40,
+    paddingHorizontal: isMobile ? 10 : 12,
+    height: isMobile ? 36 : 40,
   },
 
   searchIcon: {
-    marginRight: 8,
+    marginRight: isMobile ? 6 : 8,
   },
 
   searchInput: {
     flex: 1,
-    fontSize: 14,
+    fontSize: isMobile ? 12 : 14,
     color: colors.text,
   },
 
   filterButton: {
-    width: 40,
-    height: 40,
+    width: isMobile ? 36 : 40,
+    height: isMobile ? 36 : 40,
     backgroundColor: 'rgba(255,255,255,0.2)',
     borderRadius: 8,
     alignItems: 'center',
@@ -782,12 +793,12 @@ const styles = StyleSheet.create({
 
   // Simple categories within search section
   categoryScrollView: {
-    marginTop: 8,
+    marginTop: isMobile ? 6 : 8,
   },
 
   categoryContainer: {
     paddingHorizontal: 0,
-    paddingVertical: 8,
+    paddingVertical: isMobile ? 6 : 8,
   },
 
   simpleCategoryTab: {
@@ -796,7 +807,7 @@ const styles = StyleSheet.create({
   },
 
   simpleCategoryText: {
-    fontSize: 13,
+    fontSize: isMobile ? 11 : 13,
     fontWeight: '400',
     color: 'rgba(255,255,255,0.8)',
   },
@@ -808,9 +819,9 @@ const styles = StyleSheet.create({
 
   categoryDivider: {
     width: 1,
-    height: 12,
+    height: isMobile ? 10 : 12,
     backgroundColor: 'rgba(255,255,255,0.3)',
-    marginHorizontal: 12,
+    marginHorizontal: isMobile ? 8 : 12,
     alignSelf: 'center',
   },
 });
