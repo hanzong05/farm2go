@@ -4,7 +4,6 @@ import {
   ActivityIndicator,
   Alert,
   Dimensions,
-  Platform,
   RefreshControl,
   ScrollView,
   StyleSheet,
@@ -18,12 +17,11 @@ import { supabase } from '../../lib/supabase';
 import { getUserWithProfile } from '../../services/auth';
 import { Database } from '../../types/database';
 
-const { width, height } = Dimensions.get('window');
+const { width } = Dimensions.get('window');
 
 // Responsive breakpoints
 const isTablet = width >= 768;
 const isDesktop = width >= 1024;
-const isWeb = Platform.OS === 'web';
 
 type Profile = Database['public']['Tables']['profiles']['Row'];
 
@@ -48,7 +46,6 @@ interface DatabaseOrder {
     first_name: string | null;
     last_name: string | null;
     phone: string | null;
-    company_name: string | null;
   } | null;
 }
 
@@ -65,7 +62,6 @@ interface Order {
     first_name: string | null;
     last_name: string | null;
     phone: string | null;
-    company_name: string | null;
   };
   order_items?: Array<{
     order_id: string;
@@ -161,7 +157,7 @@ export default function FarmerOrdersScreen() {
       }
 
       // Transform orders into the expected format
-      const ordersWithItems: Order[] = ordersData.map(order => ({
+      const ordersWithItems: Order[] = (ordersData as DatabaseOrder[]).map(order => ({
         id: order.id,
         buyer_id: order.buyer_id,
         total_amount: order.total_price,
@@ -174,7 +170,6 @@ export default function FarmerOrdersScreen() {
           first_name: order.profiles.first_name,
           last_name: order.profiles.last_name,
           phone: order.profiles.phone,
-          company_name: order.profiles.company_name,
         } : undefined,
         order_items: [{
           order_id: order.id,
@@ -207,8 +202,7 @@ export default function FarmerOrdersScreen() {
       filtered = filtered.filter(order => {
         const searchLower = searchQuery.toLowerCase();
         const orderId = order.id.slice(-8).toLowerCase();
-        const buyerName = (order.buyer_profile?.company_name ||
-          `${order.buyer_profile?.first_name || ''} ${order.buyer_profile?.last_name || ''}`.trim() ||
+        const buyerName = (`${order.buyer_profile?.first_name || ''} ${order.buyer_profile?.last_name || ''}`.trim() ||
           'unknown buyer').toLowerCase();
         const phone = order.buyer_profile?.phone?.toLowerCase() || '';
         const address = order.delivery_address?.toLowerCase() || '';
@@ -339,8 +333,7 @@ export default function FarmerOrdersScreen() {
             styles.buyerName,
             isCompact && styles.buyerNameCompact
           ]}>
-            {order.buyer_profile?.company_name ||
-             `${order.buyer_profile?.first_name || ''} ${order.buyer_profile?.last_name || ''}`.trim() ||
+{`${order.buyer_profile?.first_name || ''} ${order.buyer_profile?.last_name || ''}`.trim() ||
              'Unknown Buyer'}
           </Text>
           {order.buyer_profile?.phone && (
@@ -561,7 +554,31 @@ export default function FarmerOrdersScreen() {
           {/* Left Sidebar */}
           <View style={styles.sidebar}>
             {/* Stats */}
-           
+            <View style={styles.sidebarSection}>
+              <Text style={styles.sidebarTitle}>Overview</Text>
+              <View style={styles.sidebarStats}>
+                <View style={styles.statCard}>
+                  <Text style={styles.statValue}>{stats.pending}</Text>
+                  <Text style={styles.statLabel}>Pending</Text>
+                </View>
+                <View style={styles.statCard}>
+                  <Text style={styles.statValue}>{stats.processing}</Text>
+                  <Text style={styles.statLabel}>Processing</Text>
+                </View>
+                <View style={styles.statCard}>
+                  <Text style={styles.statValue}>{stats.ready}</Text>
+                  <Text style={styles.statLabel}>Ready</Text>
+                </View>
+                <View style={styles.statCard}>
+                  <Text style={styles.statValue}>{stats.delivered}</Text>
+                  <Text style={styles.statLabel}>Delivered</Text>
+                </View>
+                <View style={[styles.statCard, styles.revenueCard]}>
+                  <Text style={styles.statValue}>{formatPrice(stats.totalRevenue)}</Text>
+                  <Text style={styles.statLabel}>Total Revenue</Text>
+                </View>
+              </View>
+            </View>
 
             {/* Filter */}
             <View style={styles.sidebarSection}>
@@ -700,6 +717,39 @@ export default function FarmerOrdersScreen() {
           </ScrollView>
         </View>
 
+        {/* Stats */}
+        <View style={[
+          styles.statsSection,
+          isTablet && styles.statsSectionTablet
+        ]}>
+          <Text style={styles.sectionTitle}>Overview</Text>
+          <View style={[
+            styles.statsGrid,
+            isTablet && styles.statsGridTablet
+          ]}>
+            <View style={styles.statCard}>
+              <Text style={styles.statValue}>{stats.pending}</Text>
+              <Text style={styles.statLabel}>Pending</Text>
+            </View>
+            <View style={styles.statCard}>
+              <Text style={styles.statValue}>{stats.processing}</Text>
+              <Text style={styles.statLabel}>Processing</Text>
+            </View>
+            <View style={styles.statCard}>
+              <Text style={styles.statValue}>{stats.ready}</Text>
+              <Text style={styles.statLabel}>Ready</Text>
+            </View>
+            <View style={styles.statCard}>
+              <Text style={styles.statValue}>{stats.delivered}</Text>
+              <Text style={styles.statLabel}>Delivered</Text>
+            </View>
+            <View style={[styles.statCard, styles.revenueCard]}>
+              <Text style={styles.statValue}>{formatPrice(stats.totalRevenue)}</Text>
+              <Text style={styles.statLabel}>Total Revenue</Text>
+            </View>
+          </View>
+        </View>
+
         {/* Orders */}
         <View style={[
           styles.ordersSection,
@@ -783,8 +833,30 @@ const styles = StyleSheet.create({
     gap: 12,
   },
 
+  statCard: {
+    backgroundColor: '#f8fafc',
+    padding: 16,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+  },
+
+  statValue: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#0f172a',
+    marginBottom: 4,
+  },
+
+  statLabel: {
+    fontSize: 14,
+    color: '#64748b',
+    fontWeight: '500',
+  },
+
   revenueCard: {
-    marginTop: 16,
+    backgroundColor: '#ecfdf5',
+    borderColor: '#bbf7d0',
   },
 
   sidebarFilters: {
