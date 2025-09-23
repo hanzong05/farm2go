@@ -8,6 +8,27 @@ import { Database } from '../../types/database';
 
 const { width } = Dimensions.get('window');
 
+// Responsive breakpoints
+const isTablet = width >= 768;
+const isDesktop = width >= 1024;
+
+// Calculate number of columns based on screen width
+const getNumColumns = () => {
+  if (width < 768) {
+    // Phone: 2 columns
+    return 2;
+  } else if (width < 1024) {
+    // Tablet: 3 columns
+    return 3;
+  } else if (width < 1440) {
+    // Small desktop: 4 columns
+    return 4;
+  } else {
+    // Large desktop: 5 columns
+    return 5;
+  }
+};
+
 interface Product {
   id: string;
   name: string;
@@ -355,10 +376,11 @@ export default function MarketplaceScreen() {
               data={filteredProducts}
               renderItem={({ item }) => renderGridProduct(item)}
               keyExtractor={(item) => item.id}
-              numColumns={5}
-              columnWrapperStyle={styles.gridRow}
+              numColumns={getNumColumns()}
+              columnWrapperStyle={getNumColumns() > 1 ? styles.gridRow : undefined}
               showsVerticalScrollIndicator={false}
               scrollEnabled={false}
+              key={getNumColumns()} // Force re-render when columns change
             />
           )}
         </View>
@@ -484,7 +506,7 @@ const styles = StyleSheet.create({
 
   // Products Section
   productsSection: {
-    paddingHorizontal: 20,
+    paddingHorizontal: width < 768 ? 16 : 20,
   },
   sectionHeader: {
     flexDirection: 'row',
@@ -755,14 +777,14 @@ const styles = StyleSheet.create({
 
   // Grid Layout Styles
   gridRow: {
-    justifyContent: 'space-between',
-    paddingHorizontal: 8,
-    marginBottom: 12,
+    justifyContent: width < 768 ? 'space-around' : 'space-between',
+    paddingHorizontal: width < 768 ? 4 : 8,
+    marginBottom: 0,
   },
   gridProductCard: {
     backgroundColor: '#ffffff',
     borderRadius: 12,
-    width: '18%',
+    width: width < 768 ? '47%' : width < 1024 ? '31%' : width < 1440 ? '23%' : '18%',
     elevation: 3,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
@@ -771,6 +793,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#f1f5f9',
     overflow: 'hidden',
+    marginBottom: 12,
   },
   gridImageContainer: {
     position: 'relative',
@@ -790,7 +813,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   gridPlaceholderIcon: {
-    fontSize: 20,
+    fontSize: width < 768 ? 24 : 20,
   },
   gridCategoryBadge: {
     position: 'absolute',
@@ -802,20 +825,20 @@ const styles = StyleSheet.create({
     borderRadius: 8,
   },
   gridCategoryText: {
-    fontSize: 7,
+    fontSize: width < 768 ? 8 : 7,
     color: '#ffffff',
     fontWeight: '600',
     textTransform: 'uppercase',
   },
   gridProductInfo: {
-    padding: 6,
+    padding: width < 768 ? 8 : 6,
   },
   gridProductName: {
-    fontSize: 10,
+    fontSize: width < 768 ? 12 : 10,
     fontWeight: '600',
     color: '#0f172a',
     marginBottom: 4,
-    lineHeight: 12,
+    lineHeight: width < 768 ? 14 : 12,
   },
   gridPriceContainer: {
     flexDirection: 'row',
@@ -823,12 +846,12 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   gridPrice: {
-    fontSize: 11,
+    fontSize: width < 768 ? 13 : 11,
     fontWeight: 'bold',
     color: '#059669',
   },
   gridUnit: {
-    fontSize: 8,
+    fontSize: width < 768 ? 10 : 8,
     color: '#64748b',
     marginLeft: 1,
   },
@@ -839,7 +862,7 @@ const styles = StyleSheet.create({
     marginBottom: 2,
   },
   gridFarmerText: {
-    fontSize: 8,
+    fontSize: width < 768 ? 10 : 8,
     color: '#64748b',
     fontWeight: '500',
   },
@@ -847,19 +870,19 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
   },
   gridStockText: {
-    fontSize: 8,
+    fontSize: width < 768 ? 10 : 8,
     color: '#6b7280',
     fontWeight: '500',
   },
   gridOrderButton: {
     backgroundColor: '#10b981',
-    paddingVertical: 4,
+    paddingVertical: width < 768 ? 6 : 4,
     borderRadius: 6,
     alignItems: 'center',
   },
   gridOrderButtonText: {
     color: '#ffffff',
-    fontSize: 9,
+    fontSize: width < 768 ? 11 : 9,
     fontWeight: '600',
   },
 });
