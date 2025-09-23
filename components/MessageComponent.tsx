@@ -374,14 +374,14 @@ export default function MessageComponent({
 
       {/* Desktop Dropdown */}
       {isDesktop && dropdownVisible && (
-        <View style={styles.dropdownOverlay}>
+        <>
           <TouchableOpacity
             style={styles.dropdownBackdrop}
             activeOpacity={1}
             onPress={() => setDropdownVisible(false)}
           />
           {renderDropdownContent()}
-        </View>
+        </>
       )}
 
       {/* Mobile/Tablet Modal */}
@@ -848,21 +848,23 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
-    zIndex: 1000,
-    ...Platform.select({
-      web: {
-        position: 'fixed',
-      },
-    }),
+    zIndex: 10,
   },
 
   dropdownBackdrop: {
-    position: 'absolute',
+    position: 'fixed',
     top: 0,
     left: 0,
     right: 0,
     bottom: 0,
     backgroundColor: 'transparent',
+    zIndex: 5,
+    ...Platform.select({
+      web: {},
+      default: {
+        position: 'absolute',
+      },
+    }),
   },
 
   dropdownContainer: {
