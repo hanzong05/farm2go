@@ -4,6 +4,7 @@ import { Alert, Dimensions, KeyboardAvoidingView, Modal, Platform, ScrollView, S
 import Icon from 'react-native-vector-icons/FontAwesome5';
 import { supabase } from '../../lib/supabase';
 import { getUserWithProfile, loginUser, signInWithGoogle } from '../../services/auth';
+import { safeLocalStorage } from '../../utils/platformUtils';
 
 const { width, height } = Dimensions.get('window');
 const isMobile = width < 768;
@@ -67,25 +68,25 @@ export default function LoginScreen() {
 
   // Clear any stale OAuth state when login page loads
   useEffect(() => {
-    if (typeof window !== 'undefined') {
-      const clearStaleOAuthState = () => {
-        const timestamp = localStorage.getItem('oauth_timestamp');
-        if (timestamp) {
-          const storedTime = parseInt(timestamp);
-          const currentTime = Date.now();
-          const tenMinutesAgo = currentTime - (10 * 60 * 1000);
+    console.log('🧹 OAuth state cleanup disabled for debugging');
+    // Temporarily disabled to prevent localStorage errors
+    // const clearStaleOAuthState = () => {
+    //   const timestamp = safeLocalStorage.getItem('oauth_timestamp');
+    //   if (timestamp) {
+    //     const storedTime = parseInt(timestamp);
+    //     const currentTime = Date.now();
+    //     const tenMinutesAgo = currentTime - (10 * 60 * 1000);
 
-          if (storedTime < tenMinutesAgo) {
-            console.log('🧹 Clearing stale OAuth state from localStorage');
-            localStorage.removeItem('oauth_user_type');
-            localStorage.removeItem('oauth_intent');
-            localStorage.removeItem('oauth_timestamp');
-          }
-        }
-      };
+    //     if (storedTime < tenMinutesAgo) {
+    //       console.log('🧹 Clearing stale OAuth state from storage');
+    //       safeLocalStorage.removeItem('oauth_user_type');
+    //       safeLocalStorage.removeItem('oauth_intent');
+    //       safeLocalStorage.removeItem('oauth_timestamp');
+    //     }
+    //   }
+    // };
 
-      clearStaleOAuthState();
-    }
+    // clearStaleOAuthState();
   }, []);
 
   const handleInputChange = (field: string, value: string) => {
@@ -159,90 +160,36 @@ export default function LoginScreen() {
   };
 
   const handleGoogleSignIn = async () => {
+    console.log('🔥 handleGoogleSignIn function called!');
     setIsLoading(true);
 
     try {
-      console.log('🚀 Starting Google sign in...');
+      console.log('🔥 About to call signInWithGoogle...');
 
-      // Store OAuth state using session manager
+      // Store OAuth intent for callback processing
       const { sessionManager } = await import('../../services/sessionManager');
       await sessionManager.storeOAuthState({
         intent: 'signin',
-        userType: null,
-        source: 'login_page'
+        userType: null, // Will be determined by callback page
+        timestamp: Date.now()
       });
 
-      await signInWithGoogle(false); // false indicates this is not registration
+      const result = await signInWithGoogle(false);
+      console.log('🔄 OAuth result:', result);
 
-      // OAuth will redirect, so this code won't execute immediately
-      console.log('🔄 Google OAuth initiated...');
+      // For mobile OAuth, the result might be processed by the callback page
+      // so we don't need to handle it here - just wait for the deep link
 
     } catch (error: any) {
-      console.error('Google sign in error:', error);
-
-      // Clean up OAuth state on error
-      const { sessionManager } = await import('../../services/sessionManager');
-      await sessionManager.clearOAuthState();
-
-      Alert.alert(
-        'Google Sign In Failed',
-        error.message || 'Please try again.'
-      );
+      console.error('🔥 Error in handleGoogleSignIn:', error);
+      Alert.alert('Error', error.message || 'OAuth failed');
       setIsLoading(false);
     }
+    // Don't set loading to false here - let the callback page handle it
   };
 
-  // Listen for authentication state changes - React Native compatible
-  useEffect(() => {
-    console.log('🔍 Setting up React Native auth listener for login...');
-
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      console.log('🔄 Auth state change on login:', event);
-
-      if (event === 'SIGNED_IN' && session?.user) {
-        console.log('✅ User signed in:', session.user.email);
-        setIsLoading(false);
-
-        // Get user profile to determine redirect
-        const userData = await getUserWithProfile();
-
-        if (userData?.profile) {
-          console.log('✅ Auth state change - Profile found, user_type:', userData.profile.user_type);
-
-          // Redirect based on user type
-          switch (userData.profile.user_type) {
-            case 'super-admin':
-              console.log('🚀 Auth state change - Redirecting super admin to dashboard');
-              router.replace('/super-admin');
-              break;
-            case 'admin':
-              console.log('🚀 Auth state change - Redirecting admin to dashboard');
-              router.replace('/admin/users');
-              break;
-            case 'farmer':
-              console.log('🚀 Auth state change - Redirecting farmer to dashboard');
-              router.replace('/farmer');
-              break;
-            case 'buyer':
-              console.log('🚀 Auth state change - Redirecting buyer to marketplace');
-              router.replace('/buyer/marketplace');
-              break;
-            default:
-              console.log('⚠️ Auth state change - Unknown user type, redirecting to marketplace. User type:', userData.profile.user_type);
-              router.replace('/buyer/marketplace');
-          }
-        } else {
-          console.log('❌ Auth state change - No profile found, redirecting to marketplace');
-          router.replace('/buyer/marketplace');
-        }
-      }
-    });
-
-    return () => {
-      console.log('🧹 Cleaning up auth listener');
-      subscription.unsubscribe();
-    };
-  }, []);
+  // Auth state changes are now handled by the callback page for OAuth flows
+  // Regular email/password login still works through handleLogin above
 
   const renderFormInput = (
     field: string,
@@ -427,7 +374,10 @@ export default function LoginScreen() {
               {/* Google Sign In Button */}
               <TouchableOpacity
                 style={[styles.socialButton, isLoading && styles.socialButtonDisabled]}
-                onPress={handleGoogleSignIn}
+                onPress={() => {
+                  console.log('🔥 GOOGLE BUTTON PRESSED!');
+                  handleGoogleSignIn();
+                }}
                 disabled={isLoading}
               >
                 <View style={styles.googleIcon}>

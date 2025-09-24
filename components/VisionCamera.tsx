@@ -277,25 +277,31 @@ export default function VisionCamera({ onPhotoTaken, type }: VisionCameraProps) 
   }, [isActive, onPhotoTaken, stopCamera]);
 
   const handleFileUpload = useCallback(() => {
-    // Create file input for web
-    if (typeof window !== 'undefined') {
-      const input = document.createElement('input');
-      input.type = 'file';
-      input.accept = 'image/*';
-      input.capture = type === 'face' ? 'user' : 'environment';
-      input.onchange = (e: Event) => {
-        const target = e.target as HTMLInputElement;
-        const file = target.files?.[0];
-        if (file) {
-          const photoUri = URL.createObjectURL(file);
-          onPhotoTaken(photoUri);
-        }
-      };
-      input.click();
+    // Only run on web platform with explicit checks
+    if (Platform.OS === 'web' && typeof window !== 'undefined' && typeof document !== 'undefined') {
+      try {
+        const input = document.createElement('input');
+        input.type = 'file';
+        input.accept = 'image/*';
+        input.capture = type === 'face' ? 'user' : 'environment';
+        input.onchange = (e: Event) => {
+          const target = e.target as HTMLInputElement;
+          const file = target.files?.[0];
+          if (file) {
+            const photoUri = URL.createObjectURL(file);
+            onPhotoTaken(photoUri);
+          }
+        };
+        input.click();
+      } catch (error) {
+        console.error('File upload error:', error);
+        Alert.alert('Error', 'File upload failed. Please try again.');
+      }
     } else {
+      // On React Native, this shouldn't be called since camera should be available
       Alert.alert(
-        'Upload Photo',
-        'File upload is not available on this platform.',
+        'Camera Recommended',
+        'Please use the camera feature for the best experience.',
         [{ text: 'OK' }]
       );
     }

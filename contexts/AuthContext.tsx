@@ -128,7 +128,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   useEffect(() => {
     let isMounted = true;
 
-    // Get initial session
+    // Get initial session with timeout protection
     const getInitialSession = async () => {
       try {
         // If in demo mode, skip Supabase initialization
@@ -138,23 +138,39 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
           return;
         }
 
-        const { data: { session }, error } = await supabase.auth.getSession();
+        console.log('🔄 AuthContext: Getting initial session...');
+
+        // Add timeout protection to prevent infinite loading
+        const timeoutPromise = new Promise((_, reject) => {
+          setTimeout(() => reject(new Error('Session initialization timeout')), 10000);
+        });
+
+        const sessionPromise = supabase.auth.getSession();
+
+        const { data: { session }, error } = await Promise.race([sessionPromise, timeoutPromise]) as any;
 
         if (error) {
           console.error('Error getting session:', error);
         } else if (isMounted) {
+          console.log('📦 AuthContext: Session found:', !!session);
           setSession(session);
           setUser(session?.user ?? null);
 
           if (session?.user) {
+            console.log('👤 AuthContext: Fetching profile for user:', session.user.id);
             const profileData = await fetchProfile(session.user.id);
+            console.log('📊 AuthContext: Profile result:', !!profileData);
             if (isMounted) setProfile(profileData);
           }
         }
       } catch (error) {
         console.error('Initial session error:', error);
+        // Don't let errors prevent app from loading
       } finally {
-        if (isMounted) setLoading(false);
+        if (isMounted) {
+          console.log('✅ AuthContext: Setting loading to false');
+          setLoading(false);
+        }
       }
     };
 

@@ -6,6 +6,7 @@ import Icon from 'react-native-vector-icons/FontAwesome5';
 import LocationPicker from '../../components/LocationPicker';
 import { supabase } from '../../lib/supabase';
 import { Database } from '../../types/database';
+import { safeLocalStorage } from '../../utils/platformUtils';
 
 const { width, height } = Dimensions.get('window');
 const isMobile = width < 768;
@@ -120,7 +121,7 @@ export default function CompleteProfileScreen() {
 
         // If not in AsyncStorage, try localStorage (for web)
         if (!storedUserType && typeof window !== 'undefined') {
-          storedUserType = localStorage.getItem('oauth_user_type');
+          storedUserType = safeLocalStorage.getItem('oauth_user_type');
           console.log('🔄 Complete Profile: Checking localStorage for user type:', storedUserType);
         }
 
@@ -148,7 +149,7 @@ export default function CompleteProfileScreen() {
               // Store it for future reference
               await AsyncStorage.setItem('oauth_user_type', existingProfile.user_type);
               if (typeof window !== 'undefined') {
-                localStorage.setItem('oauth_user_type', existingProfile.user_type);
+                safeLocalStorage.setItem('oauth_user_type', existingProfile.user_type);
               }
             } else {
               console.log('❌ Complete Profile: No existing profile found, user will need to select');
@@ -340,7 +341,7 @@ export default function CompleteProfileScreen() {
 
       // Also clean up localStorage
       if (typeof window !== 'undefined') {
-        localStorage.removeItem('oauth_user_type');
+        safeLocalStorage.removeItem('oauth_user_type');
       }
 
       // Show success modal

@@ -7,6 +7,7 @@ import LocationPicker from '../../components/LocationPicker';
 import { supabase } from '../../lib/supabase';
 import { registerUser, signInWithFacebook, signInWithGoogle } from '../../services/auth';
 import { Database } from '../../types/database';
+import { safeLocalStorage } from '../../utils/platformUtils';
 
 const { width, height } = Dimensions.get('window');
 const isMobile = width < 768;
@@ -124,7 +125,7 @@ export default function RegisterScreen() {
                 if (existingProfile && existingProfile.user_type) {
                   console.log('✅ Found existing profile, updating stored user type');
                   await AsyncStorage.setItem('oauth_user_type', existingProfile.user_type);
-                  localStorage.setItem('oauth_user_type', existingProfile.user_type);
+                  safeLocalStorage.setItem('oauth_user_type', existingProfile.user_type);
                 }
               }
             }
@@ -161,7 +162,7 @@ export default function RegisterScreen() {
 
               await AsyncStorage.setItem('oauth_user_type', existingProfile.user_type);
               if (typeof window !== 'undefined') {
-                localStorage.setItem('oauth_user_type', existingProfile.user_type);
+                safeLocalStorage.setItem('oauth_user_type', existingProfile.user_type);
               }
             }
           }

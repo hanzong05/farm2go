@@ -49,6 +49,17 @@ export const SessionProvider: React.FC<SessionProviderProps> = ({ children }) =>
 
   useEffect(() => {
     let unsubscribe: (() => void) | undefined;
+    let fallbackTimeoutId: NodeJS.Timeout;
+
+    // Fallback timeout to ensure loading state is cleared
+    fallbackTimeoutId = setTimeout(() => {
+      console.log('⏰ SessionProvider: Fallback timeout - force clearing loading state');
+      setSessionState(prev => ({
+        ...prev,
+        isLoading: false,
+        error: 'Session initialization took too long',
+      }));
+    }, 10000);
 
     const initSession = async () => {
       try {
@@ -61,14 +72,41 @@ export const SessionProvider: React.FC<SessionProviderProps> = ({ children }) =>
             hasUser: !!state.user,
             hasProfile: !!state.profile,
             userType: state.profile?.user_type,
+            isLoading: state.isLoading,
           });
+
+          // Clear fallback timeout since we got a state update
+          if (fallbackTimeoutId) {
+            clearTimeout(fallbackTimeoutId);
+          }
+
           setSessionState(state);
         });
 
-        // Initialize session
-        await sessionManager.initializeSession();
+        // Initialize session with timeout protection
+        console.log('⏰ SessionProvider: Starting session initialization with timeout...');
+
+        const timeoutPromise = new Promise<never>((_, reject) => {
+          setTimeout(() => {
+            console.log('⏰ SessionProvider: Session initialization timeout reached');
+            reject(new Error('Session initialization timeout'));
+          }, 8000);
+        });
+
+        const initPromise = sessionManager.initializeSession();
+
+        await Promise.race([initPromise, timeoutPromise]);
+        console.log('✅ SessionProvider: Session initialization completed');
+
       } catch (error) {
         console.error('❌ SessionProvider: Error initializing session:', error);
+
+        // Clear fallback timeout
+        if (fallbackTimeoutId) {
+          clearTimeout(fallbackTimeoutId);
+        }
+
+        // Ensure loading state is cleared even on error
         setSessionState(prev => ({
           ...prev,
           isLoading: false,
@@ -82,6 +120,9 @@ export const SessionProvider: React.FC<SessionProviderProps> = ({ children }) =>
     return () => {
       if (unsubscribe) {
         unsubscribe();
+      }
+      if (fallbackTimeoutId) {
+        clearTimeout(fallbackTimeoutId);
       }
     };
   }, []);

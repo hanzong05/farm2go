@@ -1,7 +1,7 @@
 import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native';
-import { Stack } from 'expo-router';
+import { Stack, useRouter, useSegments, useRootNavigationState } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Linking, Platform, AppState } from 'react-native';
 import 'react-native-reanimated';
 
@@ -88,9 +88,59 @@ export default function RootLayout() {
   const colorScheme = useColorScheme();
   const appStateRef = useRef(AppState.currentState);
   const hasInitialized = useRef(false);
+  const router = useRouter();
+  const segments = useSegments();
+  const navigationState = useRootNavigationState();
+  const [pendingNavigation, setPendingNavigation] = useState<string | null>(null);
 
-  // Simplified session-based routing guard
+  // Check if router is ready for navigation
+  const isRouterReady = navigationState?.key != null;
+
+  // Handle pending navigation once router is ready
   useEffect(() => {
+    if (isRouterReady && pendingNavigation) {
+      const executePendingNavigation = () => {
+        try {
+          console.log('🚀 Executing pending navigation:', pendingNavigation);
+          router.replace(pendingNavigation);
+          setPendingNavigation(null);
+        } catch (error) {
+          console.error('❌ Pending navigation failed:', error);
+          // Retry after a short delay
+          setTimeout(() => {
+            if (pendingNavigation) {
+              executePendingNavigation();
+            }
+          }, 500);
+        }
+      };
+
+      // Small delay to ensure router is fully ready
+      setTimeout(executePendingNavigation, 100);
+    }
+  }, [isRouterReady, pendingNavigation, router]);
+
+  // Safe navigation function
+  const safeNavigate = (path: string) => {
+    if (isRouterReady) {
+      try {
+        console.log('🚀 Safe navigation to:', path);
+        router.replace(path);
+      } catch (error) {
+        console.error('❌ Navigation failed, queuing for retry:', error);
+        setPendingNavigation(path);
+      }
+    } else {
+      console.log('⏳ Router not ready, queuing navigation:', path);
+      setPendingNavigation(path);
+    }
+  };
+
+  // Temporarily disabled session-based routing guard to fix loading issue
+  /*
+  useEffect(() => {
+    if (!isRouterReady) return; // Wait for router to be ready
+
     let isMounted = true;
 
     const checkUserSessionAndRedirect = async () => {
@@ -100,7 +150,7 @@ export default function RootLayout() {
         const userData = await getUserWithProfile();
         const currentPath = Platform.OS === 'web' && typeof window !== 'undefined'
           ? window.location.pathname
-          : '';
+          : `/${segments.join('/')}`;
 
         if (!isMounted) return;
 
@@ -110,33 +160,47 @@ export default function RootLayout() {
         const isProtectedRoute = protectedRoutes.some(route => currentPath.startsWith(route));
 
         if (userData?.profile) {
-          // User is logged in - only redirect from root/auth pages
+          // User is logged in with profile - only redirect from root/auth pages
           const shouldRedirect = currentPath === '/' || currentPath === '/index' || currentPath.startsWith('/auth/');
 
           if (shouldRedirect && isMounted) {
-            const { router } = await import('expo-router');
-
+            let targetPath: string;
             switch (userData.profile.user_type) {
               case 'super-admin':
-                router.replace('/super-admin' as any);
+                targetPath = '/super-admin';
                 break;
               case 'admin':
-                router.replace('/admin' as any);
+                targetPath = '/admin';
                 break;
               case 'farmer':
-                router.replace('/farmer');
+                targetPath = '/farmer';
                 break;
               case 'buyer':
-                router.replace('/buyer/marketplace');
+                targetPath = '/buyer/marketplace';
                 break;
               default:
-                router.replace('/buyer/marketplace');
+                targetPath = '/buyer/marketplace';
             }
+            safeNavigate(targetPath);
           }
-        } else if (isProtectedRoute && isMounted) {
-          // Redirect unauthenticated users from protected routes
-          const { router } = await import('expo-router');
-          router.replace('/buyer/marketplace' as any);
+        } else if (userData?.user && !userData?.profile) {
+          // User is authenticated but has no profile - redirect to complete profile
+          console.log('🔄 Authenticated user without profile, redirecting to complete profile');
+          const shouldRedirectToCompleteProfile =
+            currentPath === '/' ||
+            currentPath === '/index' ||
+            currentPath.startsWith('/auth/login') ||
+            currentPath.startsWith('/auth/register') ||
+            isProtectedRoute;
+
+          if (shouldRedirectToCompleteProfile && isMounted) {
+            safeNavigate('/auth/complete-profile');
+          }
+        } else {
+          // No user at all - redirect unauthenticated users to marketplace from protected routes
+          if (isProtectedRoute && isMounted) {
+            safeNavigate('/buyer/marketplace');
+          }
         }
 
         hasInitialized.current = true;
@@ -146,15 +210,18 @@ export default function RootLayout() {
       }
     };
 
-    const timeoutId = setTimeout(checkUserSessionAndRedirect, 100); // Small delay to prevent race conditions
+    // Increased delay for better reliability
+    const timeoutId = setTimeout(checkUserSessionAndRedirect, 1000);
 
     return () => {
       isMounted = false;
       clearTimeout(timeoutId);
     };
-  }, []);
+  }, [isRouterReady, router, segments]);
+  */
 
-  // Simplified auth state listener - only handle sign out
+  // Temporarily disabled auth state listener to fix loading issue
+  /*
   useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       console.log('🔄 Auth state change:', event);
@@ -162,19 +229,19 @@ export default function RootLayout() {
       if (event === 'SIGNED_OUT') {
         const currentPath = Platform.OS === 'web' && typeof window !== 'undefined'
           ? window.location.pathname
-          : '';
+          : `/${segments.join('/')}`;
         const protectedRoutes = ['/admin', '/super-admin', '/farmer', '/buyer/my-orders', '/buyer/purchase-history', '/buyer/wishlist', '/buyer/settings', '/buyer/cart', '/buyer/checkout', '/shared'];
         const isProtectedRoute = protectedRoutes.some(route => currentPath.startsWith(route));
 
         if (isProtectedRoute) {
-          const { router } = await import('expo-router');
-          router.replace('/buyer/marketplace' as any);
+          safeNavigate('/buyer/marketplace');
         }
       }
     });
 
     return () => subscription.unsubscribe();
-  }, []);
+  }, [router, segments, isRouterReady]);
+  */
 
   // Minimal AppState monitoring - just track current state
   useEffect(() => {
@@ -189,8 +256,22 @@ export default function RootLayout() {
   // Enhanced deep linking for OAuth and marketplace navigation
   useEffect(() => {
     const handleDeepLink = (url: string) => {
-      console.log('🛒 Marketplace deep link handler:', url);
-      
+      console.log('🛒 Deep link handler:', url);
+
+      // Handle OAuth callback
+      if (url.includes('access_token=') || url.includes('refresh_token=')) {
+        console.log('🔗 OAuth callback detected, redirecting to auth/callback');
+        if (isRouterReady) {
+          router.replace('/auth/callback');
+        } else {
+          // Wait for router to be ready then redirect
+          setTimeout(() => {
+            router.replace('/auth/callback');
+          }, 1000);
+        }
+        return;
+      }
+
       // Handle specific deep link patterns
       if (url.includes('/products/')) {
         // Product detail pages
@@ -202,8 +283,6 @@ export default function RootLayout() {
         // Order tracking pages
         console.log('🔗 Order tracking deep link detected');
       }
-      
-      // OAuth redirects will be handled by Supabase automatically
     };
 
     // Listen for incoming deep links with enhanced error handling
@@ -229,12 +308,13 @@ export default function RootLayout() {
     return () => {
       subscription?.remove();
     };
-  }, []);
+  }, [router, isRouterReady]);
 
   return (
     <ErrorBoundary>
-      <SessionProvider>
-        <AuthProvider>
+      {/* Temporarily bypass SessionProvider and AuthProvider to fix loading issue */}
+      {/* <SessionProvider> */}
+      {/* <AuthProvider> */}
           <ThemeProvider
             value={colorScheme === 'dark' ? Farm2GoDarkTheme : Farm2GoTheme}
           >
@@ -546,8 +626,8 @@ export default function RootLayout() {
           translucent={Platform.OS === 'android'}
         />
         </ThemeProvider>
-        </AuthProvider>
-      </SessionProvider>
+        {/* </AuthProvider> */}
+      {/* </SessionProvider> */}
     </ErrorBoundary>
   );
 }

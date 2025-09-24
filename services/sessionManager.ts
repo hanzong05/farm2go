@@ -131,32 +131,36 @@ class SessionManager {
         return this.getSessionState();
       }
 
-      // Get user profile
+      // Get user profile (optional - user might not have profile yet)
       const profile = await this.fetchUserProfile(session.user.id);
       if (!profile) {
-        console.log('❌ No profile found for user');
-        await this.clearSession();
-        return this.getSessionState();
+        console.log('⚠️ No profile found for user during initialization - user needs to complete profile');
+        // Don't clear session - allow OAuth users without profiles to continue
       }
 
-      // Create session data
+      const currentTime = Date.now();
+
+      // Create session data (profile can be null for new OAuth users)
       this.sessionData = {
         user: session.user,
-        profile,
+        profile: profile || null,
         session,
-        lastActivity: Date.now(),
-        sessionStartTime: Date.now(),
+        lastActivity: currentTime,
+        sessionStartTime: currentTime,
       };
+
+      // Update activity immediately to prevent race conditions
+      this.updateLastActivity();
 
       // Store session data
       await this.storeSessionData();
 
       console.log('✅ Session initialized successfully');
       console.log('👤 User:', session.user.email);
-      console.log('🏷️ User type:', profile.user_type);
+      console.log('🏷️ User type:', profile?.user_type || 'No profile');
+      console.log('⏰ Session start time:', new Date(currentTime).toISOString());
 
       this.notifyListeners();
-      this.updateLastActivity();
 
       return this.getSessionState();
     } catch (error) {
@@ -171,31 +175,36 @@ class SessionManager {
     try {
       console.log('🔄 Creating new session...');
 
-      // Fetch user profile
+      // Fetch user profile (optional - user might not have profile yet)
       const profile = await this.fetchUserProfile(user.id);
       if (!profile) {
-        console.error('❌ No profile found for user during session creation');
-        return false;
+        console.log('⚠️ No profile found for user during session creation - user needs to complete profile');
+        // Don't fail - create session without profile for OAuth users
       }
 
-      // Create session data
+      const currentTime = Date.now();
+
+      // Create session data (profile can be null for new OAuth users)
       this.sessionData = {
         user,
-        profile,
+        profile: profile || null,
         session,
-        lastActivity: Date.now(),
-        sessionStartTime: Date.now(),
+        lastActivity: currentTime,
+        sessionStartTime: currentTime,
       };
+
+      // Update activity immediately to prevent race conditions
+      this.updateLastActivity();
 
       // Store session data
       await this.storeSessionData();
 
       console.log('✅ Session created successfully');
       console.log('👤 User:', user.email);
-      console.log('🏷️ User type:', profile.user_type);
+      console.log('🏷️ User type:', profile?.user_type || 'No profile');
+      console.log('⏰ Session start time:', new Date(currentTime).toISOString());
 
       this.notifyListeners();
-      this.updateLastActivity();
 
       return true;
     } catch (error) {
@@ -314,6 +323,12 @@ class SessionManager {
 
     const now = Date.now();
     const timeSinceActivity = now - this.sessionData.lastActivity;
+    const sessionAge = now - this.sessionData.sessionStartTime;
+
+    // Don't expire sessions that are less than 5 minutes old, regardless of activity
+    if (sessionAge < 5 * 60 * 1000) {
+      return false;
+    }
 
     return timeSinceActivity > this.sessionTimeout;
   }
@@ -392,13 +407,25 @@ class SessionManager {
     try {
       if (!this.sessionData) return;
 
-      await Promise.all([
+      const storageOperations = [
         AsyncStorage.setItem(this.STORAGE_KEYS.SESSION, JSON.stringify(this.sessionData.session)),
         AsyncStorage.setItem(this.STORAGE_KEYS.USER, JSON.stringify(this.sessionData.user)),
-        AsyncStorage.setItem(this.STORAGE_KEYS.PROFILE, JSON.stringify(this.sessionData.profile)),
         AsyncStorage.setItem(this.STORAGE_KEYS.LAST_ACTIVITY, this.sessionData.lastActivity.toString()),
         AsyncStorage.setItem(this.STORAGE_KEYS.SESSION_START, this.sessionData.sessionStartTime.toString()),
-      ]);
+      ];
+
+      // Only store profile if it exists, otherwise remove it
+      if (this.sessionData.profile) {
+        storageOperations.push(
+          AsyncStorage.setItem(this.STORAGE_KEYS.PROFILE, JSON.stringify(this.sessionData.profile))
+        );
+      } else {
+        storageOperations.push(
+          AsyncStorage.removeItem(this.STORAGE_KEYS.PROFILE)
+        );
+      }
+
+      await Promise.all(storageOperations);
     } catch (error) {
       console.error('❌ Error storing session data:', error);
     }

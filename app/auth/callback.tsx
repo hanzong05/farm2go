@@ -1,47 +1,74 @@
 import { useEffect, useState } from 'react';
-import { router } from 'expo-router';
+import { useRouter, useRootNavigationState } from 'expo-router';
 import { View, Text, ActivityIndicator, StyleSheet, Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from '../../lib/supabase';
+import { safeLocalStorage } from '../../utils/platformUtils';
 
 export default function AuthCallback() {
   const [isClient, setIsClient] = useState(false);
+  const router = useRouter();
+  const navigationState = useRootNavigationState();
+  const [pendingNavigation, setPendingNavigation] = useState<string | null>(null);
+
+  // Check if router is ready for navigation
+  const isRouterReady = navigationState?.key != null;
+
+  // Handle pending navigation once router is ready
+  useEffect(() => {
+    if (isRouterReady && pendingNavigation) {
+      console.log('🚀 AuthCallback: Executing pending navigation:', pendingNavigation);
+      router.replace(pendingNavigation);
+      setPendingNavigation(null);
+    }
+  }, [isRouterReady, pendingNavigation, router]);
+
+  // Safe navigation function
+  const safeNavigate = (path: string) => {
+    if (isRouterReady) {
+      console.log('🚀 AuthCallback: Safe navigation to:', path);
+      router.replace(path);
+    } else {
+      console.log('⏳ AuthCallback: Router not ready, queuing navigation:', path);
+      setPendingNavigation(path);
+    }
+  };
 
   useEffect(() => {
     setIsClient(true);
   }, []);
 
   useEffect(() => {
-    if (!isClient) return;
+    if (!isClient || !isRouterReady) return;
     const handleCallback = async () => {
       try {
         console.log('🔄 OAuth callback screen loaded!');
         console.log('🔄 Processing OAuth callback...');
 
-        // Clear any stale localStorage state first (Chrome desktop fix)
-        if (Platform.OS === 'web' && typeof window !== 'undefined' && window.localStorage) {
-          try {
-            console.log('🧹 Clearing any stale localStorage state...');
-            // Check if we have stale data from previous sessions
-            const storedTimestamp = localStorage.getItem('oauth_timestamp');
-            const currentTime = Date.now();
-            const fiveMinutesAgo = currentTime - (5 * 60 * 1000);
+        // Clear any stale storage state first (Chrome desktop fix)
+        console.log('🧹 Clearing any stale storage state...');
+        try {
+          // Check if we have stale data from previous sessions
+          const storedTimestamp = safeLocalStorage.getItem('oauth_timestamp');
+          const currentTime = Date.now();
+          const fiveMinutesAgo = currentTime - (5 * 60 * 1000);
 
-            if (storedTimestamp && parseInt(storedTimestamp) < fiveMinutesAgo) {
-              console.log('🧹 Found stale localStorage data, clearing...');
-              localStorage.removeItem('oauth_user_type');
-              localStorage.removeItem('oauth_intent');
-              localStorage.removeItem('oauth_timestamp');
-            }
+          if (storedTimestamp && parseInt(storedTimestamp) < fiveMinutesAgo) {
+            console.log('🧹 Found stale storage data, clearing...');
+            safeLocalStorage.removeItem('oauth_user_type');
+            safeLocalStorage.removeItem('oauth_intent');
+            safeLocalStorage.removeItem('oauth_timestamp');
+          }
 
+          if (Platform.OS === 'web' && typeof window !== 'undefined') {
             console.log('🌐 Platform info:', {
               userAgent: navigator.userAgent,
               url: window.location.href,
               hash: window.location.hash
             });
-          } catch (error) {
-            console.log('🧹 Error accessing localStorage:', error);
           }
+        } catch (error) {
+          console.log('🧹 Error accessing storage:', error);
         }
 
         // Get the stored user type from sessionManager first, then fallback to legacy storage
@@ -60,38 +87,28 @@ export default function AuthCallback() {
           storedUserType = storedUserType || await AsyncStorage.getItem('oauth_user_type');
           oauthIntent = oauthIntent || await AsyncStorage.getItem('oauth_intent');
 
-          // If not in AsyncStorage, try localStorage (for web)
-          if (!storedUserType && Platform.OS === 'web' && typeof window !== 'undefined' && window.localStorage) {
-            try {
-              storedUserType = localStorage.getItem('oauth_user_type');
-              console.log('📱 Checking localStorage for user type:', storedUserType);
-            } catch (error) {
-              console.log('📱 Error accessing localStorage for user type:', error);
-            }
+          // If not in AsyncStorage, try safeLocalStorage (for web)
+          if (!storedUserType) {
+            storedUserType = safeLocalStorage.getItem('oauth_user_type');
+            console.log('📱 Checking safeLocalStorage for user type:', storedUserType);
           }
 
-          if (!oauthIntent && Platform.OS === 'web' && typeof window !== 'undefined' && window.localStorage) {
-            try {
-              oauthIntent = localStorage.getItem('oauth_intent');
-            } catch (error) {
-              console.log('📱 Error accessing localStorage for intent:', error);
-            }
+          if (!oauthIntent) {
+            oauthIntent = safeLocalStorage.getItem('oauth_intent');
           }
         }
 
         console.log('📱 Final stored user type:', storedUserType);
         console.log('📱 OAuth intent:', oauthIntent);
 
-        // Debug: Log all localStorage OAuth-related keys
-        if (Platform.OS === 'web' && typeof window !== 'undefined' && window.localStorage) {
-          try {
-            console.log('🔍 All localStorage OAuth keys:');
-            console.log('  - oauth_user_type:', localStorage.getItem('oauth_user_type'));
-            console.log('  - oauth_intent:', localStorage.getItem('oauth_intent'));
-            console.log('  - oauth_timestamp:', localStorage.getItem('oauth_timestamp'));
-          } catch (error) {
-            console.log('🔍 Error accessing localStorage for debug:', error);
-          }
+        // Debug: Log all storage OAuth-related keys
+        try {
+          console.log('🔍 All storage OAuth keys:');
+          console.log('  - oauth_user_type:', safeLocalStorage.getItem('oauth_user_type'));
+          console.log('  - oauth_intent:', safeLocalStorage.getItem('oauth_intent'));
+          console.log('  - oauth_timestamp:', safeLocalStorage.getItem('oauth_timestamp'));
+        } catch (error) {
+          console.log('🔍 Error accessing storage for debug:', error);
         }
 
         // For sign-in attempts or when intent is unclear, always look up user type from database
@@ -113,7 +130,7 @@ export default function AuthCallback() {
 
           if (userError) {
             console.error('❌ Error getting OAuth user:', userError);
-            router.replace('/auth/register?error=' + encodeURIComponent('Failed to get user information. Please try again.'));
+            safeNavigate('/auth/register?error=' + encodeURIComponent('Failed to get user information. Please try again.'));
             return;
           }
 
@@ -158,16 +175,12 @@ export default function AuthCallback() {
 
                 // Store it for future reference (but don't rely on it)
                 await AsyncStorage.setItem('oauth_user_type', (existingProfile as any).user_type);
-                if (typeof window !== 'undefined') {
-                  localStorage.setItem('oauth_user_type', (existingProfile as any).user_type);
-                  localStorage.setItem('oauth_timestamp', Date.now().toString());
-                }
+                safeLocalStorage.setItem('oauth_user_type', (existingProfile as any).user_type);
+                safeLocalStorage.setItem('oauth_timestamp', Date.now().toString());
 
                 // Clean up the intent flag
                 await AsyncStorage.removeItem('oauth_intent');
-                if (typeof window !== 'undefined') {
-                  localStorage.removeItem('oauth_intent');
-                }
+                safeLocalStorage.removeItem('oauth_intent');
 
                 console.log('✅ Sign-in user type resolved from database:', storedUserType);
               } else {
@@ -176,32 +189,26 @@ export default function AuthCallback() {
 
                 // Clean up the intent flag
                 await AsyncStorage.removeItem('oauth_intent');
-                if (typeof window !== 'undefined') {
-                  localStorage.removeItem('oauth_intent');
-                }
+                safeLocalStorage.removeItem('oauth_intent');
 
                 // Redirect to register page with error message
-                router.replace('/auth/register?error=' + encodeURIComponent('No account found with this email. Please register first or use a different sign-in method.'));
+                safeNavigate('/auth/register?error=' + encodeURIComponent('No account found with this email. Please register first or use a different sign-in method.'));
                 return;
               }
             } catch (error) {
               console.error('❌ Error checking for existing profile:', error);
               // Clean up and redirect to register
               await AsyncStorage.removeItem('oauth_intent');
-              if (typeof window !== 'undefined') {
-                localStorage.removeItem('oauth_intent');
-              }
-              router.replace('/auth/register?error=' + encodeURIComponent('Error checking account. Please try again.'));
+              safeLocalStorage.removeItem('oauth_intent');
+              safeNavigate('/auth/register?error=' + encodeURIComponent('Error checking account. Please try again.'));
               return;
             }
           } else {
             console.log('❌ No OAuth user email found');
             // Clean up and redirect
             await AsyncStorage.removeItem('oauth_intent');
-            if (typeof window !== 'undefined') {
-              localStorage.removeItem('oauth_intent');
-            }
-            router.replace('/auth/register?error=' + encodeURIComponent('Could not get email from Google. Please try again.'));
+            safeLocalStorage.removeItem('oauth_intent');
+            safeNavigate('/auth/register?error=' + encodeURIComponent('Could not get email from Google. Please try again.'));
             return;
           }
         }
@@ -216,7 +223,7 @@ export default function AuthCallback() {
         if (!storedUserType) {
           console.error('❌ No user type found in storage or database');
           console.log('🔄 Redirecting to complete profile to let user choose...');
-          router.replace('/auth/complete-profile');
+          safeNavigate('/auth/complete-profile');
           return;
         }
 
@@ -337,12 +344,10 @@ export default function AuthCallback() {
           await AsyncStorage.removeItem('oauth_user_type');
           await AsyncStorage.removeItem('oauth_intent');
 
-          // Also clean up localStorage completely
-          if (typeof window !== 'undefined') {
-            localStorage.removeItem('oauth_user_type');
-            localStorage.removeItem('oauth_intent');
-            localStorage.removeItem('oauth_timestamp');
-          }
+          // Also clean up storage completely
+          safeLocalStorage.removeItem('oauth_user_type');
+          safeLocalStorage.removeItem('oauth_intent');
+          safeLocalStorage.removeItem('oauth_timestamp');
 
           // For existing users, always redirect to dashboard regardless of intent
           // This fixes the mobile browser issue where intent might be misidentified
@@ -359,23 +364,23 @@ export default function AuthCallback() {
           switch (profile.user_type) {
             case 'farmer':
               console.log('🚜 Redirecting to farmer dashboard');
-              router.replace('/farmer/my-products');
+              safeNavigate('/farmer/my-products');
               break;
             case 'buyer':
               console.log('🛒 Redirecting to buyer marketplace');
-              router.replace('/buyer/marketplace');
+              safeNavigate('/buyer/marketplace');
               break;
             case 'admin':
               console.log('👑 Redirecting to admin dashboard');
-              router.replace('/admin/users');
+              safeNavigate('/admin/users');
               break;
             case 'super-admin':
               console.log('🔱 Redirecting to super admin dashboard');
-              router.replace('/super-admin');
+              safeNavigate('/super-admin');
               break;
             default:
               console.log('❓ Unknown user type, defaulting to buyer marketplace');
-              router.replace('/buyer/marketplace');
+              safeNavigate('/buyer/marketplace');
           }
           return;
         }
@@ -383,7 +388,7 @@ export default function AuthCallback() {
         // Redirect to complete profile screen
         console.log('🔄 No existing profile found');
         console.log('🔄 Redirecting to complete profile screen...');
-        router.replace('/auth/complete-profile');
+        safeNavigate('/auth/complete-profile');
 
       } catch (error: any) {
         console.error('❌ OAuth callback error:', error);
@@ -393,16 +398,14 @@ export default function AuthCallback() {
         await AsyncStorage.removeItem('oauth_user_type');
         await AsyncStorage.removeItem('oauth_intent');
 
-        // Also clean up localStorage completely
-        if (typeof window !== 'undefined') {
-          localStorage.removeItem('oauth_user_type');
-          localStorage.removeItem('oauth_intent');
-          localStorage.removeItem('oauth_timestamp');
-        }
+        // Also clean up storage completely
+        safeLocalStorage.removeItem('oauth_user_type');
+        safeLocalStorage.removeItem('oauth_intent');
+        safeLocalStorage.removeItem('oauth_timestamp');
 
         // Redirect back to register with error
         console.log('🔄 Redirecting to register with error...');
-        router.replace(`/auth/register?error=${encodeURIComponent(error.message || 'OAuth failed')}`);
+        safeNavigate(`/auth/register?error=${encodeURIComponent(error.message || 'OAuth failed')}`);
       }
     };
 
@@ -414,7 +417,7 @@ export default function AuthCallback() {
       console.log('🧹 Cleaning up callback timer');
       clearTimeout(timer);
     };
-  }, [isClient]);
+  }, [isClient, isRouterReady]);
 
   return (
     <View style={styles.container}>

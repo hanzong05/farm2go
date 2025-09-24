@@ -1,7 +1,9 @@
+import * as FileSystem from 'expo-file-system';
 import * as ImagePicker from 'expo-image-picker';
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
+  Alert,
   Image,
   Platform,
   ScrollView,
@@ -10,15 +12,24 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import Swal from 'sweetalert2';
 import { supabase } from '../lib/supabase';
 import { Database } from '../types/database';
+import WebFileInput from './WebFileInput';
+
+// Import legacy FileSystem methods if available
+let legacyFileSystem: any = null;
+try {
+  if (Platform.OS !== 'web') {
+    legacyFileSystem = require('expo-file-system/legacy');
+  }
+} catch (error) {
+  console.warn('Legacy FileSystem not available, will use current API');
+}
+
 // Platform-specific import to prevent VisionCamera loading on web
 const VisionCamera = Platform.OS === 'web'
   ? require('./VisionCameraMock').default
   : require('./VisionCamera').default;
-import WebFileInput from './WebFileInput';
-
 
 type VerificationSubmission = Database['public']['Tables']['verification_submissions']['Insert'];
 
@@ -113,18 +124,49 @@ export default function VerificationUpload({
   const [uploadProgress, setUploadProgress] = useState('');
   const [showVisionCamera, setShowVisionCamera] = useState<'id' | 'face' | null>(null);
   const [showFileInput, setShowFileInput] = useState<'id' | 'face' | null>(null);
-  const [debugInfo, setDebugInfo] = useState<string[]>([]);
+  const [fileSystemAvailable, setFileSystemAvailable] = useState(false);
+
+  // Check FileSystem availability on component mount
+  useEffect(() => {
+    const checkFileSystem = async () => {
+      try {
+        if (Platform.OS !== 'web') {
+          // Check for modern FileSystem API first, then legacy
+          const hasModernAPI = FileSystem && 
+                              typeof FileSystem.readAsStringAsync === 'function' &&
+                              FileSystem.EncodingType;
+                              
+          const hasLegacyAPI = legacyFileSystem &&
+                              typeof legacyFileSystem.readAsStringAsync === 'function' &&
+                              legacyFileSystem.EncodingType;
+          
+          if (hasModernAPI || hasLegacyAPI) {
+            console.log('✅ FileSystem is properly loaded');
+            setFileSystemAvailable(true);
+          } else {
+            console.warn('⚠️ FileSystem methods not available');
+            setFileSystemAvailable(false);
+          }
+        } else {
+          setFileSystemAvailable(true); // Web doesn't need FileSystem
+        }
+      } catch (error) {
+        console.error('❌ FileSystem check failed:', error);
+        setFileSystemAvailable(false);
+      }
+    };
+
+    checkFileSystem();
+  }, []);
 
   const requestCameraPermission = async () => {
     const { status } = await ImagePicker.requestCameraPermissionsAsync();
     if (status !== 'granted') {
-      Swal.fire({
-        title: 'Camera Permission Required',
-        text: 'Please allow camera access to take verification photos.',
-        icon: 'warning',
-        confirmButtonText: 'OK',
-        confirmButtonColor: '#10b981'
-      });
+      Alert.alert(
+        'Camera Permission Required',
+        'Please allow camera access to take verification photos.',
+        [{ text: 'OK' }]
+      );
       return false;
     }
     return true;
@@ -133,13 +175,11 @@ export default function VerificationUpload({
   const requestMediaLibraryPermission = async () => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (status !== 'granted') {
-      Swal.fire({
-        title: 'Media Library Permission Required',
-        text: 'Please allow media library access to select photos.',
-        icon: 'warning',
-        confirmButtonText: 'OK',
-        confirmButtonColor: '#10b981'
-      });
+      Alert.alert(
+        'Media Library Permission Required',
+        'Please allow media library access to select photos.',
+        [{ text: 'OK' }]
+      );
       return false;
     }
     return true;
@@ -149,14 +189,30 @@ export default function VerificationUpload({
     console.log('Platform.OS:', Platform.OS);
     console.log('showImagePickerOptions called for type:', type);
 
-    // Always use file input on web (desktop or mobile)
+    // Always use file input on web
     if (Platform.OS === 'web') {
       console.log('Using WebFileInput for web platform');
       setShowFileInput(type);
     } else {
-      // Native platforms - use VisionCamera
-      console.log('Using VisionCamera for native platform:', Platform.OS);
-      setShowVisionCamera(type);
+      // For native platforms, show options
+      Alert.alert(
+        'Select Image',
+        'Choose how you want to add your photo',
+        [
+          {
+            text: 'Cancel',
+            style: 'cancel'
+          },
+          {
+            text: 'Take Photo',
+            onPress: () => takePhoto(type)
+          },
+          {
+            text: 'Choose from Gallery',
+            onPress: () => pickImage(type)
+          }
+        ]
+      );
     }
   };
 
@@ -177,13 +233,11 @@ export default function VerificationUpload({
       }
     } catch (error) {
       console.error('Error taking photo:', error);
-      Swal.fire({
-        title: 'Error',
-        text: 'Failed to take photo. Please try again.',
-        icon: 'error',
-        confirmButtonText: 'OK',
-        confirmButtonColor: '#ef4444'
-      });
+      Alert.alert(
+        'Error',
+        'Failed to take photo. Please try again.',
+        [{ text: 'OK' }]
+      );
     }
   };
 
@@ -204,13 +258,11 @@ export default function VerificationUpload({
       }
     } catch (error) {
       console.error('Error picking image:', error);
-      Swal.fire({
-        title: 'Error',
-        text: 'Failed to select image. Please try again.',
-        icon: 'error',
-        confirmButtonText: 'OK',
-        confirmButtonColor: '#ef4444'
-      });
+      Alert.alert(
+        'Error',
+        'Failed to select image. Please try again.',
+        [{ text: 'OK' }]
+      );
     }
   };
 
@@ -250,8 +302,6 @@ export default function VerificationUpload({
         console.log('📸 Updating verification data for type:', showVisionCamera);
         updateVerificationData(showVisionCamera, photoUri);
 
-        // Add a small delay before setting showVisionCamera to null
-        // to ensure the photo URI is properly processed
         setTimeout(() => {
           console.log('📸 Setting showVisionCamera to null to return to main view');
           setShowVisionCamera(null);
@@ -261,13 +311,11 @@ export default function VerificationUpload({
       }
     } catch (error) {
       console.error('📸 Error handling vision camera photo:', error);
-      Swal.fire({
-        title: 'Error',
-        text: 'Failed to process photo. Please try again.',
-        icon: 'error',
-        confirmButtonText: 'OK',
-        confirmButtonColor: '#ef4444'
-      });
+      Alert.alert(
+        'Error',
+        'Failed to process photo. Please try again.',
+        [{ text: 'OK' }]
+      );
       setShowVisionCamera(null);
     }
   };
@@ -279,10 +327,11 @@ export default function VerificationUpload({
     }
   };
 
+  // Enhanced upload function with better error handling
   const uploadImageToSupabase = async (uri: string, fileName: string, retryCount = 0): Promise<string> => {
     const maxRetries = 3;
     const isMobile = Platform.OS !== 'web' || /Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator?.userAgent || '');
-    const timeoutDuration = isMobile ? 60000 : 90000; // 60s for mobile, 90s for desktop
+    const timeoutDuration = isMobile ? 60000 : 90000;
 
     const controller = new AbortController();
     const timeoutId = setTimeout(() => {
@@ -292,78 +341,191 @@ export default function VerificationUpload({
 
     try {
       console.log(`Starting upload attempt ${retryCount + 1}/${maxRetries + 1} for:`, fileName);
-      console.log('Platform detected as mobile:', isMobile);
-      console.log('Using timeout:', timeoutDuration + 'ms');
+      console.log('Platform:', Platform.OS);
+      console.log('FileSystem available:', fileSystemAvailable);
+      console.log('URI format:', uri.substring(0, 50) + '...');
 
-      // Add timeout to fetch request with mobile optimization
-      const response = await Promise.race([
-        fetch(uri, {
-          signal: controller.signal,
-          method: 'GET',
-          headers: {
-            'Cache-Control': 'no-cache',
-            'Accept': 'image/*',
-            'User-Agent': isMobile ? 'Mozilla/5.0 (Mobile)' : 'Mozilla/5.0 (Desktop)'
+      let fileData: ArrayBuffer;
+      let mimeType = 'image/jpeg';
+
+      // Handle different platforms and URI formats
+      if (Platform.OS === 'web') {
+        // Web platform - use fetch
+        const response = await fetch(uri, { signal: controller.signal });
+        if (!response.ok) {
+          throw new Error(`Failed to fetch image: ${response.status} ${response.statusText}`);
+        }
+        
+        const blob = await response.blob();
+        fileData = await blob.arrayBuffer();
+        mimeType = blob.type || 'image/jpeg';
+        console.log('Web: Created ArrayBuffer, size:', fileData.byteLength);
+        
+      } else {
+        // React Native platform - use FileSystem if available, otherwise fallback to fetch
+        if (fileSystemAvailable) {
+          try {
+            let fileUri = uri;
+            
+            // Determine which API to use
+            const useModernAPI = FileSystem && typeof FileSystem.readAsStringAsync === 'function';
+            const fsAPI = useModernAPI ? FileSystem : legacyFileSystem;
+            
+            // Handle content:// URIs by copying to cache first
+            if (uri.startsWith('content://') || uri.startsWith('ph://')) {
+              console.log('Converting content/photo URI to file URI...');
+              const tempFileName = `temp_${Date.now()}.jpg`;
+              
+              // Use the appropriate cacheDirectory
+              const cacheDir = useModernAPI 
+                ? (FileSystem.cacheDirectory || FileSystem.documentDirectory)
+                : (legacyFileSystem?.cacheDirectory || FileSystem.documentDirectory);
+              
+              const tempUri = `${cacheDir}${tempFileName}`;
+              
+              // Use the appropriate copy method
+              if (useModernAPI && FileSystem.copyAsync) {
+                await FileSystem.copyAsync({
+                  from: uri,
+                  to: tempUri
+                });
+              } else if (legacyFileSystem?.copyAsync) {
+                await legacyFileSystem.copyAsync({
+                  from: uri,
+                  to: tempUri
+                });
+              } else {
+                throw new Error('Copy function not available');
+              }
+              
+              fileUri = tempUri;
+              console.log('Copied to temp file:', fileUri);
+            }
+            
+            console.log('Reading file as base64...');
+            
+            // Read file as base64 using the appropriate API
+            const encodingType = useModernAPI 
+              ? FileSystem.EncodingType?.Base64 
+              : legacyFileSystem?.EncodingType?.Base64;
+            
+            if (!encodingType) {
+              throw new Error('Base64 encoding type not available');
+            }
+            
+            const base64String = await fsAPI.readAsStringAsync(fileUri, {
+              encoding: encodingType,
+            });
+            
+            console.log('Read file as base64, length:', base64String.length);
+            
+            if (!base64String || base64String.length === 0) {
+              throw new Error('File is empty or could not be read');
+            }
+            
+            // Convert base64 to ArrayBuffer
+            const binaryString = atob(base64String);
+            const bytes = new Uint8Array(binaryString.length);
+            for (let i = 0; i < binaryString.length; i++) {
+              bytes[i] = binaryString.charCodeAt(i);
+            }
+            
+            fileData = bytes.buffer;
+            console.log('Native FileSystem: Created ArrayBuffer, size:', fileData.byteLength);
+            
+            // Clean up temp file if we created one
+            if (fileUri !== uri && fileUri.includes('temp_')) {
+              try {
+                // Use the appropriate delete method
+                if (useModernAPI && FileSystem.deleteAsync) {
+                  await FileSystem.deleteAsync(fileUri, { idempotent: true });
+                } else if (legacyFileSystem?.deleteAsync) {
+                  await legacyFileSystem.deleteAsync(fileUri, { idempotent: true });
+                }
+              } catch (deleteError) {
+                console.warn('Failed to delete temp file:', deleteError);
+              }
+            }
+            
+          } catch (fileError: unknown) {
+            console.error('FileSystem error:', fileError);
+            const errorMessage = fileError instanceof Error ? fileError.message : 'Unknown file system error';
+            throw new Error(`FileSystem failed: ${errorMessage}. Please restart the app and try again.`);
           }
-        }),
-        new Promise((_, reject) =>
-          setTimeout(() => reject(new Error('Request timeout')), timeoutDuration - 5000)
-        )
-      ]) as Response;
-
-      if (!response.ok) {
-        throw new Error(`Failed to fetch image: ${response.status} ${response.statusText}`);
-      }
-
-      console.log('Fetch completed, creating blob...');
-      const blob = await response.blob();
-
-      // Check file size (max 20MB)
-      if (blob.size > 20 * 1024 * 1024) {
-        throw new Error('File size too large. Please select an image smaller than 20MB.');
-      }
-
-      console.log('File blob created, size:', Math.round(blob.size / 1024) + 'KB');
-
-      // Compress image if too large (mobile optimization)
-      let finalBlob = blob;
-      if (blob.size > 5 * 1024 * 1024 && isMobile) { // 5MB threshold for mobile
-        console.log('Compressing large image for mobile upload...');
-        try {
-          finalBlob = await compressImage(blob, 0.7); // 70% quality
-          console.log('Compressed image size:', Math.round(finalBlob.size / 1024) + 'KB');
-        } catch (compressError) {
-          console.warn('Image compression failed, using original:', compressError);
-          finalBlob = blob;
+        } else {
+          // FileSystem not available - use fetch as fallback
+          console.log('FileSystem not available, using fetch fallback...');
+          try {
+            const response = await fetch(uri, { signal: controller.signal });
+            if (!response.ok) {
+              throw new Error(`Fetch failed: ${response.status} ${response.statusText}`);
+            }
+            const blob = await response.blob();
+            fileData = await blob.arrayBuffer();
+            console.log('Fetch fallback successful, size:', fileData.byteLength);
+          } catch (fetchError: unknown) {
+            const fetchErrorMessage = fetchError instanceof Error ? fetchError.message : 'Unknown fetch error';
+            throw new Error(`Cannot read file - FileSystem unavailable and fetch failed: ${fetchErrorMessage}`);
+          }
         }
       }
 
-      const fileExt = uri.split('.').pop() || 'jpg';
+      // Validate file data
+      if (fileData.byteLength === 0) {
+        throw new Error('Image file is empty. Please try taking another photo.');
+      }
+
+      if (fileData.byteLength > 20 * 1024 * 1024) {
+        throw new Error('File size too large. Please select an image smaller than 20MB.');
+      }
+
+      console.log('File data prepared, size:', Math.round(fileData.byteLength / 1024) + 'KB');
+
+      // Create file path
+      const fileExt = uri.split('.').pop()?.toLowerCase() || 'jpg';
       const filePath = `${userId}/${fileName}.${fileExt}`;
 
       console.log('Starting Supabase upload:', filePath);
 
-      // For mobile, use smaller chunk size and different upload options
-      const uploadOptions = isMobile ? {
-        cacheControl: '300',
-        upsert: true,
-      } : {
+      // Upload to Supabase using ArrayBuffer
+      const uploadOptions = {
         cacheControl: '3600',
         upsert: true,
+        contentType: mimeType,
       };
 
       const { data, error } = await supabase.storage
         .from('verification-documents')
-        .upload(filePath, finalBlob, uploadOptions);
+        .upload(filePath, fileData, uploadOptions);
 
       if (error) {
         console.error('Storage upload error:', error);
-
-        // Check if it's a bucket not found error
+        
         if (error.message.includes('Bucket not found')) {
-          throw new Error('Storage bucket not configured. Please contact support to set up verification document storage.');
+          throw new Error('Storage bucket not configured. Please contact support.');
         }
-
+        
+        // Handle duplicate files
+        if (error.message.includes('duplicate') || error.message.includes('already exists')) {
+          console.log('File exists, trying with unique name...');
+          const uniqueFileName = `${fileName}_${Date.now()}`;
+          const uniquePath = `${userId}/${uniqueFileName}.${fileExt}`;
+          
+          const { data: retryData, error: retryError } = await supabase.storage
+            .from('verification-documents')
+            .upload(uniquePath, fileData, uploadOptions);
+            
+          if (retryError) {
+            throw retryError;
+          }
+          
+          const { data: urlData } = supabase.storage
+            .from('verification-documents')
+            .getPublicUrl(retryData.path);
+          
+          return urlData.publicUrl;
+        }
+        
         throw error;
       }
 
@@ -374,6 +536,7 @@ export default function VerificationUpload({
         .getPublicUrl(data.path);
 
       return urlData.publicUrl;
+      
     } catch (uploadError) {
       console.error('Upload process error:', uploadError);
 
@@ -382,7 +545,6 @@ export default function VerificationUpload({
         if (retryCount < maxRetries) {
           console.log(`Upload timeout, retrying... (${retryCount + 1}/${maxRetries})`);
           clearTimeout(timeoutId);
-          // Exponential backoff for retries
           const backoffTime = Math.min(2000 * Math.pow(2, retryCount), 10000);
           await new Promise(resolve => setTimeout(resolve, backoffTime));
           return uploadImageToSupabase(uri, fileName, retryCount + 1);
@@ -390,7 +552,18 @@ export default function VerificationUpload({
         throw new Error('Upload timeout after retries. Please try with a smaller image or better internet connection.');
       }
 
-      // Retry on network errors (but not on other errors)
+      // Handle specific errors
+      if (uploadError instanceof Error) {
+        if (uploadError.message.includes('FileSystem failed')) {
+          throw new Error('App restart required. Please close and reopen the app, then try again.');
+        }
+        
+        if (uploadError.message.includes('Cannot read file')) {
+          throw new Error('Cannot read the selected image. Please try selecting a different image.');
+        }
+      }
+
+      // Retry on network errors
       if (uploadError instanceof Error &&
           (uploadError.message.includes('fetch') ||
            uploadError.message.includes('network') ||
@@ -402,17 +575,7 @@ export default function VerificationUpload({
         return uploadImageToSupabase(uri, fileName, retryCount + 1);
       }
 
-      // If it's our custom bucket error, throw it as-is
-      if (uploadError instanceof Error && uploadError.message.includes('Storage bucket not configured')) {
-        throw uploadError;
-      }
-
-      // For other errors, provide a specific message
-      if (uploadError instanceof Error && uploadError.message.includes('Failed to fetch')) {
-        throw new Error('Network connection failed. Please check your internet and try again.');
-      }
-
-      // Generic error message
+      // Generic error
       throw new Error('Failed to upload image. Please try again.');
     } finally {
       clearTimeout(timeoutId);
@@ -421,26 +584,28 @@ export default function VerificationUpload({
 
   const submitVerification = async () => {
     console.log('📄 Submit verification started');
-    console.log('📄 Current verification data:', {
-      hasIdDocument: !!verificationData.idDocument.uri,
-      hasFacePhoto: !!verificationData.facePhoto.uri,
-      idDocumentType: verificationData.idDocument.type
-    });
 
     if (!verificationData.idDocument.uri || !verificationData.facePhoto.uri) {
-      console.log('❌ Missing photos, showing warning');
-      Swal.fire({
-        title: 'Missing Photos',
-        text: 'Please upload both ID document and face photo.',
-        icon: 'warning',
-        confirmButtonText: 'OK',
-        confirmButtonColor: '#f59e0b'
-      });
+      Alert.alert(
+        'Missing Photos',
+        'Please upload both ID document and face photo.',
+        [{ text: 'OK' }]
+      );
+      return;
+    }
+
+    // Check if FileSystem is available for native platforms
+    if (Platform.OS !== 'web' && !fileSystemAvailable) {
+      Alert.alert(
+        'App Restart Required',
+        'The file system is not available. Please close and reopen the app, then try again.',
+        [{ text: 'OK' }]
+      );
       return;
     }
 
     const isMobile = Platform.OS !== 'web' || /Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator?.userAgent || '');
-    const totalTimeout = isMobile ? 180000 : 240000; // 3min for mobile, 4min for desktop
+    const totalTimeout = isMobile ? 180000 : 240000;
     let timeoutId: number | undefined;
 
     try {
@@ -448,19 +613,15 @@ export default function VerificationUpload({
       setUploadProgress('Preparing upload... (1/4)');
 
       console.log('Starting verification submission...');
-      console.log('Platform detected as mobile:', isMobile);
-      console.log('Total timeout set to:', totalTimeout + 'ms');
 
-      // Set overall timeout for the entire submission process
+      // Set overall timeout
       timeoutId = setTimeout(() => {
-        setUploadProgress('Overall timeout reached - Please try again');
         throw new Error('Overall submission timeout');
       }, totalTimeout);
 
       setUploadProgress('Uploading ID document... (2/4)');
       console.log('Starting ID document upload');
 
-      // Upload ID document with automatic retries
       const idDocumentUrl = await uploadImageToSupabase(
         verificationData.idDocument.uri,
         `id_document_${Date.now()}`
@@ -469,7 +630,6 @@ export default function VerificationUpload({
       console.log('ID document uploaded successfully');
       setUploadProgress('Uploading face photo... (3/4)');
 
-      // Upload face photo with automatic retries
       const facePhotoUrl = await uploadImageToSupabase(
         verificationData.facePhoto.uri,
         `face_photo_${Date.now()}`
@@ -498,73 +658,61 @@ export default function VerificationUpload({
 
       console.log('Verification submitted successfully');
 
-      // Clear timeout since we succeeded
       if (timeoutId !== undefined) {
         clearTimeout(timeoutId);
         timeoutId = undefined;
       }
 
-      // Note: We no longer update the profiles table directly here.
-      // The verification_submissions table is now the source of truth.
-
-      Swal.fire({
-        title: 'Verification Submitted!',
-        text: 'Your verification documents have been submitted successfully. You will be notified once an admin reviews your submission.',
-        icon: 'success',
-        confirmButtonText: 'OK',
-        confirmButtonColor: '#10b981',
-        timer: 5000,
-        timerProgressBar: true
-      }).then(() => {
-        setTimeout(() => {
-          onVerificationSubmitted();
-        }, 200);
-      });
+      Alert.alert(
+        'Verification Submitted!',
+        'Your verification documents have been submitted successfully. You will be notified once an admin reviews your submission.',
+        [{
+          text: 'OK',
+          onPress: () => {
+            setTimeout(() => {
+              onVerificationSubmitted();
+            }, 200);
+          }
+        }]
+      );
     } catch (error) {
       console.error('Error submitting verification:', error);
 
-      // Provide more specific error messages for mobile users
       let errorMessage = 'Failed to submit verification. Please try again.';
       let showRetry = true;
 
       if (error instanceof Error) {
-        if (error.name === 'AbortError' || error.message.includes('timeout')) {
+        if (error.message.includes('App restart required') || error.message.includes('FileSystem failed')) {
+          errorMessage = 'Please close and reopen the app, then try again.';
+          showRetry = false;
+        } else if (error.message.includes('Cannot read the selected image')) {
+          errorMessage = 'Cannot read the selected image. Please try selecting a different photo.';
+        } else if (error.message.includes('timeout')) {
           errorMessage = isMobile
-            ? 'Upload timeout on mobile. Try using WiFi, reduce image size, or try again later.'
-            : 'Upload timeout. Please check your internet connection and try again.';
+            ? 'Upload timeout on mobile. Try using WiFi or a better signal area.'
+            : 'Upload timeout. Please check your internet connection.';
         } else if (error.message.includes('File size too large')) {
           errorMessage = error.message;
           showRetry = false;
-        } else if (error.message.includes('Storage bucket not configured')) {
-          errorMessage = 'Storage configuration error. Please contact support.';
-          showRetry = false;
-        } else if (error.message.includes('verification_submissions')) {
-          errorMessage = 'Database configuration error. Please contact support.';
-          showRetry = false;
-        } else if (error.message.includes('network') || error.message.includes('connection') || error.message.includes('fetch')) {
-          errorMessage = isMobile
-            ? 'Network error on mobile. Try switching to WiFi or better signal area.'
-            : 'Network error. Please check your internet connection and try again.';
-        } else if (error.message.includes('retries')) {
-          errorMessage = 'Upload failed after multiple attempts. Please try with a smaller image or better connection.';
         }
       }
 
-      const swalConfig: any = {
-        title: 'Submission Failed',
-        text: errorMessage,
-        icon: 'error',
-        confirmButtonText: showRetry ? 'Try Again' : 'OK',
-        confirmButtonColor: '#ef4444',
-      };
-
       if (showRetry) {
-        swalConfig.showCancelButton = true;
-        swalConfig.cancelButtonText = 'Cancel';
-        swalConfig.cancelButtonColor = '#6b7280';
+        Alert.alert(
+          'Submission Failed',
+          errorMessage,
+          [
+            { text: 'Cancel', style: 'cancel' },
+            { text: 'Try Again', onPress: submitVerification }
+          ]
+        );
+      } else {
+        Alert.alert(
+          'Submission Failed',
+          errorMessage,
+          [{ text: 'OK' }]
+        );
       }
-
-      Swal.fire(swalConfig);
     } finally {
       if (timeoutId !== undefined) {
         clearTimeout(timeoutId);
@@ -575,35 +723,50 @@ export default function VerificationUpload({
   };
 
   const selectIdDocumentType = () => {
-    const options = ID_DOCUMENT_TYPES.map(type => `<option value="${type.key}">${type.label}</option>`).join('');
-
-    Swal.fire({
-      title: 'Select ID Document Type',
-      text: 'Choose the type of ID document you want to upload',
-      html: `
-        <select id="documentType" class="swal2-input" style="font-size: 16px; padding: 10px;">
-          ${options}
-        </select>
-      `,
-      icon: 'question',
-      showCancelButton: true,
-      confirmButtonText: 'Select',
-      confirmButtonColor: '#10b981',
-      cancelButtonText: 'Cancel',
-      cancelButtonColor: '#6b7280',
-      preConfirm: () => {
-        const select = document.getElementById('documentType') as HTMLSelectElement;
-        return select.value;
-      }
-    }).then((result) => {
-      if (result.isConfirmed && result.value) {
-        setVerificationData(prev => ({
-          ...prev,
-          idDocument: { ...prev.idDocument, type: result.value },
-        }));
-      }
-    });
+    Alert.alert(
+      'ID Document Type',
+      'Using default ID document type for mobile verification.',
+      [
+        {
+          text: 'Cancel',
+          style: 'cancel'
+        },
+        {
+          text: 'Continue',
+          onPress: () => {
+            setVerificationData(prev => ({
+              ...prev,
+              idDocument: { ...prev.idDocument, type: 'drivers_license' },
+            }));
+          }
+        }
+      ]
+    );
   };
+
+  // Show FileSystem warning for native platforms
+  if (Platform.OS !== 'web' && !fileSystemAvailable) {
+    return (
+      <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+        <View style={styles.header}>
+          <Text style={styles.title}>System Error</Text>
+          <Text style={styles.subtitle}>
+            The file system is not available. Please restart the app to continue with verification.
+          </Text>
+        </View>
+        
+        <View style={styles.errorContainer}>
+          <Text style={styles.errorTitle}>⚠️ App Restart Required</Text>
+          <Text style={styles.errorText}>
+            The file handling system is not properly loaded. Please close this app completely and reopen it to resolve this issue.
+          </Text>
+          <Text style={styles.errorText}>
+            If the problem persists, try restarting your device.
+          </Text>
+        </View>
+      </ScrollView>
+    );
+  }
 
   if (showVisionCamera) {
     console.log('📸 Rendering VisionCamera for type:', showVisionCamera);
@@ -957,5 +1120,25 @@ const styles = StyleSheet.create({
     color: '#374151',
     fontSize: 16,
     fontWeight: '600',
+  },
+  errorContainer: {
+    backgroundColor: '#fef2f2',
+    borderRadius: 12,
+    padding: 20,
+    borderWidth: 1,
+    borderColor: '#fca5a5',
+    marginBottom: 32,
+  },
+  errorTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#dc2626',
+    marginBottom: 12,
+  },
+  errorText: {
+    fontSize: 14,
+    color: '#dc2626',
+    lineHeight: 20,
+    marginBottom: 8,
   },
 });

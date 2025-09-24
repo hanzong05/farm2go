@@ -1,5 +1,5 @@
 import { Linking, Platform } from 'react-native';
-import { supabase } from '../lib/supabase';
+import { supabase, signInWithGoogleOAuth } from '../lib/supabase';
 import { Database } from '../types/database';
 import type { AuthResponse } from '@supabase/supabase-js';
 
@@ -359,7 +359,8 @@ export const checkUserExistsByEmail = async (email: string): Promise<boolean> =>
 // Social auth functions
 export const signInWithGoogle = async (isRegistration = false) => {
   try {
-    console.log('🚀 Starting Google OAuth sign in...');
+    console.log('🔥 signInWithGoogle auth service called!');
+    console.log('🚀 Starting in-app Google OAuth sign in...');
     console.log('📝 Registration mode:', isRegistration);
 
     if (isDemoMode) {
@@ -376,67 +377,48 @@ export const signInWithGoogle = async (isRegistration = false) => {
       return { user: mockUser, session: null };
     }
 
-    // Different redirect URLs for registration vs login
-    // Use proper callback routing for development and production
-    const getRedirectUrl = (isRegistration: boolean) => {
-      // For web development and production
-      if (Platform.OS === 'web') {
-        // Check if we're in production (deployed on Vercel)
-        const baseUrl = typeof window !== 'undefined'
-          ? window.location.origin
-          : 'http://localhost:8081';
-        return `${baseUrl}/auth/callback`;
-      } else {
-        // For mobile, use the proper app scheme
-        return 'farm2go://auth/callback';
-      }
-    };
-
-    const redirectTo = getRedirectUrl(isRegistration);
-
-    console.log('🔗 Redirect URL:', redirectTo);
-    console.log('📱 Platform:', Platform.OS);
-
-    const oauthOptions = {
-      provider: 'google' as const,
-      options: {
-        redirectTo,
-        queryParams: {
-          access_type: 'offline',
-          prompt: 'consent',
-        },
-      },
-    };
-
-    // For mobile platforms, try to open OAuth in external browser
-    if (Platform.OS !== 'web') {
-      console.log('📱 Mobile platform detected, attempting external browser OAuth...');
-    }
-
-    const { data, error } = await supabase.auth.signInWithOAuth(oauthOptions);
-
-    if (error) {
-      console.error('❌ Google OAuth error:', error);
-      console.error('❌ Error details:', JSON.stringify(error, null, 2));
-      throw error;
-    }
-
-    console.log('✅ Google OAuth initiated');
-    console.log('📤 OAuth data:', data);
-
-    // On mobile, the OAuth should open in the browser
-    if (Platform.OS !== 'web' && data.url) {
-      console.log('🌐 Opening OAuth URL in browser:', data.url);
-      const canOpen = await Linking.canOpenURL(data.url);
-      if (canOpen) {
-        await Linking.openURL(data.url);
-      } else {
-        console.error('❌ Cannot open OAuth URL');
-        throw new Error('Cannot open OAuth URL');
+    // Get userType from session manager for registration
+    let userType = 'buyer'; // Default for sign-in
+    if (isRegistration) {
+      try {
+        const { sessionManager } = await import('./sessionManager');
+        const oauthState = await sessionManager.getOAuthState();
+        userType = oauthState?.userType || 'buyer';
+        console.log('📝 Retrieved userType from session:', userType);
+      } catch (error) {
+        console.log('⚠️ Could not get userType from session, using default:', userType);
       }
     }
 
-    return data;
+    const intent = isRegistration ? 'registration' : 'signin';
+
+    const result = await signInWithGoogleOAuth(userType, intent);
+
+    // Handle post-OAuth processing
+    if (result && result.sessionData) {
+      console.log('✅ OAuth session established');
+
+      // Check if user already has a profile
+      const user = result.sessionData.user;
+      if (user) {
+        console.log('🔍 Checking for existing profile...');
+        const { data: existingProfile } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('id', user.id)
+          .single();
+
+        if (existingProfile) {
+          console.log('✅ Existing profile found, user is authenticated');
+          return { user, profile: existingProfile, needsRedirect: true };
+        } else {
+          console.log('ℹ️ No profile found, needs profile completion');
+          return { user, profile: null, needsProfileCompletion: true };
+        }
+      }
+    }
+
+    return result;
   } catch (error) {
     console.error('Google sign in error:', error);
     throw error;
@@ -569,8 +551,9 @@ export const getUserWithProfile = async (): Promise<{ user: any; profile: Profil
     const { sessionManager } = await import('./sessionManager');
     const sessionState = sessionManager.getSessionState();
 
-    if (sessionState.isAuthenticated && sessionState.user && sessionState.profile) {
+    if (sessionState.isAuthenticated && sessionState.user) {
       console.log('📦 Using cached session data');
+      console.log('📦 Profile status:', sessionState.profile ? 'Found' : 'None');
       return {
         user: sessionState.user,
         profile: sessionState.profile
