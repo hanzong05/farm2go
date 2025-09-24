@@ -17,6 +17,10 @@ import {
 } from 'react-native';
 import { LineChart } from 'react-native-chart-kit';
 import Icon from 'react-native-vector-icons/FontAwesome5';
+import AddProductForm from '../../components/AddProductForm';
+import AdminInventoryCard from '../../components/AdminInventoryCard';
+import AdminOrderCard from '../../components/AdminOrderCard';
+import AdminProductCard from '../../components/AdminProductCard';
 import HeaderComponent from '../../components/HeaderComponent';
 import { supabase } from '../../lib/supabase';
 import { getUserWithProfile } from '../../services/auth';
@@ -76,21 +80,19 @@ interface OrderResponse {
     price: number;
     unit: string;
   };
-  order_items?: Array<{
-    id: string;
-    product: {
-      name: string;
-      price: number;
-    };
-  }>;
+  // order_items removed - using single table approach
 }
 
 interface ProductResponse {
   id: string;
   name: string;
+  description?: string;
   price: number;
+  unit: string;
   stock_quantity: number;
   category: string;
+  image_url?: string;
+  status: 'pending' | 'approved' | 'rejected';
   farmer_id: string;
   created_at: string;
 }
@@ -602,11 +604,7 @@ export default function AdminUsers() {
         .from('orders')
         .select(`
           *,
-          buyer_profile:profiles!orders_buyer_id_fkey(first_name, last_name),
-          order_items(
-            *,
-            product:products(name, price)
-          )
+          buyer_profile:profiles!orders_buyer_id_fkey(first_name, last_name)
         `)
         .eq('farmer_id', farmerId)
         .order('created_at', { ascending: false });
@@ -1533,41 +1531,46 @@ export default function AdminUsers() {
           <ScrollView style={styles.modalContent}>
             {farmerDetailTab === 'products' && (
               <View style={styles.tabContent}>
-                <View style={styles.sectionHeader}>
-                  <Text style={styles.sectionTitle}>Products ({farmerProducts.length})</Text>
-                  <TouchableOpacity
-                    style={styles.addButton}
-                    onPress={() => setShowAddForm(true)}
-                  >
-                    <Icon name="plus" size={16} color={colors.white} />
-                    <Text style={styles.addButtonText}>Add Product</Text>
-                  </TouchableOpacity>
-                </View>
-
-                {farmerProducts.map((product) => (
-                  <View key={product.id} style={styles.itemCard}>
-                    <View style={styles.itemHeader}>
-                      <Text style={styles.itemName}>{product.name}</Text>
-                      <View style={styles.itemActions}>
-                        <TouchableOpacity
-                          style={styles.editButton}
-                          onPress={() => setEditingItem(product)}
-                        >
-                          <Icon name="edit" size={14} color={colors.primary} />
-                        </TouchableOpacity>
-                        <TouchableOpacity
-                          style={styles.deleteButton}
-                          onPress={() => handleDeleteProduct(product.id)}
-                        >
-                          <Icon name="trash" size={14} color={colors.danger} />
-                        </TouchableOpacity>
-                      </View>
+                {showAddForm ? (
+                  <AddProductForm
+                    farmerId={selectedFarmer?.id || ''}
+                    onSuccess={() => {
+                      setShowAddForm(false);
+                      loadFarmerData(selectedFarmer?.id || '');
+                    }}
+                    onCancel={() => setShowAddForm(false)}
+                  />
+                ) : (
+                  <>
+                    <View style={styles.sectionHeader}>
+                      <Text style={styles.sectionTitle}>Products ({farmerProducts.length})</Text>
+                      <TouchableOpacity
+                        style={styles.addButton}
+                        onPress={() => setShowAddForm(true)}
+                      >
+                        <Icon name="plus" size={16} color={colors.white} />
+                        <Text style={styles.addButtonText}>Add Product</Text>
+                      </TouchableOpacity>
                     </View>
-                    <Text style={styles.itemDetail}>Price: {formatCurrency(product.price)}</Text>
-                    <Text style={styles.itemDetail}>Stock: {product.stock_quantity}</Text>
-                    <Text style={styles.itemDetail}>Category: {product.category}</Text>
-                  </View>
-                ))}
+
+                    {farmerProducts.map((product) => (
+                      <AdminProductCard
+                        key={product.id}
+                        id={product.id}
+                        name={product.name}
+                        price={product.price}
+                        unit={product.unit}
+                        imageUrl={product.image_url}
+                        category={product.category}
+                        quantity={product.stock_quantity}
+                        status={product.status}
+                        description={product.description}
+                        farmer={selectedFarmer ? `${selectedFarmer.first_name} ${selectedFarmer.last_name}`.trim() : undefined}
+                        onStatusUpdate={() => loadFarmerData(selectedFarmer?.id || '')}
+                      />
+                    ))}
+                  </>
+                )}
               </View>
             )}
 
@@ -1578,21 +1581,17 @@ export default function AdminUsers() {
                 </View>
 
                 {farmerOrders.map((order) => (
-                  <View key={order.id} style={styles.itemCard}>
-                    <View style={styles.itemHeader}>
-                      <Text style={styles.itemName}>Order #{order.id.slice(-8)}</Text>
-                      <Text style={[styles.statusBadge, { backgroundColor: getOrderStatusColor(order.status) }]}>
-                        {order.status}
-                      </Text>
-                    </View>
-                    <Text style={styles.itemDetail}>
-                      Buyer: {order.buyer_profile?.first_name} {order.buyer_profile?.last_name}
-                    </Text>
-                    <Text style={styles.itemDetail}>Total: {formatCurrency(order.total_price)}</Text>
-                    <Text style={styles.itemDetail}>
-                      Date: {new Date(order.created_at).toLocaleDateString()}
-                    </Text>
-                  </View>
+                  <AdminOrderCard
+                    key={order.id}
+                    id={order.id}
+                    totalAmount={order.total_price}
+                    status={order.status}
+                    createdAt={order.created_at}
+                    buyerProfile={order.buyer_profile}
+                    farmer={selectedFarmer ? `${selectedFarmer.first_name} ${selectedFarmer.last_name}`.trim() : undefined}
+                    items={`Order details - Total: ${formatCurrency(order.total_price)}`}
+                    onStatusUpdate={() => loadFarmerData(selectedFarmer?.id || '')}
+                  />
                 ))}
               </View>
             )}
@@ -1604,24 +1603,21 @@ export default function AdminUsers() {
                 </View>
 
                 {farmerInventory.map((item) => (
-                  <View key={item.id} style={styles.itemCard}>
-                    <View style={styles.itemHeader}>
-                      <Text style={styles.itemName}>{item.name}</Text>
-                      <View style={styles.itemActions}>
-                        <TouchableOpacity
-                          style={styles.editButton}
-                          onPress={() => setEditingItem(item)}
-                        >
-                          <Icon name="edit" size={14} color={colors.primary} />
-                        </TouchableOpacity>
-                      </View>
-                    </View>
-                    <Text style={styles.itemDetail}>Current Stock: {item.stock_quantity}</Text>
-                    <Text style={[styles.itemDetail, { color: item.stock_quantity < 10 ? colors.danger : colors.textSecondary }]}>
-                      Status: {item.stock_quantity < 10 ? 'Low Stock' : 'In Stock'}
-                    </Text>
-                    <Text style={styles.itemDetail}>Price: {formatCurrency(item.price)}</Text>
-                  </View>
+                  <AdminInventoryCard
+                    key={item.id}
+                    id={item.id}
+                    name={item.name}
+                    price={item.price}
+                    unit={item.unit}
+                    stockQuantity={item.stock_quantity}
+                    category={item.category}
+                    imageUrl={item.image_url}
+                    status={item.status}
+                    description={item.description}
+                    farmer={selectedFarmer ? `${selectedFarmer.first_name} ${selectedFarmer.last_name}`.trim() : undefined}
+                    createdAt={item.created_at}
+                    onUpdate={() => loadFarmerData(selectedFarmer?.id || '')}
+                  />
                 ))}
               </View>
             )}
@@ -1686,50 +1682,23 @@ export default function AdminUsers() {
                 </View>
 
                 {buyerOrders.map((order) => (
-                  <View key={order.id} style={styles.buyerOrderCard}>
-                    {/* Order Header - similar to buyer's view */}
-                    <View style={styles.buyerOrderHeader}>
-                      <View style={styles.buyerOrderLeftInfo}>
-                        <Text style={styles.buyerOrderStatusText}>{getOrderStatusText(order.status)}</Text>
-                        <Text style={styles.buyerOrderDate}>{formatOrderDate(order.created_at)}</Text>
-                      </View>
-                      <View style={styles.buyerOrderRightInfo}>
-                        <Text style={styles.buyerOrderTotal}>TOTAL</Text>
-                        <Text style={styles.buyerOrderAmount}>{formatCurrency(order.total_price)}</Text>
-                      </View>
-                    </View>
-
-                    {/* Delivery Status */}
-                    <View style={styles.buyerDeliveryStatus}>
-                      <Text style={[styles.buyerDeliveryText, { color: getOrderStatusColor(order.status) }]}>
-                        {getOrderDeliveryText(order.status)}
-                      </Text>
-                    </View>
-
-                    {/* Product Info */}
-                    <View style={styles.buyerProductSection}>
-                      <View style={styles.buyerProductRow}>
-                        <View style={styles.buyerProductIconContainer}>
-                          <Text style={styles.buyerProductIcon}>📦</Text>
-                        </View>
-                        <View style={styles.buyerProductInfo}>
-                          <Text style={styles.buyerProductName}>{order.product?.name}</Text>
-                          <Text style={styles.buyerProductDetails}>
-                            Quantity: {order.quantity} {order.product?.unit} • From: {
-                              order.farmer_profile?.farm_name ||
-                              `${order.farmer_profile?.first_name || ''} ${order.farmer_profile?.last_name || ''}`.trim() ||
-                              'Farm'
-                            }
-                          </Text>
-                        </View>
-                      </View>
-                    </View>
-
-                    {/* Order ID Section */}
-                    <View style={styles.buyerOrderIdSection}>
-                      <Text style={styles.buyerOrderIdLabel}>ORDER # {order.id.slice(-12).toUpperCase()}</Text>
-                    </View>
-                  </View>
+                  <AdminOrderCard
+                    key={order.id}
+                    id={order.id}
+                    totalAmount={order.total_price}
+                    status={order.status}
+                    createdAt={order.created_at}
+                    buyerProfile={selectedBuyer}
+                    farmer={order.farmer_profile ?
+                      `${order.farmer_profile.first_name} ${order.farmer_profile.last_name}`.trim() ||
+                      order.farmer_profile.farm_name : undefined
+                    }
+                    items={order.product ?
+                      `${order.product.name} - Qty: ${order.quantity} ${order.product.unit}` :
+                      'Order details'
+                    }
+                    onStatusUpdate={() => loadBuyerData(selectedBuyer?.id || '')}
+                  />
                 ))}
 
                 {buyerOrders.length === 0 && (
@@ -1747,50 +1716,23 @@ export default function AdminUsers() {
                 </View>
 
                 {buyerHistory.map((order) => (
-                  <View key={order.id} style={styles.buyerOrderCard}>
-                    {/* Order Header - similar to buyer's view */}
-                    <View style={styles.buyerOrderHeader}>
-                      <View style={styles.buyerOrderLeftInfo}>
-                        <Text style={styles.buyerOrderStatusText}>{getOrderStatusText(order.status)}</Text>
-                        <Text style={styles.buyerOrderDate}>{formatOrderDate(order.created_at)}</Text>
-                      </View>
-                      <View style={styles.buyerOrderRightInfo}>
-                        <Text style={styles.buyerOrderTotal}>TOTAL</Text>
-                        <Text style={styles.buyerOrderAmount}>{formatCurrency(order.total_price)}</Text>
-                      </View>
-                    </View>
-
-                    {/* Delivery Status */}
-                    <View style={styles.buyerDeliveryStatus}>
-                      <Text style={[styles.buyerDeliveryText, { color: getOrderStatusColor(order.status) }]}>
-                        {getOrderDeliveryText(order.status)}
-                      </Text>
-                    </View>
-
-                    {/* Product Info */}
-                    <View style={styles.buyerProductSection}>
-                      <View style={styles.buyerProductRow}>
-                        <View style={styles.buyerProductIconContainer}>
-                          <Text style={styles.buyerProductIcon}>📦</Text>
-                        </View>
-                        <View style={styles.buyerProductInfo}>
-                          <Text style={styles.buyerProductName}>{order.product?.name}</Text>
-                          <Text style={styles.buyerProductDetails}>
-                            Quantity: {order.quantity} {order.product?.unit} • From: {
-                              order.farmer_profile?.farm_name ||
-                              `${order.farmer_profile?.first_name || ''} ${order.farmer_profile?.last_name || ''}`.trim() ||
-                              'Farm'
-                            }
-                          </Text>
-                        </View>
-                      </View>
-                    </View>
-
-                    {/* Order ID Section */}
-                    <View style={styles.buyerOrderIdSection}>
-                      <Text style={styles.buyerOrderIdLabel}>ORDER # {order.id.slice(-12).toUpperCase()}</Text>
-                    </View>
-                  </View>
+                  <AdminOrderCard
+                    key={order.id}
+                    id={order.id}
+                    totalAmount={order.total_price}
+                    status={order.status}
+                    createdAt={order.created_at}
+                    buyerProfile={selectedBuyer}
+                    farmer={order.farmer_profile ?
+                      `${order.farmer_profile.first_name} ${order.farmer_profile.last_name}`.trim() ||
+                      order.farmer_profile.farm_name : undefined
+                    }
+                    items={order.product ?
+                      `${order.product.name} - Qty: ${order.quantity} ${order.product.unit}` :
+                      'Order details'
+                    }
+                    onStatusUpdate={() => loadBuyerData(selectedBuyer?.id || '')}
+                  />
                 ))}
 
                 {buyerHistory.length === 0 && (

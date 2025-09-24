@@ -136,8 +136,6 @@ export default function RootLayout() {
     }
   };
 
-  // Temporarily disabled session-based routing guard to fix loading issue
-  /*
   useEffect(() => {
     if (!isRouterReady) return; // Wait for router to be ready
 
@@ -160,17 +158,20 @@ export default function RootLayout() {
         const isProtectedRoute = protectedRoutes.some(route => currentPath.startsWith(route));
 
         if (userData?.profile) {
-          // User is logged in with profile - only redirect from root/auth pages
-          const shouldRedirect = currentPath === '/' || currentPath === '/index' || currentPath.startsWith('/auth/');
+          // User is logged in with profile - redirect from auth pages and callback
+          const shouldRedirect = currentPath === '/' ||
+                                 currentPath === '/index' ||
+                                 currentPath.startsWith('/auth/');
 
           if (shouldRedirect && isMounted) {
+            console.log('🚀 Redirecting authenticated user to dashboard based on type:', userData.profile.user_type);
             let targetPath: string;
             switch (userData.profile.user_type) {
               case 'super-admin':
                 targetPath = '/super-admin';
                 break;
               case 'admin':
-                targetPath = '/admin';
+                targetPath = '/admin/users';
                 break;
               case 'farmer':
                 targetPath = '/farmer';
@@ -179,8 +180,10 @@ export default function RootLayout() {
                 targetPath = '/buyer/marketplace';
                 break;
               default:
+                console.log('⚠️ Unknown user type, defaulting to buyer marketplace');
                 targetPath = '/buyer/marketplace';
             }
+            console.log('🚀 Navigating to:', targetPath);
             safeNavigate(targetPath);
           }
         } else if (userData?.user && !userData?.profile) {
@@ -218,13 +221,10 @@ export default function RootLayout() {
       clearTimeout(timeoutId);
     };
   }, [isRouterReady, router, segments]);
-  */
 
-  // Temporarily disabled auth state listener to fix loading issue
-  /*
   useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      console.log('🔄 Auth state change:', event);
+      console.log('🔄 Layout auth state change:', event, session?.user?.email);
 
       if (event === 'SIGNED_OUT') {
         const currentPath = Platform.OS === 'web' && typeof window !== 'undefined'
@@ -237,11 +237,57 @@ export default function RootLayout() {
           safeNavigate('/buyer/marketplace');
         }
       }
+
+      // Handle SIGNED_IN events for OAuth completion
+      if (event === 'SIGNED_IN' && session?.user && isRouterReady) {
+        const currentPath = Platform.OS === 'web' && typeof window !== 'undefined'
+          ? window.location.pathname
+          : `/${segments.join('/')}`;
+
+        // Only handle redirection if on auth pages (especially callback)
+        if (currentPath.startsWith('/auth/')) {
+          console.log('🚀 OAuth sign-in detected, checking user profile for redirection...');
+
+          try {
+            // Wait a moment for profile to be loaded/created
+            await new Promise(resolve => setTimeout(resolve, 1000));
+
+            const userData = await getUserWithProfile();
+
+            if (userData?.profile) {
+              console.log('✅ Profile found after OAuth, redirecting to dashboard');
+              let targetPath: string;
+              switch (userData.profile.user_type) {
+                case 'super-admin':
+                  targetPath = '/super-admin';
+                  break;
+                case 'admin':
+                  targetPath = '/admin/users';
+                  break;
+                case 'farmer':
+                  targetPath = '/farmer';
+                  break;
+                case 'buyer':
+                  targetPath = '/buyer/marketplace';
+                  break;
+                default:
+                  targetPath = '/buyer/marketplace';
+              }
+              console.log('🚀 OAuth redirection to:', targetPath);
+              safeNavigate(targetPath);
+            } else if (userData?.user) {
+              console.log('🔄 OAuth user without profile, redirecting to complete profile');
+              safeNavigate('/auth/complete-profile');
+            }
+          } catch (error) {
+            console.error('❌ Error during OAuth profile check:', error);
+          }
+        }
+      }
     });
 
     return () => subscription.unsubscribe();
   }, [router, segments, isRouterReady]);
-  */
 
   // Minimal AppState monitoring - just track current state
   useEffect(() => {
@@ -312,9 +358,8 @@ export default function RootLayout() {
 
   return (
     <ErrorBoundary>
-      {/* Temporarily bypass SessionProvider and AuthProvider to fix loading issue */}
-      {/* <SessionProvider> */}
-      {/* <AuthProvider> */}
+      <SessionProvider>
+        <AuthProvider>
           <ThemeProvider
             value={colorScheme === 'dark' ? Farm2GoDarkTheme : Farm2GoTheme}
           >
@@ -626,8 +671,8 @@ export default function RootLayout() {
           translucent={Platform.OS === 'android'}
         />
         </ThemeProvider>
-        {/* </AuthProvider> */}
-      {/* </SessionProvider> */}
+        </AuthProvider>
+      </SessionProvider>
     </ErrorBoundary>
   );
 }

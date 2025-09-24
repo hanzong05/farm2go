@@ -349,39 +349,11 @@ export default function AuthCallback() {
           safeLocalStorage.removeItem('oauth_intent');
           safeLocalStorage.removeItem('oauth_timestamp');
 
-          // For existing users, always redirect to dashboard regardless of intent
-          // This fixes the mobile browser issue where intent might be misidentified
-          console.log('✅ Existing user found, redirecting to dashboard');
-          const profile = existingProfile as any;
-          console.log('👤 User type from profile:', profile.user_type);
+          console.log('✅ Existing user found, OAuth cleanup completed');
 
-          // If the user was trying to register but already has an account,
-          // log it but still proceed with login
-          if (oauthIntent === 'registration') {
-            console.log('ℹ️ User attempted to register but account exists - proceeding with login');
-          }
-
-          switch (profile.user_type) {
-            case 'farmer':
-              console.log('🚜 Redirecting to farmer dashboard');
-              safeNavigate('/farmer/my-products');
-              break;
-            case 'buyer':
-              console.log('🛒 Redirecting to buyer marketplace');
-              safeNavigate('/buyer/marketplace');
-              break;
-            case 'admin':
-              console.log('👑 Redirecting to admin dashboard');
-              safeNavigate('/admin/users');
-              break;
-            case 'super-admin':
-              console.log('🔱 Redirecting to super admin dashboard');
-              safeNavigate('/super-admin');
-              break;
-            default:
-              console.log('❓ Unknown user type, defaulting to buyer marketplace');
-              safeNavigate('/buyer/marketplace');
-          }
+          // Don't navigate here - let the layout handle it to prevent conflicts
+          // The layout will automatically redirect based on user type
+          console.log('✅ Letting layout handle navigation to prevent conflicts');
           return;
         }
 

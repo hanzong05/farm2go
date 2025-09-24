@@ -174,19 +174,64 @@ export default function LoginScreen() {
         timestamp: Date.now()
       });
 
-      const result = await signInWithGoogle(false);
+      const result = await signInWithGoogle(false) as any;
       console.log('🔄 OAuth result:', result);
 
-      // For mobile OAuth, the result might be processed by the callback page
-      // so we don't need to handle it here - just wait for the deep link
+      // For mobile/native platforms, let the callback handle everything
+      // This prevents conflicts between login page and callback page navigation
+      if (Platform.OS !== 'web') {
+        console.log('📱 Mobile platform detected - letting callback handle navigation');
+        // Don't clear loading here - let callback or auth state change handle it
+        return;
+      }
+
+      // For web, handle immediate session if available
+      if (result && result.sessionData && result.sessionData.user) {
+        console.log('✅ OAuth completed with session data on web');
+
+        // Clear OAuth state since we're handling it directly
+        await sessionManager.clearOAuthState();
+
+        // Let the layout handle the redirect to avoid conflicts
+        setIsLoading(false);
+        return;
+      }
+
+      // For web without immediate session data, wait for callback
+      console.log('ℹ️ No direct session data on web, waiting for callback...');
 
     } catch (error: any) {
       console.error('🔥 Error in handleGoogleSignIn:', error);
       Alert.alert('Error', error.message || 'OAuth failed');
       setIsLoading(false);
     }
-    // Don't set loading to false here - let the callback page handle it
   };
+
+  // Listen for auth state changes to handle successful OAuth
+  useEffect(() => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      console.log('🔄 Login page auth state change:', event, session?.user?.id);
+
+      // Handle SIGNED_OUT events
+      if (event === 'SIGNED_OUT') {
+        console.log('🔄 User signed out, resetting loading state');
+        setIsLoading(false);
+      }
+
+      // Handle SIGNED_IN events during OAuth
+      if (event === 'SIGNED_IN' && session?.user && isLoading) {
+        console.log('✅ Auth state change: User signed in during OAuth');
+
+        // Clear loading state immediately to prevent getting stuck
+        setIsLoading(false);
+
+        // Let the layout handle navigation - don't compete with callback page
+        console.log('✅ Clearing loading state and letting layout handle navigation');
+      }
+    });
+
+    return () => subscription.unsubscribe();
+  }, [isLoading]);
 
   // Auth state changes are now handled by the callback page for OAuth flows
   // Regular email/password login still works through handleLogin above

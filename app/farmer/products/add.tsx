@@ -153,15 +153,26 @@ export default function AddProductScreen() {
       // Create a unique filename
       const filename = `product_${Date.now()}_${Math.random().toString(36).substring(7)}.jpg`;
 
-      // Convert image to blob
-      const response = await fetch(imageUri);
-      const blob = await response.blob();
+      // Read file data for React Native
+      let fileData: any;
+      let mimeType = 'image/jpeg';
+
+      if (Platform.OS === 'web') {
+        // Web: convert to blob
+        const response = await fetch(imageUri);
+        fileData = await response.blob();
+      } else {
+        // React Native: read as base64 and convert to ArrayBuffer
+        const response = await fetch(imageUri);
+        const arrayBuffer = await response.arrayBuffer();
+        fileData = new Uint8Array(arrayBuffer);
+      }
 
       // Upload to Supabase storage
       const { data, error } = await supabase.storage
         .from('product-images')
-        .upload(filename, blob, {
-          contentType: 'image/jpeg',
+        .upload(filename, fileData, {
+          contentType: mimeType,
           upsert: false
         });
 

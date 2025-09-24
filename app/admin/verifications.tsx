@@ -14,7 +14,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import Swal from 'sweetalert2';
+// import Swal from 'sweetalert2'; // Removed - not compatible with React Native
 import HeaderComponent from '../../components/HeaderComponent';
 import { supabase } from '../../lib/supabase';
 import { getUserWithProfile } from '../../services/auth';
@@ -92,13 +92,7 @@ export default function AdminVerificationsScreen() {
       await loadVerificationSubmissions();
     } catch (error) {
       console.error('Error loading data:', error);
-      Swal.fire({
-        title: 'Error',
-        text: 'Failed to load verification submissions',
-        icon: 'error',
-        confirmButtonText: 'OK',
-        confirmButtonColor: '#ef4444'
-      });
+      Alert.alert('Error', 'Failed to load verification submissions');
     } finally {
       setLoading(false);
     }
@@ -152,23 +146,22 @@ export default function AdminVerificationsScreen() {
   const openReviewModal = (submission: VerificationSubmission, action: 'approve' | 'reject') => {
     const userName = `${submission.user_profile?.first_name} ${submission.user_profile?.last_name}`;
 
-    Swal.fire({
-      title: `${action === 'approve' ? 'Approve' : 'Reject'} Verification?`,
-      text: `Are you sure you want to ${action} ${userName}'s verification?`,
-      icon: action === 'approve' ? 'question' : 'warning',
-      showCancelButton: true,
-      confirmButtonText: `Yes, ${action}`,
-      confirmButtonColor: action === 'approve' ? '#10b981' : '#ef4444',
-      cancelButtonText: 'Cancel',
-      cancelButtonColor: '#6b7280',
-      reverseButtons: true
-    }).then((result) => {
-      if (result.isConfirmed) {
-        setReviewModalData({ submission, action });
-        setAdminNotes('');
-        setShowReviewModal(true);
-      }
-    });
+    Alert.alert(
+      `${action === 'approve' ? 'Approve' : 'Reject'} Verification?`,
+      `Are you sure you want to ${action} ${userName}'s verification?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: `Yes, ${action}`,
+          style: action === 'approve' ? 'default' : 'destructive',
+          onPress: () => {
+            setReviewModalData({ submission, action });
+            setAdminNotes('');
+            setShowReviewModal(true);
+          }
+        }
+      ]
+    );
   };
 
   const openImageViewer = (imageUrl: string, title: string) => {
@@ -244,17 +237,11 @@ export default function AdminVerificationsScreen() {
         }
       }
 
-      Swal.fire({
-        title: 'Success!',
-        text: `Verification ${action === 'approve' ? 'approved' : 'rejected'} successfully`,
-        icon: 'success',
-        confirmButtonText: 'OK',
-        confirmButtonColor: '#10b981',
-        timer: 3000,
-        timerProgressBar: true
-      }).then(() => {
-        closeReviewModal();
-      });
+      Alert.alert(
+        'Success!',
+        `Verification ${action === 'approve' ? 'approved' : 'rejected'} successfully`,
+        [{ text: 'OK', onPress: () => closeReviewModal() }]
+      );
 
       await loadVerificationSubmissions();
     } catch (error) {
@@ -269,13 +256,7 @@ export default function AdminVerificationsScreen() {
         }
       }
 
-      Swal.fire({
-        title: 'Error',
-        text: errorMessage,
-        icon: 'error',
-        confirmButtonText: 'Try Again',
-        confirmButtonColor: '#ef4444'
-      });
+      Alert.alert('Error', errorMessage);
     } finally {
       setProcessing(false);
     }

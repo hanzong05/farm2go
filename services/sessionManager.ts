@@ -26,7 +26,7 @@ export interface SessionState {
 class SessionManager {
   private static instance: SessionManager;
   private sessionData: SessionData | null = null;
-  private sessionTimeout = 24 * 60 * 60 * 1000; // 24 hours
+  private sessionTimeout = 7 * 24 * 60 * 60 * 1000; // 7 days
   private refreshTimer: number | null = null;
   private activityTimer: number | null = null;
   private listeners: Array<(state: SessionState) => void> = [];
@@ -105,7 +105,26 @@ class SessionManager {
     try {
       console.log('🔄 Initializing session from storage...');
 
-      // Try to get session from Supabase first
+      // First try to load from local storage
+      const storedSessionData = await this.loadStoredSessionData();
+
+      if (storedSessionData) {
+        console.log('📦 Found stored session data, validating...');
+
+        // Check if stored session is still valid
+        if (!this.isStoredSessionExpired(storedSessionData)) {
+          console.log('✅ Stored session is valid, using it');
+          this.sessionData = storedSessionData;
+          this.notifyListeners();
+          return this.getSessionState();
+        } else {
+          console.log('⏰ Stored session expired, clearing...');
+          await this.clearStoredSession();
+        }
+      }
+
+      // Fallback to getting session from Supabase
+      console.log('🔄 Getting fresh session from Supabase...');
       const { data: { session }, error } = await supabase.auth.getSession();
 
       if (error) {
@@ -322,15 +341,11 @@ class SessionManager {
     if (!this.sessionData) return true;
 
     const now = Date.now();
-    const timeSinceActivity = now - this.sessionData.lastActivity;
     const sessionAge = now - this.sessionData.sessionStartTime;
 
-    // Don't expire sessions that are less than 5 minutes old, regardless of activity
-    if (sessionAge < 5 * 60 * 1000) {
-      return false;
-    }
-
-    return timeSinceActivity > this.sessionTimeout;
+    // For persistent authentication, only expire based on session age, not activity
+    // This allows users to stay logged in even after closing the app
+    return sessionAge > this.sessionTimeout;
   }
 
   // Get session duration
@@ -382,6 +397,56 @@ class SessionManager {
   }
 
   // Private helper methods
+
+  private async loadStoredSessionData(): Promise<SessionData | null> {
+    try {
+      const [sessionStr, userStr, profileStr, lastActivityStr, sessionStartStr] = await Promise.all([
+        AsyncStorage.getItem(this.STORAGE_KEYS.SESSION),
+        AsyncStorage.getItem(this.STORAGE_KEYS.USER),
+        AsyncStorage.getItem(this.STORAGE_KEYS.PROFILE),
+        AsyncStorage.getItem(this.STORAGE_KEYS.LAST_ACTIVITY),
+        AsyncStorage.getItem(this.STORAGE_KEYS.SESSION_START),
+      ]);
+
+      if (!sessionStr || !userStr || !lastActivityStr || !sessionStartStr) {
+        return null;
+      }
+
+      const session = JSON.parse(sessionStr);
+      const user = JSON.parse(userStr);
+      const profile = profileStr ? JSON.parse(profileStr) : null;
+      const lastActivity = parseInt(lastActivityStr);
+      const sessionStartTime = parseInt(sessionStartStr);
+
+      return {
+        session,
+        user,
+        profile,
+        lastActivity,
+        sessionStartTime,
+      };
+    } catch (error) {
+      console.error('❌ Error loading stored session data:', error);
+      return null;
+    }
+  }
+
+  private isStoredSessionExpired(sessionData: SessionData): boolean {
+    const now = Date.now();
+    const sessionAge = now - sessionData.sessionStartTime;
+
+    // Check if session is older than our timeout
+    if (sessionAge > this.sessionTimeout) {
+      return true;
+    }
+
+    // Also check if the Supabase session token is expired
+    if (sessionData.session.expires_at && sessionData.session.expires_at * 1000 < now) {
+      return true;
+    }
+
+    return false;
+  }
 
   private async fetchUserProfile(userId: string): Promise<Profile | null> {
     try {

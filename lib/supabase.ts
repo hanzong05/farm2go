@@ -22,6 +22,8 @@ export const supabase = createClient<Database>(supabaseUrl, supabaseAnonKey, {
     detectSessionInUrl: true,
     persistSession: true,
     autoRefreshToken: true,
+    flowType: 'pkce',
+    storage: Platform.OS !== 'web' ? require('@react-native-async-storage/async-storage').default : undefined,
     ...(Platform.OS !== 'web' && {
       scheme: 'farm2go',
     }),
@@ -130,39 +132,26 @@ export const signInWithGoogleOAuth = async (userType: string, intent: string = '
           console.log('✅ OAuth completed successfully');
           console.log('🔍 Result URL:', result.url);
 
-          // The WebBrowser result should contain the callback with tokens
+          // The WebBrowser result should contain the callback with authorization code
           if (result.url) {
             console.log('🔗 Processing callback URL...');
 
-            // Extract tokens from the URL hash or search params
-            let access_token, refresh_token, token_type;
-
             try {
-              // Try parsing as URL with hash first (common for OAuth)
-              if (result.url.includes('#')) {
-                const hashPart = result.url.split('#')[1];
-                const hashParams = new URLSearchParams(hashPart);
-                access_token = hashParams.get('access_token');
-                refresh_token = hashParams.get('refresh_token');
-                token_type = hashParams.get('token_type');
-              } else {
-                // Try parsing as regular URL search params
-                const url = new URL(result.url);
-                access_token = url.searchParams.get('access_token');
-                refresh_token = url.searchParams.get('refresh_token');
-                token_type = url.searchParams.get('token_type');
-              }
+              const url = new URL(result.url);
+              const code = url.searchParams.get('code');
+              const access_token = url.searchParams.get('access_token');
+              const refresh_token = url.searchParams.get('refresh_token');
 
-              console.log('🔑 Extracted tokens:', {
+              console.log('🔑 Extracted from URL:', {
+                code: !!code,
                 access_token: !!access_token,
-                refresh_token: !!refresh_token,
-                token_type: !!token_type
+                refresh_token: !!refresh_token
               });
 
               if (access_token && refresh_token) {
-                console.log('✅ Valid tokens found, setting session...');
+                // Direct tokens (older flow)
+                console.log('✅ Direct tokens found, setting session...');
 
-                // Set the session manually
                 const { data: sessionData, error: sessionError } = await supabase.auth.setSession({
                   access_token,
                   refresh_token
@@ -190,9 +179,67 @@ export const signInWithGoogleOAuth = async (userType: string, intent: string = '
                 }
 
                 return { ...data, authSession: result, sessionData };
+              } else if (code) {
+                // PKCE flow - exchange code for tokens
+                console.log('🔄 Authorization code found, exchanging for tokens...');
+                console.log('🔍 Code value:', code);
+
+                try {
+                  const { data: sessionData, error: exchangeError } = await supabase.auth.exchangeCodeForSession(code);
+
+                  if (exchangeError) {
+                    console.error('❌ Error exchanging code for session:', exchangeError);
+                    console.error('❌ Exchange error details:', JSON.stringify(exchangeError, null, 2));
+                    throw exchangeError;
+                  }
+
+                  console.log('✅ Code exchanged successfully');
+                  console.log('👤 User ID:', sessionData?.user?.id);
+                  console.log('📧 User email:', sessionData?.user?.email);
+                  console.log('🔑 Session expires at:', sessionData?.session?.expires_at);
+
+                  // Import SessionManager and create session
+                  if (sessionData?.session && sessionData?.user) {
+                    try {
+                      const { sessionManager } = await import('../services/sessionManager');
+                      const sessionCreated = await sessionManager.createSession(sessionData.user, sessionData.session);
+                      console.log('🔄 SessionManager create result:', sessionCreated);
+
+                      // Also check if session manager has the session data
+                      const currentState = sessionManager.getSessionState();
+                      console.log('🔍 SessionManager state after creation:', {
+                        isAuthenticated: currentState.isAuthenticated,
+                        hasUser: !!currentState.user,
+                        hasProfile: !!currentState.profile
+                      });
+
+                    } catch (smError) {
+                      console.error('❌ SessionManager error:', smError);
+                      // Continue anyway, the auth state change will handle it
+                    }
+                  }
+
+                  // Return with sessionData property for login page to handle
+                  return {
+                    ...data,
+                    authSession: result,
+                    sessionData: sessionData || null,
+                    success: true
+                  };
+                } catch (codeExchangeError) {
+                  console.error('❌ Code exchange failed:', codeExchangeError);
+                  // Return without sessionData but with error info
+                  return {
+                    ...data,
+                    authSession: result,
+                    sessionData: null,
+                    success: false,
+                    error: codeExchangeError
+                  };
+                }
               } else {
-                console.log('⚠️ No tokens found in callback URL');
-                // Still return success but without session data
+                console.log('⚠️ No tokens or code found in callback URL');
+                console.log('🔍 URL search params:', Array.from(url.searchParams.entries()));
                 return { ...data, authSession: result };
               }
             } catch (urlError) {
