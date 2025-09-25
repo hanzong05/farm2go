@@ -1,60 +1,36 @@
 import { router } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import {
-    ActivityIndicator,
-    Alert,
-    Dimensions,
-    RefreshControl,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    View,
+  ActivityIndicator,
+  Alert,
+  Dimensions,
+  RefreshControl,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View
 } from 'react-native';
+import FilterSidebar from '../../components/FilterSidebar';
 import HeaderComponent from '../../components/HeaderComponent';
-import { supabase } from '../../lib/supabase';
 import { getUserWithProfile } from '../../services/auth';
+import { getBuyerOrders } from '../../services/orders';
 import { Database } from '../../types/database';
-
-const { width } = Dimensions.get('window');
+import { ORDER_STATUS_CONFIG, OrderWithDetails, TRANSACTION_STATUS_CONFIG } from '../../types/orders';
+import { applyFilters } from '../../utils/filterConfigs';
 
 type Profile = Database['public']['Tables']['profiles']['Row'];
 
-interface Purchase {
-  id: string;
-  farmer_id: string;
-  total_amount: number;
-  status: 'completed';
-  created_at: string;
-  delivery_date: string | null;
-  delivery_address: string | null;
-  farmer_profile?: {
-    first_name: string | null;
-    last_name: string | null;
-    farm_name: string | null;
-    barangay: string | null;
-  };
-  order_items?: Array<{
-    id: string;
-    quantity: number;
-    unit_price: number;
-    total_price: number;
-    product: {
-      name: string;
-      unit: string;
-      category: string;
-    };
-  }>;
-}
-
 interface PurchaseStats {
-  totalPurchases: number;
+  totalOrders: number;
   totalSpent: number;
   averageOrderValue: number;
   favoriteCategory: string;
   thisMonthSpent: number;
   lastMonthSpent: number;
   uniqueFarmers: number;
+  pendingPayments: number;
+  completedDeliveries: number;
 }
 
 const TIME_PERIODS = [
@@ -65,12 +41,57 @@ const TIME_PERIODS = [
   { key: 'year', label: 'This Year' },
 ];
 
+const AMOUNT_RANGES = [
+  { key: 'all', label: 'All Amounts', min: 0, max: 10000 },
+  { key: 'low', label: '₱0 - ₱500', min: 0, max: 500 },
+  { key: 'medium', label: '₱500 - ₱1,500', min: 500, max: 1500 },
+  { key: 'high', label: '₱1,500 - ₱3,000', min: 1500, max: 3000 },
+  { key: 'premium', label: '₱3,000+', min: 3000, max: 10000 },
+];
+
+const SORT_OPTIONS = [
+  { key: 'newest', label: 'Newest First' },
+  { key: 'oldest', label: 'Oldest First' },
+  { key: 'amount-high', label: 'Amount: High to Low' },
+  { key: 'amount-low', label: 'Amount: Low to High' },
+  { key: 'status', label: 'Status' },
+];
+
+const { width } = Dimensions.get('window');
+const isDesktop = width >= 1024;
+
+const STATUS_FILTERS = [
+  { key: 'all', label: 'All' },
+  { key: 'pending', label: 'Pending' },
+  { key: 'confirmed', label: 'Confirmed' },
+  { key: 'shipped', label: 'Shipped' },
+  { key: 'delivered', label: 'Delivered' },
+  { key: 'cancelled', label: 'Cancelled' },
+];
+
+const CATEGORY_FILTERS = [
+  { key: 'all', label: 'All' },
+  { key: 'vegetables', label: 'Vegetables' },
+  { key: 'fruits', label: 'Fruits' },
+  { key: 'grains', label: 'Grains' },
+  { key: 'herbs', label: 'Herbs' },
+];
+
 export default function BuyerPurchaseHistoryScreen() {
-  const [purchases, setPurchases] = useState<Purchase[]>([]);
-  const [filteredPurchases, setFilteredPurchases] = useState<Purchase[]>([]);
+  const [orders, setOrders] = useState<OrderWithDetails[]>([]);
+  const [filteredOrders, setFilteredOrders] = useState<OrderWithDetails[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [selectedPeriod, setSelectedPeriod] = useState('month');
+  const [selectedStatus, setSelectedStatus] = useState('all');
+  const [showSidebar, setShowSidebar] = useState(false);
+
+  // Filter state
+  const [filterState, setFilterState] = useState({
+    category: 'all',
+    amountRange: 'all',
+    dateRange: 'month',
+    sortBy: 'newest'
+  });
   const [profile, setProfile] = useState<Profile | null>(null);
 
   useEffect(() => {
@@ -78,139 +99,91 @@ export default function BuyerPurchaseHistoryScreen() {
   }, []);
 
   useEffect(() => {
-    filterPurchasesByPeriod();
-  }, [purchases, selectedPeriod]);
+    filterOrdersByPeriod();
+  }, [orders, selectedStatus, filterState]);
 
   const loadData = async () => {
     try {
       const userData = await getUserWithProfile();
       if (!userData?.profile) {
-        router.replace('/auth/login');
+        // Don't force logout - just show error state
+        console.warn('No user profile found, but keeping user logged in');
+        Alert.alert(
+          'Profile Not Found',
+          'Unable to load your profile. Please try refreshing or contact support if the issue persists.',
+          [
+            {
+              text: 'Retry',
+              onPress: () => loadData()
+            },
+            {
+              text: 'OK',
+              style: 'cancel'
+            }
+          ]
+        );
         return;
       }
 
       setProfile(userData.profile);
-      await loadPurchases(userData.user.id);
+      await loadOrders(userData.user.id);
     } catch (error) {
       console.error('Error loading data:', error);
-      Alert.alert('Error', 'Failed to load purchase history');
+      Alert.alert(
+        'Error',
+        'Failed to load purchase history. Please try again.',
+        [
+          {
+            text: 'Retry',
+            onPress: () => loadData()
+          },
+          {
+            text: 'OK',
+            style: 'cancel'
+          }
+        ]
+      );
     } finally {
       setLoading(false);
     }
   };
 
-  const loadPurchases = async (buyerId: string) => {
+  const loadOrders = async (buyerId: string) => {
     try {
-      // Get completed orders for this buyer
-      const { data: ordersData, error: ordersError } = await (supabase as any)
-        .from('orders')
-        .select(`
-          id,
-          farmer_id,
-          total_amount,
-          status,
-          created_at,
-          delivery_date,
-          delivery_address,
-          profiles!orders_farmer_id_fkey (
-            first_name,
-            last_name,
-            farm_name,
-            barangay
-          )
-        `)
-        .eq('buyer_id', buyerId)
-        .eq('status', 'delivered')
-        .order('created_at', { ascending: false });
-
-      if (ordersError) throw ordersError;
-
-      if (!ordersData || ordersData.length === 0) {
-        setPurchases([]);
-        return;
-      }
-
-      // Get order items for all orders
-     const orderIds = ordersData.map((order: { id: string | number }) => order.id);
-
-      const { data: orderItems, error: itemsError } = await (supabase as any)
-        .from('order_items')
-        .select(`
-          order_id,
-          quantity,
-          unit_price,
-          products (
-            name,
-            unit,
-            category
-          )
-        `)
-        .in('order_id', orderIds);
-
-      if (itemsError) throw itemsError;
-
-      // Combine orders with their items
-      const purchasesWithItems: Purchase[] = ordersData.map((order: any) => {
-        const items = orderItems?.filter((item: any) => item.order_id === order.id).map((item: any) => ({
-          id: item.order_id,
-          quantity: item.quantity,
-          unit_price: item.unit_price,
-          total_price: item.quantity * item.unit_price,
-          product: {
-            name: item.products?.name || '',
-            unit: item.products?.unit || '',
-            category: item.products?.category || '',
-          },
-        })) || [];
-
-        return {
-          id: order.id,
-          farmer_id: order.farmer_id,
-          total_amount: order.total_amount,
-          status: order.status as 'completed',
-          created_at: order.created_at,
-          delivery_date: order.delivery_date,
-          delivery_address: order.delivery_address,
-          farmer_profile: order.profiles,
-          order_items: items,
-        };
-      });
-
-      setPurchases(purchasesWithItems);
+      const ordersData = await getBuyerOrders(buyerId);
+      setOrders(ordersData);
     } catch (error) {
-      console.error('Error loading purchases:', error);
+      console.error('Error loading orders:', error);
       throw error;
     }
   };
 
-  const filterPurchasesByPeriod = () => {
-    const now = new Date();
-    let startDate: Date;
+  const filterOrdersByPeriod = () => {
+    let filtered = orders;
 
-    switch (selectedPeriod) {
-      case 'week':
-        startDate = new Date(now.setDate(now.getDate() - 7));
-        break;
-      case 'month':
-        startDate = new Date(now.getFullYear(), now.getMonth(), 1);
-        break;
-      case 'quarter':
-        const quarterStartMonth = Math.floor(now.getMonth() / 3) * 3;
-        startDate = new Date(now.getFullYear(), quarterStartMonth, 1);
-        break;
-      case 'year':
-        startDate = new Date(now.getFullYear(), 0, 1);
-        break;
-      default:
-        setFilteredPurchases(purchases);
-        return;
+    // Filter by status
+    if (selectedStatus !== 'all') {
+      filtered = filtered.filter(order =>
+        order.status === selectedStatus
+      );
     }
 
-    const filtered = purchases.filter(purchase =>
-      new Date(purchase.created_at) >= startDate
-    );
+    // Apply other filters using the utility function
+    filtered = applyFilters(filtered, filterState, {
+      categoryKey: 'product.category',
+      priceKey: 'total_price',
+      dateKey: 'created_at',
+    });
 
-    setFilteredPurchases(filtered);
+    setFilteredOrders(filtered);
+  };
+
+  // Handle filter changes
+  const handleFilterChange = (key: string, value: any) => {
+    setFilterState(prev => ({
+      ...prev,
+      [key]: value
+    }));
   };
 
   const onRefresh = async () => {
@@ -219,7 +192,7 @@ export default function BuyerPurchaseHistoryScreen() {
     try {
       const userData = await getUserWithProfile();
       if (userData?.user) {
-        await loadPurchases(userData.user.id);
+        await loadOrders(userData.user.id);
       }
     } catch (error) {
       console.error('Error refreshing:', error);
@@ -228,47 +201,53 @@ export default function BuyerPurchaseHistoryScreen() {
     }
   };
 
-  const getPurchaseStats = (): PurchaseStats => {
+  const getOrderStats = (): PurchaseStats => {
     const now = new Date();
     const thisMonth = new Date(now.getFullYear(), now.getMonth(), 1);
     const lastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
     const lastMonthEnd = new Date(now.getFullYear(), now.getMonth(), 0);
 
-    const thisMonthPurchases = purchases.filter(purchase =>
-      new Date(purchase.created_at) >= thisMonth
+    const thisMonthOrders = orders.filter(order =>
+      new Date(order.created_at) >= thisMonth
     );
 
-    const lastMonthPurchases = purchases.filter(purchase => {
-      const purchaseDate = new Date(purchase.created_at);
-      return purchaseDate >= lastMonth && purchaseDate <= lastMonthEnd;
+    const lastMonthOrders = orders.filter(order => {
+      const orderDate = new Date(order.created_at);
+      return orderDate >= lastMonth && orderDate <= lastMonthEnd;
     });
 
-    const totalSpent = filteredPurchases.reduce((sum, purchase) => sum + purchase.total_amount, 0);
-    const averageOrderValue = filteredPurchases.length > 0 ? totalSpent / filteredPurchases.length : 0;
+    const totalSpent = filteredOrders.reduce((sum, order) => sum + order.total_price, 0);
+    const averageOrderValue = filteredOrders.length > 0 ? totalSpent / filteredOrders.length : 0;
 
     // Find favorite category
-    const categoryPurchases: { [key: string]: number } = {};
-    filteredPurchases.forEach(purchase => {
-      purchase.order_items?.forEach(item => {
-        categoryPurchases[item.product.category] = (categoryPurchases[item.product.category] || 0) + item.quantity;
-      });
+    const categoryOrders: { [key: string]: number } = {};
+    filteredOrders.forEach(order => {
+      if (order.product?.category) {
+        categoryOrders[order.product.category] = (categoryOrders[order.product.category] || 0) + order.quantity;
+      }
     });
 
-    const favoriteCategory = Object.keys(categoryPurchases).reduce((a, b) =>
-      categoryPurchases[a] > categoryPurchases[b] ? a : b, 'None'
+    const favoriteCategory = Object.keys(categoryOrders).reduce((a, b) =>
+      categoryOrders[a] > categoryOrders[b] ? a : b, 'None'
     );
 
     // Count unique farmers
-    const uniqueFarmers = new Set(purchases.map(p => p.farmer_id)).size;
+    const uniqueFarmers = new Set(orders.map(o => o.farmer_id)).size;
+
+    // Count pending payments and completed deliveries
+    const pendingPayments = orders.filter(o => o.transaction?.status === 'pending').length;
+    const completedDeliveries = orders.filter(o => o.status === 'delivered').length;
 
     return {
-      totalPurchases: filteredPurchases.length,
+      totalOrders: filteredOrders.length,
       totalSpent,
       averageOrderValue,
       favoriteCategory,
-      thisMonthSpent: thisMonthPurchases.reduce((sum, purchase) => sum + purchase.total_amount, 0),
-      lastMonthSpent: lastMonthPurchases.reduce((sum, purchase) => sum + purchase.total_amount, 0),
+      thisMonthSpent: thisMonthOrders.reduce((sum, order) => sum + order.total_price, 0),
+      lastMonthSpent: lastMonthOrders.reduce((sum, order) => sum + order.total_price, 0),
       uniqueFarmers,
+      pendingPayments,
+      completedDeliveries,
     };
   };
 
@@ -287,111 +266,173 @@ export default function BuyerPurchaseHistoryScreen() {
     }).format(price);
   };
 
-  const getGrowthPercentage = (current: number, previous: number) => {
-    if (previous === 0) return current > 0 ? 100 : 0;
-    return ((current - previous) / previous) * 100;
+  const getStatusDisplay = (status: string) => {
+    const config = ORDER_STATUS_CONFIG[status as keyof typeof ORDER_STATUS_CONFIG];
+    if (config) {
+      return { text: config.label.toUpperCase(), color: config.color };
+    }
+    return { text: status.toUpperCase(), color: '#6b7280' };
   };
 
+  const getPaymentStatusDisplay = (status?: string) => {
+    if (!status) return { text: 'NO PAYMENT', color: '#6b7280' };
+    const config = TRANSACTION_STATUS_CONFIG[status as keyof typeof TRANSACTION_STATUS_CONFIG];
+    if (config) {
+      return { text: config.label.toUpperCase(), color: config.color };
+    }
+    return { text: status.toUpperCase(), color: '#6b7280' };
+  };
 
-  const renderPurchaseCard = ({ item: purchase }: { item: Purchase }) => (
-    <View style={styles.purchaseCard}>
-      <View style={styles.purchaseHeader}>
-        <View style={styles.purchaseInfo}>
-          <Text style={styles.purchaseId}>Order #{purchase.id.slice(-8)}</Text>
-          <Text style={styles.purchaseDate}>{formatDate(purchase.created_at)}</Text>
+  const renderOrderCard = ({ item: order }: { item: OrderWithDetails }) => (
+    <View style={styles.orderCard}>
+      {/* Shop Header */}
+      <View style={styles.shopHeader}>
+        <View style={styles.shopInfo}>
+          <View style={styles.shopIconContainer}>
+            <Text style={styles.shopIcon}>🌾</Text>
+          </View>
+          <Text style={styles.shopName}>
+            {order.farmer_profile?.farm_name ||
+             `${order.farmer_profile?.first_name || ''} ${order.farmer_profile?.last_name || ''}`.trim() ||
+             'Unknown Farm'}
+          </Text>
+          <Text style={styles.shopLocation}>
+            {order.farmer_profile?.barangay || 'Local Farm'}
+          </Text>
         </View>
-        <Text style={styles.purchaseAmount}>{formatPrice(purchase.total_amount)}</Text>
+        <View style={styles.statusContainer}>
+          <View style={[styles.statusBadge, { backgroundColor: getStatusDisplay(order.status).color }]}>
+            <Text style={styles.statusText}>{getStatusDisplay(order.status).text}</Text>
+          </View>
+          {order.transaction && (
+            <View style={[styles.paymentBadge, { backgroundColor: getPaymentStatusDisplay(order.transaction.status).color }]}>
+              <Text style={styles.statusText}>{getPaymentStatusDisplay(order.transaction.status).text}</Text>
+            </View>
+          )}
+          <Text style={styles.orderDate}>{formatDate(order.created_at)}</Text>
+        </View>
       </View>
 
-      <View style={styles.farmerInfo}>
-        <Text style={styles.farmerName}>
-          {purchase.farmer_profile?.farm_name ||
-           `${purchase.farmer_profile?.first_name || ''} ${purchase.farmer_profile?.last_name || ''}`.trim() ||
-           'Unknown Farm'}
-        </Text>
-        {purchase.farmer_profile?.barangay && (
-          <Text style={styles.farmerLocation}>
-            📍 {purchase.farmer_profile.barangay}
-          </Text>
+      {/* Product Details */}
+      <View style={styles.productsSection}>
+        <View style={styles.productItem}>
+          <View style={styles.productImageContainer}>
+            <Text style={styles.productImage}>🥬</Text>
+          </View>
+          <View style={styles.productDetails}>
+            <Text style={styles.productName} numberOfLines={2}>{order.product?.name || 'Unknown Product'}</Text>
+            <Text style={styles.productVariation}>Category: {order.product?.category || 'N/A'}</Text>
+            <Text style={styles.productQuantity}>Quantity: {order.quantity} {order.product?.unit || 'pcs'}</Text>
+            <Text style={styles.productNote}>Order ID: {order.purchase_code || order.id.slice(0, 8)}</Text>
+          </View>
+          <View style={styles.productPriceContainer}>
+            <Text style={styles.productPrice}>{formatPrice(order.product?.price || 0)}</Text>
+            <Text style={styles.productTotal}>Total: {formatPrice(order.total_price)}</Text>
+          </View>
+        </View>
+      </View>
+
+      {/* Order Summary */}
+      <View style={styles.orderSummary}>
+        <View style={styles.summaryRow}>
+          <Text style={styles.itemCount}>1 item • Order Total:</Text>
+          <Text style={styles.totalPrice}>{formatPrice(order.total_price)}</Text>
+        </View>
+        {order.delivery_address && (
+          <View style={styles.deliveryInfo}>
+            <Text style={styles.deliveryLabel}>Delivery to:</Text>
+            <Text style={styles.deliveryAddress} numberOfLines={2}>{order.delivery_address}</Text>
+          </View>
         )}
       </View>
 
-      <View style={styles.purchaseItems}>
-        <Text style={styles.itemsTitle}>Items Purchased:</Text>
-        {purchase.order_items?.map((item, index) => (
-          <View key={index} style={styles.purchaseItem}>
-            <View style={styles.itemInfo}>
-              <Text style={styles.itemName}>{item.product.name}</Text>
-              <Text style={styles.itemDetails}>
-                {item.quantity} {item.product.unit} • {item.product.category}
-              </Text>
-            </View>
-            <Text style={styles.itemPrice}>{formatPrice(item.total_price)}</Text>
-          </View>
-        ))}
-      </View>
-
-      {purchase.delivery_address && (
-        <View style={styles.deliveryInfo}>
-          <View style={styles.deliveryRow}>
-            <Text style={styles.deliveryIcon}>🚚</Text>
-            <View style={styles.deliveryContent}>
-              <Text style={styles.deliveryLabel}>Delivered to:</Text>
-              <Text style={styles.deliveryText}>{purchase.delivery_address}</Text>
-            </View>
-          </View>
-        </View>
-      )}
-
-      <View style={styles.purchaseActions}>
-        <TouchableOpacity
-          style={styles.reorderButton}
-          onPress={() => router.push('/buyer/marketplace')}
-          activeOpacity={0.8}
-        >
-          <Text style={styles.reorderButtonText}>🔄 Reorder</Text>
+      {/* Action Buttons */}
+      <View style={styles.actionButtonsContainer}>
+        <TouchableOpacity style={styles.secondaryButton}>
+          <Text style={styles.secondaryButtonText}>Contact Seller</Text>
         </TouchableOpacity>
-
-        <TouchableOpacity
-          style={styles.contactButton}
-          onPress={() => router.push(`/buyer/contact-farmer/${purchase.farmer_id}` as any)}
-          activeOpacity={0.8}
-        >
-          <Text style={styles.contactButtonText}>💬 Contact Farm</Text>
+        <TouchableOpacity style={styles.primaryActionButton}>
+          <Text style={styles.primaryButtonText}>Buy Again</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.ratingButton}>
+          <Text style={styles.ratingButtonText}>⭐ Rate</Text>
         </TouchableOpacity>
       </View>
     </View>
   );
+
+  // Create filter sections for the FilterSidebar component
+  const getFilterSections = () => [
+    {
+      key: 'category',
+      title: 'Categories',
+      type: 'category' as const,
+      options: CATEGORY_FILTERS.map(category => ({
+        key: category.key,
+        label: category.label,
+        count: category.key === 'all'
+          ? orders.length
+          : orders.filter(o => o.product?.category?.toLowerCase() === category.key.toLowerCase()).length
+      }))
+    },
+    {
+      key: 'amountRange',
+      title: 'Amount Range',
+      type: 'range' as const,
+      options: AMOUNT_RANGES.map(range => ({
+        key: range.key,
+        label: range.label,
+        min: range.min,
+        max: range.max
+      }))
+    },
+    {
+      key: 'dateRange',
+      title: 'Date Range',
+      type: 'range' as const,
+      options: TIME_PERIODS.map(period => ({
+        key: period.key,
+        label: period.label
+      }))
+    },
+    {
+      key: 'sortBy',
+      title: 'Sort By',
+      type: 'sort' as const,
+      options: SORT_OPTIONS.map(sort => ({
+        key: sort.key,
+        label: sort.label
+      }))
+    }
+  ];
 
   const renderEmptyState = () => (
     <View style={styles.emptyContainer}>
       <View style={styles.emptyIllustration}>
         <View style={styles.emptyIconContainer}>
-          <Text style={styles.emptyIcon}>🛒</Text>
+          <Text style={styles.emptyIcon}>📋</Text>
         </View>
       </View>
-      
-      <Text style={styles.emptyTitle}>No Purchase History</Text>
+
+      <Text style={styles.emptyTitle}>No Orders Found</Text>
       <Text style={styles.emptyDescription}>
-        {selectedPeriod === 'all'
-          ? 'You haven\'t made any purchases yet. Start shopping to support local farmers!'
-          : `No purchases found for the selected time period.`}
+        {selectedStatus === 'all'
+          ? 'You haven\'t made any orders yet. Start shopping to support local farmers!'
+          : `No orders found for the selected filters.`}
       </Text>
 
-      {selectedPeriod === 'all' && (
+      {selectedStatus === 'all' && filterState.category === 'all' && filterState.amountRange === 'all' && (
         <TouchableOpacity
           style={styles.ctaButton}
           onPress={() => router.push('/buyer/marketplace')}
           activeOpacity={0.8}
         >
-          <Text style={styles.ctaIcon}>🛒</Text>
+          <Text style={styles.ctaIcon}>🛍️</Text>
           <Text style={styles.ctaText}>Start Shopping</Text>
         </TouchableOpacity>
       )}
     </View>
   );
-
-  const stats = getPurchaseStats();
 
   if (loading) {
     return (
@@ -419,76 +460,84 @@ export default function BuyerPurchaseHistoryScreen() {
         currentRoute="/buyer/purchase-history"
         showMessages={true}
         showNotifications={true}
+        showFilterButton={!isDesktop}
+        onFilterPress={() => setShowSidebar(!showSidebar)}
       />
 
-      <ScrollView
-        style={styles.scrollView}
-        contentContainerStyle={styles.scrollContent}
-        refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={onRefresh}
-            tintColor="#10b981"
-            colors={['#10b981']}
-          />
-        }
-        showsVerticalScrollIndicator={false}
-      >
-
-        {/* Enhanced Stats */}
-      
-
-
-        {/* Enhanced Filter */}
-        <View style={styles.filterSection}>
-          <Text style={styles.sectionTitle}>Filter by Period</Text>
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.filterContainer}
+      {/* Status Tab Bar */}
+      <View style={styles.tabBar}>
+        {STATUS_FILTERS.map((status) => (
+          <TouchableOpacity
+            key={status.key}
+            style={[
+              styles.tab,
+              selectedStatus === status.key && styles.activeTab
+            ]}
+            onPress={() => setSelectedStatus(status.key)}
           >
-            {TIME_PERIODS.map((period) => (
-              <TouchableOpacity
-                key={period.key}
-                style={[
-                  styles.filterButton,
-                  selectedPeriod === period.key && styles.filterButtonActive
-                ]}
-                onPress={() => setSelectedPeriod(period.key)}
-                activeOpacity={0.7}
-              >
-                <Text style={[
-                  styles.filterButtonText,
-                  selectedPeriod === period.key && styles.filterButtonTextActive
-                ]}>
-                  {period.label}
-                </Text>
-              </TouchableOpacity>
-            ))}
+            <Text style={[
+              styles.tabText,
+              selectedStatus === status.key && styles.activeTabText
+            ]}>
+              {status.label}
+            </Text>
+            {selectedStatus === status.key && <View style={styles.tabIndicator} />}
+          </TouchableOpacity>
+        ))}
+      </View>
+
+      {/* Main Content with Sidebar */}
+      <View style={styles.mainContent}>
+        {/* Desktop Sidebar */}
+        {isDesktop && (
+          <FilterSidebar
+            sections={getFilterSections()}
+            filterState={filterState}
+            onFilterChange={handleFilterChange}
+            width={240}
+          />
+        )}
+
+        {/* Orders List */}
+        <View style={[styles.ordersContainer, isDesktop && styles.ordersContainerWithSidebar]}>
+          <ScrollView
+            style={styles.scrollView}
+            refreshControl={
+              <RefreshControl
+                refreshing={refreshing}
+                onRefresh={onRefresh}
+                tintColor="#ee4d2d"
+                colors={['#ee4d2d']}
+              />
+            }
+            showsVerticalScrollIndicator={false}
+          >
+            {filteredOrders.length === 0 ? (
+              renderEmptyState()
+            ) : (
+              <View style={styles.ordersList}>
+                {filteredOrders.map((order) => (
+                  <View key={order.id}>
+                    {renderOrderCard({ item: order })}
+                  </View>
+                ))}
+              </View>
+            )}
           </ScrollView>
         </View>
+      </View>
 
-        {/* Purchases List */}
-        <View style={styles.purchasesSection}>
-          <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>
-              Purchase History {filteredPurchases.length > 0 && `(${filteredPurchases.length})`}
-            </Text>
-          </View>
-
-          {filteredPurchases.length === 0 ? (
-            renderEmptyState()
-          ) : (
-            <View style={styles.purchasesList}>
-              {filteredPurchases.map((purchase) => (
-                <View key={purchase.id}>
-                  {renderPurchaseCard({ item: purchase })}
-                </View>
-              ))}
-            </View>
-          )}
-        </View>
-      </ScrollView>
+      {/* Mobile Sidebar Modal */}
+      {!isDesktop && (
+        <FilterSidebar
+          sections={getFilterSections()}
+          filterState={filterState}
+          onFilterChange={handleFilterChange}
+          showMobile={showSidebar}
+          onCloseMobile={() => setShowSidebar(false)}
+          title="Filters"
+        />
+      )}
     </View>
   );
 }
@@ -496,7 +545,7 @@ export default function BuyerPurchaseHistoryScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f1f5f9',
+    backgroundColor: '#f8f9fa',
   },
 
   // Loading
@@ -504,7 +553,7 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#f1f5f9',
+    backgroundColor: '#f5f5f5',
   },
   loadingText: {
     marginTop: 20,
@@ -513,298 +562,374 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
 
+  // Status Tab Bar (Main horizontal tabs)
+  tabBar: {
+    flexDirection: 'row',
+    backgroundColor: '#ffffff',
+    borderBottomWidth: 1,
+    borderBottomColor: '#e5e5e5',
+    elevation: 1,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 1,
+  },
+  tab: {
+    flex: 1,
+    paddingVertical: 16,
+    paddingHorizontal: 8,
+    alignItems: 'center',
+    position: 'relative',
+  },
+  activeTab: {
+    borderBottomWidth: 2,
+    borderBottomColor: '#ee4d2d',
+  },
+  tabText: {
+    fontSize: 13,
+    color: '#666',
+    fontWeight: '500',
+    textAlign: 'center',
+  },
+  activeTabText: {
+    color: '#ee4d2d',
+    fontWeight: '600',
+  },
+  tabIndicator: {
+    position: 'absolute',
+    bottom: -1,
+    height: 2,
+    width: '100%',
+    backgroundColor: '#ee4d2d',
+  },
+
   // Scroll View
   scrollView: {
     flex: 1,
-  },
-  scrollContent: {
-    paddingBottom: 40,
+    backgroundColor: '#f5f5f5',
   },
 
-
-  // Section Titles
-  sectionTitle: {
-    fontSize: 22,
-    fontWeight: 'bold',
-    color: '#0f172a',
-    marginBottom: 20,
+  // Orders List
+  ordersList: {
+    padding: 12,
+    gap: 8,
   },
 
-  // Stats Section
-  statsSection: {
-    paddingHorizontal: 20,
-    marginBottom: 36,
-  },
-  statsGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 16,
-  },
-
-
-  // Filter Section
-  filterSection: {
-    paddingHorizontal: 20,
-    marginBottom: 36,
-  },
-  filterContainer: {
-    paddingRight: 20,
-    gap: 12,
-  },
-  filterButton: {
-    paddingHorizontal: 20,
-    paddingVertical: 12,
-    borderRadius: 24,
+  // Authentic Shopee Order Card
+  orderCard: {
     backgroundColor: '#ffffff',
-    borderWidth: 2,
-    borderColor: '#e2e8f0',
+    borderRadius: 8,
+    marginBottom: 8,
+    overflow: 'hidden',
     elevation: 2,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
-  },
-  filterButtonActive: {
-    backgroundColor: '#10b981',
-    borderColor: '#10b981',
-    elevation: 4,
-    shadowOpacity: 0.15,
-  },
-  filterButtonText: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: '#64748b',
-  },
-  filterButtonTextActive: {
-    color: '#ffffff',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 3.84,
+    borderWidth: 1,
+    borderColor: '#f0f0f0',
   },
 
-  // Purchases Section
-  purchasesSection: {
-    paddingHorizontal: 20,
-  },
-  sectionHeader: {
-    marginBottom: 24,
-  },
-  purchasesList: {
-    gap: 20,
-  },
-  purchaseCard: {
-    backgroundColor: '#ffffff',
-    borderRadius: 20,
-    padding: 24,
-    elevation: 6,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.08,
-    shadowRadius: 12,
-    borderWidth: 1,
-    borderColor: '#f1f5f9',
-  },
-  purchaseHeader: {
+  // Shop Header
+  shopHeader: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'flex-start',
-    marginBottom: 20,
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f0f0f0',
+    backgroundColor: '#ffffff',
   },
-  purchaseInfo: {
-    flex: 1,
-    marginRight: 16,
-  },
-  purchaseId: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#0f172a',
-    marginBottom: 6,
-    lineHeight: 26,
-  },
-  purchaseDate: {
-    fontSize: 14,
-    color: '#64748b',
-    fontWeight: '500',
-  },
-  purchaseAmount: {
-    fontSize: 22,
-    fontWeight: 'bold',
-    color: '#3b82f6',
-  },
-  farmerInfo: {
-    backgroundColor: '#f8fafc',
-    padding: 16,
-    borderRadius: 12,
-    marginBottom: 20,
-  },
-  farmerName: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: '#0f172a',
-    marginBottom: 6,
-  },
-  farmerLocation: {
-    fontSize: 14,
-    color: '#64748b',
-    fontWeight: '500',
-  },
-  purchaseItems: {
-    marginBottom: 20,
-  },
-  itemsTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#0f172a',
-    marginBottom: 12,
-  },
-  purchaseItem: {
+  shopInfo: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    backgroundColor: '#f1f5f9',
-    borderRadius: 12,
-    marginBottom: 8,
-  },
-  itemInfo: {
     flex: 1,
   },
-  itemName: {
-    fontSize: 16,
-    color: '#0f172a',
+  shopIconContainer: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: '#10b981',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 10,
+  },
+  shopIcon: {
+    fontSize: 12,
+    color: '#ffffff',
+  },
+  shopName: {
+    fontSize: 15,
     fontWeight: '600',
-    marginBottom: 4,
+    color: '#333',
+    marginRight: 8,
   },
-  itemDetails: {
-    fontSize: 14,
-    color: '#64748b',
-    fontWeight: '500',
-  },
-  itemPrice: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#3b82f6',
-  },
-  deliveryInfo: {
-    marginBottom: 20,
-    paddingTop: 16,
-    borderTopWidth: 1,
-    borderTopColor: '#f1f5f9',
-  },
-  deliveryRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-  },
-  deliveryIcon: {
-    fontSize: 16,
-    marginRight: 12,
+  shopLocation: {
+    fontSize: 12,
+    color: '#999',
     marginTop: 2,
   },
-  deliveryContent: {
-    flex: 1,
+  statusContainer: {
+    alignItems: 'flex-end',
   },
-  deliveryLabel: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#374151',
+  statusBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 3,
     marginBottom: 4,
   },
-  deliveryText: {
-    fontSize: 14,
-    color: '#64748b',
-    lineHeight: 20,
+  paymentBadge: {
+    paddingHorizontal: 6,
+    paddingVertical: 1,
+    borderRadius: 3,
+    marginBottom: 4,
   },
-  purchaseActions: {
+  statusText: {
+    fontSize: 10,
+    color: '#ffffff',
+    fontWeight: 'bold',
+    textTransform: 'uppercase',
+  },
+  orderDate: {
+    fontSize: 11,
+    color: '#999',
+  },
+
+  // Products Section
+  productsSection: {
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+  },
+  productItem: {
     flexDirection: 'row',
-    gap: 12,
-    borderTopWidth: 1,
-    borderTopColor: '#f1f5f9',
-    paddingTop: 20,
-  },
-  reorderButton: {
-    flex: 1,
-    backgroundColor: '#f1f5f9',
-    paddingVertical: 14,
-    borderRadius: 12,
     alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#e2e8f0',
+    marginBottom: 8,
   },
-  reorderButtonText: {
+  productImageContainer: {
+    width: 60,
+    height: 60,
+    borderRadius: 4,
+    backgroundColor: '#f8f9fa',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+    borderWidth: 1,
+    borderColor: '#e9ecef',
+  },
+  productImage: {
+    fontSize: 24,
+  },
+  productDetails: {
+    flex: 1,
+    justifyContent: 'center',
+  },
+  productName: {
     fontSize: 14,
-    color: '#475569',
+    color: '#333',
+    fontWeight: '400',
+    lineHeight: 18,
+    marginBottom: 4,
+  },
+  productVariation: {
+    fontSize: 12,
+    color: '#999',
+    marginBottom: 2,
+  },
+  productQuantity: {
+    fontSize: 12,
+    color: '#666',
+    marginBottom: 2,
+  },
+  productNote: {
+    fontSize: 11,
+    color: '#999',
+    fontStyle: 'italic',
+  },
+  productTotal: {
+    fontSize: 12,
+    color: '#666',
+    marginTop: 2,
+  },
+  productPriceContainer: {
+    alignItems: 'flex-end',
+  },
+  productPrice: {
+    fontSize: 14,
+    color: '#ee4d2d',
     fontWeight: '600',
   },
-  contactButton: {
-    flex: 1,
-    backgroundColor: '#ecfdf5',
-    paddingVertical: 14,
-    borderRadius: 12,
+  moreProductsContainer: {
+    paddingVertical: 8,
     alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#bbf7d0',
   },
-  contactButtonText: {
-    fontSize: 14,
-    color: '#059669',
+  moreProductsText: {
+    fontSize: 13,
+    color: '#666',
+    fontStyle: 'italic',
+  },
+
+  // Order Summary
+  orderSummary: {
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderTopWidth: 1,
+    borderTopColor: '#f0f0f0',
+    backgroundColor: '#ffffff',
+  },
+  summaryRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  itemCount: {
+    fontSize: 12,
+    color: '#666',
+    flex: 1,
+  },
+  totalPrice: {
+    fontSize: 16,
+    color: '#ee4d2d',
+    fontWeight: 'bold',
+  },
+  deliveryInfo: {
+    marginTop: 8,
+  },
+  deliveryLabel: {
+    fontSize: 12,
+    color: '#666',
+    fontWeight: '500',
+  },
+  deliveryAddress: {
+    fontSize: 12,
+    color: '#333',
+    marginTop: 2,
+    lineHeight: 16,
+  },
+
+  // Action Buttons
+  actionButtonsContainer: {
+    flexDirection: 'row',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    gap: 8,
+    borderTopWidth: 1,
+    borderTopColor: '#f0f0f0',
+    backgroundColor: '#fafafa',
+  },
+  secondaryButton: {
+    flex: 1,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: 4,
+    borderWidth: 1,
+    borderColor: '#dee2e6',
+    backgroundColor: '#ffffff',
+    alignItems: 'center',
+  },
+  primaryActionButton: {
+    flex: 1,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: 4,
+    backgroundColor: '#ee4d2d',
+    alignItems: 'center',
+  },
+  ratingButton: {
+    flex: 1,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: 4,
+    borderWidth: 1,
+    borderColor: '#fbbf24',
+    backgroundColor: '#fffbeb',
+    alignItems: 'center',
+  },
+  secondaryButtonText: {
+    fontSize: 12,
+    color: '#666',
+    fontWeight: '500',
+  },
+  primaryButtonText: {
+    fontSize: 12,
+    color: '#ffffff',
+    fontWeight: '600',
+  },
+  ratingButtonText: {
+    fontSize: 12,
+    color: '#f59e0b',
     fontWeight: '600',
   },
 
   // Empty State
   emptyContainer: {
     alignItems: 'center',
-    paddingVertical: 48,
+    paddingVertical: 60,
+    paddingHorizontal: 20,
   },
   emptyIllustration: {
-    marginBottom: 32,
+    marginBottom: 24,
   },
   emptyIconContainer: {
-    width: 120,
-    height: 120,
-    borderRadius: 60,
-    backgroundColor: '#ecfdf5',
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    backgroundColor: '#f8f9fa',
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 3,
-    borderColor: '#bbf7d0',
+    borderWidth: 2,
+    borderColor: '#e9ecef',
   },
   emptyIcon: {
-    fontSize: 60,
+    fontSize: 40,
   },
   emptyTitle: {
-    fontSize: 28,
-    fontWeight: 'bold',
-    color: '#0f172a',
-    marginBottom: 16,
+    fontSize: 20,
+    fontWeight: '600',
+    color: '#333',
+    marginBottom: 8,
     textAlign: 'center',
   },
   emptyDescription: {
-    fontSize: 16,
-    color: '#64748b',
+    fontSize: 14,
+    color: '#666',
     textAlign: 'center',
-    marginBottom: 40,
-    lineHeight: 24,
-    paddingHorizontal: 20,
+    marginBottom: 24,
+    lineHeight: 20,
   },
   ctaButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#10b981',
-    paddingHorizontal: 36,
-    paddingVertical: 20,
-    borderRadius: 16,
-    elevation: 8,
-    shadowColor: '#10b981',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.25,
-    shadowRadius: 16,
+    backgroundColor: '#ee4d2d',
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: 6,
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 3.84,
   },
   ctaIcon: {
-    fontSize: 22,
-    color: '#ffffff',
-    marginRight: 12,
-    fontWeight: 'bold',
+    fontSize: 16,
+    marginRight: 8,
   },
   ctaText: {
-    fontSize: 16,
+    fontSize: 14,
     color: '#ffffff',
-    fontWeight: 'bold',
+    fontWeight: '600',
+  },
+
+  // Main Content Layout
+  mainContent: {
+    flex: 1,
+    flexDirection: 'row',
+  },
+  ordersContainer: {
+    flex: 1,
+  },
+  ordersContainerWithSidebar: {
+    flex: 1,
+    marginLeft: 0,
   },
 });

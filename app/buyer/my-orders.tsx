@@ -12,102 +12,76 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import FilterSidebar from '../../components/FilterSidebar';
 import HeaderComponent from '../../components/HeaderComponent';
 import OrderQRCodeModal from '../../components/OrderQRCodeModal';
 import OrderDetailsModal from '../../components/OrderDetailsModal';
-import { supabase } from '../../lib/supabase';
 import { getUserWithProfile } from '../../services/auth';
+import { getBuyerOrders } from '../../services/orders';
+import { OrderWithDetails, ORDER_STATUS_CONFIG } from '../../types/orders';
 import { Database } from '../../types/database';
 
 const { width } = Dimensions.get('window');
 
 type Profile = Database['public']['Tables']['profiles']['Row'];
 
-// Database response types
-interface DatabaseOrderItem {
-  order_id: string;
-  quantity: number;
-  unit_price: number;
-  products: {
-    farmer_id: string;
-    name: string;
-    unit: string;
-  } | null;
-}
-
-interface DatabaseOrder {
-  id: string;
-  buyer_id: string;
-  farmer_id: string;
-  product_id: string;
-  quantity: number;
-  total_price: number;
-  status: string;
-  created_at: string;
-  delivery_address: string;
-  notes: string | null;
-  products: {
-    name: string;
-    unit: string;
-    price: number;
-  } | null;
-  profiles: {
-    first_name: string | null;
-    last_name: string | null;
-    farm_name: string | null;
-    barangay: string | null;
-  } | null;
-}
-
-interface Order {
-  id: string;
-  buyer_id: string;
-  total_amount: number;
-  status: 'pending' | 'confirmed' | 'processing' | 'ready' | 'delivered' | 'cancelled';
-  created_at: string;
-  delivery_date: string | null;
-  delivery_address: string | null;
-  notes: string | null;
-  purchase_code?: string;
-  farmer_profile?: {
-    first_name: string | null;
-    last_name: string | null;
-    farm_name: string | null;
-    barangay: string | null;
-  };
-  order_items?: Array<{
-    order_id: string;
-    quantity: number;
-    unit_price: number;
-    product: {
-      name: string;
-      unit: string;
-    };
-  }>;
-}
-
-const ORDER_STATUSES = [
-  { key: 'all', label: 'All Orders', color: '#6b7280', bgColor: '#f3f4f6' },
-  { key: 'pending', label: 'Pending', color: '#f59e0b', bgColor: '#fffbeb' },
-  { key: 'confirmed', label: 'Confirmed', color: '#3b82f6', bgColor: '#eff6ff' },
-  { key: 'processing', label: 'Processing', color: '#8b5cf6', bgColor: '#f3f0ff' },
-  { key: 'ready', label: 'Ready', color: '#10b981', bgColor: '#ecfdf5' },
-  { key: 'delivered', label: 'Delivered', color: '#059669', bgColor: '#ecfdf5' },
-  { key: 'cancelled', label: 'Cancelled', color: '#dc2626', bgColor: '#fef2f2' },
+// Status filters for the UI
+const STATUS_FILTERS = [
+  { key: 'all', label: 'All' },
+  { key: 'pending', label: 'Pending' },
+  { key: 'confirmed', label: 'Confirmed' },
+  { key: 'shipped', label: 'Shipped' },
+  { key: 'delivered', label: 'Delivered' },
+  { key: 'cancelled', label: 'Cancelled' },
 ];
+
+const CATEGORY_FILTERS = [
+  { key: 'all', label: 'All' },
+  { key: 'vegetables', label: 'Vegetables' },
+  { key: 'fruits', label: 'Fruits' },
+  { key: 'grains', label: 'Grains' },
+  { key: 'herbs', label: 'Herbs' },
+];
+
+const AMOUNT_RANGES = [
+  { key: 'all', label: 'All Amounts', min: 0, max: 10000 },
+  { key: 'low', label: '₱0 - ₱500', min: 0, max: 500 },
+  { key: 'medium', label: '₱500 - ₱1,500', min: 500, max: 1500 },
+  { key: 'high', label: '₱1,500 - ₱3,000', min: 1500, max: 3000 },
+  { key: 'premium', label: '₱3,000+', min: 3000, max: 10000 },
+];
+
+const SORT_OPTIONS = [
+  { key: 'newest', label: 'Newest First' },
+  { key: 'oldest', label: 'Oldest First' },
+  { key: 'amount-high', label: 'Amount: High to Low' },
+  { key: 'amount-low', label: 'Amount: Low to High' },
+  { key: 'status', label: 'Status' },
+];
+
+const isDesktop = width >= 1024;
 
 export default function BuyerMyOrdersScreen() {
   const navigation = useNavigation();
-  const [orders, setOrders] = useState<Order[]>([]);
-  const [filteredOrders, setFilteredOrders] = useState<Order[]>([]);
+  const [orders, setOrders] = useState<OrderWithDetails[]>([]);
+  const [filteredOrders, setFilteredOrders] = useState<OrderWithDetails[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [selectedStatus, setSelectedStatus] = useState('all');
+  const [showSidebar, setShowSidebar] = useState(false);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [showQRModal, setShowQRModal] = useState(false);
   const [showDetailsModal, setShowDetailsModal] = useState(false);
-  const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
+  const [selectedOrder, setSelectedOrder] = useState<OrderWithDetails | null>(null);
   const fadeAnim = new Animated.Value(0);
+
+  // Filter state
+  const [filterState, setFilterState] = useState({
+    category: 'all',
+    amountRange: 'all',
+    dateRange: 'month',
+    sortBy: 'newest'
+  });
 
   useEffect(() => {
     loadData();
@@ -122,7 +96,7 @@ export default function BuyerMyOrdersScreen() {
 
   useEffect(() => {
     filterOrders();
-  }, [orders, selectedStatus]);
+  }, [orders, selectedStatus, filterState]);
 
   const loadData = async () => {
     try {
@@ -130,8 +104,21 @@ export default function BuyerMyOrdersScreen() {
       console.log('User data:', userData);
 
       if (!userData?.profile) {
-        console.log('No user profile found, redirecting to login');
-        navigation.navigate('Login' as never);
+        console.warn('No user profile found, but keeping user logged in');
+        Alert.alert(
+          'Profile Not Found',
+          'Unable to load your profile. Please try refreshing or contact support if the issue persists.',
+          [
+            {
+              text: 'Retry',
+              onPress: () => loadData()
+            },
+            {
+              text: 'OK',
+              style: 'cancel'
+            }
+          ]
+        );
         return;
       }
 
@@ -148,76 +135,10 @@ export default function BuyerMyOrdersScreen() {
 
   const loadOrders = async (buyerId: string) => {
     try {
-      // Get orders for this buyer with product and farmer info
-      const { data: ordersData, error: ordersError } = await (supabase as any)
-        .from('orders')
-        .select(`
-          id,
-          buyer_id,
-          quantity,
-          total_price,
-          status,
-          created_at,
-          delivery_address,
-          notes,
-          purchase_code,
-          products (
-            name,
-            unit,
-            price
-          ),
-          profiles:farmer_id (
-            first_name,
-            last_name,
-            farm_name,
-            barangay
-          )
-        `)
-        .eq('buyer_id', buyerId)
-        .order('created_at', { ascending: false });
-
-      if (ordersError) {
-        console.error('Orders query error:', ordersError);
-        throw ordersError;
-      }
-
-      console.log('Orders data:', ordersData);
-
-      if (!ordersData || ordersData.length === 0) {
-        setOrders([]);
-        return;
-      }
-
-      // Transform the data to match the expected structure
-      const orders: Order[] = ordersData.map((order: any) => ({
-        id: order.id,
-        buyer_id: order.buyer_id,
-        total_amount: order.total_price, // Map total_price to total_amount for UI consistency
-        status: order.status as Order['status'],
-        created_at: order.created_at,
-        delivery_date: null, // Not in current schema
-        delivery_address: order.delivery_address,
-        notes: order.notes,
-        purchase_code: order.purchase_code,
-        farmer_profile: order.profiles ? {
-          first_name: order.profiles.first_name,
-          last_name: order.profiles.last_name,
-          farm_name: order.profiles.farm_name,
-          barangay: order.profiles.barangay,
-        } : undefined,
-        order_items: [{
-          order_id: order.id,
-          quantity: order.quantity,
-          unit_price: order.products?.price || 0,
-          product: {
-            name: order.products?.name || '',
-            unit: order.products?.unit || '',
-          },
-        }],
-      }));
-
-      console.log('Transformed orders:', orders);
-      setOrders(orders);
+      console.log('Loading orders for buyer:', buyerId);
+      const ordersData = await getBuyerOrders(buyerId);
+      console.log('Orders loaded:', ordersData.length);
+      setOrders(ordersData);
     } catch (error) {
       console.error('Error loading orders:', error);
       throw error;
@@ -225,14 +146,22 @@ export default function BuyerMyOrdersScreen() {
   };
 
   const filterOrders = () => {
-    console.log('Filtering orders:', { orders: orders.length, selectedStatus });
-    if (selectedStatus === 'all') {
-      setFilteredOrders(orders);
-    } else {
-      const filtered = orders.filter(order => order.status === selectedStatus);
-      console.log('Filtered orders:', filtered.length);
-      setFilteredOrders(filtered);
+    let filtered = orders;
+
+    // Filter by status
+    if (selectedStatus !== 'all') {
+      filtered = filtered.filter(order => order.status === selectedStatus);
     }
+
+    // Apply other filters using the utility function
+    const { applyFilters } = require('../../utils/filterConfigs');
+    filtered = applyFilters(filtered, filterState, {
+      categoryKey: 'product.category',
+      priceKey: 'total_price',
+      dateKey: 'created_at',
+    });
+
+    setFilteredOrders(filtered);
   };
 
   const onRefresh = async () => {
@@ -268,22 +197,55 @@ export default function BuyerMyOrdersScreen() {
   };
 
   const getStatusConfig = (status: string) => {
-    const statusObj = ORDER_STATUSES.find(s => s.key === status);
-    return statusObj || { color: '#6b7280', bgColor: '#f3f4f6' };
+    const config = ORDER_STATUS_CONFIG[status as keyof typeof ORDER_STATUS_CONFIG];
+    return config ? { color: config.color, bgColor: config.bgColor } : { color: '#6b7280', bgColor: '#f3f4f6' };
   };
 
-  const getOrderStats = () => {
-    const pending = orders.filter(o => o.status === 'pending').length;
-    const active = orders.filter(o => ['confirmed', 'processing', 'ready'].includes(o.status)).length;
-    const completed = orders.filter(o => o.status === 'delivered').length;
-    const totalSpent = orders
-      .filter(o => o.status === 'delivered')
-      .reduce((sum, o) => sum + o.total_amount, 0);
+  // Create filter sections for the FilterSidebar component
+  const getFilterSections = () => [
+    {
+      key: 'category',
+      title: 'Categories',
+      type: 'category' as const,
+      options: CATEGORY_FILTERS.map(category => ({
+        key: category.key,
+        label: category.label,
+        count: category.key === 'all'
+          ? orders.length
+          : orders.filter(o => o.product?.category?.toLowerCase() === category.key.toLowerCase()).length
+      }))
+    },
+    {
+      key: 'amountRange',
+      title: 'Amount Range',
+      type: 'range' as const,
+      options: AMOUNT_RANGES.map(range => ({
+        key: range.key,
+        label: range.label,
+        min: range.min,
+        max: range.max
+      }))
+    },
+    {
+      key: 'sortBy',
+      title: 'Sort By',
+      type: 'sort' as const,
+      options: SORT_OPTIONS.map(sort => ({
+        key: sort.key,
+        label: sort.label
+      }))
+    }
+  ];
 
-    return { pending, active, completed, totalSpent };
+  // Handle filter changes
+  const handleFilterChange = (key: string, value: any) => {
+    setFilterState(prev => ({
+      ...prev,
+      [key]: value
+    }));
   };
 
-  const handleShowQRCode = (order: Order) => {
+  const handleShowQRCode = (order: OrderWithDetails) => {
     setSelectedOrder(order);
     setShowQRModal(true);
   };
@@ -293,7 +255,7 @@ export default function BuyerMyOrdersScreen() {
     setSelectedOrder(null);
   };
 
-  const handleShowOrderDetails = (order: Order) => {
+  const handleShowOrderDetails = (order: OrderWithDetails) => {
     setSelectedOrder(order);
     setShowDetailsModal(true);
   };
@@ -370,21 +332,8 @@ export default function BuyerMyOrdersScreen() {
     );
   };
 
-  const renderStatsCard = (title: string, value: string | number, icon: string, color: string) => (
-    <View style={[styles.statsCard, { borderLeftColor: color }]}>
-      <View style={styles.statsContent}>
-        <View style={[styles.statsIcon, { backgroundColor: color + '20' }]}>
-          <Text style={styles.statsIconText}>{icon}</Text>
-        </View>
-        <View style={styles.statsInfo}>
-          <Text style={styles.statsValue}>{value}</Text>
-          <Text style={styles.statsTitle}>{title}</Text>
-        </View>
-      </View>
-    </View>
-  );
 
-  const renderOrderCard = ({ item: order }: { item: Order }) => {
+  const renderOrderCard = ({ item: order }: { item: OrderWithDetails }) => {
     const statusConfig = getStatusConfig(order.status);
     const getStatusText = (status: string) => {
       switch (status) {
@@ -420,7 +369,7 @@ export default function BuyerMyOrdersScreen() {
           </View>
           <View style={styles.orderRightInfo}>
             <Text style={styles.orderTotal}>TOTAL</Text>
-            <Text style={styles.orderAmount}>{formatPrice(order.total_amount)}</Text>
+            <Text style={styles.orderAmount}>{formatPrice(order.total_price)}</Text>
           </View>
         </View>
 
@@ -436,23 +385,13 @@ export default function BuyerMyOrdersScreen() {
 
         {/* Product Info */}
         <View style={styles.productSection}>
-          {order.order_items?.map((item, index) => (
-            <View key={index} style={styles.productRow}>
-              <View style={styles.productIconContainer}>
-                <Text style={styles.productIcon}>📦</Text>
-              </View>
-              <View style={styles.productInfo}>
-                <Text style={styles.productName}>{item.product.name}</Text>
-                <Text style={styles.productDetails}>
-                  Quantity: {item.quantity} {item.product.unit} • From: {
-                    order.farmer_profile?.farm_name ||
-                    `${order.farmer_profile?.first_name || ''} ${order.farmer_profile?.last_name || ''}`.trim() ||
-                    'Farm'
-                  }
-                </Text>
-              </View>
+          {order.product && (
+            <View key={order.id} style={styles.orderItem}>
+              <Text style={styles.productName}>{order.product.name}</Text>
+              <Text style={styles.productDetails}>Qty: {order.quantity} {order.product.unit}</Text>
+              <Text style={styles.productPrice}>{formatPrice(order.product.price)}</Text>
             </View>
-          )) || null}
+          )}
         </View>
 
         {/* Delivery Address */}
@@ -525,7 +464,6 @@ export default function BuyerMyOrdersScreen() {
     </View>
   );
 
-  const stats = getOrderStats();
 
   if (loading) {
     return (
@@ -540,96 +478,76 @@ export default function BuyerMyOrdersScreen() {
     <View style={styles.container}>
       <HeaderComponent
         profile={profile}
-        showSearch={true}
-        searchPlaceholder="Search your orders..."
+        userType="buyer"
+        currentRoute="/buyer/my-orders"
+        showMessages={true}
+        showNotifications={true}
+        showFilterButton={!isDesktop}
+        onFilterPress={() => setShowSidebar(!showSidebar)}
       />
 
-      <ScrollView
-        style={styles.scrollView}
-        contentContainerStyle={styles.scrollContent}
-        refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={onRefresh}
-            tintColor="#10b981"
-            colors={['#10b981']}
-          />
-        }
-        showsVerticalScrollIndicator={false}
-      >
-        {/* Stats Section */}
-        <View style={styles.statsSection}>
-          <Text style={styles.sectionTitle}>Order Summary</Text>
-          <View style={styles.statsGrid}>
-            {renderStatsCard('Pending', stats.pending, '⏰', '#f59e0b')}
-            {renderStatsCard('Active', stats.active, '🚀', '#3b82f6')}
-            {renderStatsCard('Completed', stats.completed, '✅', '#10b981')}
-            {renderStatsCard('Total Spent', formatPrice(stats.totalSpent), '💰', '#8b5cf6')}
-          </View>
-        </View>
-
-        {/* Filter */}
-        <View style={styles.filterSection}>
-          <Text style={styles.sectionTitle}>Filter Orders</Text>
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.filterContainer}
+      {/* Status Tab Bar */}
+      <View style={styles.tabBar}>
+        {STATUS_FILTERS.map((status) => (
+          <TouchableOpacity
+            key={status.key}
+            style={[
+              styles.tab,
+              selectedStatus === status.key && styles.activeTab
+            ]}
+            onPress={() => setSelectedStatus(status.key)}
           >
-            {ORDER_STATUSES.map((status) => (
-              <TouchableOpacity
-                key={status.key}
-                style={[
-                  styles.filterButton,
-                  selectedStatus === status.key && [
-                    styles.filterButtonActive,
-                    { backgroundColor: status.color }
-                  ]
-                ]}
-                onPress={() => setSelectedStatus(status.key)}
-                activeOpacity={0.7}
-              >
-                <Text style={[
-                  styles.filterButtonText,
-                  selectedStatus === status.key && styles.filterButtonTextActive
-                ]}>
-                  {status.label}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </ScrollView>
-        </View>
+            <Text style={[
+              styles.tabText,
+              selectedStatus === status.key && styles.activeTabText
+            ]}>
+              {status.label}
+            </Text>
+            {selectedStatus === status.key && <View style={styles.tabIndicator} />}
+          </TouchableOpacity>
+        ))}
+      </View>
+
+      {/* Main Content with Sidebar */}
+      <View style={styles.mainContent}>
+        {/* Desktop Sidebar */}
+        {isDesktop && (
+          <FilterSidebar
+            sections={getFilterSections()}
+            filterState={filterState}
+            onFilterChange={handleFilterChange}
+            width={240}
+          />
+        )}
 
         {/* Orders List */}
-        <View style={styles.ordersSection}>
-          <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>
-              Your Orders {filteredOrders.length > 0 && `(${filteredOrders.length})`}
-            </Text>
-          </View>
-
-          {(() => {
-            console.log('Rendering orders section:', {
-              filteredOrdersLength: filteredOrders.length,
-              ordersLength: orders.length
-            });
-            return filteredOrders.length === 0 ? (
+        <View style={[styles.ordersContainer, isDesktop && styles.ordersContainerWithSidebar]}>
+          <ScrollView
+            style={styles.scrollView}
+            refreshControl={
+              <RefreshControl
+                refreshing={refreshing}
+                onRefresh={onRefresh}
+                tintColor="#10b981"
+                colors={['#10b981']}
+              />
+            }
+            showsVerticalScrollIndicator={false}
+          >
+            {filteredOrders.length === 0 ? (
               renderEmptyState()
             ) : (
               <View style={styles.ordersList}>
-                {filteredOrders.map((order, index) => {
-                  console.log('Rendering order:', order.id, order.status);
-                  return (
-                    <View key={order.id}>
-                      {renderOrderCard({ item: order })}
-                    </View>
-                  );
-                })}
+                {filteredOrders.map((order) => (
+                  <View key={order.id}>
+                    {renderOrderCard({ item: order })}
+                  </View>
+                ))}
               </View>
-            );
-          })()}
+            )}
+          </ScrollView>
         </View>
-      </ScrollView>
+      </View>
 
       {/* QR Code Modal */}
       {selectedOrder && (
@@ -648,6 +566,18 @@ export default function BuyerMyOrdersScreen() {
           order={selectedOrder}
         />
       )}
+
+      {/* Mobile Sidebar Modal */}
+      {!isDesktop && (
+        <FilterSidebar
+          sections={getFilterSections()}
+          filterState={filterState}
+          onFilterChange={handleFilterChange}
+          showMobile={showSidebar}
+          onCloseMobile={() => setShowSidebar(false)}
+          title="Filters"
+        />
+      )}
     </View>
   );
 }
@@ -655,7 +585,7 @@ export default function BuyerMyOrdersScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f1f5f9',
+    backgroundColor: '#f8f9fa',
   },
 
   // Loading
@@ -663,7 +593,7 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#f1f5f9',
+    backgroundColor: '#f5f5f5',
   },
   loadingText: {
     marginTop: 20,
@@ -672,122 +602,68 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
 
+  // Status Tab Bar (Main horizontal tabs)
+  tabBar: {
+    flexDirection: 'row',
+    backgroundColor: '#ffffff',
+    borderBottomWidth: 1,
+    borderBottomColor: '#e5e5e5',
+    elevation: 1,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 1,
+  },
+  tab: {
+    flex: 1,
+    paddingVertical: 16,
+    paddingHorizontal: 8,
+    alignItems: 'center',
+    position: 'relative',
+  },
+  activeTab: {
+    borderBottomWidth: 2,
+    borderBottomColor: '#10b981',
+  },
+  tabText: {
+    fontSize: 13,
+    color: '#666',
+    fontWeight: '500',
+    textAlign: 'center',
+  },
+  activeTabText: {
+    color: '#10b981',
+    fontWeight: '600',
+  },
+  tabIndicator: {
+    position: 'absolute',
+    bottom: -1,
+    height: 2,
+    width: '100%',
+    backgroundColor: '#10b981',
+  },
+
+  // Main Content Layout
+  mainContent: {
+    flex: 1,
+    flexDirection: 'row',
+  },
+  ordersContainer: {
+    flex: 1,
+  },
+  ordersContainerWithSidebar: {
+    flex: 1,
+    marginLeft: 0,
+  },
+
   // Scroll View
   scrollView: {
     flex: 1,
-  },
-  scrollContent: {
-    paddingBottom: 40,
-  },
-
-  // Section Titles
-  sectionTitle: {
-    fontSize: 22,
-    fontWeight: 'bold',
-    color: '#0f172a',
-    marginBottom: 20,
-  },
-
-  // Stats Section
-  statsSection: {
-    paddingHorizontal: 20,
-    marginBottom: 36,
-  },
-  statsGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 16,
-  },
-  statsCard: {
-    flex: 1,
-    minWidth: (width - 60) / 2,
-    backgroundColor: '#ffffff',
-    borderRadius: 16,
-    borderLeftWidth: 4,
-    elevation: 4,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 8,
-  },
-  statsContent: {
-    padding: 20,
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  statsIcon: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 16,
-  },
-  statsIconText: {
-    fontSize: 20,
-  },
-  statsInfo: {
-    flex: 1,
-  },
-  statsValue: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#0f172a',
-    marginBottom: 4,
-  },
-  statsTitle: {
-    fontSize: 12,
-    color: '#64748b',
-    fontWeight: '600',
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-  },
-
-  // Filter Section
-  filterSection: {
-    paddingHorizontal: 20,
-    marginBottom: 36,
-  },
-  filterContainer: {
-    paddingRight: 20,
-    gap: 12,
-  },
-  filterButton: {
-    paddingHorizontal: 20,
-    paddingVertical: 12,
-    borderRadius: 24,
-    backgroundColor: '#ffffff',
-    borderWidth: 2,
-    borderColor: '#e2e8f0',
-    elevation: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
-  },
-  filterButtonActive: {
-    borderColor: 'transparent',
-    elevation: 4,
-    shadowOpacity: 0.15,
-  },
-  filterButtonText: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: '#64748b',
-  },
-  filterButtonTextActive: {
-    color: '#ffffff',
-  },
-
-  // Orders Section
-  ordersSection: {
-    paddingHorizontal: 20,
-  },
-  sectionHeader: {
-    marginBottom: 24,
+    backgroundColor: '#f5f5f5',
   },
   ordersList: {
-    gap: 12,
+    padding: 12,
+    gap: 8,
   },
   orderCard: {
     backgroundColor: '#ffffff',
@@ -877,6 +753,11 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#6b7280',
     lineHeight: 16,
+  },
+  productPrice: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#374151',
   },
   orderDetails: {
     marginBottom: 20,

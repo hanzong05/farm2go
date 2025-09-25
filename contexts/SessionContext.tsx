@@ -51,18 +51,17 @@ export const SessionProvider: React.FC<SessionProviderProps> = ({ children }) =>
     let unsubscribe: (() => void) | undefined;
     let fallbackTimeoutId: NodeJS.Timeout;
 
-    // Aggressive fallback timeout to ensure loading state is cleared
+    // Fallback timeout to ensure loading state is cleared
     fallbackTimeoutId = setTimeout(() => {
-      console.log('⏰ SessionProvider: AGGRESSIVE FALLBACK - forcing app to usable state');
       setSessionState({
         isAuthenticated: false,
         user: null,
         profile: null,
         session: null,
         isLoading: false,
-        error: null, // Clear error to make app usable
+        error: null,
       });
-    }, 10000); // Aggressive 10 second fallback
+    }, 30000); // 30 second fallback to reduce aggressive timeouts
 
     const initSession = async () => {
       try {
@@ -91,9 +90,8 @@ export const SessionProvider: React.FC<SessionProviderProps> = ({ children }) =>
 
         const directTimeoutPromise = new Promise<never>((_, reject) => {
           setTimeout(() => {
-            console.log('⏰ SessionProvider: Direct timeout - using fallback state');
             reject(new Error('Direct session timeout'));
-          }, 3000); // Very aggressive 3 second timeout
+          }, 15000); // Less aggressive 15 second timeout
         });
 
         const directSessionPromise = supabase.auth.getSession();

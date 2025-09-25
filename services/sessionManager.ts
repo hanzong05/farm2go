@@ -32,6 +32,27 @@ class SessionManager {
   private listeners: Array<(state: SessionState) => void> = [];
   private isDestroyed = false;
 
+  // Cleanup method to be called when app is being closed/unloaded
+  public destroy(): void {
+    console.log('🔄 SessionManager: Destroying instance...');
+    this.isDestroyed = true;
+
+    // Clear all timers
+    if (this.refreshTimer) {
+      clearInterval(this.refreshTimer);
+      this.refreshTimer = null;
+    }
+    if (this.activityTimer) {
+      clearInterval(this.activityTimer);
+      this.activityTimer = null;
+    }
+
+    // Clear listeners to prevent memory leaks
+    this.listeners = [];
+
+    console.log('✅ SessionManager: Instance destroyed');
+  }
+
   // Storage keys
   private readonly STORAGE_KEYS = {
     SESSION: 'farm2go_session',
@@ -142,7 +163,7 @@ class SessionManager {
       const sessionTimeoutPromise = new Promise<never>((_, reject) => {
         setTimeout(() => {
           reject(new Error('Supabase session fetch timeout'));
-        }, 5000); // Reduced to 5 second timeout
+        }, 20000); // Increased to 20 second timeout
       });
 
       const sessionPromise = supabase.auth.getSession();
@@ -480,7 +501,7 @@ class SessionManager {
       const timeoutPromise = new Promise<never>((_, reject) => {
         setTimeout(() => {
           reject(new Error('Profile fetch timeout'));
-        }, 5000); // 5 second timeout for profile fetch
+        }, 15000); // 15 second timeout for profile fetch
       });
 
       const profilePromise = supabase
@@ -564,25 +585,23 @@ class SessionManager {
   }
 
   private setupActivityMonitoring(): void {
-    // Check for expired sessions every minute
+    // Check for expired sessions every 5 minutes to reduce CPU usage
     this.activityTimer = setInterval(() => {
       if (this.isSessionExpired()) {
         this.clearSession();
       }
-    }, 60 * 1000);
+    }, 5 * 60 * 1000);
   }
 
   private setupTokenRefresh(): void {
-    // Refresh token every 50 minutes (tokens expire in 1 hour)
+    // Refresh token every 45 minutes (tokens expire in 1 hour) - less aggressive
     this.refreshTimer = setInterval(() => {
-      if (this.sessionData) {
-        this.refreshSession().catch(error => {
-          console.error('❌ Auto-refresh failed:', error);
-          // Don't automatically clear session on auto-refresh failure
-          // Let the user try to refresh manually or continue until expiry
+      if (this.sessionData && !this.isDestroyed) {
+        this.refreshSession().catch(() => {
+          // Silently handle auto-refresh failures to reduce console spam
         });
       }
-    }, 50 * 60 * 1000);
+    }, 45 * 60 * 1000);
   }
 }
 

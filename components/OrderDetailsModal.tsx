@@ -17,15 +17,15 @@ interface OrderDetailsModalProps {
   order: {
     id: string;
     status: string;
-    total_amount: number;
+    total_price: number;
     created_at: string;
     delivery_address: string | null;
     notes?: string | null;
     farmer_profile?: {
-      first_name: string | null;
-      last_name: string | null;
-      farm_name: string | null;
-      barangay: string | null;
+      first_name: string | undefined;
+      last_name: string | undefined;
+      farm_name: string | undefined;
+      barangay: string | undefined;
     };
     order_items?: Array<{
       product: {
@@ -169,7 +169,7 @@ export default function OrderDetailsModal({
                 </View>
                 <View style={[styles.summaryRow, styles.totalRow]}>
                   <Text style={styles.totalLabel}>Total Amount:</Text>
-                  <Text style={styles.totalValue}>{formatPrice(order.total_amount)}</Text>
+                  <Text style={styles.totalValue}>{formatPrice(order.total_price)}</Text>
                 </View>
               </View>
             </View>

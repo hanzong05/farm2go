@@ -24,7 +24,8 @@
       "Bash(npx:*)",
       "Bash(./gradlew:*)",
       "mcp__ide__getDiagnostics",
-      "WebSearch"
+      "WebSearch",
+      "WebFetch(domain:shopee.ph)"
     ],
     "deny": [],
     "ask": []

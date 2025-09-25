@@ -4,6 +4,7 @@ import {
   ActivityIndicator,
   Alert,
   Dimensions,
+  Modal,
   RefreshControl,
   ScrollView,
   StyleSheet,
@@ -12,10 +13,12 @@ import {
   View
 } from 'react-native';
 import Icon from 'react-native-vector-icons/FontAwesome5';
+import FilterSidebar from '../../components/FilterSidebar';
 import HeaderComponent from '../../components/HeaderComponent';
 import { supabase } from '../../lib/supabase';
 import { getUserWithProfile } from '../../services/auth';
 import { Database } from '../../types/database';
+import { applyFilters } from '../../utils/filterConfigs';
 
 const { width } = Dimensions.get('window');
 
@@ -74,14 +77,38 @@ interface Order {
   }>;
 }
 
-const ORDER_STATUSES = [
-  { key: 'all', label: 'All Orders', color: '#6b7280' },
-  { key: 'pending', label: 'Pending', color: '#f59e0b' },
-  { key: 'confirmed', label: 'Confirmed', color: '#3b82f6' },
-  { key: 'processing', label: 'Processing', color: '#8b5cf6' },
-  { key: 'ready', label: 'Ready', color: '#10b981' },
-  { key: 'delivered', label: 'Delivered', color: '#059669' },
-  { key: 'cancelled', label: 'Cancelled', color: '#dc2626' },
+const STATUS_FILTERS = [
+  { key: 'all', label: 'All' },
+  { key: 'pending', label: 'Pending' },
+  { key: 'confirmed', label: 'Confirmed' },
+  { key: 'processing', label: 'Processing' },
+  { key: 'ready', label: 'Ready' },
+  { key: 'delivered', label: 'Delivered' },
+  { key: 'cancelled', label: 'Cancelled' },
+];
+
+const CATEGORY_FILTERS = [
+  { key: 'all', label: 'All' },
+  { key: 'vegetables', label: 'Vegetables' },
+  { key: 'fruits', label: 'Fruits' },
+  { key: 'grains', label: 'Grains' },
+  { key: 'herbs', label: 'Herbs' },
+];
+
+const AMOUNT_RANGES = [
+  { key: 'all', label: 'All Amounts', min: 0, max: 10000 },
+  { key: 'low', label: '₱0 - ₱500', min: 0, max: 500 },
+  { key: 'medium', label: '₱500 - ₱1,500', min: 500, max: 1500 },
+  { key: 'high', label: '₱1,500 - ₱3,000', min: 1500, max: 3000 },
+  { key: 'premium', label: '₱3,000+', min: 3000, max: 10000 },
+];
+
+const SORT_OPTIONS = [
+  { key: 'newest', label: 'Newest First' },
+  { key: 'oldest', label: 'Oldest First' },
+  { key: 'amount-high', label: 'Amount: High to Low' },
+  { key: 'amount-low', label: 'Amount: Low to High' },
+  { key: 'status', label: 'Status' },
 ];
 
 export default function FarmerOrdersScreen() {
@@ -89,9 +116,21 @@ export default function FarmerOrdersScreen() {
   const [filteredOrders, setFilteredOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [selectedStatus, setSelectedStatus] = useState('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [profile, setProfile] = useState<Profile | null>(null);
+  const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
+  const [showActionModal, setShowActionModal] = useState(false);
+  const [showSidebar, setShowSidebar] = useState(false);
+
+  const [selectedStatus, setSelectedStatus] = useState('all');
+
+  // Filter state
+  const [filterState, setFilterState] = useState({
+    category: 'all',
+    amountRange: 'all',
+    dateRange: 'month',
+    sortBy: 'newest'
+  });
 
   useEffect(() => {
     loadData();
@@ -99,7 +138,7 @@ export default function FarmerOrdersScreen() {
 
   useEffect(() => {
     filterOrders();
-  }, [orders, selectedStatus, searchQuery]);
+  }, [orders, selectedStatus, filterState, searchQuery]);
 
   const loadData = async () => {
     try {
@@ -191,15 +230,15 @@ export default function FarmerOrdersScreen() {
   const filterOrders = () => {
     let filtered = orders;
 
-    // Filter by status
+    // Filter by status first
     if (selectedStatus !== 'all') {
       filtered = filtered.filter(order => order.status === selectedStatus);
     }
 
     // Filter by search query
     if (searchQuery.trim()) {
+      const searchLower = searchQuery.toLowerCase();
       filtered = filtered.filter(order => {
-        const searchLower = searchQuery.toLowerCase();
         const orderId = order.id.slice(-8).toLowerCase();
         const buyerName = (`${order.buyer_profile?.first_name || ''} ${order.buyer_profile?.last_name || ''}`.trim() ||
           'unknown buyer').toLowerCase();
@@ -214,6 +253,12 @@ export default function FarmerOrdersScreen() {
                notes.includes(searchLower);
       });
     }
+
+    // Apply other filters using the utility function
+    filtered = applyFilters(filtered, filterState, {
+      dateKey: 'created_at',
+      amountKey: 'total_amount'
+    });
 
     setFilteredOrders(filtered);
   };
@@ -235,12 +280,15 @@ export default function FarmerOrdersScreen() {
 
   const updateOrderStatus = async (orderId: string, newStatus: Order['status']) => {
     try {
-      const { error } = await (supabase as any)
+      const { error } = await supabase
         .from('orders')
         .update({ status: newStatus })
         .eq('id', orderId);
 
-      if (error) throw error;
+      if (error) {
+        console.error('Supabase error:', error);
+        throw error;
+      }
 
       // Update local state
       setOrders(prevOrders =>
@@ -252,8 +300,41 @@ export default function FarmerOrdersScreen() {
       Alert.alert('Success', 'Order status updated successfully');
     } catch (error) {
       console.error('Error updating order status:', error);
-      Alert.alert('Error', 'Failed to update order status');
+      const errorMessage = error instanceof Error ? error.message : 'Failed to update order status';
+      Alert.alert('Error', errorMessage);
     }
+  };
+
+  const handleOrderPress = (order: Order) => {
+    setSelectedOrder(order);
+    setShowActionModal(true);
+  };
+
+  const handleActionModalClose = () => {
+    setSelectedOrder(null);
+    setShowActionModal(false);
+  };
+
+  const handleOrderAction = async (action: 'confirm' | 'cancel' | 'ready') => {
+    if (!selectedOrder) return;
+
+    let newStatus: Order['status'];
+    switch (action) {
+      case 'confirm':
+        newStatus = 'confirmed';
+        break;
+      case 'cancel':
+        newStatus = 'cancelled';
+        break;
+      case 'ready':
+        newStatus = 'ready';
+        break;
+      default:
+        return;
+    }
+
+    await updateOrderStatus(selectedOrder.id, newStatus);
+    handleActionModalClose();
   };
 
   const formatDate = (dateString: string) => {
@@ -274,31 +355,79 @@ export default function FarmerOrdersScreen() {
   };
 
   const getStatusColor = (status: string) => {
-    const statusObj = ORDER_STATUSES.find(s => s.key === status);
-    return statusObj?.color || '#6b7280';
+    const statusColors = {
+      'all': '#6b7280',
+      'pending': '#f59e0b',
+      'confirmed': '#3b82f6',
+      'processing': '#8b5cf6',
+      'ready': '#10b981',
+      'delivered': '#059669',
+      'cancelled': '#dc2626',
+    };
+    return statusColors[status as keyof typeof statusColors] || '#6b7280';
   };
 
-  const getOrderStats = () => {
-    const pending = orders.filter(o => o.status === 'pending').length;
-    const processing = orders.filter(o => o.status === 'processing').length;
-    const ready = orders.filter(o => o.status === 'ready').length;
-    const delivered = orders.filter(o => o.status === 'delivered').length;
-    const totalRevenue = orders
-      .filter(o => o.status === 'delivered')
-      .reduce((sum, o) => sum + o.total_amount, 0);
+  // Create filter sections for the FilterSidebar component
+  const getFilterSections = () => [
+    {
+      key: 'category',
+      title: 'Categories',
+      type: 'category' as const,
+      options: CATEGORY_FILTERS.map(category => ({
+        key: category.key,
+        label: category.label,
+        count: category.key === 'all'
+          ? orders.length
+          : orders.filter(o => {
+              // Since farmer orders don't have product categories in the current structure,
+              // we'll use a placeholder count
+              return true;
+            }).length
+      }))
+    },
+    {
+      key: 'amountRange',
+      title: 'Amount Range',
+      type: 'range' as const,
+      options: AMOUNT_RANGES.map(range => ({
+        key: range.key,
+        label: range.label,
+        min: range.min,
+        max: range.max
+      }))
+    },
+    {
+      key: 'sortBy',
+      title: 'Sort By',
+      type: 'sort' as const,
+      options: SORT_OPTIONS.map(sort => ({
+        key: sort.key,
+        label: sort.label
+      }))
+    }
+  ];
 
-    return { pending, processing, ready, delivered, totalRevenue };
+  // Handle filter changes
+  const handleFilterChange = (key: string, value: any) => {
+    setFilterState(prev => ({
+      ...prev,
+      [key]: value
+    }));
   };
 
   const renderOrderCard = ({ item: order, isCompact = false }: { item: Order; isCompact?: boolean }) => {
     const statusColor = getStatusColor(order.status);
-    
+
     return (
-      <View style={[
-        styles.orderCard,
-        isDesktop && styles.orderCardDesktop,
-        isCompact && styles.orderCardCompact
-      ]}>
+      <TouchableOpacity
+        style={[
+          styles.orderCard,
+          isDesktop && styles.orderCardDesktop,
+          isCompact && styles.orderCardCompact
+        ]}
+        onPress={() => handleOrderPress(order)}
+        activeOpacity={0.8}
+      >
         <View style={[
           styles.orderHeader,
           isDesktop && styles.orderHeaderDesktop
@@ -488,7 +617,7 @@ export default function FarmerOrdersScreen() {
             </View>
           </View>
         )}
-      </View>
+      </TouchableOpacity>
     );
   };
 
@@ -523,7 +652,81 @@ export default function FarmerOrdersScreen() {
     </View>
   );
 
-  const stats = getOrderStats();
+  const renderActionModal = () => {
+    if (!selectedOrder) return null;
+
+    const canConfirm = selectedOrder.status === 'pending';
+    const canCancel = selectedOrder.status === 'pending' || selectedOrder.status === 'confirmed';
+    const canSetReady = selectedOrder.status === 'confirmed';
+
+    return (
+      <Modal
+        visible={showActionModal}
+        animationType="fade"
+        transparent={true}
+        onRequestClose={handleActionModalClose}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContainer}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Order Actions</Text>
+              <Text style={styles.modalOrderId}>Order #{selectedOrder.id.slice(-8)}</Text>
+            </View>
+
+            <View style={styles.modalContent}>
+              <Text style={styles.modalDescription}>
+                Choose an action for this order:
+              </Text>
+
+              <View style={styles.modalActions}>
+                {canConfirm && (
+                  <TouchableOpacity
+                    style={[styles.modalButton, styles.modalConfirmButton]}
+                    onPress={() => handleOrderAction('confirm')}
+                    activeOpacity={0.8}
+                  >
+                    <Icon name="check" size={16} color="#ffffff" style={{marginRight: 8}} />
+                    <Text style={styles.modalButtonText}>Confirm Order</Text>
+                  </TouchableOpacity>
+                )}
+
+                {canSetReady && (
+                  <TouchableOpacity
+                    style={[styles.modalButton, styles.modalReadyButton]}
+                    onPress={() => handleOrderAction('ready')}
+                    activeOpacity={0.8}
+                  >
+                    <Icon name="check-circle" size={16} color="#ffffff" style={{marginRight: 8}} />
+                    <Text style={styles.modalButtonText}>Mark Ready</Text>
+                  </TouchableOpacity>
+                )}
+
+                {canCancel && (
+                  <TouchableOpacity
+                    style={[styles.modalButton, styles.modalCancelButton]}
+                    onPress={() => handleOrderAction('cancel')}
+                    activeOpacity={0.8}
+                  >
+                    <Icon name="times" size={16} color="#ffffff" style={{marginRight: 8}} />
+                    <Text style={styles.modalButtonText}>Cancel Order</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+
+              <TouchableOpacity
+                style={styles.modalCloseButton}
+                onPress={handleActionModalClose}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.modalCloseButtonText}>Close</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+    );
+  };
+
 
   if (loading) {
     return (
@@ -534,248 +737,98 @@ export default function FarmerOrdersScreen() {
     );
   }
 
-  // Desktop Layout
-  if (isDesktop) {
-    return (
-      <View style={styles.container}>
-        <HeaderComponent
-          profile={profile}
-          showSearch={true}
-          searchQuery={searchQuery}
-          onSearchChange={setSearchQuery}
-          searchPlaceholder="Search orders..."
-          showAddButton={true}
-          addButtonText="+ Add Product"
-          addButtonRoute="/farmer/products/add"
-        />
-
-        <View style={styles.desktopLayout}>
-          {/* Left Sidebar */}
-          <View style={styles.sidebar}>
-            {/* Stats */}
-            <View style={styles.sidebarSection}>
-              <Text style={styles.sidebarTitle}>Overview</Text>
-              <View style={styles.sidebarStats}>
-                <View style={styles.statCard}>
-                  <Text style={styles.statValue}>{stats.pending}</Text>
-                  <Text style={styles.statLabel}>Pending</Text>
-                </View>
-                <View style={styles.statCard}>
-                  <Text style={styles.statValue}>{stats.processing}</Text>
-                  <Text style={styles.statLabel}>Processing</Text>
-                </View>
-                <View style={styles.statCard}>
-                  <Text style={styles.statValue}>{stats.ready}</Text>
-                  <Text style={styles.statLabel}>Ready</Text>
-                </View>
-                <View style={styles.statCard}>
-                  <Text style={styles.statValue}>{stats.delivered}</Text>
-                  <Text style={styles.statLabel}>Delivered</Text>
-                </View>
-                <View style={[styles.statCard, styles.revenueCard]}>
-                  <Text style={styles.statValue}>{formatPrice(stats.totalRevenue)}</Text>
-                  <Text style={styles.statLabel}>Total Revenue</Text>
-                </View>
-              </View>
-            </View>
-
-            {/* Filter */}
-            <View style={styles.sidebarSection}>
-              <Text style={styles.sidebarTitle}>Filter Orders</Text>
-              <View style={styles.sidebarFilters}>
-                {ORDER_STATUSES.map((status) => (
-                  <TouchableOpacity
-                    key={status.key}
-                    style={[
-                      styles.sidebarFilterButton,
-                      selectedStatus === status.key && [
-                        styles.sidebarFilterButtonActive,
-                        { backgroundColor: status.color }
-                      ]
-                    ]}
-                    onPress={() => setSelectedStatus(status.key)}
-                    activeOpacity={0.7}
-                  >
-                    <Text style={[
-                      styles.sidebarFilterText,
-                      selectedStatus === status.key && styles.sidebarFilterTextActive
-                    ]}>
-                      {status.label}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-            </View>
-          </View>
-
-          {/* Main Content */}
-          <View style={styles.mainContent}>
-            <View style={styles.mainHeader}>
-              <Text style={styles.mainTitle}>
-                Orders {filteredOrders.length > 0 && `(${filteredOrders.length})`}
-              </Text>
-            </View>
-
-            <ScrollView
-              style={styles.ordersScrollView}
-              refreshControl={
-                <RefreshControl
-                  refreshing={refreshing}
-                  onRefresh={onRefresh}
-                  tintColor="#10b981"
-                  colors={['#10b981']}
-                />
-              }
-              showsVerticalScrollIndicator={false}
-            >
-              {filteredOrders.length === 0 ? (
-                renderEmptyState()
-              ) : (
-                <View style={styles.ordersGrid}>
-                  {filteredOrders.map((order) => (
-                    <View key={order.id} style={styles.orderGridItem}>
-                      {renderOrderCard({ item: order, isCompact: true })}
-                    </View>
-                  ))}
-                </View>
-              )}
-            </ScrollView>
-          </View>
-        </View>
-      </View>
-    );
-  }
-
-  // Mobile/Tablet Layout
   return (
     <View style={styles.container}>
       <HeaderComponent
         profile={profile}
+        userType="farmer"
+        currentRoute="/farmer/orders"
+        showMessages={true}
+        showNotifications={true}
         showSearch={true}
         searchQuery={searchQuery}
         onSearchChange={setSearchQuery}
         searchPlaceholder="Search orders..."
-        showAddButton={true}
-        addButtonText="+ Add Product"
-        addButtonRoute="/farmer/products/add"
+        showFilterButton={!isDesktop}
+        onFilterPress={() => setShowSidebar(!showSidebar)}
       />
 
-      <ScrollView
-        style={styles.scrollView}
-        contentContainerStyle={[
-          styles.scrollContent,
-          isTablet && styles.scrollContentTablet
-        ]}
-        refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={onRefresh}
-            tintColor="#10b981"
-            colors={['#10b981']}
-          />
-        }
-        showsVerticalScrollIndicator={false}
-      >
-       
-
-        {/* Filter */}
-        <View style={[
-          styles.filterSection,
-          isTablet && styles.filterSectionTablet
-        ]}>
-          <Text style={styles.sectionTitle}>Filter Orders</Text>
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={[
-              styles.filterContainer,
-              isTablet && styles.filterContainerTablet
+      {/* Status Tab Bar */}
+      <View style={styles.tabBar}>
+        {STATUS_FILTERS.map((status) => (
+          <TouchableOpacity
+            key={status.key}
+            style={[
+              styles.tab,
+              selectedStatus === status.key && styles.activeTab
             ]}
+            onPress={() => setSelectedStatus(status.key)}
           >
-            {ORDER_STATUSES.map((status) => (
-              <TouchableOpacity
-                key={status.key}
-                style={[
-                  styles.filterButton,
-                  selectedStatus === status.key && [
-                    styles.filterButtonActive,
-                    { backgroundColor: status.color }
-                  ]
-                ]}
-                onPress={() => setSelectedStatus(status.key)}
-                activeOpacity={0.7}
-              >
-                <Text style={[
-                  styles.filterButtonText,
-                  selectedStatus === status.key && styles.filterButtonTextActive
-                ]}>
-                  {status.label}
-                </Text>
-              </TouchableOpacity>
-            ))}
+            <Text style={[
+              styles.tabText,
+              selectedStatus === status.key && styles.activeTabText
+            ]}>
+              {status.label}
+            </Text>
+            {selectedStatus === status.key && <View style={styles.tabIndicator} />}
+          </TouchableOpacity>
+        ))}
+      </View>
+
+      {/* Main Content with Sidebar */}
+      <View style={styles.mainContent}>
+        {/* Desktop Sidebar */}
+        {isDesktop && (
+          <FilterSidebar
+            sections={getFilterSections()}
+            filterState={filterState}
+            onFilterChange={handleFilterChange}
+            width={240}
+          />
+        )}
+
+        {/* Orders List */}
+        <View style={[styles.ordersContainer, isDesktop && styles.ordersContainerWithSidebar]}>
+          <ScrollView
+            style={styles.scrollView}
+            refreshControl={
+              <RefreshControl
+                refreshing={refreshing}
+                onRefresh={onRefresh}
+                tintColor="#10b981"
+                colors={['#10b981']}
+              />
+            }
+            showsVerticalScrollIndicator={false}
+          >
+            {filteredOrders.length === 0 ? (
+              renderEmptyState()
+            ) : (
+              <View style={styles.ordersList}>
+                {filteredOrders.map((order) => (
+                  <View key={order.id}>
+                    {renderOrderCard({ item: order })}
+                  </View>
+                ))}
+              </View>
+            )}
           </ScrollView>
         </View>
+      </View>
 
-        {/* Stats */}
-        <View style={[
-          styles.statsSection,
-          isTablet && styles.statsSectionTablet
-        ]}>
-          <Text style={styles.sectionTitle}>Overview</Text>
-          <View style={[
-            styles.statsGrid,
-            isTablet && styles.statsGridTablet
-          ]}>
-            <View style={styles.statCard}>
-              <Text style={styles.statValue}>{stats.pending}</Text>
-              <Text style={styles.statLabel}>Pending</Text>
-            </View>
-            <View style={styles.statCard}>
-              <Text style={styles.statValue}>{stats.processing}</Text>
-              <Text style={styles.statLabel}>Processing</Text>
-            </View>
-            <View style={styles.statCard}>
-              <Text style={styles.statValue}>{stats.ready}</Text>
-              <Text style={styles.statLabel}>Ready</Text>
-            </View>
-            <View style={styles.statCard}>
-              <Text style={styles.statValue}>{stats.delivered}</Text>
-              <Text style={styles.statLabel}>Delivered</Text>
-            </View>
-            <View style={[styles.statCard, styles.revenueCard]}>
-              <Text style={styles.statValue}>{formatPrice(stats.totalRevenue)}</Text>
-              <Text style={styles.statLabel}>Total Revenue</Text>
-            </View>
-          </View>
-        </View>
+      {renderActionModal()}
 
-        {/* Orders */}
-        <View style={[
-          styles.ordersSection,
-          isTablet && styles.ordersSectionTablet
-        ]}>
-          <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>
-              Orders {filteredOrders.length > 0 && `(${filteredOrders.length})`}
-            </Text>
-          </View>
-
-          {filteredOrders.length === 0 ? (
-            renderEmptyState()
-          ) : (
-            <View style={[
-              styles.ordersList,
-              isTablet && styles.ordersListTablet
-            ]}>
-              {filteredOrders.map((order) => (
-                <View key={order.id}>
-                  {renderOrderCard({ item: order })}
-                </View>
-              ))}
-            </View>
-          )}
-        </View>
-      </ScrollView>
+      {/* Mobile Sidebar Modal */}
+      {!isDesktop && (
+        <FilterSidebar
+          sections={getFilterSections()}
+          filterState={filterState}
+          onFilterChange={handleFilterChange}
+          showMobile={showSidebar}
+          onCloseMobile={() => setShowSidebar(false)}
+          title="Filters"
+        />
+      )}
     </View>
   );
 }
@@ -783,7 +836,7 @@ export default function FarmerOrdersScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f1f5f9',
+    backgroundColor: '#f8f9fa',
   },
 
   // Loading
@@ -791,7 +844,7 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#f1f5f9',
+    backgroundColor: '#f5f5f5',
   },
   loadingText: {
     marginTop: 20,
@@ -800,231 +853,71 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
 
-  // Desktop Layout
-  desktopLayout: {
-    flex: 1,
+  // Status Tab Bar (Main horizontal tabs)
+  tabBar: {
     flexDirection: 'row',
-    maxWidth: 1400,
-    alignSelf: 'center',
-    width: '100%',
-  },
-
-  sidebar: {
-    width: 320,
     backgroundColor: '#ffffff',
-    borderRightWidth: 1,
-    borderRightColor: '#e2e8f0',
-    padding: 24,
-  },
-
-  sidebarSection: {
-    marginBottom: 32,
-  },
-
-  sidebarTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#0f172a',
-    marginBottom: 16,
-  },
-
-  sidebarStats: {
-    gap: 12,
-  },
-
-  statCard: {
-    backgroundColor: '#f8fafc',
-    padding: 16,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#e2e8f0',
-  },
-
-  statValue: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#0f172a',
-    marginBottom: 4,
-  },
-
-  statLabel: {
-    fontSize: 14,
-    color: '#64748b',
-    fontWeight: '500',
-  },
-
-  revenueCard: {
-    backgroundColor: '#ecfdf5',
-    borderColor: '#bbf7d0',
-  },
-
-  sidebarFilters: {
-    gap: 8,
-  },
-
-  sidebarFilterButton: {
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderRadius: 8,
-    backgroundColor: '#f8fafc',
-    borderWidth: 1,
-    borderColor: '#e2e8f0',
-  },
-
-  sidebarFilterButtonActive: {
-    borderColor: 'transparent',
-  },
-
-  sidebarFilterText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#64748b',
-  },
-
-  sidebarFilterTextActive: {
-    color: '#ffffff',
-  },
-
-  mainContent: {
-    flex: 1,
-    backgroundColor: '#f1f5f9',
-  },
-
-  mainHeader: {
-    padding: 24,
-    paddingBottom: 0,
-  },
-
-  mainTitle: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#0f172a',
-  },
-
-  ordersScrollView: {
-    flex: 1,
-    padding: 24,
-  },
-
-  ordersGrid: {
-    gap: 20,
-  },
-
-  orderGridItem: {
-    marginBottom: 0,
-  },
-
-  // Mobile/Tablet Scroll Layout
-  scrollView: {
-    flex: 1,
-  },
-
-  scrollContent: {
-    paddingBottom: 40,
-  },
-
-  scrollContentTablet: {
-    paddingHorizontal: 40,
-  },
-
-  // Section Styles
-  sectionTitle: {
-    fontSize: 22,
-    fontWeight: 'bold',
-    color: '#0f172a',
-    marginBottom: 20,
-  },
-
-  // Stats Section
-  statsSection: {
-    paddingHorizontal: 20,
-    marginBottom: 36,
-  },
-
-  statsSectionTablet: {
-    paddingHorizontal: 0,
-  },
-
-  statsGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 16,
-  },
-
-  statsGridTablet: {
-    justifyContent: 'space-between',
-  },
-
-  // Filter Section
-  filterSection: {
-    paddingHorizontal: 20,
-    marginBottom: 36,
-  },
-
-  filterSectionTablet: {
-    paddingHorizontal: 0,
-  },
-
-  filterContainer: {
-    paddingRight: 20,
-    gap: 12,
-  },
-
-  filterContainerTablet: {
-    paddingRight: 0,
-    flexWrap: 'wrap',
-  },
-
-  filterButton: {
-    paddingHorizontal: 20,
-    paddingVertical: 12,
-    borderRadius: 24,
-    backgroundColor: '#ffffff',
-    borderWidth: 2,
-    borderColor: '#e2e8f0',
-    elevation: 2,
+    borderBottomWidth: 1,
+    borderBottomColor: '#e5e5e5',
+    elevation: 1,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
+    shadowOpacity: 0.1,
+    shadowRadius: 1,
   },
-
-  filterButtonActive: {
-    borderColor: 'transparent',
-    elevation: 4,
-    shadowOpacity: 0.15,
+  tab: {
+    flex: 1,
+    paddingVertical: 16,
+    paddingHorizontal: 8,
+    alignItems: 'center',
+    position: 'relative',
   },
-
-  filterButtonText: {
-    fontSize: 15,
+  activeTab: {
+    borderBottomWidth: 2,
+    borderBottomColor: '#10b981',
+  },
+  tabText: {
+    fontSize: 13,
+    color: '#666',
+    fontWeight: '500',
+    textAlign: 'center',
+  },
+  activeTabText: {
+    color: '#10b981',
     fontWeight: '600',
-    color: '#64748b',
+  },
+  tabIndicator: {
+    position: 'absolute',
+    bottom: -1,
+    height: 2,
+    width: '100%',
+    backgroundColor: '#10b981',
   },
 
-  filterButtonTextActive: {
-    color: '#ffffff',
+  // Main Content Layout
+  mainContent: {
+    flex: 1,
+    flexDirection: 'row',
+  },
+  ordersContainer: {
+    flex: 1,
+  },
+  ordersContainerWithSidebar: {
+    flex: 1,
+    marginLeft: 0,
   },
 
-  // Orders Section
-  ordersSection: {
-    paddingHorizontal: 20,
-  },
-
-  ordersSectionTablet: {
-    paddingHorizontal: 0,
-  },
-
-  sectionHeader: {
-    marginBottom: 24,
+  // Scroll View
+  scrollView: {
+    flex: 1,
+    backgroundColor: '#f5f5f5',
   },
 
   ordersList: {
-    gap: 20,
+    padding: 12,
+    gap: 8,
   },
 
-  ordersListTablet: {
-    gap: 24,
-  },
 
   // Order Card Styles
   orderCard: {
@@ -1429,5 +1322,109 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#ffffff',
     fontWeight: 'bold',
+  },
+
+  // Modal Styles
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+  },
+
+  modalContainer: {
+    backgroundColor: '#ffffff',
+    borderRadius: 20,
+    width: '100%',
+    maxWidth: 400,
+    elevation: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.25,
+    shadowRadius: 16,
+  },
+
+  modalHeader: {
+    padding: 24,
+    paddingBottom: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f1f5f9',
+  },
+
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#0f172a',
+    marginBottom: 4,
+  },
+
+  modalOrderId: {
+    fontSize: 14,
+    color: '#64748b',
+    fontWeight: '500',
+  },
+
+  modalContent: {
+    padding: 24,
+  },
+
+  modalDescription: {
+    fontSize: 16,
+    color: '#374151',
+    marginBottom: 24,
+    textAlign: 'center',
+  },
+
+  modalActions: {
+    gap: 12,
+    marginBottom: 24,
+  },
+
+  modalButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 16,
+    paddingHorizontal: 20,
+    borderRadius: 12,
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+  },
+
+  modalConfirmButton: {
+    backgroundColor: '#3b82f6',
+  },
+
+  modalReadyButton: {
+    backgroundColor: '#10b981',
+  },
+
+  modalCancelButton: {
+    backgroundColor: '#dc2626',
+  },
+
+  modalButtonText: {
+    fontSize: 16,
+    color: '#ffffff',
+    fontWeight: '600',
+  },
+
+  modalCloseButton: {
+    backgroundColor: '#f3f4f6',
+    paddingVertical: 14,
+    borderRadius: 12,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#d1d5db',
+  },
+
+  modalCloseButtonText: {
+    fontSize: 16,
+    color: '#374151',
+    fontWeight: '600',
   },
 });

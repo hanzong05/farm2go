@@ -3,6 +3,7 @@ import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  Dimensions,
   RefreshControl,
   ScrollView,
   StyleSheet,
@@ -10,10 +11,18 @@ import {
   TouchableOpacity,
   View
 } from 'react-native';
+import FilterSidebar from '../../components/FilterSidebar';
 import HeaderComponent from '../../components/HeaderComponent';
 import { supabase } from '../../lib/supabase';
 import { getUserWithProfile } from '../../services/auth';
 import { Database } from '../../types/database';
+import { applyFilters, getFarmerSalesFilters } from '../../utils/filterConfigs';
+
+const { width } = Dimensions.get('window');
+
+// Responsive breakpoints
+const isTablet = width >= 768;
+const isDesktop = width >= 1024;
 
 // Remove unused width variable
 
@@ -82,13 +91,37 @@ const TIME_PERIODS = [
   { key: 'year', label: 'This Year' },
 ];
 
+const STATUS_FILTERS = [
+  { key: 'all', label: 'All' },
+  { key: 'pending', label: 'Pending' },
+  { key: 'confirmed', label: 'Confirmed' },
+  { key: 'delivered', label: 'Completed' },
+  { key: 'cancelled', label: 'Cancelled' },
+];
+
+const CATEGORY_FILTERS = [
+  { key: 'all', label: 'All' },
+  { key: 'vegetables', label: 'Vegetables' },
+  { key: 'fruits', label: 'Fruits' },
+  { key: 'grains', label: 'Grains' },
+  { key: 'herbs', label: 'Herbs' },
+];
+
 export default function FarmerSalesHistoryScreen() {
   const [sales, setSales] = useState<Sale[]>([]);
   const [filteredSales, setFilteredSales] = useState<Sale[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [selectedPeriod, setSelectedPeriod] = useState('month');
   const [profile, setProfile] = useState<Profile | null>(null);
+  const [showSidebar, setShowSidebar] = useState(false);
+
+  // Filter state
+  const [filterState, setFilterState] = useState({
+    status: 'all',
+    category: 'all',
+    dateRange: 'month',
+    sortBy: 'newest'
+  });
 
   useEffect(() => {
     loadData();
@@ -96,7 +129,7 @@ export default function FarmerSalesHistoryScreen() {
 
   useEffect(() => {
     filterSalesByPeriod();
-  }, [sales, selectedPeriod]);
+  }, [sales, filterState]);
 
   const loadData = async () => {
     try {
@@ -200,31 +233,20 @@ export default function FarmerSalesHistoryScreen() {
   };
 
   const filterSalesByPeriod = () => {
-    const now = new Date();
-    let startDate: Date;
-
-    switch (selectedPeriod) {
-      case 'week':
-        startDate = new Date(now.setDate(now.getDate() - 7));
-        break;
-      case 'month':
-        startDate = new Date(now.getFullYear(), now.getMonth(), 1);
-        break;
-      case 'quarter':
-        const quarterStartMonth = Math.floor(now.getMonth() / 3) * 3;
-        startDate = new Date(now.getFullYear(), quarterStartMonth, 1);
-        break;
-      case 'year':
-        startDate = new Date(now.getFullYear(), 0, 1);
-        break;
-      default:
-        setFilteredSales(sales);
-        return;
-    }
-
-    const filtered = sales.filter(sale =>
-      new Date(sale.created_at) >= startDate
-    );
+    // Apply filters using the utility function
+    const filtered = applyFilters(sales, filterState, {
+      statusKey: 'status',
+      dateKey: 'created_at',
+      amountKey: 'total_amount',
+      customFilters: {
+        category: (sale, value) => {
+          if (value === 'all') return true;
+          return sale.order_items?.some(item =>
+            item.product.name.toLowerCase().includes(value.toLowerCase())
+          ) || false;
+        }
+      }
+    });
 
     setFilteredSales(filtered);
   };
@@ -284,6 +306,14 @@ export default function FarmerSalesHistoryScreen() {
     };
   };
 
+  // Handle filter changes
+  const handleFilterChange = (key: string, value: any) => {
+    setFilterState(prev => ({
+      ...prev,
+      [key]: value
+    }));
+  };
+
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString('en-US', {
       year: 'numeric',
@@ -327,56 +357,61 @@ export default function FarmerSalesHistoryScreen() {
 
 
   const renderSaleCard = ({ item: sale }: { item: Sale }) => (
-    <View style={styles.saleCard}>
-      <View style={styles.saleHeader}>
-        <View style={styles.saleMainInfo}>
-          <Text style={styles.saleId}>Sale #{sale.id.slice(-8)}</Text>
-          <Text style={styles.saleDate}>{formatDate(sale.created_at)}</Text>
-        </View>
-        <View style={styles.saleAmountContainer}>
-          <Text style={styles.saleAmount}>{formatPrice(sale.total_amount)}</Text>
-          <View style={[styles.statusBadge, { backgroundColor: getStatusColor(sale.status) }]}>
-            <Text style={styles.statusText}>{getStatusLabel(sale.status)}</Text>
-          </View>
-        </View>
-      </View>
-
-      <View style={styles.buyerSection}>
-        <Text style={styles.buyerIcon}>👤</Text>
+    <View style={styles.orderCard}>
+      {/* Buyer Header */}
+      <View style={styles.buyerHeader}>
         <View style={styles.buyerInfo}>
+          <View style={styles.buyerIconContainer}>
+            <Text style={styles.buyerIcon}>👤</Text>
+          </View>
           <Text style={styles.buyerName}>
             {`${sale.buyer_profile?.first_name || ''} ${sale.buyer_profile?.last_name || ''}`.trim() ||
              'Unknown Buyer'}
           </Text>
         </View>
+        <View style={[styles.statusBadge, { backgroundColor: getStatusColor(sale.status) }]}>
+          <Text style={styles.statusText}>{getStatusLabel(sale.status)}</Text>
+        </View>
       </View>
 
-      <View style={styles.saleItems}>
-        <Text style={styles.itemsTitle}>Items Sold</Text>
+      {/* Products Grid */}
+      <View style={styles.productsSection}>
         {sale.order_items?.map((item, index) => (
-          <View key={index} style={styles.saleItem}>
-            <View style={styles.itemInfo}>
-              <Text style={styles.itemQuantity}>{item.quantity} {item.product.unit}</Text>
-              <Text style={styles.itemName}>{item.product.name}</Text>
+          <View key={index} style={styles.productItem}>
+            <View style={styles.productImageContainer}>
+              <Text style={styles.productImage}>🥬</Text>
             </View>
-            <Text style={styles.itemPrice}>{formatPrice(item.total_price)}</Text>
+            <View style={styles.productDetails}>
+              <Text style={styles.productName} numberOfLines={2}>{item.product.name}</Text>
+              <Text style={styles.productVariation}>Unit: {item.product.unit}</Text>
+              <Text style={styles.productPrice}>x{item.quantity} = {formatPrice(item.total_price)}</Text>
+            </View>
           </View>
-        )) || null}
+        )) || []}
       </View>
 
-      <View style={styles.saleFooter}>
-        <View style={styles.saleMetrics}>
-          <View style={styles.metricItem}>
-            <Text style={styles.metricLabel}>Items</Text>
-            <Text style={styles.metricValue}>
-              {sale.order_items?.reduce((sum, item) => sum + item.quantity, 0) || 0}
-            </Text>
-          </View>
-          <View style={styles.metricItem}>
-            <Text style={styles.metricLabel}>Revenue</Text>
-            <Text style={styles.metricValue}>{formatPrice(sale.total_amount)}</Text>
+      {/* Order Summary */}
+      <View style={styles.orderSummary}>
+        <View style={styles.summaryRow}>
+          <Text style={styles.itemCount}>{sale.order_items?.length || 0} item(s)</Text>
+          <View style={styles.totalContainer}>
+            <Text style={styles.totalLabel}>Total Revenue: </Text>
+            <Text style={styles.totalPrice}>{formatPrice(sale.total_amount)}</Text>
           </View>
         </View>
+      </View>
+
+      {/* Action Buttons */}
+      <View style={styles.actionButtonsContainer}>
+        <TouchableOpacity style={styles.secondaryButton}>
+          <Text style={styles.secondaryButtonText}>Contact Buyer</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.primaryActionButton}>
+          <Text style={styles.primaryButtonText}>Order Details</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.secondaryButton}>
+          <Text style={styles.secondaryButtonText}>Invoice</Text>
+        </TouchableOpacity>
       </View>
     </View>
   );
@@ -385,18 +420,18 @@ export default function FarmerSalesHistoryScreen() {
     <View style={styles.emptyContainer}>
       <View style={styles.emptyIllustration}>
         <View style={styles.emptyIconContainer}>
-          <Text style={styles.emptyIcon}>📈</Text>
+          <Text style={styles.emptyIcon}>📋</Text>
         </View>
       </View>
-      
-      <Text style={styles.emptyTitle}>No Sales Data</Text>
+
+      <Text style={styles.emptyTitle}>No Orders Found</Text>
       <Text style={styles.emptyDescription}>
-        {selectedPeriod === 'all'
-          ? 'You haven\'t made any sales yet. Start by adding products and promoting your farm!'
-          : `No sales found for the selected time period.`}
+        {filterState.status === 'all'
+          ? 'You haven\'t received any orders yet. Start by adding products and promoting your farm!'
+          : `No orders found for the selected status.`}
       </Text>
 
-      {selectedPeriod === 'all' && (
+      {filterState.status === 'all' && (
         <TouchableOpacity
           style={styles.ctaButton}
           onPress={() => router.push('/farmer/products/add')}
@@ -411,6 +446,9 @@ export default function FarmerSalesHistoryScreen() {
 
   // Removed unused stats variable
 
+  // Get filter configuration
+  const filterSections = getFarmerSalesFilters(sales);
+
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
@@ -420,6 +458,69 @@ export default function FarmerSalesHistoryScreen() {
     );
   }
 
+  // Desktop Layout
+  if (isDesktop) {
+    return (
+      <View style={styles.container}>
+        <HeaderComponent
+          profile={profile}
+          userType="farmer"
+          currentRoute="/farmer/sales-history"
+          showMessages={true}
+          showNotifications={true}
+          showFilterButton={!isDesktop}
+          onFilterPress={() => setShowSidebar(!showSidebar)}
+        />
+
+        <View style={styles.desktopLayout}>
+          {/* Filter Sidebar */}
+          <FilterSidebar
+            sections={filterSections}
+            filterState={filterState}
+            onFilterChange={handleFilterChange}
+            title="Sales Filters"
+          />
+
+          {/* Main Content */}
+          <ScrollView
+            style={styles.mainContent}
+            contentContainerStyle={styles.mainScrollContent}
+            refreshControl={
+              <RefreshControl
+                refreshing={refreshing}
+                onRefresh={onRefresh}
+                tintColor="#ee4d2d"
+                colors={['#ee4d2d']}
+              />
+            }
+            showsVerticalScrollIndicator={false}
+          >
+            {/* Sales Header */}
+            <View style={styles.salesHeader}>
+              <Text style={styles.salesTitle}>
+                Sales History ({filteredSales.length} sales)
+              </Text>
+            </View>
+
+            {/* Sales List */}
+            {filteredSales.length === 0 ? (
+              renderEmptyState()
+            ) : (
+              <View style={styles.ordersList}>
+                {filteredSales.map((sale) => (
+                  <View key={sale.id}>
+                    {renderSaleCard({ item: sale })}
+                  </View>
+                ))}
+              </View>
+            )}
+          </ScrollView>
+        </View>
+      </View>
+    );
+  }
+
+  // Mobile/Tablet Layout
   return (
     <View style={styles.container}>
       <HeaderComponent
@@ -428,75 +529,44 @@ export default function FarmerSalesHistoryScreen() {
         currentRoute="/farmer/sales-history"
         showMessages={true}
         showNotifications={true}
+        showFilterButton={!isDesktop}
+        onFilterPress={() => setShowSidebar(!showSidebar)}
       />
 
+      {/* Mobile Filter Sidebar */}
+      <FilterSidebar
+        sections={filterSections}
+        filterState={filterState}
+        onFilterChange={handleFilterChange}
+        title="Sales Filters"
+        showMobile={showSidebar}
+        onCloseMobile={() => setShowSidebar(false)}
+      />
+
+      {/* Orders List */}
       <ScrollView
         style={styles.scrollView}
-        contentContainerStyle={styles.scrollContent}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
             onRefresh={onRefresh}
-            tintColor="#10b981"
-            colors={['#10b981']}
+            tintColor="#ee4d2d"
+            colors={['#ee4d2d']}
           />
         }
         showsVerticalScrollIndicator={false}
       >
-        {/* Enhanced Stats */}
-       
-
-        {/* Enhanced Filter */}
-        <View style={styles.filterSection}>
-          <Text style={styles.sectionTitle}>Time Period</Text>
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.filterContainer}
-          >
-            {TIME_PERIODS.map((period) => (
-              <TouchableOpacity
-                key={period.key}
-                style={[
-                  styles.filterButton,
-                  selectedPeriod === period.key && styles.filterButtonActive
-                ]}
-                onPress={() => setSelectedPeriod(period.key)}
-                activeOpacity={0.7}
-              >
-                <Text style={[
-                  styles.filterButtonText,
-                  selectedPeriod === period.key && styles.filterButtonTextActive
-                ]}>
-                  {period.label}
-                </Text>
-              </TouchableOpacity>
+        {filteredSales.length === 0 ? (
+          renderEmptyState()
+        ) : (
+          <View style={styles.ordersList}>
+            {filteredSales.map((sale) => (
+              <View key={sale.id}>
+                {renderSaleCard({ item: sale })}
+              </View>
             ))}
-          </ScrollView>
-        </View>
-
-        {/* Orders List */}
-        <View style={styles.salesSection}>
-          <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>
-              Order History {filteredSales.length > 0 && `(${filteredSales.length})`}
-            </Text>
           </View>
-
-          {filteredSales.length === 0 ? (
-            renderEmptyState()
-          ) : (
-            <View style={styles.salesList}>
-              {filteredSales.map((sale) => (
-                <View key={sale.id}>
-                  {renderSaleCard({ item: sale })}
-                </View>
-              ))}
-            </View>
-          )}
-        </View>
-
-        <View style={styles.bottomSpacing} />
+        )}
       </ScrollView>
     </View>
   );
@@ -505,7 +575,40 @@ export default function FarmerSalesHistoryScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f1f5f9',
+    backgroundColor: '#f5f5f5',
+  },
+
+  // Desktop Layout
+  desktopLayout: {
+    flex: 1,
+    flexDirection: 'row',
+    backgroundColor: '#f8fafc',
+  },
+
+  // Main Content
+  mainContent: {
+    flex: 1,
+    backgroundColor: '#f5f5f5',
+  },
+
+  mainScrollContent: {
+    padding: 20,
+  },
+
+  salesHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 20,
+    paddingBottom: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#e2e8f0',
+  },
+
+  salesTitle: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#0f172a',
   },
 
   // Loading
@@ -513,7 +616,7 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#f1f5f9',
+    backgroundColor: '#f5f5f5',
   },
   loadingText: {
     marginTop: 20,
@@ -522,285 +625,245 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
 
+
   // Scroll View
   scrollView: {
     flex: 1,
-  },
-  scrollContent: {
-    paddingBottom: 40,
+    backgroundColor: '#f5f5f5',
   },
 
-
-  // Section Titles
-  sectionTitle: {
-    fontSize: 22,
-    fontWeight: 'bold',
-    color: '#0f172a',
-    marginBottom: 20,
+  // Orders List
+  ordersList: {
+    padding: 12,
+    gap: 8,
   },
 
-  // Stats Section
-  statsSection: {
-    paddingHorizontal: 20,
-    marginBottom: 36,
-  },
-  statsGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 16,
-  },
-
-
-  // Filter Section
-  filterSection: {
-    paddingHorizontal: 20,
-    marginBottom: 36,
-  },
-  filterContainer: {
-    paddingRight: 20,
-    gap: 12,
-  },
-  filterButton: {
-    paddingHorizontal: 20,
-    paddingVertical: 12,
-    borderRadius: 24,
+  // Authentic Shopee Order Card
+  orderCard: {
     backgroundColor: '#ffffff',
-    borderWidth: 2,
-    borderColor: '#e2e8f0',
-    elevation: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
-  },
-  filterButtonActive: {
-    backgroundColor: '#10b981',
-    borderColor: '#10b981',
-    elevation: 4,
-    shadowOpacity: 0.15,
-  },
-  filterButtonText: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: '#64748b',
-  },
-  filterButtonTextActive: {
-    color: '#ffffff',
-  },
-
-  // Sales Section
-  salesSection: {
-    paddingHorizontal: 20,
-  },
-  sectionHeader: {
-    marginBottom: 24,
-  },
-  salesList: {
-    gap: 20,
-  },
-  saleCard: {
-    backgroundColor: '#ffffff',
-    borderRadius: 20,
-    padding: 24,
-    elevation: 6,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.08,
-    shadowRadius: 12,
-    borderWidth: 1,
-    borderColor: '#f1f5f9',
-  },
-  saleHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginBottom: 20,
-  },
-  saleMainInfo: {
-    flex: 1,
-    marginRight: 16,
-  },
-  saleId: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#0f172a',
-    marginBottom: 6,
-    lineHeight: 26,
-  },
-  saleDate: {
-    fontSize: 14,
-    color: '#64748b',
-    fontWeight: '500',
-  },
-  saleAmountContainer: {
-    alignItems: 'flex-end',
-  },
-  saleAmount: {
-    fontSize: 22,
-    fontWeight: 'bold',
-    color: '#059669',
+    borderRadius: 8,
     marginBottom: 8,
-  },
-  statusBadge: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 16,
-    elevation: 2,
+    overflow: 'hidden',
+    elevation: 1,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.1,
-    shadowRadius: 4,
+    shadowRadius: 1,
+  },
+
+  // Buyer Header
+  buyerHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f0f0f0',
+    backgroundColor: '#fafafa',
+  },
+  buyerInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  buyerIconContainer: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: '#ee4d2d',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 8,
+  },
+  buyerIcon: {
+    fontSize: 10,
+    color: '#ffffff',
+  },
+  buyerName: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#333',
+  },
+  statusBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 4,
   },
   statusText: {
     fontSize: 10,
     color: '#ffffff',
     fontWeight: 'bold',
-    letterSpacing: 0.8,
+    textTransform: 'uppercase',
   },
-  buyerSection: {
+
+  // Products Section
+  productsSection: {
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+  },
+  productItem: {
     flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#f8fafc',
-    padding: 16,
-    borderRadius: 12,
-    marginBottom: 20,
-  },
-  buyerIcon: {
-    fontSize: 20,
-    marginRight: 12,
-  },
-  buyerInfo: {
-    flex: 1,
-  },
-  buyerName: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#0f172a',
-  },
-  saleItems: {
-    marginBottom: 20,
-  },
-  itemsTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#0f172a',
     marginBottom: 12,
   },
-  saleItem: {
+  productImageContainer: {
+    width: 80,
+    height: 80,
+    borderRadius: 8,
+    backgroundColor: '#f8f9fa',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+    borderWidth: 1,
+    borderColor: '#e9ecef',
+  },
+  productImage: {
+    fontSize: 32,
+  },
+  productDetails: {
+    flex: 1,
+    justifyContent: 'space-between',
+  },
+  productName: {
+    fontSize: 14,
+    color: '#333',
+    fontWeight: '400',
+    lineHeight: 18,
+    marginBottom: 4,
+  },
+  productVariation: {
+    fontSize: 12,
+    color: '#999',
+    marginBottom: 4,
+  },
+  productPrice: {
+    fontSize: 16,
+    color: '#ee4d2d',
+    fontWeight: '600',
+  },
+
+  // Order Summary
+  orderSummary: {
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#f0f0f0',
+    backgroundColor: '#fafafa',
+  },
+  summaryRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    backgroundColor: '#f1f5f9',
-    borderRadius: 10,
-    marginBottom: 8,
   },
-  itemInfo: {
-    flex: 1,
+  itemCount: {
+    fontSize: 13,
+    color: '#666',
   },
-  itemQuantity: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: '#059669',
-    marginBottom: 2,
-  },
-  itemName: {
-    fontSize: 14,
-    color: '#0f172a',
-    fontWeight: '500',
-  },
-  itemPrice: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#059669',
-  },
-  saleFooter: {
-    borderTopWidth: 1,
-    borderTopColor: '#f1f5f9',
-    paddingTop: 16,
-  },
-  saleMetrics: {
+  totalContainer: {
     flexDirection: 'row',
-    justifyContent: 'space-around',
-  },
-  metricItem: {
     alignItems: 'center',
-    flex: 1,
   },
-  metricLabel: {
-    fontSize: 12,
-    color: '#64748b',
-    fontWeight: '500',
-    marginBottom: 4,
+  totalLabel: {
+    fontSize: 13,
+    color: '#666',
   },
-  metricValue: {
+  totalPrice: {
     fontSize: 16,
+    color: '#ee4d2d',
     fontWeight: 'bold',
-    color: '#0f172a',
+  },
+
+  // Action Buttons
+  actionButtonsContainer: {
+    flexDirection: 'row',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    gap: 8,
+    borderTopWidth: 1,
+    borderTopColor: '#f0f0f0',
+  },
+  secondaryButton: {
+    flex: 1,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 4,
+    borderWidth: 1,
+    borderColor: '#dee2e6',
+    backgroundColor: '#ffffff',
+    alignItems: 'center',
+  },
+  primaryActionButton: {
+    flex: 1,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 4,
+    backgroundColor: '#ee4d2d',
+    alignItems: 'center',
+  },
+  secondaryButtonText: {
+    fontSize: 12,
+    color: '#666',
+    fontWeight: '500',
+  },
+  primaryButtonText: {
+    fontSize: 12,
+    color: '#ffffff',
+    fontWeight: '600',
   },
 
   // Empty State
   emptyContainer: {
     alignItems: 'center',
     paddingVertical: 48,
+    paddingHorizontal: 20,
   },
   emptyIllustration: {
     marginBottom: 32,
   },
   emptyIconContainer: {
-    width: 120,
-    height: 120,
-    borderRadius: 60,
-    backgroundColor: '#ecfdf5',
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    backgroundColor: '#f8f9fa',
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 3,
-    borderColor: '#bbf7d0',
+    borderWidth: 2,
+    borderColor: '#dee2e6',
   },
   emptyIcon: {
-    fontSize: 60,
+    fontSize: 48,
   },
   emptyTitle: {
-    fontSize: 28,
+    fontSize: 18,
     fontWeight: 'bold',
-    color: '#0f172a',
-    marginBottom: 16,
+    color: '#333',
+    marginBottom: 8,
     textAlign: 'center',
   },
   emptyDescription: {
-    fontSize: 16,
-    color: '#64748b',
+    fontSize: 14,
+    color: '#666',
     textAlign: 'center',
-    marginBottom: 40,
-    lineHeight: 24,
-    paddingHorizontal: 20,
+    marginBottom: 24,
+    lineHeight: 20,
   },
   ctaButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#10b981',
-    paddingHorizontal: 36,
-    paddingVertical: 20,
-    borderRadius: 16,
-    elevation: 8,
-    shadowColor: '#10b981',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.25,
-    shadowRadius: 16,
+    backgroundColor: '#ee4d2d',
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 4,
   },
   ctaIcon: {
-    fontSize: 22,
+    fontSize: 14,
     color: '#ffffff',
-    marginRight: 12,
+    marginRight: 6,
     fontWeight: 'bold',
   },
   ctaText: {
-    fontSize: 16,
+    fontSize: 14,
     color: '#ffffff',
-    fontWeight: 'bold',
-  },
-  bottomSpacing: {
-    height: 40,
+    fontWeight: '600',
   },
 });

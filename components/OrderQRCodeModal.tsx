@@ -20,7 +20,7 @@ interface OrderQRCodeModalProps {
   order: {
     id: string;
     purchase_code?: string;
-    total_amount: number;
+    total_price: number;
     created_at: string;
     status: string;
     farmer_profile?: {
@@ -68,7 +68,7 @@ export default function OrderQRCodeModal({
 
   const qrCodeData = generateQRCodeData(purchaseCode, {
     farmName,
-    totalAmount: order.total_amount,
+    totalAmount: order.total_price,
     purchaseDate: order.created_at,
     productName,
   });
@@ -76,7 +76,7 @@ export default function OrderQRCodeModal({
   const handleShare = async () => {
     try {
       await Share.share({
-        message: `Farm2Go Order Verification\n\nOrder ID: ${order.id.slice(-8)}\nPurchase Code: ${purchaseCode}\nFarm: ${farmName}\nProduct: ${productName}\nTotal: ₱${order.total_amount.toLocaleString()}\nDate: ${new Date(order.created_at).toLocaleDateString()}\nStatus: ${order.status.toUpperCase()}\n\nScan the QR code to verify this order.`,
+        message: `Farm2Go Order Verification\n\nOrder ID: ${order.id.slice(-8)}\nPurchase Code: ${purchaseCode}\nFarm: ${farmName}\nProduct: ${productName}\nTotal: ₱${order.total_price.toLocaleString()}\nDate: ${new Date(order.created_at).toLocaleDateString()}\nStatus: ${order.status.toUpperCase()}\n\nScan the QR code to verify this order.`,
         title: 'Farm2Go Order Verification',
       });
     } catch (error) {
@@ -194,7 +194,7 @@ export default function OrderQRCodeModal({
               <View style={[styles.detailRow, styles.totalRow]}>
                 <Text style={styles.totalLabel}>Total Amount:</Text>
                 <Text style={styles.totalValue}>
-                  ₱{order.total_amount.toLocaleString()}
+                  ₱{order.total_price.toLocaleString()}
                 </Text>
               </View>
 

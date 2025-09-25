@@ -1,15 +1,16 @@
 import { router } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import { ActivityIndicator, Alert, Dimensions, FlatList, Image, RefreshControl, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import FilterSidebar from '../../components/FilterSidebar';
 import HeaderComponent from '../../components/HeaderComponent';
 import { supabase } from '../../lib/supabase';
 import { getUserWithProfile } from '../../services/auth';
 import { Database } from '../../types/database';
+import { applyFilters, getMarketplaceFilters } from '../../utils/filterConfigs';
 
 const { width } = Dimensions.get('window');
 
 // Responsive breakpoints
-const isTablet = width >= 768;
 const isDesktop = width >= 1024;
 
 // Calculate number of columns based on screen width
@@ -59,8 +60,16 @@ export default function MarketplaceScreen() {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [selectedCategory, setSelectedCategory] = useState('All');
   const [searchQuery, setSearchQuery] = useState('');
+  const [showSidebar, setShowSidebar] = useState(false);
+
+  // Filter state
+  const [filterState, setFilterState] = useState({
+    category: 'all',
+    priceRange: 'all',
+    availability: false,
+    sortBy: 'newest'
+  });
 
   useEffect(() => {
     loadData();
@@ -68,21 +77,23 @@ export default function MarketplaceScreen() {
 
   useEffect(() => {
     filterProducts();
-  }, [products, selectedCategory, searchQuery]);
+  }, [products, searchQuery, filterState]);
 
-  const loadData = async () => {
+  const loadData = async (page = 0, pageSize = 50) => {
     try {
-      // Get user profile
-      const userData = await getUserWithProfile();
-      if (userData?.profile) {
-        setProfile(userData.profile);
+      // Get user profile only once
+      if (!profile) {
+        const userData = await getUserWithProfile();
+        if (userData?.profile) {
+          setProfile(userData.profile);
+        }
       }
 
-      // Load approved products with farmer info
+      // Load approved products with farmer info using pagination
       const { data: productsData, error } = await supabase
         .from('products')
         .select(`
-          *,
+          id, name, description, price, unit, quantity_available, category, image_url, farmer_id,
           profiles:farmer_id (
             first_name,
             last_name,
@@ -92,7 +103,9 @@ export default function MarketplaceScreen() {
         `)
         .eq('status', 'approved')
         .gt('quantity_available', 0)
-        .order('created_at', { ascending: false });
+        .order('created_at', { ascending: false })
+        .range(page * pageSize, (page + 1) * pageSize - 1)
+        .limit(pageSize);
 
       if (error) throw error;
       setProducts(productsData || []);
@@ -107,12 +120,7 @@ export default function MarketplaceScreen() {
   const filterProducts = () => {
     let filtered = products;
 
-    // Filter by category
-    if (selectedCategory !== 'All') {
-      filtered = filtered.filter(product => product.category === selectedCategory);
-    }
-
-    // Filter by search query
+    // Filter by search query first
     if (searchQuery.trim()) {
       const query = searchQuery.toLowerCase();
       filtered = filtered.filter(product =>
@@ -123,7 +131,25 @@ export default function MarketplaceScreen() {
       );
     }
 
+    // Apply filters using the utility function
+    filtered = applyFilters(filtered, filterState, {
+      categoryKey: 'category',
+      priceKey: 'price',
+      dateKey: 'created_at',
+      customFilters: {
+        availability: (product, value) => value ? product.quantity_available > 0 : true,
+      }
+    });
+
     setFilteredProducts(filtered);
+  };
+
+  // Handle filter changes
+  const handleFilterChange = (key: string, value: any) => {
+    setFilterState(prev => ({
+      ...prev,
+      [key]: value
+    }));
   };
 
   const onRefresh = async () => {
@@ -152,70 +178,59 @@ export default function MarketplaceScreen() {
  
 
 
-  const renderProduct = (product: Product) => (
+
+  const renderCompactProduct = (product: Product) => (
     <TouchableOpacity
-      key={product.id}
-      style={styles.productCard}
+      style={styles.compactProductCard}
       onPress={() => checkAuthAndNavigate(`/buyer/products/${product.id}`)}
-      activeOpacity={0.7}
+      activeOpacity={0.8}
     >
-      <View style={styles.productHeader}>
-        <View style={styles.productMainInfo}>
-          <Text style={styles.productName}>{product.name}</Text>
-          <View style={styles.categoryBadge}>
-            <Text style={styles.categoryBadgeText}>{product.category}</Text>
+      {/* Product Image */}
+      <View style={styles.compactImageContainer}>
+        {product.image_url ? (
+          <Image source={{ uri: product.image_url }} style={styles.compactProductImage} />
+        ) : (
+          <View style={styles.compactPlaceholderImage}>
+            <Text style={styles.compactPlaceholderIcon}>🥬</Text>
           </View>
-        </View>
-        <View style={styles.farmerCard}>
-          <Text style={styles.farmerIcon}>🏡</Text>
-          <View style={styles.farmerInfo}>
-            <Text style={styles.farmerName}>{product.profiles?.farm_name || 'Farm'}</Text>
-            <Text style={styles.farmerLocation}>{product.profiles?.barangay}</Text>
-          </View>
-        </View>
+        )}
       </View>
 
-      <Text style={styles.productDescription} numberOfLines={2}>
-        {product.description}
-      </Text>
-
-      <View style={styles.productMetrics}>
-        <View style={styles.priceSection}>
-          <Text style={styles.priceLabel}>Price</Text>
-          <Text style={styles.priceValue}>{formatPrice(product.price)}</Text>
-          <Text style={styles.priceUnit}>per {product.unit}</Text>
+      {/* Product Info */}
+      <View style={styles.compactProductInfo}>
+        <View style={styles.compactHeader}>
+          <Text style={styles.compactProductName} numberOfLines={1}>
+            {product.name}
+          </Text>
+          <View style={styles.compactCategoryBadge}>
+            <Text style={styles.compactCategoryText}>{product.category}</Text>
+          </View>
         </View>
-        
-        <View style={styles.metricsVerticalDivider} />
-        
-        <View style={styles.stockSection}>
-          <Text style={styles.stockLabel}>Available</Text>
-          <Text style={styles.stockValue}>{product.quantity_available}</Text>
-          <Text style={styles.stockUnit}>{product.unit}</Text>
-        </View>
-      </View>
 
-      <View style={styles.productFooter}>
-        <TouchableOpacity
-          style={styles.contactButton}
-          onPress={(e) => {
-            e.stopPropagation();
-            checkAuthAndNavigate(`/buyer/contact-farmer/${product.farmer_id}`);
-          }}
-          activeOpacity={0.7}
-        >
-          <Text style={styles.contactButtonText}>Contact</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={styles.orderButton}
-          onPress={(e) => {
-            e.stopPropagation();
-            checkAuthAndNavigate(`/buyer/order/${product.id}`);
-          }}
-          activeOpacity={0.7}
-        >
-          <Text style={styles.orderButtonText}>Order Now</Text>
-        </TouchableOpacity>
+        <View style={styles.compactPriceContainer}>
+          <Text style={styles.compactPrice}>{formatPrice(product.price)}</Text>
+          <Text style={styles.compactUnit}>/{product.unit}</Text>
+        </View>
+
+        <View style={styles.compactMeta}>
+          <Text style={styles.compactFarmerText} numberOfLines={1}>
+            🏡 {product.profiles?.farm_name || 'Farm'}
+          </Text>
+          <Text style={styles.compactStockText}>{product.quantity_available} {product.unit} left</Text>
+        </View>
+
+        <View style={styles.compactActions}>
+          <TouchableOpacity
+            style={styles.compactOrderButton}
+            onPress={(e) => {
+              e.stopPropagation();
+              checkAuthAndNavigate(`/buyer/order/${product.id}`);
+            }}
+            activeOpacity={0.7}
+          >
+            <Text style={styles.compactOrderButtonText}>Order</Text>
+          </TouchableOpacity>
+        </View>
       </View>
     </TouchableOpacity>
   );
@@ -279,6 +294,9 @@ export default function MarketplaceScreen() {
     </TouchableOpacity>
   );
 
+  // Get filter configuration
+  const filterSections = getMarketplaceFilters(products);
+
   const renderEmptyState = () => (
     <View style={styles.emptyContainer}>
       <View style={styles.emptyIllustration}>
@@ -291,17 +309,22 @@ export default function MarketplaceScreen() {
       <Text style={styles.emptyDescription}>
         {searchQuery
           ? `No products match "${searchQuery}"`
-          : selectedCategory !== 'All'
-          ? `No products available in ${selectedCategory} category`
+          : filterState.category !== 'all'
+          ? `No products available in ${filterState.category} category`
           : 'No products available at the moment'}
       </Text>
 
-      {(searchQuery || selectedCategory !== 'All') && (
+      {(searchQuery || filterState.category !== 'all') && (
         <TouchableOpacity
           style={styles.ctaButton}
           onPress={() => {
             setSearchQuery('');
-            setSelectedCategory('All');
+            setFilterState({
+              category: 'all',
+              priceRange: 'all',
+              availability: false,
+              sortBy: 'newest'
+            });
           }}
           activeOpacity={0.8}
         >
@@ -347,54 +370,112 @@ export default function MarketplaceScreen() {
         searchPlaceholder="Search fresh products..."
         showCategories={true}
         categories={headerCategories}
-        selectedCategory={selectedCategory.toLowerCase()}
-        onCategoryChange={(category) => setSelectedCategory(category === 'all' ? 'All' : category.charAt(0).toUpperCase() + category.slice(1))}
-        showFilterButton={true}
+        selectedCategory={filterState.category}
+        onCategoryChange={(category) => handleFilterChange('category', category)}
+        showFilterButton={!isDesktop}
+        onFilterPress={() => setShowSidebar(!showSidebar)}
       />
 
-      <ScrollView
-        style={styles.scrollView}
-        contentContainerStyle={styles.scrollContent}
-        refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={onRefresh}
-            tintColor="#10b981"
-            colors={['#10b981']}
+      {/* Desktop Layout with Sidebar */}
+      {isDesktop ? (
+        <View style={styles.desktopLayout}>
+          {/* Sidebar */}
+          <FilterSidebar
+            sections={filterSections}
+            filterState={filterState}
+            onFilterChange={handleFilterChange}
+            title="Product Filters"
           />
-        }
-        showsVerticalScrollIndicator={false}
-      >
-    
-        {/* Products Section */}
-        <View style={styles.productsSection}>
-          <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>
-              {selectedCategory === 'All' ? 'Fresh Products' : selectedCategory}
-            </Text>
-            <View style={styles.productCount}>
-              <Text style={styles.productCountText}>
-                {filteredProducts.length} products
+
+          {/* Main Content */}
+          <ScrollView
+            style={styles.mainContent}
+            contentContainerStyle={styles.mainScrollContent}
+            refreshControl={
+              <RefreshControl
+                refreshing={refreshing}
+                onRefresh={onRefresh}
+                tintColor="#10b981"
+                colors={['#10b981']}
+              />
+            }
+            showsVerticalScrollIndicator={false}
+          >
+            {/* Products Header */}
+            <View style={styles.productsHeader}>
+              <Text style={styles.productsTitle}>
+                {filterState.category === 'all' ? 'All Products' : filterState.category.charAt(0).toUpperCase() + filterState.category.slice(1)}
+              </Text>
+              <Text style={styles.productsCount}>
+                {filteredProducts.length} products found
               </Text>
             </View>
-          </View>
 
-          {filteredProducts.length === 0 ? (
-            renderEmptyState()
-          ) : (
-            <FlatList
-              data={filteredProducts}
-              renderItem={({ item }) => renderGridProduct(item)}
-              keyExtractor={(item) => item.id}
-              numColumns={getNumColumns()}
-              columnWrapperStyle={getNumColumns() > 1 ? styles.gridRow : undefined}
-              showsVerticalScrollIndicator={false}
-              scrollEnabled={false}
-              key={getNumColumns()} // Force re-render when columns change
-            />
-          )}
+            {/* Products Grid */}
+            {filteredProducts.length === 0 ? (
+              renderEmptyState()
+            ) : (
+              <View style={styles.productsGrid}>
+                {filteredProducts.map((product) => renderCompactProduct(product))}
+              </View>
+            )}
+          </ScrollView>
         </View>
-      </ScrollView>
+      ) : (
+        /* Mobile/Tablet Layout */
+        <ScrollView
+          style={styles.scrollView}
+          contentContainerStyle={styles.scrollContent}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              tintColor="#10b981"
+              colors={['#10b981']}
+            />
+          }
+          showsVerticalScrollIndicator={false}
+        >
+          {/* Mobile Filter Sidebar */}
+          <FilterSidebar
+            sections={filterSections}
+            filterState={filterState}
+            onFilterChange={handleFilterChange}
+            title="Product Filters"
+            showMobile={showSidebar}
+            onCloseMobile={() => setShowSidebar(false)}
+          />
+
+          {/* Products Section */}
+          <View style={styles.productsSection}>
+            <View style={styles.sectionHeader}>
+              <Text style={styles.sectionTitle}>
+                {filterState.category === 'all' ? 'Fresh Products' : filterState.category.charAt(0).toUpperCase() + filterState.category.slice(1)}
+              </Text>
+              <View style={styles.productCount}>
+                <Text style={styles.productCountText}>
+                  {filteredProducts.length} products
+                </Text>
+              </View>
+            </View>
+
+            {filteredProducts.length === 0 ? (
+              renderEmptyState()
+            ) : (
+              <FlatList
+                data={filteredProducts}
+                renderItem={({ item }) => renderGridProduct(item)}
+                keyExtractor={(item) => item.id}
+                numColumns={getNumColumns()}
+                columnWrapperStyle={getNumColumns() > 1 ? styles.gridRow : undefined}
+                showsVerticalScrollIndicator={false}
+                scrollEnabled={false}
+                key={getNumColumns()} // Force re-render when columns change
+              />
+            )}
+          </View>
+        </ScrollView>
+      )}
     </View>
   );
 }
@@ -895,4 +976,184 @@ const styles = StyleSheet.create({
     fontSize: width < 768 ? 11 : 9,
     fontWeight: '600',
   },
+
+  // Desktop Layout with Sidebar
+  desktopLayout: {
+    flex: 1,
+    flexDirection: 'row',
+    backgroundColor: '#f8fafc',
+  },
+
+
+  // Main Content
+  mainContent: {
+    flex: 1,
+    backgroundColor: '#f8fafc',
+  },
+
+  mainScrollContent: {
+    padding: 20,
+  },
+
+  productsHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 20,
+    paddingBottom: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#e2e8f0',
+  },
+
+  productsTitle: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#0f172a',
+  },
+
+  productsCount: {
+    fontSize: 14,
+    color: '#64748b',
+    backgroundColor: '#ffffff',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+  },
+
+  productsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 16,
+    justifyContent: 'flex-start',
+  },
+
+  // Compact Product Card
+  compactProductCard: {
+    backgroundColor: '#ffffff',
+    borderRadius: 8,
+    width: 280,
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.06,
+    shadowRadius: 3,
+    borderWidth: 1,
+    borderColor: '#f1f5f9',
+    overflow: 'hidden',
+    marginBottom: 16,
+  },
+
+  compactImageContainer: {
+    height: 140,
+    backgroundColor: '#f8fafc',
+    position: 'relative',
+  },
+
+  compactProductImage: {
+    width: '100%',
+    height: '100%',
+    resizeMode: 'cover',
+  },
+
+  compactPlaceholderImage: {
+    width: '100%',
+    height: '100%',
+    backgroundColor: '#f1f5f9',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  compactPlaceholderIcon: {
+    fontSize: 32,
+  },
+
+  compactProductInfo: {
+    padding: 12,
+  },
+
+  compactHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: 8,
+  },
+
+  compactProductName: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#0f172a',
+    flex: 1,
+    marginRight: 8,
+  },
+
+  compactCategoryBadge: {
+    backgroundColor: '#ecfdf5',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+    borderWidth: 1,
+    borderColor: '#bbf7d0',
+  },
+
+  compactCategoryText: {
+    fontSize: 10,
+    color: '#059669',
+    fontWeight: '600',
+    textTransform: 'uppercase',
+  },
+
+  compactPriceContainer: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    marginBottom: 8,
+  },
+
+  compactPrice: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#059669',
+  },
+
+  compactUnit: {
+    fontSize: 12,
+    color: '#64748b',
+    marginLeft: 2,
+  },
+
+  compactMeta: {
+    marginBottom: 12,
+  },
+
+  compactFarmerText: {
+    fontSize: 12,
+    color: '#64748b',
+    marginBottom: 2,
+  },
+
+  compactStockText: {
+    fontSize: 11,
+    color: '#9ca3af',
+  },
+
+  compactActions: {
+    flexDirection: 'row',
+  },
+
+  compactOrderButton: {
+    backgroundColor: '#10b981',
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderRadius: 6,
+    flex: 1,
+    alignItems: 'center',
+  },
+
+  compactOrderButtonText: {
+    color: '#ffffff',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+
 });

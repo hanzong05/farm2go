@@ -84,7 +84,7 @@ export const signInWithGoogleOAuth = async (userType: string, intent: string = '
       const { data, error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
-          redirectTo: 'exp://192.168.100.52:8086',
+          redirectTo: 'https://farm2go.vercel.app',
           skipBrowserRedirect: true, // Important: don't auto-redirect
         },
       });
@@ -99,14 +99,14 @@ export const signInWithGoogleOAuth = async (userType: string, intent: string = '
       if (data.url) {
         console.log('🌐 Opening OAuth URL in WebBrowser...');
         console.log('🔗 OAuth URL:', data.url);
-        console.log('🔗 Redirect URL:', 'exp://192.168.100.52:8086');
+        console.log('🔗 Redirect URL:', 'https://farm2go.vercel.app');
 
         // Open the OAuth URL in WebBrowser (in-app) with error handling
         let result;
         try {
           result = await WebBrowser.openAuthSessionAsync(
             data.url,
-            'exp://192.168.100.52:8086'
+            'exp:https://farm2go.vercel.app'
           );
 
           console.log('🌐 WebBrowser result:', result);
