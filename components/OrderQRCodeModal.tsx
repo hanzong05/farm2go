@@ -44,8 +44,21 @@ export default function OrderQRCodeModal({
   onClose,
   order,
 }: OrderQRCodeModalProps) {
+  // Debug the order data
+  console.log('🔍 OrderQRCodeModal - Order data:', {
+    orderId: order.id,
+    purchaseCodeFromDB: order.purchase_code,
+    orderKeys: Object.keys(order)
+  });
+
   // Generate purchase code if not exists (for backward compatibility)
   const purchaseCode = order.purchase_code || `FG-${new Date(order.created_at).getFullYear()}-${order.id.slice(-6).toUpperCase()}`;
+
+  console.log('📝 Final purchase code used:', {
+    fromDatabase: order.purchase_code,
+    generated: `FG-${new Date(order.created_at).getFullYear()}-${order.id.slice(-6).toUpperCase()}`,
+    final: purchaseCode
+  });
 
   const farmName = order.farmer_profile?.farm_name ||
     `${order.farmer_profile?.first_name || ''} ${order.farmer_profile?.last_name || ''}`.trim() ||

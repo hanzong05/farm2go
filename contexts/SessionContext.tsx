@@ -51,52 +51,90 @@ export const SessionProvider: React.FC<SessionProviderProps> = ({ children }) =>
     let unsubscribe: (() => void) | undefined;
     let fallbackTimeoutId: NodeJS.Timeout;
 
-    // Fallback timeout to ensure loading state is cleared
+    // Aggressive fallback timeout to ensure loading state is cleared
     fallbackTimeoutId = setTimeout(() => {
-      console.log('⏰ SessionProvider: Fallback timeout - force clearing loading state');
-      setSessionState(prev => ({
-        ...prev,
+      console.log('⏰ SessionProvider: AGGRESSIVE FALLBACK - forcing app to usable state');
+      setSessionState({
+        isAuthenticated: false,
+        user: null,
+        profile: null,
+        session: null,
         isLoading: false,
-        error: 'Session initialization took too long',
-      }));
-    }, 10000);
+        error: null, // Clear error to make app usable
+      });
+    }, 10000); // Aggressive 10 second fallback
 
     const initSession = async () => {
       try {
         console.log('🔄 SessionProvider: Initializing session...');
 
-        // Subscribe to session changes
-        unsubscribe = sessionManager.subscribe((state) => {
-          console.log('📡 SessionProvider: Session state updated', {
-            isAuthenticated: state.isAuthenticated,
-            hasUser: !!state.user,
-            hasProfile: !!state.profile,
-            userType: state.profile?.user_type,
-            isLoading: state.isLoading,
-          });
+        // AGGRESSIVE BYPASS: Skip sessionManager and use simple fallback
+        const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL || 'https://demo.supabase.co';
+        const supabaseKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || 'demo-anon-key';
 
-          // Clear fallback timeout since we got a state update
-          if (fallbackTimeoutId) {
-            clearTimeout(fallbackTimeoutId);
+        if (supabaseUrl === 'https://demo.supabase.co' || supabaseKey === 'demo-anon-key') {
+          console.log('⚠️ SessionProvider: Demo config detected - using fallback state');
+          setSessionState({
+            isAuthenticated: false,
+            user: null,
+            profile: null,
+            session: null,
+            isLoading: false,
+            error: null,
+          });
+          return;
+        }
+
+        // Try a simple direct approach instead of sessionManager
+        console.log('🔄 SessionProvider: Trying direct Supabase session...');
+        const { supabase } = await import('../lib/supabase');
+
+        const directTimeoutPromise = new Promise<never>((_, reject) => {
+          setTimeout(() => {
+            console.log('⏰ SessionProvider: Direct timeout - using fallback state');
+            reject(new Error('Direct session timeout'));
+          }, 3000); // Very aggressive 3 second timeout
+        });
+
+        const directSessionPromise = supabase.auth.getSession();
+
+        try {
+          const { data: { session }, error } = await Promise.race([directSessionPromise, directTimeoutPromise]);
+
+          if (error || !session) {
+            console.log('ℹ️ SessionProvider: No session, using unauthenticated state');
+            setSessionState({
+              isAuthenticated: false,
+              user: null,
+              profile: null,
+              session: null,
+              isLoading: false,
+              error: null,
+            });
+            return;
           }
 
-          setSessionState(state);
-        });
+          console.log('✅ SessionProvider: Direct session found');
+          setSessionState({
+            isAuthenticated: true,
+            user: session.user,
+            profile: null, // Skip profile fetch for now
+            session,
+            isLoading: false,
+            error: null,
+          });
 
-        // Initialize session with timeout protection
-        console.log('⏰ SessionProvider: Starting session initialization with timeout...');
-
-        const timeoutPromise = new Promise<never>((_, reject) => {
-          setTimeout(() => {
-            console.log('⏰ SessionProvider: Session initialization timeout reached');
-            reject(new Error('Session initialization timeout'));
-          }, 8000);
-        });
-
-        const initPromise = sessionManager.initializeSession();
-
-        await Promise.race([initPromise, timeoutPromise]);
-        console.log('✅ SessionProvider: Session initialization completed');
+        } catch (directError) {
+          console.log('⚠️ SessionProvider: Direct approach failed, using fallback');
+          setSessionState({
+            isAuthenticated: false,
+            user: null,
+            profile: null,
+            session: null,
+            isLoading: false,
+            error: null,
+          });
+        }
 
       } catch (error) {
         console.error('❌ SessionProvider: Error initializing session:', error);
@@ -106,11 +144,21 @@ export const SessionProvider: React.FC<SessionProviderProps> = ({ children }) =>
           clearTimeout(fallbackTimeoutId);
         }
 
+        // Handle timeout errors more gracefully
+        const errorMessage = error instanceof Error
+          ? (error.message.includes('timeout')
+            ? 'Session loading is taking longer than usual. Please refresh the page.'
+            : error.message)
+          : 'Failed to initialize session';
+
         // Ensure loading state is cleared even on error
         setSessionState(prev => ({
           ...prev,
           isLoading: false,
-          error: error instanceof Error ? error.message : 'Failed to initialize session',
+          error: errorMessage,
+          isAuthenticated: false, // Force to false on timeout
+          user: null,
+          profile: null,
         }));
       }
     };

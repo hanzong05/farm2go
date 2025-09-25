@@ -22,6 +22,8 @@ import AdminInventoryCard from '../../components/AdminInventoryCard';
 import AdminOrderCard from '../../components/AdminOrderCard';
 import AdminProductCard from '../../components/AdminProductCard';
 import HeaderComponent from '../../components/HeaderComponent';
+import OrderQRScanner from '../../components/OrderQRScanner';
+import OrderVerificationModal from '../../components/OrderVerificationModal';
 import { supabase } from '../../lib/supabase';
 import { getUserWithProfile } from '../../services/auth';
 import { Database } from '../../types/database';
@@ -986,7 +988,9 @@ export default function AdminUsers() {
                   if (item.profiles?.user_type === 'farmer') {
                     openFarmerDetail(item);
                   } else if (item.profiles?.user_type === 'buyer') {
-                    openBuyerDetail(item);
+                    // Open QR scanner for order verification
+                    setSelectedBuyer(item);
+                    setQrScannerVisible(true);
                   }
                 }}
                 disabled={item.profiles?.user_type !== 'farmer' && item.profiles?.user_type !== 'buyer'}
@@ -1945,6 +1949,31 @@ export default function AdminUsers() {
           </View>
         </View>
       </Modal>
+
+      {/* Order QR Scanner */}
+      <OrderQRScanner
+        visible={qrScannerVisible}
+        onClose={() => setQrScannerVisible(false)}
+        onOrderScanned={(orderData) => {
+          setScannedOrderData(orderData);
+          setQrScannerVisible(false);
+          setOrderProcessingVisible(true);
+        }}
+      />
+
+      {/* Order Verification Modal */}
+      <OrderVerificationModal
+        visible={orderProcessingVisible}
+        orderData={scannedOrderData}
+        onClose={() => {
+          setOrderProcessingVisible(false);
+          setScannedOrderData(null);
+        }}
+        onOrderCompleted={() => {
+          // Refresh user data if needed
+          onRefresh();
+        }}
+      />
     </View>
   );
 }

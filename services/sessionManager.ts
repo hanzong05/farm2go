@@ -103,10 +103,12 @@ class SessionManager {
   // Initialize session from storage
   public async initializeSession(): Promise<SessionState> {
     try {
-      console.log('🔄 Initializing session from storage...');
+      console.log('🔄 [STEP 1] Initializing session from storage...');
 
       // First try to load from local storage
+      console.log('🔄 [STEP 2] Loading stored session data...');
       const storedSessionData = await this.loadStoredSessionData();
+      console.log('📋 [STEP 2] Stored session data result:', !!storedSessionData);
 
       if (storedSessionData) {
         console.log('📦 Found stored session data, validating...');
@@ -123,9 +125,29 @@ class SessionManager {
         }
       }
 
+      // Check if we're using demo/invalid Supabase config
+      const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL || 'https://demo.supabase.co';
+      const supabaseKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || 'demo-anon-key';
+
+      if (supabaseUrl === 'https://demo.supabase.co' || supabaseKey === 'demo-anon-key') {
+        console.log('⚠️ [STEP 3] Demo Supabase config detected - skipping session fetch');
+        console.log('✅ Session initialization completed (no auth)');
+        return this.getSessionState();
+      }
+
       // Fallback to getting session from Supabase
-      console.log('🔄 Getting fresh session from Supabase...');
-      const { data: { session }, error } = await supabase.auth.getSession();
+      console.log('🔄 [STEP 3] Getting fresh session from Supabase...');
+
+      // Add timeout protection for Supabase session fetch
+      const sessionTimeoutPromise = new Promise<never>((_, reject) => {
+        setTimeout(() => {
+          reject(new Error('Supabase session fetch timeout'));
+        }, 5000); // Reduced to 5 second timeout
+      });
+
+      const sessionPromise = supabase.auth.getSession();
+      const { data: { session }, error } = await Promise.race([sessionPromise, sessionTimeoutPromise]);
+      console.log('📋 [STEP 3] Supabase session result:', { hasSession: !!session, error: !!error });
 
       if (error) {
         console.error('❌ Error getting session from Supabase:', error);
@@ -151,7 +173,9 @@ class SessionManager {
       }
 
       // Get user profile (optional - user might not have profile yet)
+      console.log('🔄 [STEP 4] Fetching user profile...');
       const profile = await this.fetchUserProfile(session.user.id);
+      console.log('📋 [STEP 4] Profile fetch result:', { hasProfile: !!profile });
       if (!profile) {
         console.log('⚠️ No profile found for user during initialization - user needs to complete profile');
         // Don't clear session - allow OAuth users without profiles to continue
@@ -450,17 +474,34 @@ class SessionManager {
 
   private async fetchUserProfile(userId: string): Promise<Profile | null> {
     try {
-      const { data: profile, error } = await supabase
+      console.log('🔍 Fetching user profile for:', userId);
+
+      // Add timeout protection for profile fetch
+      const timeoutPromise = new Promise<never>((_, reject) => {
+        setTimeout(() => {
+          reject(new Error('Profile fetch timeout'));
+        }, 5000); // 5 second timeout for profile fetch
+      });
+
+      const profilePromise = supabase
         .from('profiles')
         .select('*')
         .eq('id', userId)
         .single();
 
-      if (error || !profile) {
+      const { data: profile, error } = await Promise.race([profilePromise, timeoutPromise]);
+
+      if (error) {
         console.error('❌ Error fetching user profile:', error);
         return null;
       }
 
+      if (!profile) {
+        console.log('ℹ️ No profile found for user');
+        return null;
+      }
+
+      console.log('✅ Profile fetched successfully:', profile.user_type);
       return profile;
     } catch (error) {
       console.error('❌ Error in fetchUserProfile:', error);
@@ -526,7 +567,6 @@ class SessionManager {
     // Check for expired sessions every minute
     this.activityTimer = setInterval(() => {
       if (this.isSessionExpired()) {
-        console.log('⏰ Session expired due to inactivity');
         this.clearSession();
       }
     }, 60 * 1000);

@@ -160,6 +160,7 @@ export default function BuyerMyOrdersScreen() {
           created_at,
           delivery_address,
           notes,
+          purchase_code,
           products (
             name,
             unit,
@@ -197,7 +198,7 @@ export default function BuyerMyOrdersScreen() {
         delivery_date: null, // Not in current schema
         delivery_address: order.delivery_address,
         notes: order.notes,
-        purchase_code: null, // Temporarily set to null until column exists
+        purchase_code: order.purchase_code,
         farmer_profile: order.profiles ? {
           first_name: order.profiles.first_name,
           last_name: order.profiles.last_name,
@@ -302,6 +303,73 @@ export default function BuyerMyOrdersScreen() {
     setSelectedOrder(null);
   };
 
+  const renderOrderTracker = (currentStatus: string) => {
+    const steps = [
+      { key: 'pending', label: 'Order Placed', icon: '📋' },
+      { key: 'confirmed', label: 'Confirmed', icon: '✅' },
+      { key: 'processing', label: 'Processing', icon: '👨‍🍳' },
+      { key: 'ready', label: 'Ready', icon: '📦' },
+      { key: 'delivered', label: 'Delivered', icon: '🚚' }
+    ];
+
+    // Handle cancelled status
+    if (currentStatus === 'cancelled') {
+      return (
+        <View style={styles.trackerContainer}>
+          <View style={styles.cancelledTracker}>
+            <Text style={styles.cancelledIcon}>❌</Text>
+            <Text style={styles.cancelledText}>Order Cancelled</Text>
+          </View>
+        </View>
+      );
+    }
+
+    const currentIndex = steps.findIndex(step => step.key === currentStatus);
+
+    return (
+      <View style={styles.trackerContainer}>
+        <View style={styles.tracker}>
+          {steps.map((step, index) => {
+            const isActive = index <= currentIndex;
+            const isCurrent = index === currentIndex;
+
+            return (
+              <View key={step.key} style={styles.stepContainer}>
+                <View style={styles.stepRow}>
+                  <View style={[
+                    styles.stepCircle,
+                    isActive ? styles.stepCircleActive : styles.stepCircleInactive
+                  ]}>
+                    <Text style={[
+                      styles.stepIcon,
+                      isActive ? styles.stepIconActive : styles.stepIconInactive
+                    ]}>
+                      {step.icon}
+                    </Text>
+                  </View>
+
+                  {index < steps.length - 1 && (
+                    <View style={[
+                      styles.stepLine,
+                      isActive ? styles.stepLineActive : styles.stepLineInactive
+                    ]} />
+                  )}
+                </View>
+
+                <Text style={[
+                  styles.stepLabel,
+                  isCurrent ? styles.stepLabelCurrent : isActive ? styles.stepLabelActive : styles.stepLabelInactive
+                ]}>
+                  {step.label}
+                </Text>
+              </View>
+            );
+          })}
+        </View>
+      </View>
+    );
+  };
+
   const renderStatsCard = (title: string, value: string | number, icon: string, color: string) => (
     <View style={[styles.statsCard, { borderLeftColor: color }]}>
       <View style={styles.statsContent}>
@@ -362,6 +430,9 @@ export default function BuyerMyOrdersScreen() {
             {getDeliveryText(order.status)}
           </Text>
         </View>
+
+        {/* Order Progress Tracker */}
+        {renderOrderTracker(order.status)}
 
         {/* Product Info */}
         <View style={styles.productSection}>
@@ -1114,5 +1185,100 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#ffffff',
     fontWeight: 'bold',
+  },
+
+  // Order Tracker Styles
+  trackerContainer: {
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    backgroundColor: '#f8fafc',
+    borderRadius: 12,
+    marginHorizontal: 16,
+    marginBottom: 16,
+  },
+  tracker: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+  },
+  stepContainer: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  stepRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    width: '100%',
+    marginBottom: 8,
+  },
+  stepCircle: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+  },
+  stepCircleActive: {
+    backgroundColor: '#10b981',
+    borderColor: '#10b981',
+  },
+  stepCircleInactive: {
+    backgroundColor: '#f1f5f9',
+    borderColor: '#e2e8f0',
+  },
+  stepIcon: {
+    fontSize: 16,
+  },
+  stepIconActive: {
+    color: '#ffffff',
+  },
+  stepIconInactive: {
+    color: '#94a3b8',
+  },
+  stepLine: {
+    flex: 1,
+    height: 2,
+    marginLeft: 8,
+  },
+  stepLineActive: {
+    backgroundColor: '#10b981',
+  },
+  stepLineInactive: {
+    backgroundColor: '#e2e8f0',
+  },
+  stepLabel: {
+    fontSize: 12,
+    textAlign: 'center',
+    marginTop: 4,
+  },
+  stepLabelCurrent: {
+    color: '#10b981',
+    fontWeight: '600',
+  },
+  stepLabelActive: {
+    color: '#475569',
+    fontWeight: '500',
+  },
+  stepLabelInactive: {
+    color: '#94a3b8',
+    fontWeight: '400',
+  },
+
+  // Cancelled Order Tracker
+  cancelledTracker: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 12,
+  },
+  cancelledIcon: {
+    fontSize: 20,
+    marginRight: 8,
+  },
+  cancelledText: {
+    fontSize: 16,
+    color: '#dc2626',
+    fontWeight: '600',
   },
 });
