@@ -111,15 +111,80 @@ export default function AuthCallback() {
           console.log('🔍 Error accessing storage for debug:', error);
         }
 
+        // First, check if we have authorization code that needs to be exchanged
+        console.log('🔍 Checking for OAuth authorization code...');
+
+        // For mobile, check if we have a stored authorization code from deep link processing
+        let authorizationCode = null;
+        if (Platform.OS !== 'web') {
+          // Check if the deep link contained an authorization code
+          try {
+            authorizationCode = await AsyncStorage.getItem('oauth_authorization_code');
+            if (authorizationCode) {
+              console.log('🔑 Found stored authorization code from deep link');
+              // Remove it so it's not used again
+              await AsyncStorage.removeItem('oauth_authorization_code');
+            }
+          } catch (error) {
+            console.log('📱 Error checking for stored auth code:', error);
+          }
+        } else if (typeof window !== 'undefined') {
+          // For web, check URL parameters
+          const urlParams = new URLSearchParams(window.location.search);
+          authorizationCode = urlParams.get('code');
+        }
+
+        if (authorizationCode) {
+          console.log('🔑 Found authorization code, exchanging for session...');
+          try {
+            const { data: sessionData, error: exchangeError } = await supabase.auth.exchangeCodeForSession(authorizationCode);
+            if (exchangeError) {
+              console.error('❌ Error exchanging code:', exchangeError);
+            } else {
+              console.log('✅ Successfully exchanged code for session');
+              console.log('👤 Session user:', sessionData?.user?.email);
+            }
+          } catch (exchangeError) {
+            console.error('❌ Exception exchanging code:', exchangeError);
+          }
+
+          // Wait a moment for session to be established
+          await new Promise(resolve => setTimeout(resolve, 1000));
+        } else {
+          console.log('🔍 No authorization code found');
+        }
+
         // For sign-in attempts or when intent is unclear, always look up user type from database
         // This fixes mobile browser issues where intent might not be properly stored
         if (oauthIntent === 'signin' || !oauthIntent) {
           console.log('📱 This is a sign-in attempt or unclear intent - looking up user type from database');
           console.log('📱 Mobile browser compatibility mode enabled');
 
-          // First get the OAuth user to check their email
-          console.log('🔐 Getting OAuth user...');
-          const { data: { user: oauthUser }, error: userError } = await supabase.auth.getUser();
+          // First get the OAuth user to check their email - with retries for mobile
+          console.log('🔐 Getting OAuth user with retry logic...');
+          let oauthUser = null;
+          let userError = null;
+          let retryCount = 0;
+          const maxRetries = 5;
+
+          while (!oauthUser && retryCount < maxRetries) {
+            try {
+              const result = await supabase.auth.getUser();
+              oauthUser = result.data.user;
+              userError = result.error;
+
+              if (oauthUser) break;
+
+              if (retryCount < maxRetries - 1) {
+                console.log(`🔄 Retry ${retryCount + 1}/${maxRetries} getting OAuth user - waiting 1 second...`);
+                await new Promise(resolve => setTimeout(resolve, 1000));
+              }
+            } catch (error) {
+              console.log(`🔄 Exception on retry ${retryCount + 1}: ${error}`);
+              userError = error;
+            }
+            retryCount++;
+          }
 
           console.log('🔐 OAuth user result:', {
             hasUser: !!oauthUser,
@@ -130,7 +195,7 @@ export default function AuthCallback() {
 
           if (userError) {
             console.error('❌ Error getting OAuth user:', userError);
-            safeNavigate('/auth/register?error=' + encodeURIComponent('Failed to get user information. Please try again.'));
+            safeNavigate('/auth/login?error=' + encodeURIComponent('Failed to get user information. Please try again.'));
             return;
           }
 
@@ -191,16 +256,16 @@ export default function AuthCallback() {
                 await AsyncStorage.removeItem('oauth_intent');
                 safeLocalStorage.removeItem('oauth_intent');
 
-                // Redirect to register page with error message
-                safeNavigate('/auth/register?error=' + encodeURIComponent('No account found with this email. Please register first or use a different sign-in method.'));
+                // Redirect to login page with info message instead of error
+                safeNavigate('/auth/login?info=' + encodeURIComponent('This Google account is not registered yet. Please sign up first or use a different account.'));
                 return;
               }
             } catch (error) {
               console.error('❌ Error checking for existing profile:', error);
-              // Clean up and redirect to register
+              // Clean up and redirect to login
               await AsyncStorage.removeItem('oauth_intent');
               safeLocalStorage.removeItem('oauth_intent');
-              safeNavigate('/auth/register?error=' + encodeURIComponent('Error checking account. Please try again.'));
+              safeNavigate('/auth/login?error=' + encodeURIComponent('Error checking account. Please try again.'));
               return;
             }
           } else {
@@ -208,7 +273,7 @@ export default function AuthCallback() {
             // Clean up and redirect
             await AsyncStorage.removeItem('oauth_intent');
             safeLocalStorage.removeItem('oauth_intent');
-            safeNavigate('/auth/register?error=' + encodeURIComponent('Could not get email from Google. Please try again.'));
+            safeNavigate('/auth/login?error=' + encodeURIComponent('Could not get email from Google. Please try again.'));
             return;
           }
         }
@@ -253,7 +318,9 @@ export default function AuthCallback() {
 
         if (userError || !user) {
           console.error('❌ No OAuth user found after retries:', userError);
-          throw new Error('OAuth authentication failed');
+          console.log('🔄 Redirecting to login with error message...');
+          safeNavigate('/auth/login?error=' + encodeURIComponent('Google sign-in was not completed. Please try again.'));
+          return;
         }
 
         console.log('✅ OAuth user verified:', user.email);
@@ -375,9 +442,9 @@ export default function AuthCallback() {
         safeLocalStorage.removeItem('oauth_intent');
         safeLocalStorage.removeItem('oauth_timestamp');
 
-        // Redirect back to register with error
-        console.log('🔄 Redirecting to register with error...');
-        safeNavigate(`/auth/register?error=${encodeURIComponent(error.message || 'OAuth failed')}`);
+        // Redirect back to login with error
+        console.log('🔄 Redirecting to login with error...');
+        safeNavigate(`/auth/login?error=${encodeURIComponent(error.message || 'Google sign-in failed. Please try again.')}`);
       }
     };
 

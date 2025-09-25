@@ -374,6 +374,8 @@ export default function MarketplaceScreen() {
         onCategoryChange={(category) => handleFilterChange('category', category)}
         showFilterButton={!isDesktop}
         onFilterPress={() => setShowSidebar(!showSidebar)}
+        showMessages={true}
+        showNotifications={true}
       />
 
       {/* Desktop Layout with Sidebar */}

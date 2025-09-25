@@ -366,6 +366,8 @@ export default function AddProductScreen() {
         <HeaderComponent
           profile={profile}
           showAddButton={false}
+          showMessages={true}
+          showNotifications={true}
         />
 
       <ScrollView

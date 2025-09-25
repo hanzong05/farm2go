@@ -193,7 +193,7 @@ export default function AdminUsers() {
   // Code scanner setup (mobile only)
   const codeScanner = useCodeScanner({
     codeTypes: ['qr', 'ean-13'],
-    onCodeScanned: (codes) => {
+    onCodeScanned: (codes: any[]) => {
       if (isScanning && codes.length > 0) {
         setIsScanning(false);
         handleQrCodeScanned(codes[0].value || '');
@@ -776,7 +776,7 @@ export default function AdminUsers() {
         .eq('id', orderData.orderId || orderData.order_id)
         .single();
 
-      if (error) {
+      if (error || !orderDetails) {
         Alert.alert('Error', 'Order not found or invalid QR code');
         return;
       }
@@ -805,7 +805,7 @@ export default function AdminUsers() {
 
       const { error } = await supabase
         .from('orders')
-        .update({ status: newStatus })
+        .update({ status: newStatus } as any)
         .eq('id', scannedOrderData.id);
 
       if (error) throw error;
@@ -1569,7 +1569,7 @@ export default function AdminUsers() {
                         quantity={product.stock_quantity}
                         status={product.status}
                         description={product.description}
-                        farmer={selectedFarmer ? `${selectedFarmer.first_name} ${selectedFarmer.last_name}`.trim() : undefined}
+                        farmer={selectedFarmer ? `${selectedFarmer.profiles?.first_name || ''} ${selectedFarmer.profiles?.last_name || ''}`.trim() : undefined}
                         onStatusUpdate={() => loadFarmerData(selectedFarmer?.id || '')}
                       />
                     ))}
@@ -1592,7 +1592,7 @@ export default function AdminUsers() {
                     status={order.status}
                     createdAt={order.created_at}
                     buyerProfile={order.buyer_profile}
-                    farmer={selectedFarmer ? `${selectedFarmer.first_name} ${selectedFarmer.last_name}`.trim() : undefined}
+                    farmer={selectedFarmer ? `${selectedFarmer.profiles?.first_name || ''} ${selectedFarmer.profiles?.last_name || ''}`.trim() : undefined}
                     items={`Order details - Total: ${formatCurrency(order.total_price)}`}
                     onStatusUpdate={() => loadFarmerData(selectedFarmer?.id || '')}
                   />
@@ -1618,7 +1618,7 @@ export default function AdminUsers() {
                     imageUrl={item.image_url}
                     status={item.status}
                     description={item.description}
-                    farmer={selectedFarmer ? `${selectedFarmer.first_name} ${selectedFarmer.last_name}`.trim() : undefined}
+                    farmer={selectedFarmer ? `${selectedFarmer.profiles?.first_name || ''} ${selectedFarmer.profiles?.last_name || ''}`.trim() : undefined}
                     createdAt={item.created_at}
                     onUpdate={() => loadFarmerData(selectedFarmer?.id || '')}
                   />
@@ -1692,7 +1692,10 @@ export default function AdminUsers() {
                     totalAmount={order.total_price}
                     status={order.status}
                     createdAt={order.created_at}
-                    buyerProfile={selectedBuyer}
+                    buyerProfile={selectedBuyer?.profiles ? {
+                      first_name: selectedBuyer.profiles.first_name,
+                      last_name: selectedBuyer.profiles.last_name
+                    } : undefined}
                     farmer={order.farmer_profile ?
                       `${order.farmer_profile.first_name} ${order.farmer_profile.last_name}`.trim() ||
                       order.farmer_profile.farm_name : undefined
@@ -1707,7 +1710,7 @@ export default function AdminUsers() {
 
                 {buyerOrders.length === 0 && (
                   <View style={styles.emptyContainer}>
-                    <Text style={styles.emptyText}>No current orders</Text>
+                    <Text style={styles.emptySubtitle}>No current orders</Text>
                   </View>
                 )}
               </View>
@@ -1726,7 +1729,10 @@ export default function AdminUsers() {
                     totalAmount={order.total_price}
                     status={order.status}
                     createdAt={order.created_at}
-                    buyerProfile={selectedBuyer}
+                    buyerProfile={selectedBuyer?.profiles ? {
+                      first_name: selectedBuyer.profiles.first_name,
+                      last_name: selectedBuyer.profiles.last_name
+                    } : undefined}
                     farmer={order.farmer_profile ?
                       `${order.farmer_profile.first_name} ${order.farmer_profile.last_name}`.trim() ||
                       order.farmer_profile.farm_name : undefined
@@ -1741,7 +1747,7 @@ export default function AdminUsers() {
 
                 {buyerHistory.length === 0 && (
                   <View style={styles.emptyContainer}>
-                    <Text style={styles.emptyText}>No purchase history</Text>
+                    <Text style={styles.emptySubtitle}>No purchase history</Text>
                   </View>
                 )}
               </View>

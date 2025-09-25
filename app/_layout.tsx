@@ -304,9 +304,28 @@ export default function RootLayout() {
     const handleDeepLink = (url: string) => {
       console.log('🛒 Deep link handler:', url);
 
-      // Handle OAuth callback
-      if (url.includes('access_token=') || url.includes('refresh_token=')) {
-        console.log('🔗 OAuth callback detected, redirecting to auth/callback');
+      // Handle OAuth callback - support both token-based and code-based (PKCE) flows
+      if (url.includes('access_token=') || url.includes('refresh_token=') || url.includes('code=')) {
+        console.log('🔗 OAuth callback detected, processing callback...');
+
+        // Extract authorization code for mobile processing
+        if (url.includes('code=')) {
+          try {
+            const urlObj = new URL(url);
+            const authCode = urlObj.searchParams.get('code');
+            if (authCode) {
+              console.log('🔑 Extracted authorization code from deep link');
+              // Store it for callback processing on mobile
+              if (Platform.OS !== 'web') {
+                const AsyncStorage = require('@react-native-async-storage/async-storage').default;
+                AsyncStorage.setItem('oauth_authorization_code', authCode);
+              }
+            }
+          } catch (error) {
+            console.log('⚠️ Error parsing deep link URL:', error);
+          }
+        }
+
         if (isRouterReady) {
           router.replace('/auth/callback');
         } else {

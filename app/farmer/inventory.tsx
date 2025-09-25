@@ -461,6 +461,8 @@ export default function Farm2GoInventoryScreen() {
         addButtonText="+ Add Product"
         addButtonRoute="/farmer/products/add"
         showFilterButton={true}
+        showMessages={true}
+        showNotifications={true}
       />
       <ScrollView
         style={styles.scrollContainer}

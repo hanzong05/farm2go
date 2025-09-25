@@ -366,7 +366,7 @@ export default function HeaderComponent({
       // Multiple download options
       const downloadUrls = [
         'https://github.com/hanz-pillerva/farm2go/releases/latest/download/farm2go.apk',
-        'https://farm2go.vercel.app/downloads/farm2go.apk',
+        'exp://192.168.100.52:8081/downloads/farm2go.apk',
         (() => {
           const { data: apkData } = supabase.storage.from('app').getPublicUrl('farm2go.apk');
           return apkData.publicUrl;
@@ -402,59 +402,295 @@ export default function HeaderComponent({
     item.userTypes.includes(resolvedUserType)
   );
 
+  // Create dynamic styles based on current screen size
+  const dynamicStyles = StyleSheet.create({
+    header: {
+      backgroundColor: colors.white,
+      marginBottom: 2,
+      ...Platform.select({
+        web: {
+          boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
+        },
+        default: {
+          elevation: 2,
+          shadowColor: colors.shadow,
+          shadowOffset: { width: 0, height: 2 },
+          shadowOpacity: 0.1,
+          shadowRadius: 4,
+        },
+      }),
+    },
+
+    topBar: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      paddingHorizontal: isMobile ? 12 : isTablet ? 16 : 24,
+      paddingVertical: isMobile ? 2 : 4,
+      paddingTop: Platform.OS === 'web' ? (isMobile ? 8 : 12) : (isMobile ? 36 : 40),
+      backgroundColor: colors.primary,
+      minHeight: isMobile ? 44 : isTablet ? 52 : 60,
+    },
+
+    logoSection: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      flex: isMobile ? 0 : 0.25,
+      minWidth: isMobile ? 60 : isTablet ? 140 : 200,
+    },
+
+    logo: {
+      width: isMobile ? 24 : isTablet ? 28 : 32,
+      height: isMobile ? 24 : isTablet ? 28 : 32,
+      borderRadius: isMobile ? 6 : 8,
+      backgroundColor: colors.white,
+      alignItems: 'center',
+      justifyContent: 'center',
+      marginRight: isMobile ? 6 : 8,
+    },
+
+    logoText: {
+      fontSize: isMobile ? 10 : isTablet ? 12 : 14,
+      fontWeight: 'bold',
+      color: colors.primary,
+    },
+
+    brandText: {
+      fontSize: isTablet ? 14 : 18,
+      fontWeight: 'bold',
+      color: colors.white,
+      letterSpacing: 0.3,
+    },
+
+    // Desktop Navigation - FIXED
+    desktopNavContainer: {
+      flex: 1,
+      maxWidth: isDesktop ? 800 : 600,
+      marginHorizontal: isTablet ? 12 : 24,
+      height: '100%',
+      justifyContent: 'center',
+    },
+
+    topNavScroll: {
+      flex: 1,
+    },
+
+    topNavContent: {
+      alignItems: 'center',
+      paddingHorizontal: 8,
+      flexDirection: 'row',
+      gap: isDesktop ? 8 : 4,
+      minHeight: 40,
+    },
+
+    topNavItem: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      paddingHorizontal: isDesktop ? 8 : 6,
+      paddingVertical: isDesktop ? 4 : 3,
+      borderRadius: 6,
+      backgroundColor: 'transparent',
+      marginHorizontal: 1,
+      minHeight: 24,
+      ...(Platform.OS === 'web' ? {
+        cursor: 'pointer',
+        transition: 'all 0.2s ease-in-out',
+      } : {}),
+    },
+
+    topNavItemActive: {
+      backgroundColor: colors.white,
+      ...Platform.select({
+        web: {
+          boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
+        },
+        default: {
+          elevation: 2,
+          shadowColor: colors.shadow,
+          shadowOffset: { width: 0, height: 2 },
+          shadowOpacity: 0.15,
+          shadowRadius: 4,
+        },
+      }),
+    },
+
+    topNavIcon: {
+      marginRight: 4,
+    },
+
+    topNavText: {
+      fontSize: isDesktop ? 12 : 10,
+      fontWeight: '500',
+      color: colors.white,
+      ...(Platform.OS === 'web' && {
+        whiteSpace: 'nowrap' as any,
+      }),
+    },
+
+    topNavTextActive: {
+      color: colors.primary,
+      fontWeight: '600',
+    },
+
+    // Header Actions - FIXED
+    headerActions: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      flex: isMobile ? 0 : 0.25,
+      justifyContent: 'flex-end',
+      gap: isMobile ? 6 : isTablet ? 8 : 10,
+      minWidth: isMobile ? 120 : 'auto',
+    },
+
+    searchSection: {
+      paddingHorizontal: isMobile ? 12 : isTablet ? 16 : 24,
+      paddingVertical: isMobile ? 4 : 8,
+      backgroundColor: colors.primary,
+    },
+
+    searchContainer: {
+      flexDirection: 'row',
+      gap: isMobile ? 8 : 12,
+      alignItems: 'center',
+    },
+
+    searchInputContainer: {
+      flex: 1,
+      flexDirection: 'row',
+      alignItems: 'center',
+      backgroundColor: colors.white,
+      borderRadius: 8,
+      paddingHorizontal: isMobile ? 8 : 12,
+      height: isMobile ? 32 : isTablet ? 36 : 40,
+      ...Platform.select({
+        web: {
+          boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
+        },
+        default: {
+          elevation: 2,
+          shadowColor: colors.shadow,
+          shadowOffset: { width: 0, height: 2 },
+          shadowOpacity: 0.1,
+          shadowRadius: 4,
+        },
+      }),
+    },
+
+    searchIcon: {
+      marginRight: isMobile ? 8 : 12,
+    },
+
+    searchInput: {
+      flex: 1,
+      fontSize: isMobile ? 12 : isTablet ? 14 : 16,
+      color: colors.text,
+    },
+
+    statsSection: {
+      backgroundColor: colors.gray100,
+      paddingHorizontal: isMobile ? 12 : isTablet ? 16 : 24,
+      paddingVertical: isMobile ? 4 : 8,
+      borderBottomWidth: 1,
+      borderBottomColor: colors.gray200,
+    },
+
+    // Mobile Navigation - Dynamic Styles
+    mobileNavMenu: {
+      backgroundColor: colors.primary,
+      paddingHorizontal: 8,
+      paddingVertical: 8,
+      borderTopWidth: 1,
+      borderTopColor: 'rgba(255,255,255,0.2)',
+      maxHeight: 200,
+    },
+
+    mobileNavGrid: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      justifyContent: 'space-around',
+      alignItems: 'center',
+      paddingHorizontal: 4,
+      gap: 8,
+    },
+
+    mobileNavItem: {
+      flexDirection: 'column',
+      alignItems: 'center',
+      justifyContent: 'center',
+      paddingHorizontal: screenData.width < 375 ? 8 : 12,
+      paddingVertical: 8,
+      borderRadius: 8,
+      backgroundColor: 'transparent',
+      minWidth: screenData.width < 375 ? 65 : 80,
+      maxWidth: screenData.width < 375 ? 75 : 90,
+      minHeight: 60,
+    },
+
+    mobileNavItemActive: {
+      backgroundColor: 'rgba(255,255,255,0.25)',
+      borderWidth: 1,
+      borderColor: 'rgba(255,255,255,0.3)',
+    },
+
+    mobileNavIcon: {
+      marginBottom: 4,
+    },
+
+    mobileNavText: {
+      fontSize: screenData.width < 375 ? 9 : 10,
+      fontWeight: '500',
+      color: colors.white,
+      textAlign: 'center',
+      lineHeight: screenData.width < 375 ? 11 : 13,
+    },
+
+    mobileNavTextActive: {
+      color: colors.white,
+      fontWeight: '700',
+    },
+
+    mobileAddButton: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      backgroundColor: colors.white,
+      paddingHorizontal: 16,
+      paddingVertical: 8,
+      borderRadius: 8,
+      marginTop: 8,
+      gap: 6,
+      alignSelf: 'center',
+      minHeight: 36,
+    },
+
+    mobileAddButtonText: {
+      fontSize: 14,
+      fontWeight: '600',
+      color: colors.primary,
+    },
+  });
+
   return (
-    <View style={styles.header}>
+    <View style={dynamicStyles.header}>
       {/* Top Navigation Bar */}
-      <View style={[
-        styles.topBar,
-        isMobile && styles.topBarMobile,
-        isTablet && styles.topBarTablet,
-        isDesktop && styles.topBarDesktop
-      ]}>
+      <View style={dynamicStyles.topBar}>
         {/* Logo Section */}
-        <View style={[
-          styles.logoSection,
-          isMobile && styles.logoSectionMobile,
-          isDesktop && styles.logoSectionDesktop
-        ]}>
-          <View style={[
-            styles.logo,
-            isMobile && styles.logoMobile,
-            isTablet && styles.logoTablet,
-            isDesktop && styles.logoDesktop
-          ]}>
-            <Text style={[
-              styles.logoText,
-              isMobile && styles.logoTextMobile,
-              isTablet && styles.logoTextTablet,
-              isDesktop && styles.logoTextDesktop
-            ]}>F2G</Text>
+        <View style={dynamicStyles.logoSection}>
+          <View style={dynamicStyles.logo}>
+            <Text style={dynamicStyles.logoText}>F2G</Text>
           </View>
           {!isMobile && (
-            <Text style={[
-              styles.brandText,
-              isTablet && styles.brandTextTablet,
-              isDesktop && styles.brandTextDesktop
-            ]}>Farm2Go</Text>
+            <Text style={dynamicStyles.brandText}>Farm2Go</Text>
           )}
         </View>
 
         {/* Navigation Items - Desktop & Tablet */}
         {!isMobile && filteredNavItems.length > 0 && (
-          <View style={[
-            styles.desktopNavContainer,
-            isTablet && styles.desktopNavContainerTablet,
-            isDesktop && styles.desktopNavContainerDesktop
-          ]}>
+          <View style={dynamicStyles.desktopNavContainer}>
             <ScrollView
               horizontal
               showsHorizontalScrollIndicator={false}
-              style={styles.topNavScroll}
-              contentContainerStyle={[
-                styles.topNavContent,
-                isTablet && styles.topNavContentTablet,
-                isDesktop && styles.topNavContentDesktop
-              ]}
+              style={dynamicStyles.topNavScroll}
+              contentContainerStyle={dynamicStyles.topNavContent}
             >
               {filteredNavItems.map((item) => {
                 const isActive = currentRoute === item.route;
@@ -463,24 +699,20 @@ export default function HeaderComponent({
                   <TouchableOpacity
                     key={item.id}
                     style={[
-                      styles.topNavItem,
-                      isTablet && styles.topNavItemTablet,
-                      isDesktop && styles.topNavItemDesktop,
-                      isActive && styles.topNavItemActive
+                      dynamicStyles.topNavItem,
+                      isActive && dynamicStyles.topNavItemActive
                     ]}
                     onPress={() => handleNavigation(item.route)}
                   >
                     <Icon
                       name={item.icon}
-                      size={isDesktop ? 14 : 12}
+                      size={isDesktop ? 16 : 14}
                       color={isActive ? colors.primary : colors.white}
-                      style={styles.topNavIcon}
+                      style={dynamicStyles.topNavIcon}
                     />
                     <Text style={[
-                      styles.topNavText,
-                      isTablet && styles.topNavTextTablet,
-                      isDesktop && styles.topNavTextDesktop,
-                      isActive && styles.topNavTextActive
+                      dynamicStyles.topNavText,
+                      isActive && dynamicStyles.topNavTextActive
                     ]}>
                       {item.title}
                     </Text>
@@ -492,13 +724,8 @@ export default function HeaderComponent({
         )}
 
         {/* Header Actions */}
-        <View style={[
-          styles.headerActions,
-          isMobile && styles.headerActionsMobile,
-          isTablet && styles.headerActionsTablet,
-          isDesktop && styles.headerActionsDesktop
-        ]}>
-          {/* Messages and Notifications */}
+        <View style={dynamicStyles.headerActions}>
+          {/* Messages and Notifications - Always show on all devices */}
           {showMessages && (
             <MessageComponent
               conversations={conversations}
@@ -520,14 +747,16 @@ export default function HeaderComponent({
           )}
 
           {/* Download App Button */}
-          {Platform.OS === 'web' && !isMobile && (
+          {Platform.OS === 'web' && (
             <TouchableOpacity style={styles.downloadButton} onPress={handleDownloadApp}>
               <Icon
                 name="download"
-                size={14}
+                size={isMobile ? 14 : 16}
                 color={colors.white}
               />
-              <Text style={styles.downloadText}>Get App</Text>
+              {!isMobile && (
+                <Text style={styles.downloadText}>Get App</Text>
+              )}
             </TouchableOpacity>
           )}
 
@@ -542,13 +771,10 @@ export default function HeaderComponent({
           )}
 
           {/* Auth Button */}
-          <TouchableOpacity style={[
-            styles.authButton,
-            isMobile && styles.authButtonMobile
-          ]} onPress={handleAuthAction}>
+          <TouchableOpacity style={styles.authButton} onPress={handleAuthAction}>
             <Icon
               name={profile ? "sign-out-alt" : "sign-in-alt"}
-              size={isMobile ? 16 : 14}
+              size={isMobile ? 14 : 16}
               color={colors.white}
             />
             {!isMobile && (
@@ -576,96 +802,68 @@ export default function HeaderComponent({
 
       {/* Mobile Navigation Menu */}
       {isMobile && showMobileNav && (
-        <View style={styles.mobileNavMenu}>
-          <ScrollView 
-            style={styles.mobileNavScroll}
-            showsVerticalScrollIndicator={false}
-          >
-            <View style={[
-              styles.mobileNavGrid,
-              screenData.width < 375 && styles.mobileNavGridSmall
-            ]}>
-              {filteredNavItems.map((item) => {
-                const isActive = currentRoute === item.route;
+        <View style={dynamicStyles.mobileNavMenu}>
+          <View style={dynamicStyles.mobileNavGrid}>
+            {filteredNavItems.map((item) => {
+              const isActive = currentRoute === item.route;
 
-                return (
-                  <TouchableOpacity
-                    key={item.id}
-                    style={[
-                      styles.mobileNavItem,
-                      screenData.width < 375 && styles.mobileNavItemSmall,
-                      isActive && styles.mobileNavItemActive
-                    ]}
-                    onPress={() => {
-                      handleNavigation(item.route);
-                      setShowMobileNav(false);
-                    }}
-                    activeOpacity={0.7}
-                  >
-                    <Icon
-                      name={item.icon}
-                      size={screenData.width < 375 ? 16 : 18}
-                      color={colors.white}
-                      style={styles.mobileNavIcon}
-                    />
-                    <Text style={[
-                      styles.mobileNavText,
-                      screenData.width < 375 && styles.mobileNavTextSmall,
-                      isActive && styles.mobileNavTextActive
-                    ]} numberOfLines={2}>
-                      {item.title}
-                    </Text>
-                  </TouchableOpacity>
-                );
-              })}
-            </View>
+              return (
+                <TouchableOpacity
+                  key={item.id}
+                  style={[
+                    dynamicStyles.mobileNavItem,
+                    isActive && dynamicStyles.mobileNavItemActive
+                  ]}
+                  onPress={() => {
+                    handleNavigation(item.route);
+                    setShowMobileNav(false);
+                  }}
+                  activeOpacity={0.7}
+                >
+                  <Icon
+                    name={item.icon}
+                    size={screenData.width < 375 ? 16 : 18}
+                    color={colors.white}
+                    style={dynamicStyles.mobileNavIcon}
+                  />
+                  <Text style={[
+                    dynamicStyles.mobileNavText,
+                    isActive && dynamicStyles.mobileNavTextActive
+                  ]} numberOfLines={1}>
+                    {item.title}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
 
-            {/* Mobile Add Button */}
-            {showAddButton && (
-              <TouchableOpacity
-                style={styles.mobileAddButton}
-                onPress={() => {
-                  handleAddPress();
-                  setShowMobileNav(false);
-                }}
-                activeOpacity={0.7}
-              >
-                <Icon name="plus" size={16} color={colors.primary} />
-                <Text style={styles.mobileAddButtonText}>{addButtonText}</Text>
-              </TouchableOpacity>
-            )}
-          </ScrollView>
+          {/* Mobile Add Button */}
+          {showAddButton && (
+            <TouchableOpacity
+              style={dynamicStyles.mobileAddButton}
+              onPress={handleAddPress}
+              activeOpacity={0.7}
+            >
+              <Icon name="plus" size={16} color={colors.primary} />
+              <Text style={dynamicStyles.mobileAddButtonText}>{addButtonText}</Text>
+            </TouchableOpacity>
+          )}
         </View>
       )}
 
       {/* Search Section */}
       {showSearch && (
-        <View style={[
-          styles.searchSection,
-          isMobile && styles.searchSectionMobile,
-          isTablet && styles.searchSectionTablet,
-          isDesktop && styles.searchSectionDesktop
-        ]}>
-          <View style={styles.searchContainer}>
-            <View style={[
-              styles.searchInputContainer,
-              isMobile && styles.searchInputContainerMobile,
-              isTablet && styles.searchInputContainerTablet,
-              isDesktop && styles.searchInputContainerDesktop
-            ]}>
+        <View style={dynamicStyles.searchSection}>
+          <View style={dynamicStyles.searchContainer}>
+            <View style={dynamicStyles.searchInputContainer}>
               <Icon
                 name="search"
                 size={isMobile ? 16 : 18}
                 color={colors.textSecondary}
-                style={styles.searchIcon}
+                style={dynamicStyles.searchIcon}
               />
               <TextInput
-                style={[
-                  styles.searchInput,
-                  isMobile && styles.searchInputMobile,
-                  isTablet && styles.searchInputTablet,
-                  isDesktop && styles.searchInputDesktop
-                ]}
+                style={dynamicStyles.searchInput}
                 placeholder={searchPlaceholder}
                 value={searchQuery}
                 onChangeText={onSearchChange}
@@ -673,45 +871,31 @@ export default function HeaderComponent({
               />
             </View>
             {showFilterButton && (
-              <TouchableOpacity style={[
-                styles.filterButton,
-                isMobile && styles.filterButtonMobile
-              ]} onPress={onFilterPress}>
+              <TouchableOpacity style={styles.filterButton} onPress={onFilterPress}>
                 <Icon
-                  name="sliders-h"
+                  name="cog"
                   size={isMobile ? 16 : 18}
                   color={colors.white}
                 />
               </TouchableOpacity>
             )}
           </View>
+
         </View>
       )}
 
       {/* Stats Section */}
       {showStats && stats.length > 0 && (
-        <View style={[
-          styles.statsSection,
-          isMobile && styles.statsSectionMobile
-        ]}>
+        <View style={dynamicStyles.statsSection}>
           <ScrollView
             horizontal
             showsHorizontalScrollIndicator={false}
             contentContainerStyle={styles.statsContainer}
           >
             {stats.map((stat, index) => (
-              <View key={index} style={[
-                styles.statItem,
-                isMobile && styles.statItemMobile
-              ]}>
-                <Text style={[
-                  styles.statNumber,
-                  isMobile && styles.statNumberMobile
-                ]}>{stat.number}</Text>
-                <Text style={[
-                  styles.statLabel,
-                  isMobile && styles.statLabelMobile
-                ]}>{stat.label}</Text>
+              <View key={index} style={styles.statItem}>
+                <Text style={styles.statNumber}>{stat.number}</Text>
+                <Text style={styles.statLabel}>{stat.label}</Text>
               </View>
             ))}
           </ScrollView>
@@ -721,268 +905,18 @@ export default function HeaderComponent({
   );
 }
 
+// Keep the original styles for components that don't need dynamic changes
 const styles = StyleSheet.create({
-  // Header Container
-  header: {
-    backgroundColor: colors.white,
-    marginBottom: 2,
-    ...Platform.select({
-      web: {
-        boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
-      },
-      default: {
-        elevation: 2,
-        shadowColor: colors.shadow,
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.1,
-        shadowRadius: 4,
-      },
-    }),
-  },
-
-  // Top Bar
-  topBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    backgroundColor: colors.primary,
-  },
-  
-  topBarMobile: {
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    paddingTop: Platform.OS === 'web' ? 12 : 44,
-    minHeight: 60,
-  },
-  
-  topBarTablet: {
-    paddingHorizontal: 20,
-    paddingVertical: 12,
-    paddingTop: Platform.OS === 'web' ? 16 : 48,
-    minHeight: 70,
-  },
-  
-  topBarDesktop: {
-    paddingHorizontal: 32,
-    paddingVertical: 16,
-    paddingTop: Platform.OS === 'web' ? 20 : 52,
-    minHeight: 80,
-  },
-
-  // Logo Section
-  logoSection: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  
-  logoSectionMobile: {
-    flex: 0,
-    minWidth: 40,
-  },
-  
-  logoSectionDesktop: {
-    flex: 0,
-    minWidth: 200,
-  },
-
-  logo: {
-    borderRadius: 8,
-    backgroundColor: colors.white,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  
-  logoMobile: {
-    width: 28,
-    height: 28,
-    marginRight: 0,
-  },
-  
-  logoTablet: {
-    width: 32,
-    height: 32,
-    marginRight: 10,
-  },
-  
-  logoDesktop: {
-    width: 36,
-    height: 36,
-    marginRight: 12,
-  },
-
-  logoText: {
-    fontWeight: 'bold',
-    color: colors.primary,
-  },
-  
-  logoTextMobile: {
-    fontSize: 12,
-  },
-  
-  logoTextTablet: {
-    fontSize: 14,
-  },
-  
-  logoTextDesktop: {
-    fontSize: 16,
-  },
-
-  brandText: {
-    fontWeight: 'bold',
-    color: colors.white,
-    letterSpacing: 0.5,
-  },
-  
-  brandTextTablet: {
-    fontSize: 16,
-  },
-  
-  brandTextDesktop: {
-    fontSize: 20,
-  },
-
-  // Desktop Navigation
-  desktopNavContainer: {
-    flex: 1,
-    marginHorizontal: 20,
-    height: '100%',
-    justifyContent: 'center',
-  },
-  
-  desktopNavContainerTablet: {
-    maxWidth: 500,
-    marginHorizontal: 16,
-  },
-  
-  desktopNavContainerDesktop: {
-    maxWidth: 700,
-    marginHorizontal: 24,
-  },
-
-  topNavScroll: {
-    flex: 1,
-  },
-
-  topNavContent: {
-    alignItems: 'center',
-    paddingHorizontal: 8,
-    flexDirection: 'row',
-    minHeight: 36,
-  },
-  
-  topNavContentTablet: {
-    gap: 4,
-  },
-  
-  topNavContentDesktop: {
-    gap: 6,
-  },
-
-  topNavItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 8,
-    paddingVertical: 6,
-    borderRadius: 8,
-    backgroundColor: 'transparent',
-    marginHorizontal: 2,
-    minHeight: 32,
-    ...(Platform.OS === 'web' ? {
-      cursor: 'pointer',
-      transition: 'all 0.2s ease-in-out',
-    } : {}),
-  },
-  
-  topNavItemTablet: {
-    paddingHorizontal: 10,
-    paddingVertical: 8,
-    minHeight: 36,
-  },
-  
-  topNavItemDesktop: {
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    minHeight: 40,
-  },
-
-  topNavItemActive: {
-    backgroundColor: colors.white,
-    ...Platform.select({
-      web: {
-        boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
-      },
-      default: {
-        elevation: 2,
-        shadowColor: colors.shadow,
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.15,
-        shadowRadius: 4,
-      },
-    }),
-  },
-
-  topNavIcon: {
-    marginRight: 6,
-  },
-
-  topNavText: {
-    fontWeight: '500',
-    color: colors.white,
-    ...(Platform.OS === 'web' && {
-      whiteSpace: 'nowrap' as any,
-    }),
-  },
-  
-  topNavTextTablet: {
-    fontSize: 12,
-  },
-  
-  topNavTextDesktop: {
-    fontSize: 14,
-  },
-
-  topNavTextActive: {
-    color: colors.primary,
-    fontWeight: '600',
-  },
-
-  // Header Actions
-  headerActions: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'flex-end',
-  },
-  
-  headerActionsMobile: {
-    flex: 0,
-    gap: 8,
-  },
-  
-  headerActionsTablet: {
-    flex: 0,
-    gap: 8,
-    minWidth: 160,
-  },
-  
-  headerActionsDesktop: {
-    flex: 0,
-    gap: 10,
-    minWidth: 200,
-  },
-
-  // Action Buttons
   headerButton: {
     backgroundColor: colors.white,
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 8,
-    minHeight: 36,
-    alignItems: 'center',
-    justifyContent: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 6,
+    minHeight: 28,
   },
 
   headerButtonText: {
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: '600',
     color: colors.primary,
   },
@@ -992,12 +926,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     backgroundColor: 'rgba(255,255,255,0.15)',
     paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 8,
-    gap: 6,
+    paddingVertical: 6,
+    borderRadius: 6,
+    gap: 4,
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.3)',
-    minHeight: 36,
+    minHeight: 28,
   },
 
   downloadText: {
@@ -1011,16 +945,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     backgroundColor: 'rgba(255,255,255,0.2)',
     paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 8,
-    gap: 6,
-    minHeight: 36,
-  },
-  
-  authButtonMobile: {
-    paddingHorizontal: 10,
-    minWidth: 44,
-    justifyContent: 'center',
+    paddingVertical: 6,
+    borderRadius: 6,
+    gap: 4,
+    minHeight: 28,
   },
 
   authText: {
@@ -1030,276 +958,47 @@ const styles = StyleSheet.create({
   },
 
   mobileMenuButton: {
-    padding: 8,
-    borderRadius: 8,
+    padding: 6,
+    borderRadius: 6,
     backgroundColor: 'rgba(255,255,255,0.1)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    minWidth: 44,
-    minHeight: 44,
   },
 
-  // Mobile Navigation Menu
-  mobileNavMenu: {
-    backgroundColor: colors.primary,
-    borderTopWidth: 1,
-    borderTopColor: 'rgba(255,255,255,0.2)',
-    maxHeight: 280,
-  },
-
-  mobileNavScroll: {
-    flex: 1,
-  },
-
-  mobileNavGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'space-around',
-    alignItems: 'flex-start',
-    paddingHorizontal: 8,
-    paddingVertical: 12,
-    gap: 8,
-  },
-  
-  mobileNavGridSmall: {
-    paddingHorizontal: 4,
-    gap: 4,
-  },
-
-  mobileNavItem: {
-    flexDirection: 'column',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    borderRadius: 12,
-    backgroundColor: 'transparent',
-    minWidth: 80,
-    maxWidth: 95,
-    minHeight: 70,
-  },
-  
-  mobileNavItemSmall: {
-    paddingHorizontal: 8,
-    paddingVertical: 8,
-    minWidth: 65,
-    maxWidth: 80,
-    minHeight: 60,
-  },
-
-  mobileNavItemActive: {
-    backgroundColor: 'rgba(255,255,255,0.25)',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.4)',
-  },
-
-  mobileNavIcon: {
-    marginBottom: 6,
-  },
-
-  mobileNavText: {
-    fontSize: 11,
-    fontWeight: '500',
-    color: colors.white,
-    textAlign: 'center',
-    lineHeight: 14,
-  },
-  
-  mobileNavTextSmall: {
-    fontSize: 9,
-    lineHeight: 12,
-  },
-
-  mobileNavTextActive: {
-    color: colors.white,
-    fontWeight: '700',
-  },
-
-  mobileAddButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: colors.white,
-    paddingHorizontal: 20,
-    paddingVertical: 12,
-    borderRadius: 12,
-    marginTop: 12,
-    marginHorizontal: 20,
-    marginBottom: 8,
-    gap: 8,
-    alignSelf: 'center',
-    minHeight: 44,
-    ...Platform.select({
-      web: {
-        boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
-      },
-      default: {
-        elevation: 3,
-        shadowColor: colors.shadow,
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.15,
-        shadowRadius: 4,
-      },
-    }),
-  },
-
-  mobileAddButtonText: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: colors.primary,
-  },
-
-  // Search Section
-  searchSection: {
-    backgroundColor: colors.primary,
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255,255,255,0.1)',
-  },
-  
-  searchSectionMobile: {
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-  },
-  
-  searchSectionTablet: {
-    paddingHorizontal: 20,
-    paddingVertical: 12,
-  },
-  
-  searchSectionDesktop: {
-    paddingHorizontal: 32,
-    paddingVertical: 16,
-  },
-
-  searchContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-
-  searchInputContainer: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: colors.white,
-    borderRadius: 12,
-    paddingHorizontal: 16,
-    ...Platform.select({
-      web: {
-        boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
-      },
-      default: {
-        elevation: 2,
-        shadowColor: colors.shadow,
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.1,
-        shadowRadius: 4,
-      },
-    }),
-  },
-  
-  searchInputContainerMobile: {
-    height: 40,
-    paddingHorizontal: 12,
-  },
-  
-  searchInputContainerTablet: {
-    height: 44,
-    paddingHorizontal: 16,
-  },
-  
-  searchInputContainerDesktop: {
-    height: 48,
-    paddingHorizontal: 20,
-  },
-
-  searchIcon: {
-    marginRight: 12,
-  },
-
-  searchInput: {
-    flex: 1,
-    color: colors.text,
-    fontWeight: '400',
-  },
-  
-  searchInputMobile: {
-    fontSize: 14,
-  },
-  
-  searchInputTablet: {
-    fontSize: 15,
-  },
-  
-  searchInputDesktop: {
-    fontSize: 16,
-  },
 
   filterButton: {
+    width: 32,
+    height: 32,
     backgroundColor: 'rgba(255,255,255,0.2)',
-    borderRadius: 12,
+    borderRadius: 8,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.3)',
-    width: 40,
-    height: 40,
-  },
-  
-  filterButtonMobile: {
-    width: 40,
-    height: 40,
   },
 
-  // Stats Section
-  statsSection: {
-    backgroundColor: colors.gray100,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.gray200,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-  },
-  
-  statsSectionMobile: {
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-  },
 
+  // Stats
   statsContainer: {
     alignItems: 'center',
-    gap: 20,
+    gap: 16,
     paddingHorizontal: 4,
   },
 
   statItem: {
     alignItems: 'center',
-    minWidth: 70,
-  },
-  
-  statItemMobile: {
     minWidth: 60,
   },
 
   statNumber: {
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: 'bold',
     color: colors.primary,
     marginBottom: 2,
   },
-  
-  statNumberMobile: {
-    fontSize: 16,
-  },
 
   statLabel: {
-    fontSize: 11,
+    fontSize: 9,
     fontWeight: '500',
     color: colors.textSecondary,
     textAlign: 'center',
-    lineHeight: 13,
-  },
-  
-  statLabelMobile: {
-    fontSize: 10,
-    lineHeight: 12,
   },
 });

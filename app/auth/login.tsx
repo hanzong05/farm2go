@@ -177,11 +177,27 @@ export default function LoginScreen() {
       const result = await signInWithGoogle(false) as any;
       console.log('🔄 OAuth result:', result);
 
+      // Check if OAuth failed completely (not just dismissed)
+      if (result && result.success === false && result.error !== 'OAuth was cancelled by user') {
+        console.log('❌ OAuth failed:', result.error);
+        setIsLoading(false);
+        Alert.alert('Sign In Failed', result.error || 'Google sign-in failed. Please try again.');
+        return;
+      }
+
+      // Check if OAuth was cancelled by user
+      if (result && result.success === false && result.error === 'OAuth was cancelled by user') {
+        console.log('ℹ️ OAuth cancelled by user');
+        setIsLoading(false);
+        return; // Don't show error, user cancelled intentionally
+      }
+
       // For mobile/native platforms, let the callback handle everything
       // This prevents conflicts between login page and callback page navigation
       if (Platform.OS !== 'web') {
-        console.log('📱 Mobile platform detected - letting callback handle navigation');
-        // Don't clear loading here - let callback or auth state change handle it
+        console.log('📱 Mobile platform detected - waiting for deep link callback processing');
+        // For mobile, the deep link will redirect to /auth/callback which will handle the rest
+        // Keep loading state until auth state changes or callback redirects
         return;
       }
 

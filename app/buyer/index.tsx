@@ -48,6 +48,8 @@ export default function BuyerDashboard() {
         showAddButton={true}
         addButtonText="🛒 Browse"
         addButtonRoute="/buyer/marketplace"
+        showMessages={true}
+        showNotifications={true}
       />
 
       {/* Quick Actions */}

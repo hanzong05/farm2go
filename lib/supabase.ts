@@ -80,11 +80,11 @@ export const signInWithGoogleOAuth = async (userType: string, intent: string = '
     if (Platform.OS !== 'web') {
       console.log('📱 Using WebBrowser for in-app OAuth on mobile');
 
-      // Start OAuth flow and get the URL - use exp:// scheme for development
+      // Start OAuth flow and get the URL - use web redirect for compatibility
       const { data, error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
-          redirectTo: 'https://farm2go.vercel.app',
+          redirectTo: 'farm2go://auth/callback',
           skipBrowserRedirect: true, // Important: don't auto-redirect
         },
       });
@@ -99,14 +99,14 @@ export const signInWithGoogleOAuth = async (userType: string, intent: string = '
       if (data.url) {
         console.log('🌐 Opening OAuth URL in WebBrowser...');
         console.log('🔗 OAuth URL:', data.url);
-        console.log('🔗 Redirect URL:', 'https://farm2go.vercel.app');
+        console.log('🔗 Redirect URL:', 'farm2go://auth/callback');
 
         // Open the OAuth URL in WebBrowser (in-app) with error handling
         let result;
         try {
           result = await WebBrowser.openAuthSessionAsync(
             data.url,
-            'exp:https://farm2go.vercel.app'
+            'farm2go://auth/callback'
           );
 
           console.log('🌐 WebBrowser result:', result);
@@ -124,7 +124,37 @@ export const signInWithGoogleOAuth = async (userType: string, intent: string = '
             return { ...data, sessionData: { user: session.user, session } };
           } else {
             console.log('❌ No valid session found after WebBrowser error');
-            throw webBrowserError;
+            // Don't throw error - return failure result instead to prevent crash
+            return {
+              ...data,
+              success: false,
+              error: 'OAuth was interrupted or cancelled',
+              sessionData: null
+            };
+          }
+        }
+
+        // Handle dismissal - user closed the browser before completing
+        if (result && result.type === 'dismiss') {
+          console.log('ℹ️ WebBrowser was dismissed - checking if OAuth completed anyway');
+
+          // Wait a moment for potential deep link processing
+          await new Promise(resolve => setTimeout(resolve, 1000));
+
+          // Check if we have a session despite dismissal (OAuth might have completed)
+          const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+
+          if (session && !sessionError) {
+            console.log('✅ OAuth session found after dismissal - treating as success');
+            return { ...data, sessionData: { user: session.user, session }, success: true };
+          } else {
+            console.log('ℹ️ No session found after dismissal - OAuth was likely cancelled');
+            return {
+              ...data,
+              success: false,
+              error: 'OAuth was cancelled by user',
+              sessionData: null
+            };
           }
         }
 
@@ -251,9 +281,21 @@ export const signInWithGoogleOAuth = async (userType: string, intent: string = '
 
           return { ...data, authSession: result };
         } else if (result && result.type === 'cancel') {
-          throw new Error('OAuth was cancelled by user');
+          console.log('ℹ️ OAuth cancelled by user');
+          return {
+            ...data,
+            success: false,
+            error: 'OAuth was cancelled by user',
+            sessionData: null
+          };
         } else {
-          throw new Error('OAuth failed or incomplete');
+          console.log('❌ OAuth failed or incomplete');
+          return {
+            ...data,
+            success: false,
+            error: 'OAuth failed or incomplete',
+            sessionData: null
+          };
         }
       } else {
         throw new Error('No OAuth URL received');
