@@ -13,10 +13,12 @@ import {
   View
 } from 'react-native';
 import Icon from 'react-native-vector-icons/FontAwesome5';
+import ConfirmationModal from '../../components/ConfirmationModal';
 import FilterSidebar from '../../components/FilterSidebar';
 import HeaderComponent from '../../components/HeaderComponent';
 import { supabase } from '../../lib/supabase';
 import { getUserWithProfile } from '../../services/auth';
+import { notifyOrderStatusChange } from '../../services/notifications';
 import { Database } from '../../types/database';
 import { applyFilters } from '../../utils/filterConfigs';
 
@@ -121,6 +123,21 @@ export default function FarmerOrdersScreen() {
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
   const [showActionModal, setShowActionModal] = useState(false);
   const [showSidebar, setShowSidebar] = useState(false);
+  const [confirmModal, setConfirmModal] = useState<{
+    visible: boolean;
+    title: string;
+    message: string;
+    isDestructive: boolean;
+    confirmText: string;
+    onConfirm: () => void;
+  }>({
+    visible: false,
+    title: '',
+    message: '',
+    isDestructive: false,
+    confirmText: '',
+    onConfirm: () => {},
+  });
 
   const [selectedStatus, setSelectedStatus] = useState('all');
 
@@ -278,8 +295,53 @@ export default function FarmerOrdersScreen() {
     }
   };
 
+  const handleOrderStatusUpdate = (order: Order, newStatus: Order['status']) => {
+    const buyerName = order.buyer_profile
+      ? `${order.buyer_profile.first_name} ${order.buyer_profile.last_name}`.trim()
+      : 'the customer';
+
+    const statusLabels = {
+      'confirmed': 'Accept',
+      'cancelled': 'Decline',
+      'processing': 'Start Preparing',
+      'ready': 'Mark as Ready',
+      'delivered': 'Complete Delivery'
+    };
+
+    const statusMessages = {
+      'confirmed': 'accept this order',
+      'cancelled': 'decline this order',
+      'processing': 'start preparing this order',
+      'ready': 'mark this order as ready for pickup/delivery',
+      'delivered': 'complete delivery of this order'
+    };
+
+    const label = statusLabels[newStatus] || 'Update';
+    const action = statusMessages[newStatus] || 'update this order';
+    const isDestructive = newStatus === 'cancelled';
+
+    setConfirmModal({
+      visible: true,
+      title: `${label} Order?`,
+      message: `Are you sure you want to ${action} from ${buyerName}? This will notify the customer of the status change.`,
+      isDestructive,
+      confirmText: `Yes, ${label}`,
+      onConfirm: () => {
+        updateOrderStatus(order.id, newStatus);
+        setConfirmModal(prev => ({ ...prev, visible: false }));
+      }
+    });
+  };
+
   const updateOrderStatus = async (orderId: string, newStatus: Order['status']) => {
     try {
+      // Get order details before update for notifications
+      const currentOrder = orders.find(o => o.id === orderId);
+      if (!currentOrder) {
+        Alert.alert('Error', 'Order not found');
+        return;
+      }
+
       const { error } = await supabase
         .from('orders')
         .update({ status: newStatus })
@@ -288,6 +350,28 @@ export default function FarmerOrdersScreen() {
       if (error) {
         console.error('Supabase error:', error);
         throw error;
+      }
+
+      // Send notifications about order status change
+      try {
+        await notifyOrderStatusChange(
+          orderId,
+          newStatus,
+          currentOrder.buyer_id,
+          currentOrder.farmer_id,
+          {
+            totalAmount: currentOrder.total_amount,
+            itemCount: currentOrder.items?.length || 0,
+            farmerName: `${profile?.first_name} ${profile?.last_name}`,
+            buyerName: currentOrder.buyer_profile ? `${currentOrder.buyer_profile.first_name} ${currentOrder.buyer_profile.last_name}` : undefined
+          },
+          profile?.id || ''
+        );
+
+        console.log('✅ Order status change notification sent');
+      } catch (notifError) {
+        console.error('⚠️ Failed to send order notification:', notifError);
+        // Don't fail the status update if notifications fail
       }
 
       // Update local state
@@ -333,8 +417,8 @@ export default function FarmerOrdersScreen() {
         return;
     }
 
-    await updateOrderStatus(selectedOrder.id, newStatus);
-    handleActionModalClose();
+    handleActionModalClose(); // Close the action modal first
+    handleOrderStatusUpdate(selectedOrder, newStatus); // Then show confirmation
   };
 
   const formatDate = (dateString: string) => {
@@ -532,7 +616,7 @@ export default function FarmerOrdersScreen() {
             ]}>
               <TouchableOpacity
                 style={[styles.actionButton, styles.confirmButton]}
-                onPress={() => updateOrderStatus(order.id, 'confirmed')}
+                onPress={() => handleOrderStatusUpdate(order, 'confirmed')}
                 activeOpacity={0.8}
               >
                 <View style={styles.actionButtonContent}>
@@ -542,7 +626,7 @@ export default function FarmerOrdersScreen() {
               </TouchableOpacity>
               <TouchableOpacity
                 style={[styles.actionButton, styles.cancelButton]}
-                onPress={() => updateOrderStatus(order.id, 'cancelled')}
+                onPress={() => handleOrderStatusUpdate(order, 'cancelled')}
                 activeOpacity={0.8}
               >
                 <View style={styles.actionButtonContent}>
@@ -556,7 +640,7 @@ export default function FarmerOrdersScreen() {
           {order.status === 'confirmed' && (
             <TouchableOpacity
               style={[styles.actionButton, styles.processingButton]}
-              onPress={() => updateOrderStatus(order.id, 'processing')}
+              onPress={() => handleOrderStatusUpdate(order, 'processing')}
               activeOpacity={0.8}
             >
               <View style={styles.actionButtonContent}>
@@ -569,7 +653,7 @@ export default function FarmerOrdersScreen() {
           {order.status === 'processing' && (
             <TouchableOpacity
               style={[styles.actionButton, styles.readyButton]}
-              onPress={() => updateOrderStatus(order.id, 'ready')}
+              onPress={() => handleOrderStatusUpdate(order, 'ready')}
               activeOpacity={0.8}
             >
               <View style={styles.actionButtonContent}>
@@ -582,7 +666,7 @@ export default function FarmerOrdersScreen() {
           {order.status === 'ready' && (
             <TouchableOpacity
               style={[styles.actionButton, styles.completeButton]}
-              onPress={() => updateOrderStatus(order.id, 'delivered')}
+              onPress={() => handleOrderStatusUpdate(order, 'delivered')}
               activeOpacity={0.8}
             >
               <View style={styles.actionButtonContent}>
@@ -662,7 +746,7 @@ export default function FarmerOrdersScreen() {
     return (
       <Modal
         visible={showActionModal}
-        animationType="fade"
+        animationKeyframesType="fade"
         transparent={true}
         onRequestClose={handleActionModalClose}
       >
@@ -829,6 +913,16 @@ export default function FarmerOrdersScreen() {
           title="Filters"
         />
       )}
+
+      <ConfirmationModal
+        visible={confirmModal.visible}
+        title={confirmModal.title}
+        message={confirmModal.message}
+        confirmText={confirmModal.confirmText}
+        isDestructive={confirmModal.isDestructive}
+        onConfirm={confirmModal.onConfirm}
+        onCancel={() => setConfirmModal(prev => ({ ...prev, visible: false }))}
+      />
     </View>
   );
 }

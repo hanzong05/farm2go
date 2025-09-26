@@ -4,7 +4,6 @@ import { Alert, Dimensions, KeyboardAvoidingView, Modal, Platform, ScrollView, S
 import Icon from 'react-native-vector-icons/FontAwesome5';
 import { supabase } from '../../lib/supabase';
 import { getUserWithProfile, loginUser, signInWithGoogle } from '../../services/auth';
-import { safeLocalStorage } from '../../utils/platformUtils';
 
 const { width, height } = Dimensions.get('window');
 const isMobile = width < 768;
@@ -314,7 +313,7 @@ export default function LoginScreen() {
     <Modal
       visible={showInfoModal}
       transparent={true}
-      animationType="fade"
+      animationKeyframesType="fade"
       onRequestClose={() => setShowInfoModal(false)}
     >
       <View style={styles.modalOverlay}>
@@ -763,7 +762,7 @@ const styles = StyleSheet.create({
     marginRight: 8,
     ...Platform.select({
       web: {
-        animation: 'spin 1s linear infinite',
+        animationKeyframes: 'spin 1s linear infinite',
       },
     }),
   },

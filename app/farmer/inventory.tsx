@@ -498,7 +498,7 @@ export default function Farm2GoInventoryScreen() {
       <Modal
         visible={showStockModal}
         transparent
-        animationType="slide"
+        animationKeyframesType="slide"
         onRequestClose={() => setShowStockModal(false)}
       >
         <View style={styles.modalOverlay}>

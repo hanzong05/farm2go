@@ -423,7 +423,7 @@ export default function RegisterScreen() {
     <Modal
       visible={showSuccessModal}
       transparent={true}
-      animationType="fade"
+      animationKeyframesType="fade"
       onRequestClose={() => setShowSuccessModal(false)}
     >
       <View style={styles.modalOverlay}>
@@ -454,7 +454,7 @@ export default function RegisterScreen() {
     <Modal
       visible={showErrorModal}
       transparent={true}
-      animationType="fade"
+      animationKeyframesType="fade"
       onRequestClose={() => setShowErrorModal(false)}
     >
       <View style={styles.modalOverlay}>
@@ -1436,7 +1436,7 @@ const styles = StyleSheet.create({
     marginRight: 8,
     ...Platform.select({
       web: {
-        animation: 'spin 1s linear infinite',
+        animationKeyframes: 'spin 1s linear infinite',
       },
     }),
   },

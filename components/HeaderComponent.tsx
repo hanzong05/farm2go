@@ -29,6 +29,7 @@ import { logoutUser } from '../services/auth';
 import { Database } from '../types/database';
 import MessageComponent, { Conversation } from './MessageComponent';
 import NotificationComponent, { Notification } from './NotificationComponent';
+import { useNotifications } from '../hooks/useNotifications';
 
 type Profile = Database['public']['Tables']['profiles']['Row'];
 
@@ -304,6 +305,33 @@ export default function HeaderComponent({
   
   // State to manage message and notification panel visibility
   const [activePanel, setActivePanel] = useState<'messages' | 'notifications' | null>(null);
+
+  // Real-time notifications
+  const {
+    notifications: realtimeNotifications,
+    unreadCount,
+    markAsRead,
+    refreshNotifications
+  } = useNotifications(profile?.id || null);
+
+  // Helper function to convert notification type
+  const getNotificationType = (type: string): 'info' | 'success' | 'warning' | 'error' => {
+    if (type.includes('approved')) return 'success';
+    if (type.includes('rejected') || type.includes('deleted')) return 'error';
+    if (type.includes('pending')) return 'warning';
+    return 'info';
+  };
+
+  // Convert real-time notifications to the format expected by NotificationComponent
+  const convertedNotifications: Notification[] = realtimeNotifications.map(notif => ({
+    id: notif.id,
+    title: notif.title,
+    message: notif.message,
+    type: getNotificationType(notif.type),
+    timestamp: notif.created_at,
+    read: notif.is_read,
+    actionUrl: notif.action_url
+  }));
 
   // Update dimensions on window resize
   useEffect(() => {
@@ -738,11 +766,38 @@ export default function HeaderComponent({
 
           {showNotifications && (
             <NotificationComponent
-              notifications={notifications}
-              onNotificationPress={onNotificationPress}
-              onMarkAsRead={onMarkNotificationAsRead}
-              onMarkAllAsRead={onMarkAllNotificationsAsRead}
+              notifications={convertedNotifications}
+              onNotificationPress={(notification) => {
+                // Mark as read when clicked
+                markAsRead(notification.id);
+                // Call original handler if provided
+                if (onNotificationPress) {
+                  onNotificationPress(notification);
+                }
+              }}
+              onMarkAsRead={(notificationId) => {
+                markAsRead(notificationId);
+                // Call original handler if provided
+                if (onMarkNotificationAsRead) {
+                  onMarkNotificationAsRead(notificationId);
+                }
+              }}
+              onMarkAllAsRead={() => {
+                // Mark all as read
+                convertedNotifications.forEach(notif => {
+                  if (!notif.read) {
+                    markAsRead(notif.id);
+                  }
+                });
+                // Call original handler if provided
+                if (onMarkAllNotificationsAsRead) {
+                  onMarkAllNotificationsAsRead();
+                }
+              }}
               onClearAll={onClearAllNotifications}
+              onRefresh={refreshNotifications}
+              loading={false}
+              unreadCount={unreadCount}
             />
           )}
 

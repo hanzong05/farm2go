@@ -26,6 +26,7 @@ import OrderQRScanner from '../../components/OrderQRScanner';
 import OrderVerificationModal from '../../components/OrderVerificationModal';
 import { supabase } from '../../lib/supabase';
 import { getUserWithProfile } from '../../services/auth';
+import { notifyAllAdmins, notifyUserAction } from '../../services/notifications';
 import { Database } from '../../types/database';
 
 const { width: screenWidth } = Dimensions.get('window');
@@ -719,6 +720,19 @@ export default function AdminUsers() {
           style: 'destructive',
           onPress: async () => {
             try {
+              // Get product details before deletion for notification
+              const { data: productData, error: fetchError } = await supabase
+                .from('products')
+                .select('name, farmer_id')
+                .eq('id', productId)
+                .single();
+
+              if (fetchError || !productData) {
+                console.error('Error fetching product data:', fetchError);
+                Alert.alert('Error', 'Failed to get product information');
+                return;
+              }
+
               const { error } = await supabase
                 .from('products')
                 .delete()
@@ -727,6 +741,35 @@ export default function AdminUsers() {
               if (error) {
                 Alert.alert('Error', 'Failed to delete product');
                 return;
+              }
+
+              // Send notifications
+              try {
+                // Notify the farmer whose product was deleted
+                await notifyUserAction(
+                  productData.farmer_id,
+                  'deleted',
+                  'product',
+                  productData.name,
+                  profile?.id || '',
+                  'Product removed by administrator'
+                );
+
+                // Notify all other admins about the product deletion
+                await notifyAllAdmins(
+                  'Product Deleted',
+                  `Admin ${profile?.first_name} ${profile?.last_name} deleted the product "${productData.name}"`,
+                  profile?.id || '',
+                  {
+                    action: 'product_deleted',
+                    productName: productData.name,
+                    farmerId: productData.farmer_id
+                  }
+                );
+
+                console.log('✅ Notifications sent for product deletion');
+              } catch (notifError) {
+                console.error('⚠️ Failed to send notifications:', notifError);
               }
 
               // Refresh farmer data
@@ -920,6 +963,37 @@ export default function AdminUsers() {
         // If profile creation fails, we should try to clean up the auth user
         console.error('Profile creation error:', profileError);
         throw new Error(`Failed to create user profile: ${profileError.message}`);
+      }
+
+      // Send notifications
+      try {
+        // Notify the newly created user
+        await notifyUserAction(
+          authData.user.id,
+          'approved',
+          'account',
+          `${createUserForm.first_name} ${createUserForm.last_name}`,
+          profile?.id || '',
+          'Account created by administrator'
+        );
+
+        // Notify all other admins about the new user creation
+        await notifyAllAdmins(
+          `New ${createUserForm.user_type} Created`,
+          `Admin ${profile?.first_name} ${profile?.last_name} created a new ${createUserForm.user_type} account for ${createUserForm.first_name} ${createUserForm.last_name} (${createUserForm.email})`,
+          profile?.id || '',
+          {
+            action: 'user_created',
+            userType: createUserForm.user_type,
+            userEmail: createUserForm.email,
+            userName: `${createUserForm.first_name} ${createUserForm.last_name}`
+          }
+        );
+
+        console.log('✅ Notifications sent for user creation');
+      } catch (notifError) {
+        console.error('⚠️ Failed to send notifications:', notifError);
+        // Don't fail the user creation if notifications fail
       }
 
       // Success
@@ -1249,7 +1323,7 @@ export default function AdminUsers() {
 
       {/* Create User Modal */}
       <Modal
-        animationType="slide"
+        animationKeyframesType="slide"
         transparent={false}
         visible={createUserModalVisible}
         onRequestClose={closeCreateUserModal}
@@ -1476,7 +1550,7 @@ export default function AdminUsers() {
 
       {/* Farmer Detail Modal */}
       <Modal
-        animationType="slide"
+        animationKeyframesType="slide"
         transparent={false}
         visible={modalVisible}
         onRequestClose={() => setModalVisible(false)}
@@ -1631,7 +1705,7 @@ export default function AdminUsers() {
 
       {/* Buyer Detail Modal */}
       <Modal
-        animationType="slide"
+        animationKeyframesType="slide"
         transparent={false}
         visible={buyerModalVisible}
         onRequestClose={() => setBuyerModalVisible(false)}
@@ -1758,7 +1832,7 @@ export default function AdminUsers() {
 
       {/* QR Scanner Modal */}
       <Modal
-        animationType="slide"
+        animationKeyframesType="slide"
         transparent={false}
         visible={qrScannerVisible}
         onRequestClose={() => setQrScannerVisible(false)}
@@ -1844,7 +1918,7 @@ export default function AdminUsers() {
 
       {/* Order Processing Modal */}
       <Modal
-        animationType="slide"
+        animationKeyframesType="slide"
         transparent={true}
         visible={orderProcessingVisible}
         onRequestClose={() => setOrderProcessingVisible(false)}

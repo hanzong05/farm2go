@@ -1,12 +1,12 @@
 import React from 'react';
 import {
-  Dimensions,
-  Modal,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
+    Dimensions,
+    Modal,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TouchableOpacity,
+    View,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/FontAwesome5';
 
@@ -247,7 +247,7 @@ const FilterSidebar: React.FC<FilterSidebarProps> = ({
   if (showMobile) {
     return (
       <Modal
-        animationType="slide"
+        animationKeyframesType="slide"
         transparent={true}
         visible={showMobile}
         onRequestClose={onCloseMobile}

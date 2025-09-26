@@ -12,10 +12,12 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import ConfirmationModal from '../../../components/ConfirmationModal';
 import PurchaseSuccessModal from '../../../components/PurchaseSuccessModal';
 import VerificationGuard from '../../../components/VerificationGuard';
 import { useAuth } from '../../../contexts/AuthContext';
 import { supabase } from '../../../lib/supabase';
+import { notifyOrderCreated, notifyLowStock } from '../../../services/notifications';
 import { generateUniquePurchaseCode } from '../../../utils/purchaseCode';
 
 interface Product {
@@ -44,6 +46,21 @@ export default function OrderProductScreen() {
   const [error, setError] = useState<string | null>(null);
   const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [purchaseCode, setPurchaseCode] = useState<string>('');
+  const [confirmModal, setConfirmModal] = useState<{
+    visible: boolean;
+    title: string;
+    message: string;
+    isDestructive: boolean;
+    confirmText: string;
+    onConfirm: () => void;
+  }>({
+    visible: false,
+    title: '',
+    message: '',
+    isDestructive: false,
+    confirmText: '',
+    onConfirm: () => {},
+  });
 
   const [orderData, setOrderData] = useState({
     quantity: '1',
@@ -116,6 +133,26 @@ export default function OrderProductScreen() {
       return;
     }
 
+    // Show confirmation modal
+    const totalAmount = calculateTotal();
+    setConfirmModal({
+      visible: true,
+      title: 'Confirm Order?',
+      message: `Are you sure you want to place this order for ${quantity} ${product.unit} of ${product.name} at ₱${totalAmount.toLocaleString()}?`,
+      isDestructive: false,
+      confirmText: 'Yes, Place Order',
+      onConfirm: () => {
+        processOrder();
+        setConfirmModal(prev => ({ ...prev, visible: false }));
+      }
+    });
+  };
+
+  const processOrder = async () => {
+    if (!product || !user) return;
+
+    const quantity = parseInt(orderData.quantity);
+
     try {
       setOrdering(true);
 
@@ -123,7 +160,7 @@ export default function OrderProductScreen() {
       const uniquePurchaseCode = generateUniquePurchaseCode();
 
       // Create order record with purchase code
-      const { error: orderError } = await (supabase as any)
+      const { data: newOrder, error: orderError } = await (supabase as any)
         .from('orders')
         .insert({
           buyer_id: user.id,
@@ -135,7 +172,9 @@ export default function OrderProductScreen() {
           notes: orderData.notes,
           status: 'pending',
           purchase_code: uniquePurchaseCode,
-        });
+        })
+        .select()
+        .single();
 
       if (orderError) {
         console.error('Error creating order:', orderError);
@@ -144,11 +183,41 @@ export default function OrderProductScreen() {
         return;
       }
 
+      // Send notifications about order creation
+      try {
+        // Get buyer profile for notification
+        const { data: buyerProfile } = await supabase
+          .from('profiles')
+          .select('first_name, last_name')
+          .eq('id', user.id)
+          .single();
+
+        await notifyOrderCreated(
+          newOrder.id,
+          user.id,
+          product.farmer_id,
+          {
+            totalAmount: calculateTotal(),
+            itemCount: 1, // Single product order
+            buyerName: buyerProfile ? `${buyerProfile.first_name} ${buyerProfile.last_name}` : undefined,
+            farmerName: product.profiles ? `${product.profiles.first_name} ${product.profiles.last_name}` : undefined,
+            productName: product.name,
+            farmerBarangay: product.profiles?.barangay || undefined
+          }
+        );
+
+        console.log('✅ Order creation notification sent');
+      } catch (notifError) {
+        console.error('⚠️ Failed to send order notification:', notifError);
+        // Don't fail the order creation if notifications fail
+      }
+
       // Update product quantity
+      const newQuantity = product.quantity_available - quantity;
       const { error: updateError } = await (supabase as any)
         .from('products')
         .update({
-          quantity_available: product.quantity_available - quantity
+          quantity_available: newQuantity
         })
         .eq('id', product.id);
 
@@ -156,6 +225,22 @@ export default function OrderProductScreen() {
         console.error('Error updating product quantity:', updateError);
         // Note: Order was created but quantity wasn't updated
         // In a real app, you'd want to handle this with a transaction
+      } else {
+        // Check for low stock and notify farmer
+        const lowStockThreshold = 5; // Default threshold
+        if (newQuantity <= lowStockThreshold && newQuantity > 0) {
+          try {
+            await notifyLowStock(
+              product.farmer_id,
+              product.name,
+              newQuantity,
+              lowStockThreshold
+            );
+            console.log('✅ Low stock notification sent');
+          } catch (stockNotifError) {
+            console.error('⚠️ Failed to send low stock notification:', stockNotifError);
+          }
+        }
       }
 
       // Set purchase code and show success modal immediately
@@ -337,6 +422,16 @@ export default function OrderProductScreen() {
           }}
         />
       )}
+
+      <ConfirmationModal
+        visible={confirmModal.visible}
+        title={confirmModal.title}
+        message={confirmModal.message}
+        confirmText={confirmModal.confirmText}
+        isDestructive={confirmModal.isDestructive}
+        onConfirm={confirmModal.onConfirm}
+        onCancel={() => setConfirmModal(prev => ({ ...prev, visible: false }))}
+      />
     </KeyboardAvoidingView>
     </VerificationGuard>
   );

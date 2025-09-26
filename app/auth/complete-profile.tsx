@@ -448,7 +448,7 @@ export default function CompleteProfileScreen() {
     <Modal
       visible={showSuccessModal}
       transparent={true}
-      animationType="fade"
+      animationKeyframesType="fade"
       onRequestClose={() => setShowSuccessModal(false)}
     >
       <View style={styles.modalOverlay}>
@@ -483,7 +483,7 @@ export default function CompleteProfileScreen() {
     <Modal
       visible={showErrorModal}
       transparent={true}
-      animationType="fade"
+      animationKeyframesType="fade"
       onRequestClose={() => setShowErrorModal(false)}
     >
       <View style={styles.modalOverlay}>
@@ -1077,7 +1077,7 @@ const styles = StyleSheet.create({
     marginBottom: 24,
     ...Platform.select({
       web: {
-        animation: 'spin 1s linear infinite',
+        animationKeyframes: 'spin 1s linear infinite',
       },
     }),
   },
@@ -1111,7 +1111,7 @@ const styles = StyleSheet.create({
     marginRight: 8,
     ...Platform.select({
       web: {
-        animation: 'spin 1s linear infinite',
+        animationKeyframes: 'spin 1s linear infinite',
       },
     }),
   },

@@ -1,13 +1,13 @@
 import React from 'react';
 import {
-  View,
-  Text,
-  StyleSheet,
-  Modal,
-  TouchableOpacity,
-  Dimensions,
-  ScrollView,
-  Share,
+    Dimensions,
+    Modal,
+    ScrollView,
+    Share,
+    StyleSheet,
+    Text,
+    TouchableOpacity,
+    View,
 } from 'react-native';
 import QRCode from 'react-native-qrcode-svg';
 import { generateQRCodeData } from '../utils/purchaseCode';
@@ -109,7 +109,7 @@ export default function OrderQRCodeModal({
   return (
     <Modal
       visible={visible}
-      animationType="slide"
+      animationKeyframesType="slide"
       transparent={true}
       onRequestClose={onClose}
     >

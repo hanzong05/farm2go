@@ -1,15 +1,15 @@
-import React, { useCallback, useState, useRef, useEffect } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
-  ActivityIndicator,
-  Dimensions,
-  Modal,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
+    ActivityIndicator,
+    Dimensions,
+    Modal,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TouchableOpacity,
+    View,
 } from 'react-native';
-import { locationService, BarangayResult } from '../services/locationService';
+import { BarangayResult, locationService } from '../services/locationService';
 
 const { width } = Dimensions.get('window');
 
@@ -114,7 +114,7 @@ export default function LocationPicker({
       <Modal
         visible={showBarangayModal}
         transparent={true}
-        animationType="fade"
+        animationKeyframesType="fade"
         onRequestClose={() => setShowBarangayModal(false)}
       >
         <TouchableOpacity

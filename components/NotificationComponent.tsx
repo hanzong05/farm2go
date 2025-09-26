@@ -1,9 +1,11 @@
+import { router } from 'expo-router';
 import React, { useRef, useState } from 'react';
 import {
   Dimensions,
   FlatList,
   Modal,
   Platform,
+  RefreshControl,
   StyleSheet,
   Text,
   TouchableOpacity,
@@ -22,6 +24,11 @@ export interface Notification {
   timestamp: string;
   read: boolean;
   actionUrl?: string;
+  sender?: {
+    first_name: string | null;
+    last_name: string | null;
+  };
+  action_data?: any;
 }
 
 interface NotificationComponentProps {
@@ -30,6 +37,9 @@ interface NotificationComponentProps {
   onMarkAsRead?: (notificationId: string) => void;
   onMarkAllAsRead?: () => void;
   onClearAll?: () => void;
+  onRefresh?: () => void;
+  loading?: boolean;
+  unreadCount?: number;
 }
 
 const colors = {
@@ -64,6 +74,9 @@ export default function NotificationComponent({
   onMarkAsRead,
   onMarkAllAsRead,
   onClearAll,
+  onRefresh,
+  loading = false,
+  unreadCount = 0,
 }: NotificationComponentProps) {
   const [modalVisible, setModalVisible] = useState(false);
   const [dropdownVisible, setDropdownVisible] = useState(false);
@@ -114,15 +127,27 @@ export default function NotificationComponent({
   };
 
   const handleNotificationPress = (notification: Notification) => {
+    // Mark as read first
     if (!notification.read && onMarkAsRead) {
       onMarkAsRead(notification.id);
     }
+
+    // Handle navigation if actionUrl exists
+    if (notification.actionUrl) {
+      try {
+        router.push(notification.actionUrl as any);
+      } catch (error) {
+        console.error('Navigation error:', error);
+      }
+    }
+
+    // Call custom handler if provided
     if (onNotificationPress) {
       onNotificationPress(notification);
     }
   };
 
-  const unreadCount = notifications.filter(n => !n.read).length;
+  const calculatedUnreadCount = unreadCount > 0 ? unreadCount : notifications.filter(n => !n.read).length;
   const recentNotifications = notifications.filter(n => {
     const diffInDays = Math.floor((new Date().getTime() - new Date(n.timestamp).getTime()) / (1000 * 60 * 60 * 24));
     return diffInDays === 0;
@@ -167,9 +192,16 @@ export default function NotificationComponent({
         <Text style={styles.notificationMessage} numberOfLines={2}>
           {item.message}
         </Text>
-        <Text style={styles.notificationTime}>
-          {formatTimestamp(item.timestamp)}
-        </Text>
+        <View style={styles.notificationMeta}>
+          <Text style={styles.notificationTime}>
+            {formatTimestamp(item.timestamp)}
+          </Text>
+          {item.sender && (
+            <Text style={styles.notificationSender}>
+              • {item.sender.first_name} {item.sender.last_name}
+            </Text>
+          )}
+        </View>
       </View>
       {!item.read && <View style={styles.unreadDot} />}
     </TouchableOpacity>
@@ -348,10 +380,10 @@ export default function NotificationComponent({
           onPress={handleToggleNotifications}
         >
           <Icon name="bell" size={18} color={colors.white} />
-          {unreadCount > 0 && (
+          {calculatedUnreadCount > 0 && (
             <View style={styles.badge}>
               <Text style={styles.badgeText}>
-                {unreadCount > 99 ? '99+' : unreadCount}
+                {calculatedUnreadCount > 99 ? '99+' : calculatedUnreadCount}
               </Text>
             </View>
           )}
@@ -373,7 +405,7 @@ export default function NotificationComponent({
       {/* Mobile/Tablet Modal */}
       <Modal
         visible={modalVisible}
-        animationType="slide"
+        animationKeyframesType="slide"
         presentationStyle="pageSheet"
         onRequestClose={() => setModalVisible(false)}
       >
@@ -407,6 +439,16 @@ export default function NotificationComponent({
               keyExtractor={(item) => item.id}
               style={styles.notificationsList}
               showsVerticalScrollIndicator={false}
+              refreshControl={
+                onRefresh ? (
+                  <RefreshControl
+                    refreshing={loading}
+                    onRefresh={onRefresh}
+                    colors={[colors.primary]}
+                    tintColor={colors.primary}
+                  />
+                ) : undefined
+              }
             />
           )}
 
@@ -778,6 +820,18 @@ const styles = StyleSheet.create({
   notificationTime: {
     fontSize: 12,
     color: colors.gray500,
+  },
+
+  notificationMeta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+  },
+
+  notificationSender: {
+    fontSize: 12,
+    color: colors.gray400,
+    marginLeft: 4,
   },
 
   unreadDot: {

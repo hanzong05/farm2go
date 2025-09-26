@@ -1,15 +1,15 @@
 import React, { useEffect, useState } from 'react';
 import {
-  ActivityIndicator,
-  Alert,
-  Dimensions,
-  Image,
-  Modal,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
+    ActivityIndicator,
+    Alert,
+    Dimensions,
+    Image,
+    Modal,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TouchableOpacity,
+    View,
 } from 'react-native';
 import { supabase } from '../lib/supabase';
 
@@ -292,7 +292,7 @@ export default function OrderVerificationModal({
     'Unknown Farmer';
 
   return (
-    <Modal visible={visible} animationType="slide" presentationStyle="pageSheet">
+    <Modal visible={visible} animationKeyframesType="slide" presentationStyle="pageSheet">
       <View style={styles.container}>
         {/* Header */}
         <View style={styles.header}>

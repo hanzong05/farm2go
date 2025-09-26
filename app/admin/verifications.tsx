@@ -15,9 +15,11 @@ import {
   View,
 } from 'react-native';
 // import Swal from 'sweetalert2'; // Removed - not compatible with React Native
+import ConfirmationModal from '../../components/ConfirmationModal';
 import HeaderComponent from '../../components/HeaderComponent';
 import { supabase } from '../../lib/supabase';
 import { getUserWithProfile } from '../../services/auth';
+import { notifyAllAdmins, notifyUserAction } from '../../services/notifications';
 import { Database } from '../../types/database';
 
 const { width } = Dimensions.get('window');
@@ -64,6 +66,21 @@ export default function AdminVerificationsScreen() {
   const [processing, setProcessing] = useState(false);
   const [imageViewModal, setImageViewModal] = useState(false);
   const [selectedImage, setSelectedImage] = useState<{url: string, title: string} | null>(null);
+  const [confirmModal, setConfirmModal] = useState<{
+    visible: boolean;
+    title: string;
+    message: string;
+    isDestructive: boolean;
+    confirmText: string;
+    onConfirm: () => void;
+  }>({
+    visible: false,
+    title: '',
+    message: '',
+    isDestructive: false,
+    confirmText: '',
+    onConfirm: () => {},
+  });
 
   const STATUS_OPTIONS = [
     { key: 'all', label: 'All', color: '#6b7280' },
@@ -145,23 +162,21 @@ export default function AdminVerificationsScreen() {
 
   const openReviewModal = (submission: VerificationSubmission, action: 'approve' | 'reject') => {
     const userName = `${submission.user_profile?.first_name} ${submission.user_profile?.last_name}`;
+    const isApproval = action === 'approve';
 
-    Alert.alert(
-      `${action === 'approve' ? 'Approve' : 'Reject'} Verification?`,
-      `Are you sure you want to ${action} ${userName}'s verification?`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: `Yes, ${action}`,
-          style: action === 'approve' ? 'default' : 'destructive',
-          onPress: () => {
-            setReviewModalData({ submission, action });
-            setAdminNotes('');
-            setShowReviewModal(true);
-          }
-        }
-      ]
-    );
+    setConfirmModal({
+      visible: true,
+      title: `${isApproval ? 'Approve' : 'Reject'} Verification?`,
+      message: `Are you sure you want to ${action} ${userName}'s verification?`,
+      isDestructive: !isApproval,
+      confirmText: `Yes, ${action}`,
+      onConfirm: () => {
+        setReviewModalData({ submission, action });
+        setAdminNotes('');
+        setShowReviewModal(true);
+        setConfirmModal(prev => ({ ...prev, visible: false }));
+      }
+    });
   };
 
   const openImageViewer = (imageUrl: string, title: string) => {
@@ -235,6 +250,39 @@ export default function AdminVerificationsScreen() {
           console.error('Error updating profile:', profileError);
           // Don't throw here - the submission was already updated
         }
+      }
+
+      // Send notifications
+      try {
+        const userName = `${submission.user_profile?.first_name} ${submission.user_profile?.last_name}`;
+
+        // Notify the user whose verification was reviewed
+        await notifyUserAction(
+          submission.user_id,
+          action === 'approve' ? 'approved' : 'rejected',
+          'verification',
+          'verification documents',
+          profile.id,
+          adminNotes || `Verification ${action === 'approve' ? 'approved' : 'rejected'} by administrator`
+        );
+
+        // Notify all other admins about the verification action
+        await notifyAllAdmins(
+          `Verification ${action === 'approve' ? 'Approved' : 'Rejected'}`,
+          `Admin ${profile.first_name} ${profile.last_name} ${action === 'approve' ? 'approved' : 'rejected'} the verification for ${userName} (${submission.user_profile?.email})`,
+          profile.id,
+          {
+            action: `verification_${action === 'approve' ? 'approved' : 'rejected'}`,
+            userName: userName,
+            userEmail: submission.user_profile?.email,
+            userType: submission.user_profile?.user_type,
+            adminNotes: adminNotes
+          }
+        );
+
+        console.log('✅ Notifications sent for verification action');
+      } catch (notifError) {
+        console.error('⚠️ Failed to send notifications:', notifError);
       }
 
       Alert.alert(
@@ -466,7 +514,7 @@ export default function AdminVerificationsScreen() {
       {/* Review Modal */}
       <Modal
         visible={showReviewModal}
-        animationType="slide"
+        animationKeyframesType="slide"
         transparent={true}
         onRequestClose={closeReviewModal}
       >
@@ -571,7 +619,7 @@ export default function AdminVerificationsScreen() {
       {/* Full Screen Image Viewer Modal */}
       <Modal
         visible={imageViewModal}
-        animationType="fade"
+        animationKeyframesType="fade"
         transparent={true}
         onRequestClose={closeImageViewer}
       >
@@ -609,6 +657,16 @@ export default function AdminVerificationsScreen() {
           </TouchableOpacity>
         </View>
       </Modal>
+
+      <ConfirmationModal
+        visible={confirmModal.visible}
+        title={confirmModal.title}
+        message={confirmModal.message}
+        confirmText={confirmModal.confirmText}
+        isDestructive={confirmModal.isDestructive}
+        onConfirm={confirmModal.onConfirm}
+        onCancel={() => setConfirmModal(prev => ({ ...prev, visible: false }))}
+      />
     </View>
   );
 }

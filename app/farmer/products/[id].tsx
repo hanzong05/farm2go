@@ -1,6 +1,7 @@
 import { useLocalSearchParams, router } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, ActivityIndicator, Image, Dimensions, Platform, StatusBar } from 'react-native';
+import ConfirmationModal from '../../../components/ConfirmationModal';
 import { supabase } from '../../../lib/supabase';
 import { useAuth } from '../../../contexts/AuthContext';
 
@@ -43,6 +44,21 @@ export default function ProductDetailScreen() {
   const [product, setProduct] = useState<Product | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [confirmModal, setConfirmModal] = useState<{
+    visible: boolean;
+    title: string;
+    message: string;
+    isDestructive: boolean;
+    confirmText: string;
+    onConfirm: () => void;
+  }>({
+    visible: false,
+    title: '',
+    message: '',
+    isDestructive: false,
+    confirmText: '',
+    onConfirm: () => {},
+  });
 
   useEffect(() => {
     if (id) {
@@ -76,25 +92,35 @@ export default function ProductDetailScreen() {
   };
 
   const handleEdit = () => {
-    router.push(`/farmer/products/edit/${id}` as any);
+    if (!product) return;
+
+    setConfirmModal({
+      visible: true,
+      title: 'Edit Product?',
+      message: `Do you want to edit "${product.name}"? You'll be taken to the edit page where you can modify product details.`,
+      isDestructive: false,
+      confirmText: 'Yes, Edit',
+      onConfirm: () => {
+        router.push(`/farmer/products/edit/${id}` as any);
+        setConfirmModal(prev => ({ ...prev, visible: false }));
+      }
+    });
   };
 
   const handleDelete = () => {
-    Alert.alert(
-      'Delete Product',
-      'Are you sure you want to delete this product? This action cannot be undone.',
-      [
-        {
-          text: 'Cancel',
-          style: 'cancel',
-        },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: confirmDelete,
-        },
-      ]
-    );
+    if (!product) return;
+
+    setConfirmModal({
+      visible: true,
+      title: 'Delete Product?',
+      message: `Are you sure you want to delete "${product.name}"? This action cannot be undone and will remove the product from the marketplace.`,
+      isDestructive: true,
+      confirmText: 'Delete Product',
+      onConfirm: () => {
+        confirmDelete();
+        setConfirmModal(prev => ({ ...prev, visible: false }));
+      }
+    });
   };
 
   const confirmDelete = async () => {
@@ -288,6 +314,16 @@ export default function ProductDetailScreen() {
 
         <View style={styles.bottomSpacer} />
       </ScrollView>
+
+      <ConfirmationModal
+        visible={confirmModal.visible}
+        title={confirmModal.title}
+        message={confirmModal.message}
+        confirmText={confirmModal.confirmText}
+        isDestructive={confirmModal.isDestructive}
+        onConfirm={confirmModal.onConfirm}
+        onCancel={() => setConfirmModal(prev => ({ ...prev, visible: false }))}
+      />
     </View>
   );
 }

@@ -2,16 +2,16 @@ import { createClient } from '@supabase/supabase-js';
 import { router } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import {
-  ActivityIndicator,
-  Alert,
-  FlatList,
-  Modal,
-  RefreshControl,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View
+    ActivityIndicator,
+    Alert,
+    FlatList,
+    Modal,
+    RefreshControl,
+    StyleSheet,
+    Text,
+    TextInput,
+    TouchableOpacity,
+    View
 } from 'react-native';
 import Icon from 'react-native-vector-icons/FontAwesome5';
 import HeaderComponent from '../../components/HeaderComponent';
@@ -490,7 +490,7 @@ export default function SuperAdminUsers() {
       {/* Create User Modal */}
       <Modal
         visible={showCreateModal}
-        animationType="slide"
+        animationKeyframesType="slide"
         presentationStyle="pageSheet"
       >
         <View style={styles.modalContainer}>

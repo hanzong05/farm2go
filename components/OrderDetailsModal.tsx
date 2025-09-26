@@ -1,12 +1,12 @@
 import React from 'react';
 import {
-  View,
-  Text,
-  StyleSheet,
-  Modal,
-  TouchableOpacity,
-  Dimensions,
-  ScrollView,
+    Dimensions,
+    Modal,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TouchableOpacity,
+    View,
 } from 'react-native';
 
 const { width, height } = Dimensions.get('window');
@@ -119,7 +119,7 @@ export default function OrderDetailsModal({
   return (
     <Modal
       visible={visible}
-      animationType="slide"
+      animationKeyframesType="slide"
       transparent={true}
       onRequestClose={onClose}
     >

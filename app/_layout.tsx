@@ -1,16 +1,16 @@
 import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native';
-import { Stack, useRouter, useSegments, useRootNavigationState } from 'expo-router';
+import { Stack, useRootNavigationState, useRouter, useSegments } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect, useRef, useState } from 'react';
-import { Linking, Platform, AppState } from 'react-native';
+import { AppState, Linking, Platform } from 'react-native';
 import 'react-native-reanimated';
 
 import { useColorScheme } from '@/hooks/use-color-scheme';
+import ErrorBoundary from '../components/ErrorBoundary';
 import { AuthProvider } from '../contexts/AuthContext';
 import { SessionProvider } from '../contexts/SessionContext';
 import { supabase } from '../lib/supabase';
 import { getUserWithProfile } from '../services/auth';
-import ErrorBoundary from '../components/ErrorBoundary';
 
 // Farm2Go green theme
 const Farm2GoTheme = {
@@ -43,7 +43,7 @@ const Farm2GoDarkTheme = {
 const getScreenOptions = (title?: string) => ({
   headerShown: false,
   title: title || '',
-  animation: 'slide_from_right' as const,
+  animationKeyframes: 'slide_from_right' as const,
   contentStyle: {
     backgroundColor: 'transparent',
   },
@@ -57,7 +57,7 @@ const getScreenOptions = (title?: string) => ({
 // Auth screen options with Farm2Go styling
 const getAuthScreenOptions = (title?: string) => ({
   ...getScreenOptions(title),
-  animation: 'fade' as const,
+  animationKeyframes: 'fade' as const,
   contentStyle: {
     backgroundColor: '#ffffff',
   },
@@ -66,7 +66,7 @@ const getAuthScreenOptions = (title?: string) => ({
 // Dashboard screen options with marketplace styling
 const getDashboardScreenOptions = (title?: string)  => ({
   ...getScreenOptions(title),
-  animation: 'slide_from_bottom' as const,
+  animationKeyframes: 'slide_from_bottom' as const,
   contentStyle: {
     backgroundColor: '#f0f9f4', // Farm2Go background color
   },
@@ -75,7 +75,7 @@ const getDashboardScreenOptions = (title?: string)  => ({
 // Modal screen options for forms and overlays
 const getModalScreenOptions = (title?: string) => ({
   ...getScreenOptions(title),
-  animation: 'slide_from_bottom' as const,
+  animationKeyframes: 'slide_from_bottom' as const,
   contentStyle: {
     backgroundColor: '#ffffff',
   },
@@ -385,7 +385,7 @@ export default function RootLayout() {
         <Stack
           screenOptions={{
             headerShown: false,
-            animation: 'slide_from_right',
+            animationKeyframes: 'slide_from_right',
             contentStyle: {
               backgroundColor: colorScheme === 'dark' ? '#0f1419' : '#f0f9f4',
             },
@@ -446,7 +446,7 @@ export default function RootLayout() {
             name="auth/callback" 
             options={{
               ...getAuthScreenOptions('Signing You In...'),
-              animation: 'none',
+              animationKeyframes: 'none',
             }}
           />
 
@@ -671,14 +671,14 @@ export default function RootLayout() {
             name="onboarding" 
             options={{
               ...getScreenOptions('Welcome to Farm2Go'),
-              animation: 'fade',
+              animationKeyframes: 'fade',
             }}
           />
           <Stack.Screen 
             name="maintenance" 
             options={{
               ...getScreenOptions('System Maintenance'),
-              animation: 'fade',
+              animationKeyframes: 'fade',
             }}
           />
         </Stack>

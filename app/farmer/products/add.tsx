@@ -15,10 +15,12 @@ import {
 } from 'react-native';
 import { router } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
+import ConfirmationModal from '../../../components/ConfirmationModal';
 import HeaderComponent from '../../../components/HeaderComponent';
 import VerificationGuard from '../../../components/VerificationGuard';
 import { supabase } from '../../../lib/supabase';
 import { getUserWithProfile } from '../../../services/auth';
+import { notifyProductCreated } from '../../../services/notifications';
 import { Database } from '../../../types/database';
 
 type Profile = Database['public']['Tables']['profiles']['Row'];
@@ -62,6 +64,15 @@ export default function AddProductScreen() {
     loadProfile();
   }, []);
 
+  // Cleanup blob URLs on unmount (web only)
+  useEffect(() => {
+    return () => {
+      if (Platform.OS === 'web' && selectedImage && selectedImage.startsWith('blob:')) {
+        URL.revokeObjectURL(selectedImage);
+      }
+    };
+  }, [selectedImage]);
+
   const loadProfile = async () => {
     try {
       const userData = await getUserWithProfile();
@@ -75,6 +86,21 @@ export default function AddProductScreen() {
   const [focusedInput, setFocusedInput] = useState<string | null>(null);
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const [uploadingImage, setUploadingImage] = useState(false);
+  const [confirmModal, setConfirmModal] = useState<{
+    visible: boolean;
+    title: string;
+    message: string;
+    isDestructive: boolean;
+    confirmText: string;
+    onConfirm: () => void;
+  }>({
+    visible: false,
+    title: '',
+    message: '',
+    isDestructive: false,
+    confirmText: '',
+    onConfirm: () => {},
+  });
 
   const validateForm = () => {
     const newErrors: {[key: string]: string} = {};
@@ -158,9 +184,16 @@ export default function AddProductScreen() {
       let mimeType = 'image/jpeg';
 
       if (Platform.OS === 'web') {
-        // Web: convert to blob
-        const response = await fetch(imageUri);
-        fileData = await response.blob();
+        // Web: use the stored File object if available, otherwise fetch the blob URL
+        const webFile = (setSelectedImage as any).webFile;
+        if (webFile) {
+          fileData = webFile;
+          mimeType = webFile.type;
+        } else {
+          // Fallback: convert blob URL to blob
+          const response = await fetch(imageUri);
+          fileData = await response.blob();
+        }
       } else {
         // React Native: read as base64 and convert to ArrayBuffer
         const response = await fetch(imageUri);
@@ -195,16 +228,54 @@ export default function AddProductScreen() {
     }
   };
 
+  const pickWebImage = () => {
+    // Only available on web platform
+    if (Platform.OS !== 'web') return;
+
+    // Create a file input element for web
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = 'image/*';
+    input.onchange = (event) => {
+      const file = (event.target as HTMLInputElement).files?.[0];
+      if (file) {
+        // Check file size (limit to 5MB)
+        if (file.size > 5 * 1024 * 1024) {
+          Alert.alert('Error', 'Image size must be less than 5MB');
+          return;
+        }
+
+        // Check file type
+        if (!file.type.startsWith('image/')) {
+          Alert.alert('Error', 'Please select a valid image file');
+          return;
+        }
+
+        // Create object URL for preview
+        const imageUrl = URL.createObjectURL(file);
+        setSelectedImage(imageUrl);
+
+        // Store the file for later upload
+        (setSelectedImage as any).webFile = file;
+      }
+    };
+    input.click();
+  };
+
   const showImageOptions = () => {
-    Alert.alert(
-      'Add Product Image',
-      'Choose how you want to add a product image',
-      [
-        { text: 'Camera', onPress: takePhoto },
-        { text: 'Photo Library', onPress: pickImage },
-        { text: 'Cancel', style: 'cancel' },
-      ]
-    );
+    if (Platform.OS === 'web') {
+      pickWebImage();
+    } else {
+      Alert.alert(
+        'Add Product Image',
+        'Choose how you want to add a product image',
+        [
+          { text: 'Camera', onPress: takePhoto },
+          { text: 'Photo Library', onPress: pickImage },
+          { text: 'Cancel', style: 'cancel' },
+        ]
+      );
+    }
   };
 
   const handleSubmit = async () => {
@@ -212,6 +283,24 @@ export default function AddProductScreen() {
       return;
     }
 
+    // Show confirmation modal
+    const productName = formData.name.trim() || 'this product';
+    const price = parseFloat(formData.price) || 0;
+
+    setConfirmModal({
+      visible: true,
+      title: 'Add Product?',
+      message: `Are you sure you want to add "${productName}" for ₱${price}/${formData.unit}? It will be submitted for admin review before appearing in the marketplace.`,
+      isDestructive: false,
+      confirmText: 'Add Product',
+      onConfirm: () => {
+        processSubmit();
+        setConfirmModal(prev => ({ ...prev, visible: false }));
+      }
+    });
+  };
+
+  const processSubmit = async () => {
     setIsSubmitting(true);
 
     try {
@@ -240,15 +329,41 @@ export default function AddProductScreen() {
         image_url: imageUrl,
       };
 
-      const { error } = await (supabase as any)
+      const { data: insertedProduct, error } = await (supabase as any)
         .from('products')
-        .insert(productData);
+        .insert(productData)
+        .select()
+        .single();
 
       if (error) throw error;
 
+      // Send notifications about product creation
+      try {
+        // Get all admin IDs for notification
+        const { data: adminProfiles, error: adminError } = await supabase
+          .from('profiles')
+          .select('id')
+          .in('user_type', ['admin', 'super-admin']);
+
+        const adminIds = adminProfiles?.map(admin => admin.id) || [];
+
+        // Notify about product creation
+        await notifyProductCreated(
+          insertedProduct.id,
+          formData.name.trim(),
+          userData.user.id,
+          adminIds
+        );
+
+        console.log('✅ Notifications sent for product creation');
+      } catch (notifError) {
+        console.error('⚠️ Failed to send notifications:', notifError);
+        // Don't fail the product creation if notifications fail
+      }
+
       Alert.alert(
         'Success',
-        'Product added successfully! It will be reviewed before appearing in the marketplace.',
+        'Product added successfully! You will be notified once it is reviewed.',
         [
           {
             text: 'OK',
@@ -400,7 +515,11 @@ export default function AddProductScreen() {
                 <View style={styles.imagePlaceholder}>
                   <Text style={styles.imagePlaceholderIcon}>📷</Text>
                   <Text style={styles.imagePlaceholderText}>Add Product Photo</Text>
-                  <Text style={styles.imagePlaceholderSubtext}>Tap to select from gallery or take photo</Text>
+                  <Text style={styles.imagePlaceholderSubtext}>
+                    {Platform.OS === 'web'
+                      ? 'Click to select image file from your computer'
+                      : 'Tap to select from gallery or take photo'}
+                  </Text>
                 </View>
               )}
               {uploadingImage && (
@@ -490,6 +609,16 @@ export default function AddProductScreen() {
           </Text>
         </TouchableOpacity>
       </View>
+
+      <ConfirmationModal
+        visible={confirmModal.visible}
+        title={confirmModal.title}
+        message={confirmModal.message}
+        confirmText={confirmModal.confirmText}
+        isDestructive={confirmModal.isDestructive}
+        onConfirm={confirmModal.onConfirm}
+        onCancel={() => setConfirmModal(prev => ({ ...prev, visible: false }))}
+      />
     </KeyboardAvoidingView>
     </VerificationGuard>
   );

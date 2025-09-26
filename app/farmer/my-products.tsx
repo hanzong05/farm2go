@@ -16,6 +16,7 @@ import {
 import { supabase } from '../../lib/supabase';
 import { getUserWithProfile } from '../../services/auth';
 import { Database } from '../../types/database';
+import ConfirmationModal from '../../components/ConfirmationModal';
 import HeaderComponent from '../../components/HeaderComponent';
 
 interface Product {
@@ -96,6 +97,21 @@ export default function Farm2GoFarmerProducts() {
   const [sortBy, setSortBy] = useState('newest');
   const [showSidebar, setShowSidebar] = useState(false);
   const [numColumns, setNumColumns] = useState(getNumColumns());
+  const [confirmModal, setConfirmModal] = useState<{
+    visible: boolean;
+    title: string;
+    message: string;
+    isDestructive: boolean;
+    confirmText: string;
+    onConfirm: () => void;
+  }>({
+    visible: false,
+    title: '',
+    message: '',
+    isDestructive: false,
+    confirmText: '',
+    onConfirm: () => {},
+  });
 
   const isDesktop = width >= 1024;
   const isTablet = width >= 768;
@@ -140,6 +156,20 @@ export default function Farm2GoFarmerProducts() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleEditProduct = (product: Product) => {
+    setConfirmModal({
+      visible: true,
+      title: 'Edit Product?',
+      message: `Do you want to edit "${product.name}"? You'll be taken to the edit page where you can modify product details.`,
+      isDestructive: false,
+      confirmText: 'Yes, Edit',
+      onConfirm: () => {
+        router.push(`/farmer/products/edit/${product.id}` as any);
+        setConfirmModal(prev => ({ ...prev, visible: false }));
+      }
+    });
   };
 
   const filterProducts = () => {
@@ -378,7 +408,7 @@ export default function Farm2GoFarmerProducts() {
             style={styles.compactEditButton}
             onPress={(e) => {
               e.stopPropagation();
-              router.push(`/farmer/products/edit/${product.id}` as any);
+              handleEditProduct(product);
             }}
             activeOpacity={0.7}
           >
@@ -635,6 +665,16 @@ export default function Farm2GoFarmerProducts() {
           />
         </View>
       )}
+
+      <ConfirmationModal
+        visible={confirmModal.visible}
+        title={confirmModal.title}
+        message={confirmModal.message}
+        confirmText={confirmModal.confirmText}
+        isDestructive={confirmModal.isDestructive}
+        onConfirm={confirmModal.onConfirm}
+        onCancel={() => setConfirmModal(prev => ({ ...prev, visible: false }))}
+      />
     </View>
   );
 }

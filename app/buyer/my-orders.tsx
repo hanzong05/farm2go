@@ -12,14 +12,17 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import ConfirmationModal from '../../components/ConfirmationModal';
 import FilterSidebar from '../../components/FilterSidebar';
 import HeaderComponent from '../../components/HeaderComponent';
-import OrderQRCodeModal from '../../components/OrderQRCodeModal';
 import OrderDetailsModal from '../../components/OrderDetailsModal';
+import OrderQRCodeModal from '../../components/OrderQRCodeModal';
+import { supabase } from '../../lib/supabase';
 import { getUserWithProfile } from '../../services/auth';
+import { notifyBarangayAdmins, notifyOrderStatusChange } from '../../services/notifications';
 import { getBuyerOrders } from '../../services/orders';
-import { OrderWithDetails, ORDER_STATUS_CONFIG } from '../../types/orders';
 import { Database } from '../../types/database';
+import { ORDER_STATUS_CONFIG, OrderWithDetails } from '../../types/orders';
 
 const { width } = Dimensions.get('window');
 
@@ -32,6 +35,7 @@ const STATUS_FILTERS = [
   { key: 'confirmed', label: 'Confirmed' },
   { key: 'shipped', label: 'Shipped' },
   { key: 'delivered', label: 'Delivered' },
+  { key: 'cancellation_requested', label: 'Cancellation Requested' },
   { key: 'cancelled', label: 'Cancelled' },
 ];
 
@@ -74,6 +78,21 @@ export default function BuyerMyOrdersScreen() {
   const [showDetailsModal, setShowDetailsModal] = useState(false);
   const [selectedOrder, setSelectedOrder] = useState<OrderWithDetails | null>(null);
   const fadeAnim = new Animated.Value(0);
+  const [confirmModal, setConfirmModal] = useState<{
+    visible: boolean;
+    title: string;
+    message: string;
+    isDestructive: boolean;
+    confirmText: string;
+    onConfirm: () => void;
+  }>({
+    visible: false,
+    title: '',
+    message: '',
+    isDestructive: false,
+    confirmText: '',
+    onConfirm: () => {},
+  });
 
   // Filter state
   const [filterState, setFilterState] = useState({
@@ -86,7 +105,7 @@ export default function BuyerMyOrdersScreen() {
   useEffect(() => {
     loadData();
     
-    // Fade in animation
+    // Fade in animationKeyframes
     Animated.timing(fadeAnim, {
       toValue: 1,
       duration: 600,
@@ -199,6 +218,163 @@ export default function BuyerMyOrdersScreen() {
   const getStatusConfig = (status: string) => {
     const config = ORDER_STATUS_CONFIG[status as keyof typeof ORDER_STATUS_CONFIG];
     return config ? { color: config.color, bgColor: config.bgColor } : { color: '#6b7280', bgColor: '#f3f4f6' };
+  };
+
+  // Handle cancellation request
+  const handleCancellationRequest = async (order: OrderWithDetails) => {
+    if (!profile) return;
+
+    const productName = order.product?.name || 'this product';
+    const totalPrice = order.total_price || 0;
+
+    setConfirmModal({
+      visible: true,
+      title: 'Request Cancellation?',
+      message: `Are you sure you want to request cancellation for your order of "${productName}" (₱${totalPrice.toLocaleString()})? This will notify the farmer and admin.`,
+      isDestructive: true,
+      confirmText: 'Request Cancellation',
+      onConfirm: () => {
+        processCancellationRequest(order);
+        setConfirmModal(prev => ({ ...prev, visible: false }));
+      }
+    });
+  };
+
+  const processCancellationRequest = async (order: OrderWithDetails) => {
+    if (!profile) {
+      Alert.alert('Error', 'User profile not available');
+      return;
+    }
+
+    try {
+      console.log('🚫 Processing cancellation request for order:', order.id);
+
+      // Update order status to 'cancellation_requested' (fallback to 'cancelled' if not supported)
+      let statusToUpdate = 'cancellation_requested';
+      let notesUpdate = order.notes ? `${order.notes}\n[CANCELLATION REQUESTED BY BUYER]` : '[CANCELLATION REQUESTED BY BUYER]';
+
+      // First try with cancellation_requested
+      let { error: updateError } = await (supabase as any)
+        .from('orders')
+        .update({
+          status: statusToUpdate,
+          notes: notesUpdate,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', order.id);
+
+      // If failed due to constraint, try with 'pending' status and rely on notes
+      if (updateError && updateError.code === '23514') {
+        console.log('⚠️ cancellation_requested not supported, using pending status with special notes');
+        statusToUpdate = 'pending';
+        notesUpdate = order.notes ? `${order.notes}\n[BUYER REQUESTED CANCELLATION - PENDING FARMER RESPONSE]` : '[BUYER REQUESTED CANCELLATION - PENDING FARMER RESPONSE]';
+
+        const { error: fallbackError } = await (supabase as any)
+          .from('orders')
+          .update({
+            status: statusToUpdate,
+            notes: notesUpdate,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', order.id);
+
+        updateError = fallbackError;
+      }
+
+      if (updateError) {
+        console.error('❌ Error updating order status:', updateError);
+        console.error('❌ Error code:', updateError.code);
+        console.error('❌ Error message:', updateError.message);
+        console.error('❌ Error details:', updateError.details);
+        console.error('❌ Error hint:', updateError.hint);
+        console.error('❌ Full error object:', JSON.stringify(updateError, null, 2));
+
+        let errorMessage = 'Failed to request cancellation. Please try again.';
+        if (updateError.code === '23514') {
+          errorMessage = 'The cancellation_requested status is not supported. Please contact admin to update the system.';
+        } else if (updateError.message) {
+          errorMessage = `Database error: ${updateError.message}`;
+        }
+
+        Alert.alert('Error', errorMessage);
+        return;
+      }
+
+      // Send notifications
+      try {
+        console.log('🔔 Starting notification process...');
+        console.log('🔔 Order details:', {
+          orderId: order.id,
+          farmerId: order.farmer_profile?.id,
+          farmerName: order.farmer_profile?.first_name,
+          buyerName: `${profile.first_name} ${profile.last_name}`,
+          barangay: order.farmer_profile?.barangay
+        });
+
+        // Notify farmer about cancellation request
+        console.log('🔔 Notifying farmer...');
+        await notifyOrderStatusChange(
+          order.id,
+          'cancellation_requested',
+          profile.id, // buyerId
+          order.farmer_profile?.id || '', // farmerId
+          {
+            buyerName: `${profile.first_name} ${profile.last_name}`,
+            farmerName: order.farmer_profile?.first_name ? `${order.farmer_profile.first_name} ${order.farmer_profile.last_name}` : 'Farmer',
+            totalAmount: order.total_price
+          },
+          profile.id // updatedBy (buyer requested the cancellation)
+        );
+        console.log('✅ Farmer notification sent');
+
+        // Notify barangay admins about cancellation request
+        if (order.farmer_profile?.barangay) {
+          console.log('🔔 Notifying barangay admins for barangay:', order.farmer_profile.barangay);
+          await notifyBarangayAdmins(
+            order.farmer_profile.barangay,
+            'Order Cancellation Request',
+            `${profile.first_name} ${profile.last_name} has requested cancellation for order ${order.id} (${order.product?.name}) worth ₱${order.total_price.toFixed(2)}.`,
+            profile.id,
+            {
+              orderId: order.id,
+              buyerId: profile.id,
+              farmerId: order.farmer_profile?.id,
+              productName: order.product?.name,
+              totalAmount: order.total_price,
+              action: 'cancellation_requested'
+            }
+          );
+          console.log('✅ Barangay admin notifications sent');
+        } else {
+          console.log('⚠️ No barangay information available for admin notifications');
+        }
+
+        console.log('✅ All cancellation request notifications completed');
+      } catch (notifError) {
+        console.error('❌ Failed to send cancellation notifications:', notifError);
+        console.error('❌ Notification error details:', JSON.stringify(notifError, null, 2));
+
+        // Show user that notifications failed but order update succeeded
+        Alert.alert(
+          'Partial Success',
+          'Your cancellation request has been recorded, but we had trouble sending notifications. The farmer will still see your request.',
+          [{ text: 'OK' }]
+        );
+      }
+
+      Alert.alert(
+        'Cancellation Requested',
+        'Your cancellation request has been sent to the farmer and admin. You will be notified of their decision.',
+        [{ text: 'OK' }]
+      );
+
+      // Refresh orders to show updated status
+      await onRefresh();
+
+    } catch (error) {
+      console.error('❌ Error requesting cancellation:', error);
+      Alert.alert('Error', 'Failed to request cancellation. Please try again.');
+    }
   };
 
   // Create filter sections for the FilterSidebar component
@@ -426,10 +602,19 @@ export default function BuyerMyOrdersScreen() {
             <Text style={styles.trackButtonText}>Show QR Code</Text>
           </TouchableOpacity>
 
-          {order.status !== 'cancelled' && order.status !== 'delivered' && (
-            <TouchableOpacity style={styles.cancelButton} activeOpacity={0.8}>
+          {order.status !== 'cancelled' && order.status !== 'delivered' && order.status !== 'cancellation_requested' && !order.notes?.includes('CANCELLATION REQUESTED') && (
+            <TouchableOpacity
+              style={styles.cancelButton}
+              activeOpacity={0.8}
+              onPress={() => handleCancellationRequest(order)}
+            >
               <Text style={styles.cancelButtonText}>Request cancellation</Text>
             </TouchableOpacity>
+          )}
+          {(order.status === 'cancellation_requested' || order.notes?.includes('CANCELLATION REQUESTED')) && (
+            <View style={styles.cancelRequestedBadge}>
+              <Text style={styles.cancelRequestedText}>Cancellation Requested</Text>
+            </View>
           )}
         </View>
       </View>
@@ -554,7 +739,7 @@ export default function BuyerMyOrdersScreen() {
         <OrderQRCodeModal
           visible={showQRModal}
           onClose={handleCloseQRModal}
-          order={selectedOrder}
+          order={selectedOrder as any}
         />
       )}
 
@@ -563,7 +748,7 @@ export default function BuyerMyOrdersScreen() {
         <OrderDetailsModal
           visible={showDetailsModal}
           onClose={handleCloseDetailsModal}
-          order={selectedOrder}
+          order={selectedOrder as any}
         />
       )}
 
@@ -578,6 +763,16 @@ export default function BuyerMyOrdersScreen() {
           title="Filters"
         />
       )}
+
+      <ConfirmationModal
+        visible={confirmModal.visible}
+        title={confirmModal.title}
+        message={confirmModal.message}
+        confirmText={confirmModal.confirmText}
+        isDestructive={confirmModal.isDestructive}
+        onConfirm={confirmModal.onConfirm}
+        onCancel={() => setConfirmModal(prev => ({ ...prev, visible: false }))}
+      />
     </View>
   );
 }
@@ -1005,6 +1200,21 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#6b7280',
     fontWeight: '500',
+  },
+  cancelRequestedBadge: {
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 6,
+    backgroundColor: '#fef3c7',
+    borderWidth: 1,
+    borderColor: '#f59e0b',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  cancelRequestedText: {
+    fontSize: 12,
+    color: '#f59e0b',
+    fontWeight: '600',
   },
 
   // Empty State

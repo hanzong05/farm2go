@@ -1,6 +1,7 @@
 import { useLocalSearchParams, router } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, ActivityIndicator } from 'react-native';
+import ConfirmationModal from '../../../components/ConfirmationModal';
 import { supabase } from '../../../lib/supabase';
 import { useAuth } from '../../../contexts/AuthContext';
 
@@ -30,6 +31,21 @@ export default function BuyerProductDetailScreen() {
   const [product, setProduct] = useState<Product | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [confirmModal, setConfirmModal] = useState<{
+    visible: boolean;
+    title: string;
+    message: string;
+    isDestructive: boolean;
+    confirmText: string;
+    onConfirm: () => void;
+  }>({
+    visible: false,
+    title: '',
+    message: '',
+    isDestructive: false,
+    confirmText: '',
+    onConfirm: () => {},
+  });
 
   useEffect(() => {
     if (id) {
@@ -71,15 +87,39 @@ export default function BuyerProductDetailScreen() {
   };
 
   const handleContactFarmer = () => {
-    if (product?.farmer_id) {
-      router.push(`/buyer/contact-farmer/${product.farmer_id}` as any);
-    }
+    if (!product?.farmer_id) return;
+
+    const farmerName = product.profiles?.first_name && product.profiles?.last_name
+      ? `${product.profiles.first_name} ${product.profiles.last_name}`
+      : 'the farmer';
+
+    setConfirmModal({
+      visible: true,
+      title: 'Contact Farmer?',
+      message: `Do you want to contact ${farmerName} about "${product.name}"?`,
+      isDestructive: false,
+      confirmText: 'Yes, Contact',
+      onConfirm: () => {
+        router.push(`/buyer/contact-farmer/${product.farmer_id}` as any);
+        setConfirmModal(prev => ({ ...prev, visible: false }));
+      }
+    });
   };
 
   const handleOrderNow = () => {
-    if (product?.id) {
-      router.push(`/buyer/order/${product.id}` as any);
-    }
+    if (!product?.id) return;
+
+    setConfirmModal({
+      visible: true,
+      title: 'Place Order?',
+      message: `Do you want to place an order for "${product.name}" at ₱${product.price}/${product.unit}?`,
+      isDestructive: false,
+      confirmText: 'Yes, Order Now',
+      onConfirm: () => {
+        router.push(`/buyer/order/${product.id}` as any);
+        setConfirmModal(prev => ({ ...prev, visible: false }));
+      }
+    });
   };
 
   if (loading) {
@@ -170,6 +210,16 @@ export default function BuyerProductDetailScreen() {
           </TouchableOpacity>
         </View>
       </View>
+
+      <ConfirmationModal
+        visible={confirmModal.visible}
+        title={confirmModal.title}
+        message={confirmModal.message}
+        confirmText={confirmModal.confirmText}
+        isDestructive={confirmModal.isDestructive}
+        onConfirm={confirmModal.onConfirm}
+        onCancel={() => setConfirmModal(prev => ({ ...prev, visible: false }))}
+      />
     </ScrollView>
   );
 }

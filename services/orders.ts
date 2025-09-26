@@ -109,13 +109,21 @@ const createOrderManually = async (
     throw new Error('Failed to create transaction');
   }
 
-  // Update product availability
-  await supabase
+  // Update product availability (manual approach)
+  const { data: currentProduct } = await supabase
     .from('products')
-    .update({
-      quantity_available: supabase.sql`quantity_available - ${orderData.quantity}`
-    })
-    .eq('id', orderData.product_id);
+    .select('quantity_available')
+    .eq('id', orderData.product_id)
+    .single();
+
+  if (currentProduct) {
+    await supabase
+      .from('products')
+      .update({
+        quantity_available: Math.max(0, (currentProduct as any).quantity_available - orderData.quantity)
+      })
+      .eq('id', orderData.product_id);
+  }
 
   return { order: order as Order, transaction: transaction as Transaction };
 };
@@ -160,7 +168,7 @@ export const getBuyerOrders = async (buyerId: string): Promise<OrderWithDetails[
       throw error;
     }
 
-    return (data || []).map(order => ({
+    return (data || []).map((order: any) => ({
       ...order,
       product: order.products,
       farmer_profile: order.profiles,
@@ -211,7 +219,7 @@ export const getFarmerOrders = async (farmerId: string): Promise<OrderWithDetail
       throw error;
     }
 
-    return (data || []).map(order => ({
+    return (data || []).map((order: any) => ({
       ...order,
       product: order.products,
       farmer_profile: order.profiles, // This will be the buyer profile
@@ -240,10 +248,10 @@ export const updateOrderStatus = async (orderId: string, newStatus: OrderStatus)
       throw new Error('Order not found');
     }
 
-    const transactionStatus = orderData.transactions?.[0]?.status as TransactionStatus;
+    const transactionStatus = (orderData as any).transactions?.[0]?.status as TransactionStatus;
 
     // Validate status advancement
-    if (!canAdvanceOrderStatus(orderData.status as OrderStatus, transactionStatus)) {
+    if (!canAdvanceOrderStatus((orderData as any).status as OrderStatus, transactionStatus)) {
       throw new Error('Cannot advance order status: payment not completed');
     }
 
@@ -300,11 +308,11 @@ export const updateTransactionStatus = async (
       const { data: orderData } = await supabase
         .from('orders')
         .select('id, status')
-        .eq('id', data.order_id)
+        .eq('id', (data as any).order_id)
         .single();
 
-      if (orderData && orderData.status === 'pending') {
-        await updateOrderStatus(orderData.id, 'confirmed');
+      if (orderData && (orderData as any).status === 'pending') {
+        await updateOrderStatus((orderData as any).id, 'confirmed');
       }
     }
 
@@ -363,10 +371,10 @@ export const getOrderById = async (orderId: string): Promise<OrderWithDetails | 
     }
 
     return {
-      ...data,
-      product: data.products,
-      farmer_profile: data.farmer_profile,
-      transaction: data.transactions?.[0]
+      ...(data as any),
+      product: (data as any).products,
+      farmer_profile: (data as any).farmer_profile,
+      transaction: (data as any).transactions?.[0]
     } as OrderWithDetails;
   } catch (error) {
     console.error('Error fetching order:', error);
@@ -387,7 +395,7 @@ export const cancelOrder = async (orderId: string, reason?: string): Promise<Ord
       throw new Error('Order not found');
     }
 
-    if (order.status !== 'pending') {
+    if ((order as any).status !== 'pending') {
       throw new Error('Can only cancel pending orders');
     }
 
@@ -396,7 +404,7 @@ export const cancelOrder = async (orderId: string, reason?: string): Promise<Ord
       .from('orders')
       .update({
         status: 'cancelled',
-        notes: reason ? `${order.notes || ''}\nCancellation reason: ${reason}`.trim() : order.notes,
+        notes: reason ? `${(order as any).notes || ''}\nCancellation reason: ${reason}`.trim() : (order as any).notes,
         updated_at: new Date().toISOString()
       })
       .eq('id', orderId)
@@ -407,13 +415,21 @@ export const cancelOrder = async (orderId: string, reason?: string): Promise<Ord
       throw error;
     }
 
-    // Restore product quantity
-    await supabase
+    // Restore product quantity (manual approach)
+    const { data: currentProduct } = await supabase
       .from('products')
-      .update({
-        quantity_available: supabase.sql`quantity_available + ${order.quantity}`
-      })
-      .eq('id', order.product_id);
+      .select('quantity_available')
+      .eq('id', (order as any).product_id)
+      .single();
+
+    if (currentProduct) {
+      await supabase
+        .from('products')
+        .update({
+          quantity_available: (currentProduct as any).quantity_available + (order as any).quantity
+        })
+        .eq('id', (order as any).product_id);
+    }
 
     // Update transaction status to failed
     await supabase

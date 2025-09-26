@@ -12,9 +12,11 @@ import {
   View,
 } from 'react-native';
 import { router } from 'expo-router';
+import ConfirmationModal from '../../components/ConfirmationModal';
 import HeaderComponent from '../../components/HeaderComponent';
 import { supabase } from '../../lib/supabase';
 import { getUserWithProfile } from '../../services/auth';
+import { notifyUserAction, notifyAllAdmins } from '../../services/notifications';
 import { Database } from '../../types/database';
 
 const { width } = Dimensions.get('window');
@@ -27,6 +29,8 @@ type Product = Database['public']['Tables']['products']['Row'] & {
   };
 };
 
+type Profile = Database['public']['Tables']['profiles']['Row'];
+
 export default function AdminProducts() {
   const [products, setProducts] = useState<Product[]>([]);
   const [filteredProducts, setFilteredProducts] = useState<Product[]>([]);
@@ -38,18 +42,46 @@ export default function AdminProducts() {
   const [selectedCategory, setSelectedCategory] = useState('all');
   const [sortBy, setSortBy] = useState('newest');
   const [showSidebar, setShowSidebar] = useState(false);
+  const [profile, setProfile] = useState<Profile | null>(null);
+  const [confirmModal, setConfirmModal] = useState<{
+    visible: boolean;
+    title: string;
+    message: string;
+    isDestructive: boolean;
+    confirmText: string;
+    onConfirm: () => void;
+  }>({
+    visible: false,
+    title: '',
+    message: '',
+    isDestructive: false,
+    confirmText: '',
+    onConfirm: () => {},
+  });
 
   const isDesktop = width >= 1024;
   const isTablet = width >= 768;
   const isMobile = width < 768;
 
   useEffect(() => {
+    loadProfile();
     loadProducts();
   }, []);
 
   useEffect(() => {
     filterProducts();
   }, [products, searchQuery, selectedStatus, selectedCategory, sortBy]);
+
+  const loadProfile = async () => {
+    try {
+      const userData = await getUserWithProfile();
+      if (userData?.profile) {
+        setProfile(userData.profile);
+      }
+    } catch (error) {
+      console.error('Error loading profile:', error);
+    }
+  };
 
   const filterProducts = () => {
     let filtered = products;
@@ -151,23 +183,31 @@ export default function AdminProducts() {
       `${product.farmer_profile.first_name} ${product.farmer_profile.last_name}` :
       'Unknown Farmer';
 
-    Alert.alert(
-      `${action === 'approved' ? 'Approve' : 'Reject'} Product?`,
-      `Are you sure you want to ${action === 'approved' ? 'approve' : 'reject'} "${product?.name}" by ${farmerName}?`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: `Yes, ${action === 'approved' ? 'Approve' : 'Reject'}`,
-          style: action === 'approved' ? 'default' : 'destructive',
-          onPress: () => updateProductStatus(productId, action)
-        }
-      ]
-    );
+    const isApproval = action === 'approved';
+
+    setConfirmModal({
+      visible: true,
+      title: `${isApproval ? 'Approve' : 'Reject'} Product?`,
+      message: `Are you sure you want to ${isApproval ? 'approve' : 'reject'} "${product?.name}" by ${farmerName}?`,
+      isDestructive: !isApproval,
+      confirmText: `Yes, ${isApproval ? 'Approve' : 'Reject'}`,
+      onConfirm: () => {
+        updateProductStatus(productId, action);
+        setConfirmModal(prev => ({ ...prev, visible: false }));
+      }
+    });
   };
 
   const updateProductStatus = async (productId: string, status: 'approved' | 'rejected') => {
     try {
       setProcessing(productId);
+
+      // Get product details before update for notifications
+      const product = products.find(p => p.id === productId);
+      if (!product) {
+        Alert.alert('Error', 'Product not found');
+        return;
+      }
 
       const { error } = await supabase
         .from('products')
@@ -178,6 +218,36 @@ export default function AdminProducts() {
         .eq('id', productId);
 
       if (error) throw error;
+
+      // Send notifications
+      try {
+        // Notify the farmer whose product was updated
+        await notifyUserAction(
+          product.farmer_id,
+          status,
+          'product',
+          product.name,
+          profile?.id || '',
+          `Product ${status} by administrator`
+        );
+
+        // Notify all other admins about the product action
+        await notifyAllAdmins(
+          `Product ${status === 'approved' ? 'Approved' : 'Rejected'}`,
+          `Admin ${profile?.first_name} ${profile?.last_name} ${status} the product "${product.name}" by ${product.farmer_profile?.first_name} ${product.farmer_profile?.last_name}`,
+          profile?.id || '',
+          {
+            action: `product_${status}`,
+            productName: product.name,
+            farmerId: product.farmer_id,
+            farmerName: `${product.farmer_profile?.first_name} ${product.farmer_profile?.last_name}`
+          }
+        );
+
+        console.log('✅ Notifications sent for product status update');
+      } catch (notifError) {
+        console.error('⚠️ Failed to send notifications:', notifError);
+      }
 
       Alert.alert(
         'Success!',
@@ -607,6 +677,16 @@ export default function AdminProducts() {
           </ScrollView>
         </View>
       )}
+
+      <ConfirmationModal
+        visible={confirmModal.visible}
+        title={confirmModal.title}
+        message={confirmModal.message}
+        confirmText={confirmModal.confirmText}
+        isDestructive={confirmModal.isDestructive}
+        onConfirm={confirmModal.onConfirm}
+        onCancel={() => setConfirmModal(prev => ({ ...prev, visible: false }))}
+      />
     </View>
   );
 }

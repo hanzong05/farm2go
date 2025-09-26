@@ -16,8 +16,10 @@ import {
   Dimensions,
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
+import ConfirmationModal from '../../../../components/ConfirmationModal';
 import { supabase } from '../../../../lib/supabase';
 import { useAuth } from '../../../../contexts/AuthContext';
+import { notifyAllAdmins } from '../../../../services/notifications';
 
 const { width } = Dimensions.get('window');
 
@@ -82,6 +84,21 @@ export default function EditProductScreen() {
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const [uploadingImage, setUploadingImage] = useState(false);
   const [errors, setErrors] = useState<{[key: string]: string}>({});
+  const [confirmModal, setConfirmModal] = useState<{
+    visible: boolean;
+    title: string;
+    message: string;
+    isDestructive: boolean;
+    confirmText: string;
+    onConfirm: () => void;
+  }>({
+    visible: false,
+    title: '',
+    message: '',
+    isDestructive: false,
+    confirmText: '',
+    onConfirm: () => {},
+  });
 
   const [formData, setFormData] = useState({
     name: '',
@@ -104,8 +121,8 @@ export default function EditProductScreen() {
       const { data, error } = await supabase
         .from('products')
         .select('*')
-        .eq('id', id)
-        .eq('farmer_id', user?.id)
+        .eq('id', id || '')
+        .eq('farmer_id', user?.id || '')
         .single();
 
       if (error) {
@@ -114,17 +131,18 @@ export default function EditProductScreen() {
         return;
       }
 
+      const productData = data as any;
       setFormData({
-        name: data.name,
-        description: data.description,
-        price: data.price.toString(),
-        quantity_available: data.quantity_available.toString(),
-        unit: data.unit,
-        category: data.category,
+        name: productData.name,
+        description: productData.description,
+        price: productData.price.toString(),
+        quantity_available: productData.quantity_available.toString(),
+        unit: productData.unit,
+        category: productData.category,
       });
 
-      if (data.image_url) {
-        setSelectedImage(data.image_url);
+      if (productData.image_url) {
+        setSelectedImage(productData.image_url);
       }
     } catch (err) {
       console.error('Product fetch error:', err);
@@ -259,6 +277,21 @@ export default function EditProductScreen() {
       return;
     }
 
+    // Show confirmation modal
+    setConfirmModal({
+      visible: true,
+      title: 'Save Changes?',
+      message: `Are you sure you want to save changes to "${formData.name}"? This will update the product details and notify admins.`,
+      isDestructive: false,
+      confirmText: 'Save Changes',
+      onConfirm: () => {
+        processSave();
+        setConfirmModal(prev => ({ ...prev, visible: false }));
+      }
+    });
+  };
+
+  const processSave = async () => {
     try {
       setSaving(true);
 
@@ -272,7 +305,7 @@ export default function EditProductScreen() {
         }
       }
 
-      const { error } = await supabase
+      const { error } = await (supabase as any)
         .from('products')
         .update({
           name: formData.name.trim(),
@@ -291,6 +324,46 @@ export default function EditProductScreen() {
         console.error('Error updating product:', error);
         Alert.alert('Error', 'Failed to update product');
         return;
+      }
+
+      // Send notifications about product update
+      try {
+        console.log('📧 Sending product update notifications...');
+
+        // Get user profile for notifications
+        const { data: userProfile } = await supabase
+          .from('profiles')
+          .select('first_name, last_name, barangay')
+          .eq('id', user?.id || '')
+          .single();
+
+        const farmerName = userProfile
+          ? `${(userProfile as any).first_name} ${(userProfile as any).last_name}`
+          : 'A farmer';
+
+        // Notify admins about product update
+        await notifyAllAdmins(
+          'Product Updated',
+          `${farmerName} updated their product: ${formData.name.trim()}. Changes include pricing, quantity, or details.`,
+          user?.id || '',
+          {
+            productId: id,
+            productName: formData.name.trim(),
+            farmerName,
+            action: 'product_updated',
+            changes: {
+              name: formData.name.trim(),
+              price: parseFloat(formData.price),
+              quantity: parseInt(formData.quantity_available),
+              category: formData.category
+            }
+          }
+        );
+
+        console.log('✅ Product update notifications sent');
+      } catch (notifError) {
+        console.error('⚠️ Failed to send product update notifications:', notifError);
+        // Don't fail the product update if notifications fail
       }
 
       Alert.alert('Success', 'Product updated successfully', [
@@ -344,7 +417,7 @@ export default function EditProductScreen() {
         keyboardType={options?.keyboardType}
       />
       {errors[key] && (
-        <Text style={styles.errorText}>{errors[key]}</Text>
+        <Text style={styles.fieldErrorText}>{errors[key]}</Text>
       )}
     </View>
   );
@@ -510,7 +583,7 @@ export default function EditProductScreen() {
                 />
               </View>
               {errors.price && (
-                <Text style={styles.errorText}>{errors.price}</Text>
+                <Text style={styles.fieldErrorText}>{errors.price}</Text>
               )}
             </View>
 
@@ -544,6 +617,16 @@ export default function EditProductScreen() {
           </Text>
         </TouchableOpacity>
       </View>
+
+      <ConfirmationModal
+        visible={confirmModal.visible}
+        title={confirmModal.title}
+        message={confirmModal.message}
+        confirmText={confirmModal.confirmText}
+        isDestructive={confirmModal.isDestructive}
+        onConfirm={confirmModal.onConfirm}
+        onCancel={() => setConfirmModal(prev => ({ ...prev, visible: false }))}
+      />
     </KeyboardAvoidingView>
   );
 }
@@ -746,7 +829,7 @@ const styles = StyleSheet.create({
   selectorOptionTextSelected: {
     color: colors.white,
   },
-  errorText: {
+  fieldErrorText: {
     fontSize: 14,
     color: colors.danger,
     marginTop: 6,

@@ -1,16 +1,14 @@
-import React, { useState, useEffect } from 'react';
-import {
-  Alert,
-  Dimensions,
-  Modal,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
-  Platform,
-} from 'react-native';
 import { Camera, CameraView } from 'expo-camera';
+import React, { useEffect, useState } from 'react';
+import {
+    Alert,
+    Dimensions,
+    Modal,
+    StyleSheet,
+    Text,
+    TouchableOpacity,
+    View
+} from 'react-native';
 
 const { width, height } = Dimensions.get('window');
 
@@ -85,7 +83,7 @@ export default function OrderQRScanner({ visible, onClose, onOrderScanned }: Ord
 
   if (hasPermission === null) {
     return (
-      <Modal visible={visible} animationType="slide">
+      <Modal visible={visible} animationKeyframesType="slide">
         <View style={styles.container}>
           <Text style={styles.message}>Requesting camera permission...</Text>
           <TouchableOpacity style={styles.closeButton} onPress={onClose}>
@@ -98,7 +96,7 @@ export default function OrderQRScanner({ visible, onClose, onOrderScanned }: Ord
 
   if (hasPermission === false) {
     return (
-      <Modal visible={visible} animationType="slide">
+      <Modal visible={visible} animationKeyframesType="slide">
         <View style={styles.container}>
           <Text style={styles.message}>No access to camera</Text>
           <Text style={styles.subMessage}>
@@ -113,7 +111,7 @@ export default function OrderQRScanner({ visible, onClose, onOrderScanned }: Ord
   }
 
   return (
-    <Modal visible={visible} animationType="slide">
+    <Modal visible={visible} animationKeyframesType="slide">
       <View style={styles.container}>
         {/* Header */}
         <View style={styles.header}>

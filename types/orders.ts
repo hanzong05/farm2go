@@ -1,6 +1,6 @@
 // Order and Transaction Types based on actual database schema
 
-export type OrderStatus = 'pending' | 'confirmed' | 'shipped' | 'delivered' | 'cancelled';
+export type OrderStatus = 'pending' | 'confirmed' | 'shipped' | 'delivered' | 'cancelled' | 'cancellation_requested';
 export type TransactionStatus = 'pending' | 'completed' | 'failed';
 
 export interface Order {
@@ -97,6 +97,7 @@ export const ORDER_STATUS_CONFIG = {
   confirmed: { label: 'Confirmed', color: '#3b82f6', bgColor: '#dbeafe' },
   shipped: { label: 'Shipped', color: '#8b5cf6', bgColor: '#e9d5ff' },
   delivered: { label: 'Delivered', color: '#10b981', bgColor: '#d1fae5' },
+  cancellation_requested: { label: 'Cancellation Requested', color: '#f59e0b', bgColor: '#fef3c7' },
   cancelled: { label: 'Cancelled', color: '#ef4444', bgColor: '#fee2e2' }
 };
 

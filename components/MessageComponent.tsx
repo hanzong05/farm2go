@@ -1,14 +1,14 @@
 import React, { useRef, useState } from 'react';
 import {
-  Dimensions,
-  FlatList,
-  Modal,
-  Platform,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View
+    Dimensions,
+    FlatList,
+    Modal,
+    Platform,
+    StyleSheet,
+    Text,
+    TextInput,
+    TouchableOpacity,
+    View
 } from 'react-native';
 import Icon from 'react-native-vector-icons/FontAwesome5';
 
@@ -386,7 +386,7 @@ export default function MessageComponent({
       {/* Mobile/Tablet Modal */}
       <Modal
         visible={modalVisible}
-        animationType="slide"
+        animationKeyframesType="slide"
         presentationStyle="pageSheet"
         onRequestClose={() => {
           setModalVisible(false);
