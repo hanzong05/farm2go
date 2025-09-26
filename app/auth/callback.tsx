@@ -103,36 +103,34 @@ export default function AuthCallback() {
 
         console.log('✅ OAuth user verified:', user.email);
 
-        // Check if user has a profile - create one if needed for new OAuth users
-        console.log('🔍 Checking user profile...');
+        // Check if user has a profile to determine if this is registration or login
+        console.log('🔍 Checking if OAuth user has existing profile...');
         const { getUserWithProfile } = await import('../../services/auth');
-        let userData = await getUserWithProfile();
+        const userData = await getUserWithProfile();
 
         if (!userData?.profile) {
-          console.log('📝 No profile found for OAuth user - creating default buyer profile');
+          console.log('📝 No profile found - this is OAuth registration, redirecting to complete profile');
 
-          // Create a default buyer profile for OAuth users
-          const { data: profile, error: profileError } = await supabase
-            .from('profiles')
-            .insert({
-              id: user.id,
-              email: user.email || '',
-              first_name: user.user_metadata?.full_name?.split(' ')[0] || 'User',
-              last_name: user.user_metadata?.full_name?.split(' ').slice(1).join(' ') || '',
-              user_type: 'buyer',
-              phone: user.user_metadata?.phone || '',
-              barangay: 'Not specified'
-            })
-            .select()
-            .single();
+          // Clean up OAuth state
+          const { sessionManager } = await import('../../services/sessionManager');
+          await sessionManager.clearOAuthState();
 
-          if (profileError) {
-            console.error('❌ Failed to create OAuth user profile:', profileError);
-            // Continue anyway, user can complete profile later
-          } else {
-            console.log('✅ OAuth user profile created successfully');
-            userData = await getUserWithProfile(); // Refresh user data
+          // Clean up legacy storage
+          try {
+            await AsyncStorage.removeItem('oauth_user_type');
+            await AsyncStorage.removeItem('oauth_intent');
+            safeLocalStorage.removeItem('oauth_user_type');
+            safeLocalStorage.removeItem('oauth_intent');
+            safeLocalStorage.removeItem('oauth_timestamp');
+          } catch (error) {
+            console.log('Storage cleanup error:', error);
           }
+
+          // Redirect to complete profile for new OAuth users
+          safeNavigate('/auth/complete-profile');
+          return;
+        } else {
+          console.log('✅ Profile found - this is OAuth login, proceeding to dashboard');
         }
 
         // Clean up OAuth state
