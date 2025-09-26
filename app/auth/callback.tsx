@@ -103,6 +103,38 @@ export default function AuthCallback() {
 
         console.log('✅ OAuth user verified:', user.email);
 
+        // Check if user has a profile - create one if needed for new OAuth users
+        console.log('🔍 Checking user profile...');
+        const { getUserWithProfile } = await import('../../services/auth');
+        let userData = await getUserWithProfile();
+
+        if (!userData?.profile) {
+          console.log('📝 No profile found for OAuth user - creating default buyer profile');
+
+          // Create a default buyer profile for OAuth users
+          const { data: profile, error: profileError } = await supabase
+            .from('profiles')
+            .insert({
+              id: user.id,
+              email: user.email || '',
+              first_name: user.user_metadata?.full_name?.split(' ')[0] || 'User',
+              last_name: user.user_metadata?.full_name?.split(' ').slice(1).join(' ') || '',
+              user_type: 'buyer',
+              phone: user.user_metadata?.phone || '',
+              barangay: 'Not specified'
+            })
+            .select()
+            .single();
+
+          if (profileError) {
+            console.error('❌ Failed to create OAuth user profile:', profileError);
+            // Continue anyway, user can complete profile later
+          } else {
+            console.log('✅ OAuth user profile created successfully');
+            userData = await getUserWithProfile(); // Refresh user data
+          }
+        }
+
         // Clean up OAuth state
         const { sessionManager } = await import('../../services/sessionManager');
         await sessionManager.clearOAuthState();
@@ -117,6 +149,9 @@ export default function AuthCallback() {
         } catch (error) {
           console.log('Storage cleanup error:', error);
         }
+
+        // Small delay to ensure profile is properly created/loaded
+        await new Promise(resolve => setTimeout(resolve, 500));
 
         console.log('✅ OAuth callback completed - letting layout handle navigation');
         // Let the layout handle navigation based on user profile

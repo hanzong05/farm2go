@@ -64,7 +64,8 @@
         "react-native-vision-camera",
         {
           "cameraPermissionText": "This app uses the camera to capture photos and videos for identity verification.",
-          "enableMicrophonePermission": false
+          "enableMicrophonePermission": false,
+          "enableCodeScanner": true
         }
       ]
     ],

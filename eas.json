@@ -27,8 +27,7 @@
     "production-small": {
       "android": {
         "buildType": "apk",
-        "gradleCommand": ":app:assembleRelease",
-        "buildConfiguration": "Release"
+        "gradleCommand": ":app:assembleRelease"
       },
       "env": {
         "EXPO_NO_CAPABILITY_SYNC": "1"

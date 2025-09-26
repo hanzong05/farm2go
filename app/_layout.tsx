@@ -187,8 +187,45 @@ export default function RootLayout() {
             safeNavigate(targetPath);
           }
         } else if (userData?.user && !userData?.profile) {
-          // User is authenticated but has no profile - redirect to complete profile
-          console.log('🔄 Authenticated user without profile, redirecting to complete profile');
+          // User is authenticated but has no profile - create default profile or redirect to complete profile
+          console.log('🔄 Authenticated user without profile');
+
+          // For OAuth users, try to create a default profile
+          if (userData.user.app_metadata?.provider === 'google') {
+            console.log('📝 OAuth user detected - attempting to create default profile');
+            try {
+              const { data: newProfile, error: profileError } = await supabase
+                .from('profiles')
+                .insert({
+                  id: userData.user.id,
+                  email: userData.user.email || '',
+                  first_name: userData.user.user_metadata?.full_name?.split(' ')[0] || 'User',
+                  last_name: userData.user.user_metadata?.full_name?.split(' ').slice(1).join(' ') || '',
+                  user_type: 'buyer',
+                  phone: userData.user.user_metadata?.phone || '',
+                  barangay: 'Not specified'
+                })
+                .select()
+                .single();
+
+              if (!profileError && newProfile) {
+                console.log('✅ Default profile created for OAuth user, refreshing...');
+                // Refresh and navigate to buyer marketplace
+                hasInitialized.current = false;
+                setTimeout(() => {
+                  if (isMounted) {
+                    safeNavigate('/buyer/marketplace');
+                  }
+                }, 1000);
+                return;
+              }
+            } catch (error) {
+              console.error('❌ Failed to create default OAuth profile:', error);
+            }
+          }
+
+          // Fallback: redirect to complete profile
+          console.log('🔄 Redirecting to complete profile');
           const shouldRedirectToCompleteProfile =
             currentPath === '/' ||
             currentPath === '/index' ||

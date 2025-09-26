@@ -30,6 +30,7 @@ import { Database } from '../types/database';
 import MessageComponent, { Conversation } from './MessageComponent';
 import NotificationComponent, { Notification } from './NotificationComponent';
 import { useNotifications } from '../hooks/useNotifications';
+import { useSimplePush } from '../hooks/useSimplePush';
 
 type Profile = Database['public']['Tables']['profiles']['Row'];
 
@@ -314,6 +315,21 @@ export default function HeaderComponent({
     refreshNotifications
   } = useNotifications(profile?.id || null);
 
+  // Push notifications hook
+  const { sendTestNotification, isInitialized, pushToken } = useSimplePush(profile?.id || null);
+
+  // For debugging: show push status
+  useEffect(() => {
+    if (profile?.id) {
+      console.log('🔍 Push notification status:', {
+        isInitialized,
+        hasPushToken: !!pushToken,
+        platform: Platform.OS,
+        userId: profile.id
+      });
+    }
+  }, [isInitialized, pushToken, profile?.id]);
+
   // Helper function to convert notification type
   const getNotificationType = (type: string): 'info' | 'success' | 'warning' | 'error' => {
     if (type.includes('approved')) return 'success';
@@ -424,6 +440,20 @@ export default function HeaderComponent({
     window.open(primaryUrl, '_blank');
     console.log('Primary download:', primaryUrl);
     console.log('Alternative downloads available:', urls.slice(1));
+  };
+
+  const handleTestNotification = async () => {
+    if (!profile?.id) {
+      console.warn('⚠️ No user logged in for push notification test');
+      return;
+    }
+
+    try {
+      await sendTestNotification();
+      console.log('✅ Test notification sent successfully');
+    } catch (error) {
+      console.error('❌ Failed to send test notification:', error);
+    }
   };
 
   const filteredNavItems = NAV_ITEMS.filter(item =>
@@ -801,6 +831,26 @@ export default function HeaderComponent({
             />
           )}
 
+          {/* Push Notification Test Button */}
+          {profile && (
+            <TouchableOpacity
+              style={[styles.testNotificationButton, !isInitialized && styles.disabledButton]}
+              onPress={handleTestNotification}
+              disabled={!isInitialized}
+            >
+              <Icon
+                name="rocket"
+                size={isMobile ? 14 : 16}
+                color={isInitialized ? colors.white : colors.gray400}
+              />
+              {!isMobile && (
+                <Text style={[styles.testNotificationText, !isInitialized && styles.disabledText]}>
+                  Test Push
+                </Text>
+              )}
+            </TouchableOpacity>
+          )}
+
           {/* Download App Button */}
           {Platform.OS === 'web' && (
             <TouchableOpacity style={styles.downloadButton} onPress={handleDownloadApp}>
@@ -993,6 +1043,34 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '600',
     color: colors.white,
+  },
+
+  testNotificationButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(16, 185, 129, 0.2)',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 6,
+    gap: 4,
+    borderWidth: 1,
+    borderColor: 'rgba(16, 185, 129, 0.4)',
+    minHeight: 28,
+  },
+
+  testNotificationText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: colors.white,
+  },
+
+  disabledButton: {
+    backgroundColor: 'rgba(107, 114, 128, 0.2)',
+    borderColor: 'rgba(107, 114, 128, 0.3)',
+  },
+
+  disabledText: {
+    color: colors.gray400,
   },
 
   authButton: {
