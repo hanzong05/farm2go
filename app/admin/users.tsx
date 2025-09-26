@@ -1062,9 +1062,7 @@ export default function AdminUsers() {
                   if (item.profiles?.user_type === 'farmer') {
                     openFarmerDetail(item);
                   } else if (item.profiles?.user_type === 'buyer') {
-                    // Open QR scanner for order verification
-                    setSelectedBuyer(item);
-                    setQrScannerVisible(true);
+                    openBuyerDetail(item);
                   }
                 }}
                 disabled={item.profiles?.user_type !== 'farmer' && item.profiles?.user_type !== 'buyer'}

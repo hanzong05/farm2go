@@ -26,7 +26,7 @@ export interface SessionState {
 class SessionManager {
   private static instance: SessionManager;
   private sessionData: SessionData | null = null;
-  private sessionTimeout = 7 * 24 * 60 * 60 * 1000; // 7 days
+  private sessionTimeout = Number.MAX_SAFE_INTEGER; // Never expire automatically
   private refreshTimer: number | null = null;
   private activityTimer: number | null = null;
   private listeners: Array<(state: SessionState) => void> = [];
@@ -64,7 +64,7 @@ class SessionManager {
   };
 
   private constructor() {
-    this.setupActivityMonitoring();
+    // Only setup token refresh, no activity monitoring
     this.setupTokenRefresh();
   }
 
@@ -134,16 +134,11 @@ class SessionManager {
       if (storedSessionData) {
         console.log('📦 Found stored session data, validating...');
 
-        // Check if stored session is still valid
-        if (!this.isStoredSessionExpired(storedSessionData)) {
-          console.log('✅ Stored session is valid, using it');
-          this.sessionData = storedSessionData;
-          this.notifyListeners();
-          return this.getSessionState();
-        } else {
-          console.log('⏰ Stored session expired, clearing...');
-          await this.clearStoredSession();
-        }
+        // Always use stored session data - no expiration checks
+        console.log('✅ Found stored session, using it (no expiration check)');
+        this.sessionData = storedSessionData;
+        this.notifyListeners();
+        return this.getSessionState();
       }
 
       // Check if we're using demo/invalid Supabase config
@@ -182,16 +177,8 @@ class SessionManager {
         return this.getSessionState();
       }
 
-      // Check if session is expired
-      if (session.expires_at && session.expires_at * 1000 < Date.now()) {
-        console.log('⏰ Session expired, attempting refresh...');
-        const refreshResult = await this.refreshSession();
-        if (!refreshResult.success) {
-          await this.clearSession();
-          return this.getSessionState();
-        }
-        return this.getSessionState();
-      }
+      // Skip session expiration checks - keep session active
+      console.log('📝 Session found, keeping active regardless of expiration');
 
       // Get user profile (optional - user might not have profile yet)
       console.log('🔄 [STEP 4] Fetching user profile...');
@@ -383,14 +370,8 @@ class SessionManager {
 
   // Check if session is expired
   public isSessionExpired(): boolean {
-    if (!this.sessionData) return true;
-
-    const now = Date.now();
-    const sessionAge = now - this.sessionData.sessionStartTime;
-
-    // For persistent authentication, only expire based on session age, not activity
-    // This allows users to stay logged in even after closing the app
-    return sessionAge > this.sessionTimeout;
+    // Sessions never expire automatically - only manual logout
+    return false;
   }
 
   // Get session duration
@@ -477,19 +458,7 @@ class SessionManager {
   }
 
   private isStoredSessionExpired(sessionData: SessionData): boolean {
-    const now = Date.now();
-    const sessionAge = now - sessionData.sessionStartTime;
-
-    // Check if session is older than our timeout
-    if (sessionAge > this.sessionTimeout) {
-      return true;
-    }
-
-    // Also check if the Supabase session token is expired
-    if (sessionData.session.expires_at && sessionData.session.expires_at * 1000 < now) {
-      return true;
-    }
-
+    // Never expire stored sessions - they persist until manual logout
     return false;
   }
 
@@ -585,20 +554,17 @@ class SessionManager {
   }
 
   private setupActivityMonitoring(): void {
-    // Check for expired sessions every 5 minutes to reduce CPU usage
-    this.activityTimer = setInterval(() => {
-      if (this.isSessionExpired()) {
-        this.clearSession();
-      }
-    }, 5 * 60 * 1000);
+    // Activity monitoring disabled - sessions only end on explicit logout
+    console.log('📝 Activity monitoring disabled - sessions persist until logout');
   }
 
   private setupTokenRefresh(): void {
-    // Refresh token every 45 minutes (tokens expire in 1 hour) - less aggressive
+    // Keep token refresh to maintain Supabase connection, but don't clear session on failure
     this.refreshTimer = setInterval(() => {
       if (this.sessionData && !this.isDestroyed) {
-        this.refreshSession().catch(() => {
-          // Silently handle auto-refresh failures to reduce console spam
+        this.refreshSession().catch((error) => {
+          console.log('📝 Token refresh failed, but keeping session active:', error.message);
+          // Don't clear session - let user continue until manual logout
         });
       }
     }, 45 * 60 * 1000);

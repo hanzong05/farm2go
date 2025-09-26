@@ -140,9 +140,9 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
         console.log('🔄 AuthContext: Getting initial session...');
 
-        // Add timeout protection to prevent infinite loading
+        // Add timeout protection to prevent infinite loading (increased for OAuth)
         const timeoutPromise = new Promise((_, reject) => {
-          setTimeout(() => reject(new Error('Session initialization timeout')), 15000);
+          setTimeout(() => reject(new Error('Session initialization timeout')), 30000);
         });
 
         const sessionPromise = supabase.auth.getSession();
