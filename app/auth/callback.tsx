@@ -87,55 +87,23 @@ export default function AuthCallback() {
           } catch (exchangeError) {
             console.error('❌ Code exchange exception:', exchangeError);
           }
-          // Brief wait for session establishment
-          await new Promise(resolve => setTimeout(resolve, 500));
-        }
-
-        // Quick user verification
-        console.log('🔐 Verifying OAuth user...');
-        const { data: { user }, error: userError } = await supabase.auth.getUser();
-
-        if (userError || !user) {
-          console.error('❌ No OAuth user found:', userError);
-          safeNavigate('/auth/login?error=' + encodeURIComponent('OAuth sign-in failed. Please try again.'));
-          return;
-        }
-
-        console.log('✅ OAuth user verified:', user.email);
-
-        // Check if user has a profile to determine if this is registration or login
-        console.log('🔍 Checking if OAuth user has existing profile...');
-        const { getUserWithProfile } = await import('../../services/auth');
-        const userData = await getUserWithProfile();
-
-        if (!userData?.profile) {
-          console.log('📝 No profile found - this is OAuth registration, redirecting to complete profile');
-
-          // Clean up OAuth state
-          const { sessionManager } = await import('../../services/sessionManager');
-          await sessionManager.clearOAuthState();
-
-          // Clean up legacy storage
-          try {
-            await AsyncStorage.removeItem('oauth_user_type');
-            await AsyncStorage.removeItem('oauth_intent');
-            safeLocalStorage.removeItem('oauth_user_type');
-            safeLocalStorage.removeItem('oauth_intent');
-            safeLocalStorage.removeItem('oauth_timestamp');
-          } catch (error) {
-            console.log('Storage cleanup error:', error);
-          }
-
-          // Redirect to complete profile for new OAuth users
-          safeNavigate('/auth/complete-profile');
-          return;
+          // Wait longer for session establishment after code exchange
+          await new Promise(resolve => setTimeout(resolve, 2000));
         } else {
-          console.log('✅ Profile found - this is OAuth login, proceeding to dashboard');
+          // Still wait a bit for session to stabilize
+          await new Promise(resolve => setTimeout(resolve, 1000));
         }
+
+        // OAuth processing complete - let layout handle the rest
+        console.log('✅ OAuth code exchange completed, letting auth state handle navigation');
 
         // Clean up OAuth state
-        const { sessionManager } = await import('../../services/sessionManager');
-        await sessionManager.clearOAuthState();
+        try {
+          const { sessionManager } = await import('../../services/sessionManager');
+          await sessionManager.clearOAuthState();
+        } catch (error) {
+          console.log('Session manager cleanup error:', error);
+        }
 
         // Clean up legacy storage
         try {
@@ -148,11 +116,8 @@ export default function AuthCallback() {
           console.log('Storage cleanup error:', error);
         }
 
-        // Small delay to ensure profile is properly created/loaded
-        await new Promise(resolve => setTimeout(resolve, 500));
-
-        console.log('✅ OAuth callback completed - letting layout handle navigation');
-        // Let the layout handle navigation based on user profile
+        // Don't navigate here - let the layout's auth state change handler do it
+        // This prevents race conditions and duplicate API calls
 
       } catch (error: any) {
         console.error('❌ OAuth callback error:', error);
@@ -172,9 +137,19 @@ export default function AuthCallback() {
       }
     };
 
-    // Reduced delay for faster processing
-    const timer = setTimeout(handleCallback, 1000);
-    return () => clearTimeout(timer);
+    // Much faster processing with fallback
+    const timer = setTimeout(handleCallback, 500);
+
+    // Add a safety fallback timer
+    const fallbackTimer = setTimeout(() => {
+      console.log('⚠️ Callback taking too long, redirecting to login');
+      safeNavigate('/auth/login?error=' + encodeURIComponent('Authentication took too long. Please try again.'));
+    }, 30000); // 30 second max wait
+
+    return () => {
+      clearTimeout(timer);
+      clearTimeout(fallbackTimer);
+    };
   }, [isClient, isRouterReady]);
 
   return (

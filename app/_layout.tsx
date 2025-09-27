@@ -213,8 +213,14 @@ export default function RootLayout() {
       }
     };
 
-    // Increased delay for better reliability
-    const timeoutId = setTimeout(checkUserSessionAndRedirect, 1000);
+    // Increased delay for better reliability, especially during OAuth
+    const currentPath = Platform.OS === 'web' && typeof window !== 'undefined'
+      ? window.location.pathname
+      : `/${segments.join('/')}`;
+
+    // Longer delay if we're on the callback page to avoid race conditions
+    const delay = currentPath.startsWith('/auth/callback') ? 3000 : 1000;
+    const timeoutId = setTimeout(checkUserSessionAndRedirect, delay);
 
     return () => {
       isMounted = false;
@@ -246,42 +252,82 @@ export default function RootLayout() {
 
         // Only handle redirection if on auth pages (especially callback)
         if (currentPath.startsWith('/auth/')) {
-          console.log('🚀 OAuth sign-in detected, checking user profile for redirection...');
+          console.log('🚀 OAuth sign-in detected, will wait for AuthContext to load profile...');
 
-          try {
-            // Wait a moment for profile to be loaded/created
-            await new Promise(resolve => setTimeout(resolve, 1000));
+          // Wait for AuthContext to load the profile, then check periodically
+          let attempts = 0;
+          const maxAttempts = 10;
 
-            const userData = await getUserWithProfile();
+          const checkAuthContextData = async () => {
+            // Import AuthContext hook dynamically to avoid circular dependencies
+            const { useAuth } = await import('../contexts/AuthContext');
+            const authContextRef = { current: null as any };
 
-            if (userData?.profile) {
-              console.log('✅ Profile found after OAuth, redirecting to dashboard');
-              let targetPath: string;
-              switch (userData.profile.user_type) {
-                case 'super-admin':
-                  targetPath = '/super-admin';
-                  break;
-                case 'admin':
-                  targetPath = '/admin/users';
-                  break;
-                case 'farmer':
-                  targetPath = '/farmer';
-                  break;
-                case 'buyer':
-                  targetPath = '/buyer/marketplace';
-                  break;
-                default:
-                  targetPath = '/buyer/marketplace';
+            // We can't use hooks here, so we'll check the AuthContext state indirectly
+            // by using a short timeout approach and checking session data
+            const sessionData = await supabase.auth.getSession();
+
+            if (sessionData?.data?.session?.user) {
+              const user = sessionData.data.session.user;
+
+              // Check if profile exists by making a single query
+              try {
+                const { data: profile } = await supabase
+                  .from('profiles')
+                  .select('*')
+                  .eq('id', user.id)
+                  .single();
+
+                if (profile) {
+                  console.log('✅ Profile found after OAuth, redirecting to dashboard');
+                  let targetPath: string;
+                  switch (profile.user_type) {
+                    case 'super-admin':
+                      targetPath = '/super-admin';
+                      break;
+                    case 'admin':
+                      targetPath = '/admin/users';
+                      break;
+                    case 'farmer':
+                      targetPath = '/farmer';
+                      break;
+                    case 'buyer':
+                      targetPath = '/buyer/marketplace';
+                      break;
+                    default:
+                      targetPath = '/buyer/marketplace';
+                  }
+                  console.log('🚀 OAuth redirection to:', targetPath);
+                  safeNavigate(targetPath);
+                  return true;
+                } else {
+                  console.log('🔄 OAuth user without profile, redirecting to complete profile');
+                  safeNavigate('/auth/complete-profile');
+                  return true;
+                }
+              } catch (error) {
+                console.log('⚠️ Profile check failed, will retry...', error);
+                return false;
               }
-              console.log('🚀 OAuth redirection to:', targetPath);
-              safeNavigate(targetPath);
-            } else if (userData?.user) {
-              console.log('🔄 OAuth user without profile, redirecting to complete profile');
-              safeNavigate('/auth/complete-profile');
             }
-          } catch (error) {
-            console.error('❌ Error during OAuth profile check:', error);
-          }
+            return false;
+          };
+
+          const retryCheck = async () => {
+            if (attempts < maxAttempts) {
+              attempts++;
+              const success = await checkAuthContextData();
+              if (!success) {
+                setTimeout(retryCheck, 1000);
+              }
+            } else {
+              console.log('⚠️ OAuth profile check timed out, falling back to login');
+              safeNavigate('/auth/login?error=' + encodeURIComponent('Profile loading timed out. Please try again.'));
+            }
+          };
+
+          // Start checking after a brief delay
+          setTimeout(retryCheck, 1500);
         }
       }
     });

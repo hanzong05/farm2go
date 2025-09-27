@@ -544,44 +544,124 @@ export const handleOAuthCallback = async (userType: 'farmer' | 'buyer') => {
   }
 };
 
+// Debounce mechanism to prevent concurrent calls
+let getUserWithProfilePromise: Promise<{ user: any; profile: Profile | null } | null> | null = null;
+let lastCallTime = 0;
+
 // Get user profile with auth user
 export const getUserWithProfile = async (): Promise<{ user: any; profile: Profile | null } | null> => {
-  try {
-    // Try to get from session manager first
-    const { sessionManager } = await import('./sessionManager');
-    const sessionState = sessionManager.getSessionState();
+  const now = Date.now();
 
-    if (sessionState.isAuthenticated && sessionState.user) {
-      console.log('📦 Using cached session data');
-      console.log('📦 Profile status:', sessionState.profile ? 'Found' : 'None');
-      return {
-        user: sessionState.user,
-        profile: sessionState.profile
-      };
+  // If there's an ongoing call from within the last 5 seconds, return that promise
+  if (getUserWithProfilePromise && (now - lastCallTime) < 5000) {
+    console.log('🔄 Reusing existing getUserWithProfile call...');
+    return getUserWithProfilePromise;
+  }
+
+  lastCallTime = now;
+
+  getUserWithProfilePromise = (async () => {
+    try {
+      console.log('🔄 Starting fresh getUserWithProfile...');
+
+    // Try to get from session manager first with timeout
+    const sessionPromise = (async () => {
+      const { sessionManager } = await import('./sessionManager');
+      return sessionManager.getSessionState();
+    })();
+
+    const sessionTimeout = new Promise((_, reject) => {
+      setTimeout(() => reject(new Error('Session manager timeout')), 3000);
+    });
+
+    let sessionState;
+    try {
+      sessionState = await Promise.race([sessionPromise, sessionTimeout]);
+
+      if (sessionState.isAuthenticated && sessionState.user) {
+        console.log('📦 Using cached session data');
+        console.log('📦 Profile status:', sessionState.profile ? 'Found' : 'None');
+        return {
+          user: sessionState.user,
+          profile: sessionState.profile
+        };
+      }
+    } catch (error) {
+      console.log('⚠️ Session manager unavailable, using direct query');
     }
 
-    // Fallback to direct Supabase query
-    console.log('🔄 Fetching fresh user data from Supabase');
-    const { data: { user }, error: userError } = await supabase.auth.getUser();
+    // Try to get session first (which includes user), then fallback to getUser
+    console.log('🔄 Fetching user data from Supabase session...');
+
+    let user, userError;
+
+    try {
+      // First try to get from session (faster and more reliable during OAuth)
+      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+
+      if (session?.user && !sessionError) {
+        console.log('✅ Got user from session');
+        user = session.user;
+        userError = null;
+      } else {
+        console.log('🔄 Session not available, trying getUser...');
+
+        const userPromise = supabase.auth.getUser();
+        const userTimeout = new Promise((_, reject) => {
+          setTimeout(() => reject(new Error('User fetch timeout')), 15000);
+        });
+
+        const result = await Promise.race([userPromise, userTimeout]);
+        user = result.data?.user;
+        userError = result.error;
+      }
+    } catch (error) {
+      console.error('❌ Error fetching user:', error);
+      userError = error;
+    }
 
     if (userError || !user) {
+      console.log('❌ No user found or error:', userError);
       return null;
     }
 
-    const { data: profile, error: profileError } = await supabase
+    console.log('✅ User found, fetching profile...');
+
+    const profilePromise = supabase
       .from('profiles')
       .select('*')
       .eq('id', user.id)
       .single();
 
-    if (profileError) {
-      console.error('Profile fetch error:', profileError);
+    const profileTimeout = new Promise((_, reject) => {
+      setTimeout(() => reject(new Error('Profile fetch timeout')), 15000);
+    });
+
+    try {
+      const { data: profile, error: profileError } = await Promise.race([profilePromise, profileTimeout]);
+
+      if (profileError && profileError.code !== 'PGRST116') { // PGRST116 = no rows returned
+        console.error('❌ Profile fetch error:', profileError);
+        return { user, profile: null };
+      }
+
+      console.log('✅ Profile fetch completed:', profile ? 'Found' : 'None');
+      return { user, profile: profile || null };
+    } catch (error) {
+      console.error('❌ Profile fetch timeout:', error);
       return { user, profile: null };
     }
 
-    return { user, profile };
-  } catch (error) {
-    console.error('Get user with profile error:', error);
-    return null;
-  }
+    } catch (error) {
+      console.error('❌ Get user with profile error:', error);
+      return null;
+    } finally {
+      // Clear the promise after completion so next call starts fresh
+      setTimeout(() => {
+        getUserWithProfilePromise = null;
+      }, 1000);
+    }
+  })();
+
+  return getUserWithProfilePromise;
 };
