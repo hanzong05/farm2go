@@ -43,17 +43,19 @@ interface NavItem {
 }
 
 const NAV_ITEMS: NavItem[] = [
+  // Public Marketplace - accessible to all user types
+  {
+    id: 'marketplace',
+    title: 'Marketplace',
+    icon: 'store',
+    route: '/',
+    userTypes: ['farmer', 'buyer', 'admin', 'super-admin'],
+  },
+
   // Farmer items
   {
-    id: 'farmer-dashboard',
-    title: 'Dashboard',
-    icon: 'chart-bar',
-    route: '/farmer',
-    userTypes: ['farmer'],
-  },
-  {
     id: 'farmer-products',
-    title: 'Products',
+    title: 'My Products',
     icon: 'seedling',
     route: '/farmer/my-products',
     userTypes: ['farmer'],
@@ -86,15 +88,15 @@ const NAV_ITEMS: NavItem[] = [
     route: '/farmer/sales-history',
     userTypes: ['farmer'],
   },
+  {
+    id: 'farmer-settings',
+    title: 'Settings',
+    icon: 'cog',
+    route: '/farmer/settings',
+    userTypes: ['farmer'],
+  },
 
   // Buyer items
-  {
-    id: 'buyer-marketplace',
-    title: 'Marketplace',
-    icon: 'store',
-    route: '/buyer/marketplace',
-    userTypes: ['buyer'],
-  },
   {
     id: 'buyer-search',
     title: 'Search',
@@ -123,6 +125,13 @@ const NAV_ITEMS: NavItem[] = [
     route: '/verification/status',
     userTypes: ['buyer'],
   },
+  {
+    id: 'buyer-settings',
+    title: 'Settings',
+    icon: 'cog',
+    route: '/buyer/settings',
+    userTypes: ['buyer'],
+  },
 
   // Farmer verification
   {
@@ -134,13 +143,6 @@ const NAV_ITEMS: NavItem[] = [
   },
 
   // Admin items
-  {
-    id: 'admin-dashboard',
-    title: 'Dashboard',
-    icon: 'tachometer-alt',
-    route: '/admin',
-    userTypes: ['admin'],
-  },
   {
     id: 'admin-users',
     title: 'Users',
@@ -171,13 +173,6 @@ const NAV_ITEMS: NavItem[] = [
   },
 
   // Super Admin items
-  {
-    id: 'super-admin-dashboard',
-    title: 'Super Admin',
-    icon: 'crown',
-    route: '/super-admin',
-    userTypes: ['super-admin'],
-  },
   {
     id: 'super-admin-users',
     title: 'Manage Users',
@@ -366,6 +361,16 @@ export default function HeaderComponent({
   // Determine user type from profile if not explicitly passed
   const resolvedUserType = userType || profile?.user_type || 'buyer';
 
+  // Get the current route to determine active navigation item
+  const getCurrentRoute = () => {
+    if (Platform.OS === 'web' && typeof window !== 'undefined') {
+      return window.location.pathname;
+    }
+    return currentRoute;
+  };
+
+  const activeRoute = getCurrentRoute();
+
   const handleAddPress = () => {
     if (onAddButtonPress) {
       onAddButtonPress();
@@ -456,9 +461,17 @@ export default function HeaderComponent({
     }
   };
 
+  // Filter navigation items based on user type - this ensures only role-appropriate nav items are shown
   const filteredNavItems = NAV_ITEMS.filter(item =>
     item.userTypes.includes(resolvedUserType)
   );
+
+  // Function to determine if a nav item should be active
+  const isNavItemActive = (item: NavItem) => {
+    // Always show the navigation for the user's role, regardless of current page
+    // Only highlight the item if we're actually on that route
+    return activeRoute === item.route;
+  };
 
   // Create dynamic styles based on current screen size
   const dynamicStyles = StyleSheet.create({
@@ -751,7 +764,7 @@ export default function HeaderComponent({
               contentContainerStyle={dynamicStyles.topNavContent}
             >
               {filteredNavItems.map((item) => {
-                const isActive = currentRoute === item.route;
+                const isActive = isNavItemActive(item);
 
                 return (
                   <TouchableOpacity
@@ -910,7 +923,7 @@ export default function HeaderComponent({
         <View style={dynamicStyles.mobileNavMenu}>
           <View style={dynamicStyles.mobileNavGrid}>
             {filteredNavItems.map((item) => {
-              const isActive = currentRoute === item.route;
+              const isActive = isNavItemActive(item);
 
               return (
                 <TouchableOpacity

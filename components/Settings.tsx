@@ -15,6 +15,7 @@ import { router } from 'expo-router';
 import { supabase } from '../lib/supabase';
 import { getUserWithProfile, logoutUser } from '../services/auth';
 import { Database } from '../types/database';
+import HeaderComponent from './HeaderComponent';
 
 type Profile = Database['public']['Tables']['profiles']['Row'];
 
@@ -284,18 +285,25 @@ export default function Settings({ userType, currentRoute, onNavigateBack }: Set
   }
 
   return (
-    <ScrollView
-      style={styles.content}
-      refreshControl={
-        <RefreshControl
-          refreshing={refreshing}
-          onRefresh={onRefresh}
-          tintColor="#16a34a"
-          colors={['#16a34a']}
-        />
-      }
-      showsVerticalScrollIndicator={false}
-    >
+    <View style={styles.container}>
+      <HeaderComponent
+        profile={profile}
+        showSearch={false}
+        showMessages={true}
+        showNotifications={true}
+      />
+      <ScrollView
+        style={styles.content}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            tintColor="#16a34a"
+            colors={['#16a34a']}
+          />
+        }
+        showsVerticalScrollIndicator={false}
+      >
       {/* Profile Section */}
       <View style={styles.section}>
         <View style={styles.sectionHeader}>
@@ -386,10 +394,15 @@ export default function Settings({ userType, currentRoute, onNavigateBack }: Set
 
       <View style={styles.bottomSpacing} />
     </ScrollView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: '#f8fafc',
+  },
   content: {
     flex: 1,
     paddingTop: 16,

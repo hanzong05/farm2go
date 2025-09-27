@@ -174,14 +174,14 @@ export default function RootLayout() {
                 targetPath = '/admin/users';
                 break;
               case 'farmer':
-                targetPath = '/farmer';
+                targetPath = '/';
                 break;
               case 'buyer':
-                targetPath = '/buyer/marketplace';
+                targetPath = '/';
                 break;
               default:
                 console.log('⚠️ Unknown user type, defaulting to buyer marketplace');
-                targetPath = '/buyer/marketplace';
+                targetPath = '/';
             }
             console.log('🚀 Navigating to:', targetPath);
             safeNavigate(targetPath);
@@ -202,7 +202,7 @@ export default function RootLayout() {
         } else {
           // No user at all - redirect unauthenticated users to marketplace from protected routes
           if (isProtectedRoute && isMounted) {
-            safeNavigate('/buyer/marketplace');
+            safeNavigate('/');
           }
         }
 
@@ -240,96 +240,12 @@ export default function RootLayout() {
         const isProtectedRoute = protectedRoutes.some(route => currentPath.startsWith(route));
 
         if (isProtectedRoute) {
-          safeNavigate('/buyer/marketplace');
+          safeNavigate('/');
         }
       }
 
-      // Handle SIGNED_IN events for OAuth completion
-      if (event === 'SIGNED_IN' && session?.user && isRouterReady) {
-        const currentPath = Platform.OS === 'web' && typeof window !== 'undefined'
-          ? window.location.pathname
-          : `/${segments.join('/')}`;
-
-        // Only handle redirection if on auth pages (especially callback)
-        if (currentPath.startsWith('/auth/')) {
-          console.log('🚀 OAuth sign-in detected, will wait for AuthContext to load profile...');
-
-          // Wait for AuthContext to load the profile, then check periodically
-          let attempts = 0;
-          const maxAttempts = 10;
-
-          const checkAuthContextData = async () => {
-            // Import AuthContext hook dynamically to avoid circular dependencies
-            const { useAuth } = await import('../contexts/AuthContext');
-            const authContextRef = { current: null as any };
-
-            // We can't use hooks here, so we'll check the AuthContext state indirectly
-            // by using a short timeout approach and checking session data
-            const sessionData = await supabase.auth.getSession();
-
-            if (sessionData?.data?.session?.user) {
-              const user = sessionData.data.session.user;
-
-              // Check if profile exists by making a single query
-              try {
-                const { data: profile } = await supabase
-                  .from('profiles')
-                  .select('*')
-                  .eq('id', user.id)
-                  .single();
-
-                if (profile) {
-                  console.log('✅ Profile found after OAuth, redirecting to dashboard');
-                  let targetPath: string;
-                  switch (profile.user_type) {
-                    case 'super-admin':
-                      targetPath = '/super-admin';
-                      break;
-                    case 'admin':
-                      targetPath = '/admin/users';
-                      break;
-                    case 'farmer':
-                      targetPath = '/farmer';
-                      break;
-                    case 'buyer':
-                      targetPath = '/buyer/marketplace';
-                      break;
-                    default:
-                      targetPath = '/buyer/marketplace';
-                  }
-                  console.log('🚀 OAuth redirection to:', targetPath);
-                  safeNavigate(targetPath);
-                  return true;
-                } else {
-                  console.log('🔄 OAuth user without profile, redirecting to complete profile');
-                  safeNavigate('/auth/complete-profile');
-                  return true;
-                }
-              } catch (error) {
-                console.log('⚠️ Profile check failed, will retry...', error);
-                return false;
-              }
-            }
-            return false;
-          };
-
-          const retryCheck = async () => {
-            if (attempts < maxAttempts) {
-              attempts++;
-              const success = await checkAuthContextData();
-              if (!success) {
-                setTimeout(retryCheck, 1000);
-              }
-            } else {
-              console.log('⚠️ OAuth profile check timed out, falling back to login');
-              safeNavigate('/auth/login?error=' + encodeURIComponent('Profile loading timed out. Please try again.'));
-            }
-          };
-
-          // Start checking after a brief delay
-          setTimeout(retryCheck, 1500);
-        }
-      }
+      // OAuth navigation is now handled by the callback page directly
+      // No need for additional OAuth handling here
     });
 
     return () => subscription.unsubscribe();
@@ -438,58 +354,58 @@ export default function RootLayout() {
           }}
         >
           {/* Landing & Marketing Pages */}
-          <Stack.Screen 
-            name="index" 
+          <Stack.Screen
+            name="index"
             options={getScreenOptions('Farm2Go - Fresh Agricultural Marketplace')}
           />
-          <Stack.Screen 
-            name="about" 
+          <Stack.Screen
+            name="about"
             options={getScreenOptions('About Farm2Go')}
           />
-          <Stack.Screen 
-            name="contact" 
+          <Stack.Screen
+            name="contact"
             options={getScreenOptions('Contact Us')}
           />
-          <Stack.Screen 
-            name="terms" 
+          <Stack.Screen
+            name="terms"
             options={getScreenOptions('Terms of Service')}
           />
-          <Stack.Screen 
-            name="privacy" 
+          <Stack.Screen
+            name="privacy"
             options={getScreenOptions('Privacy Policy')}
           />
-          <Stack.Screen 
-            name="features" 
+          <Stack.Screen
+            name="features"
             options={getScreenOptions('Platform Features')}
           />
-          <Stack.Screen 
-            name="pricing" 
+          <Stack.Screen
+            name="pricing"
             options={getScreenOptions('Seller Pricing')}
           />
-          <Stack.Screen 
-            name="demo" 
+          <Stack.Screen
+            name="demo"
             options={getScreenOptions('Request Demo')}
           />
 
           {/* Authentication Flow */}
-          <Stack.Screen 
-            name="auth/login" 
+          <Stack.Screen
+            name="auth/login"
             options={getAuthScreenOptions('Sign In to Farm2Go')}
           />
-          <Stack.Screen 
-            name="auth/register" 
+          <Stack.Screen
+            name="auth/register"
             options={getAuthScreenOptions('Join Farm2Go')}
           />
-          <Stack.Screen 
-            name="auth/complete-profile" 
+          <Stack.Screen
+            name="auth/complete-profile"
             options={getAuthScreenOptions('Complete Your Profile')}
           />
-          <Stack.Screen 
-            name="auth/forgot-password" 
+          <Stack.Screen
+            name="auth/forgot-password"
             options={getAuthScreenOptions('Reset Password')}
           />
-          <Stack.Screen 
-            name="auth/callback" 
+          <Stack.Screen
+            name="auth/callback"
             options={{
               ...getAuthScreenOptions('Signing You In...'),
               animationKeyframes: 'none',
@@ -545,183 +461,183 @@ export default function RootLayout() {
           />
 
           {/* Farmer Dashboard - Seller Center */}
-          <Stack.Screen 
-            name="farmer/my-products" 
+          <Stack.Screen
+            name="farmer"
+            options={getDashboardScreenOptions('Farmer Dashboard')}
+          />
+          <Stack.Screen
+            name="farmer/my-products"
             options={getDashboardScreenOptions('My Products')}
           />
-          <Stack.Screen 
-            name="farmer/orders" 
+          <Stack.Screen
+            name="farmer/orders"
             options={getDashboardScreenOptions('Order Management')}
           />
-          <Stack.Screen 
-            name="farmer/inventory" 
+          <Stack.Screen
+            name="farmer/inventory"
             options={getDashboardScreenOptions('Inventory Control')}
           />
-          <Stack.Screen 
-            name="farmer/sales-history" 
+          <Stack.Screen
+            name="farmer/sales-history"
             options={getDashboardScreenOptions('Sales Analytics')}
           />
-          <Stack.Screen 
-            name="farmer/settings" 
+          <Stack.Screen
+            name="farmer/settings"
             options={getDashboardScreenOptions('Seller Settings')}
           />
-          <Stack.Screen 
-            name="farmer/profile" 
+          <Stack.Screen
+            name="farmer/profile"
             options={getDashboardScreenOptions('Farm Profile')}
           />
 
           {/* Farmer Product Management */}
-          <Stack.Screen 
-            name="farmer/products/add" 
+          <Stack.Screen
+            name="farmer/products/add"
             options={getModalScreenOptions('List New Product')}
           />
-          <Stack.Screen 
-            name="farmer/products/[id]" 
+          <Stack.Screen
+            name="farmer/products/[id]"
             options={getScreenOptions('Product Details')}
           />
-          <Stack.Screen 
-            name="farmer/products/edit/[id]" 
+          <Stack.Screen
+            name="farmer/products/edit/[id]"
             options={getModalScreenOptions('Edit Product')}
           />
-          <Stack.Screen 
-            name="farmer/products/analytics/[id]" 
+          <Stack.Screen
+            name="farmer/products/analytics/[id]"
             options={getScreenOptions('Product Analytics')}
           />
 
-          {/* Buyer Dashboard - Marketplace */}
-          <Stack.Screen 
-            name="buyer/marketplace" 
-            options={getDashboardScreenOptions('Fresh Marketplace')}
-          />
-          <Stack.Screen 
-            name="buyer/search" 
+          {/* Buyer Shopping Flow */}
+          <Stack.Screen
+            name="buyer/search"
             options={getDashboardScreenOptions('Search Products')}
           />
-          <Stack.Screen 
-            name="buyer/categories" 
+          <Stack.Screen
+            name="buyer/categories"
             options={getDashboardScreenOptions('Browse Categories')}
           />
-          <Stack.Screen 
-            name="buyer/my-orders" 
+          <Stack.Screen
+            name="buyer/my-orders"
             options={getDashboardScreenOptions('My Orders')}
           />
-          <Stack.Screen 
-            name="buyer/purchase-history" 
+          <Stack.Screen
+            name="buyer/purchase-history"
             options={getDashboardScreenOptions('Purchase History')}
           />
-          <Stack.Screen 
-            name="buyer/wishlist" 
+          <Stack.Screen
+            name="buyer/wishlist"
             options={getDashboardScreenOptions('My Wishlist')}
           />
-          <Stack.Screen 
-            name="buyer/settings" 
+          <Stack.Screen
+            name="buyer/settings"
             options={getDashboardScreenOptions('Account Settings')}
           />
 
           {/* Buyer Shopping Flow */}
-          <Stack.Screen 
-            name="buyer/products/[id]" 
+          <Stack.Screen
+            name="buyer/products/[id]"
             options={getScreenOptions('Product Details')}
           />
-          <Stack.Screen 
-            name="buyer/farmers/[id]" 
+          <Stack.Screen
+            name="buyer/farmers/[id]"
             options={getScreenOptions('Farmer Profile')}
           />
-          <Stack.Screen 
-            name="buyer/cart" 
+          <Stack.Screen
+            name="buyer/cart"
             options={getModalScreenOptions('Shopping Cart')}
           />
-          <Stack.Screen 
-            name="buyer/checkout" 
+          <Stack.Screen
+            name="buyer/checkout"
             options={getModalScreenOptions('Checkout')}
           />
-          <Stack.Screen 
-            name="buyer/order/[id]" 
+          <Stack.Screen
+            name="buyer/order/[id]"
             options={getScreenOptions('Order Details')}
           />
-          <Stack.Screen 
-            name="buyer/contact-farmer/[id]" 
+          <Stack.Screen
+            name="buyer/contact-farmer/[id]"
             options={getModalScreenOptions('Contact Farmer')}
           />
 
           {/* Shared Features */}
-          <Stack.Screen 
-            name="shared/notifications" 
+          <Stack.Screen
+            name="shared/notifications"
             options={getDashboardScreenOptions('Notifications')}
           />
-          <Stack.Screen 
-            name="shared/messages" 
+          <Stack.Screen
+            name="shared/messages"
             options={getDashboardScreenOptions('Messages')}
           />
-          <Stack.Screen 
-            name="shared/barangay-sync" 
+          <Stack.Screen
+            name="shared/barangay-sync"
             options={getScreenOptions('Location Services')}
           />
-          <Stack.Screen 
-            name="shared/gps-location" 
+          <Stack.Screen
+            name="shared/gps-location"
             options={getScreenOptions('GPS Location')}
           />
-          <Stack.Screen 
-            name="shared/partnerships" 
+          <Stack.Screen
+            name="shared/partnerships"
             options={getScreenOptions('Partner Programs')}
           />
-          <Stack.Screen 
-            name="shared/visual-search" 
+          <Stack.Screen
+            name="shared/visual-search"
             options={getModalScreenOptions('Visual Search')}
           />
-          <Stack.Screen 
-            name="shared/support" 
+          <Stack.Screen
+            name="shared/support"
             options={getModalScreenOptions('Customer Support')}
           />
 
           {/* Marketing & Information Pages */}
-          <Stack.Screen 
-            name="blog" 
+          <Stack.Screen
+            name="blog"
             options={getScreenOptions('Farm2Go Blog')}
           />
-          <Stack.Screen 
-            name="careers" 
+          <Stack.Screen
+            name="careers"
             options={getScreenOptions('Join Our Team')}
           />
-          <Stack.Screen 
-            name="case-studies" 
+          <Stack.Screen
+            name="case-studies"
             options={getScreenOptions('Success Stories')}
           />
-          <Stack.Screen 
-            name="cookies" 
+          <Stack.Screen
+            name="cookies"
             options={getScreenOptions('Cookie Policy')}
           />
-          <Stack.Screen 
-            name="docs" 
+          <Stack.Screen
+            name="docs"
             options={getScreenOptions('Help Center')}
           />
-          <Stack.Screen 
-            name="integrations" 
+          <Stack.Screen
+            name="integrations"
             options={getScreenOptions('Platform Integrations')}
           />
-          <Stack.Screen 
-            name="press" 
+          <Stack.Screen
+            name="press"
             options={getScreenOptions('Press & Media')}
           />
-          <Stack.Screen 
-            name="security" 
+          <Stack.Screen
+            name="security"
             options={getScreenOptions('Security & Trust')}
           />
-          <Stack.Screen 
-            name="support" 
+          <Stack.Screen
+            name="support"
             options={getScreenOptions('Customer Support')}
           />
 
           {/* Special Pages */}
-          <Stack.Screen 
-            name="onboarding" 
+          <Stack.Screen
+            name="onboarding"
             options={{
               ...getScreenOptions('Welcome to Farm2Go'),
               animationKeyframes: 'fade',
             }}
           />
-          <Stack.Screen 
-            name="maintenance" 
+          <Stack.Screen
+            name="maintenance"
             options={{
               ...getScreenOptions('System Maintenance'),
               animationKeyframes: 'fade',

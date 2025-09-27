@@ -424,7 +424,7 @@ export default function BuyerPurchaseHistoryScreen() {
       {selectedStatus === 'all' && filterState.category === 'all' && filterState.amountRange === 'all' && (
         <TouchableOpacity
           style={styles.ctaButton}
-          onPress={() => router.push('/buyer/marketplace')}
+          onPress={() => router.push('/')}
           activeOpacity={0.8}
         >
           <Text style={styles.ctaIcon}>🛍️</Text>

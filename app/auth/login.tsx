@@ -130,21 +130,21 @@ export default function LoginScreen() {
               }
               break;
             case 'farmer':
-              console.log('🚀 Redirecting to farmer dashboard');
-              router.replace('/farmer');
+              console.log('🚀 Redirecting to marketplace');
+              router.replace('/');
               break;
             case 'buyer':
-              console.log('🚀 Redirecting to buyer dashboard');
-              router.replace('/buyer/marketplace');
+              console.log('🚀 Redirecting to marketplace');
+              router.replace('/');
               break;
             default:
               console.log('⚠️ Unknown user type, redirecting to marketplace. User type:', userData.profile.user_type);
-              router.replace('/buyer/marketplace');
+              router.replace('/');
           }
         } else {
           console.log('❌ No profile found, redirecting to buyer marketplace');
-          // Fallback to buyer dashboard if profile not found
-          router.replace('/buyer/marketplace');
+          // Fallback to marketplace if profile not found
+          router.replace('/');
         }
       }
     } catch (error: any) {

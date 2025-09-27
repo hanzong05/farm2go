@@ -1,7 +1,7 @@
-import { useEffect, useState } from 'react';
-import { useRouter, useRootNavigationState } from 'expo-router';
-import { View, Text, ActivityIndicator, StyleSheet, Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useRootNavigationState, useRouter } from 'expo-router';
+import { useEffect, useState } from 'react';
+import { ActivityIndicator, Platform, StyleSheet, Text, View } from 'react-native';
 import { supabase } from '../../lib/supabase';
 import { safeLocalStorage } from '../../utils/platformUtils';
 
@@ -94,8 +94,8 @@ export default function AuthCallback() {
           await new Promise(resolve => setTimeout(resolve, 1000));
         }
 
-        // OAuth processing complete - let layout handle the rest
-        console.log('✅ OAuth code exchange completed, letting auth state handle navigation');
+        // OAuth processing complete - navigate directly to marketplace
+        console.log('✅ OAuth code exchange completed, navigating to marketplace');
 
         // Clean up OAuth state
         try {
@@ -116,8 +116,9 @@ export default function AuthCallback() {
           console.log('Storage cleanup error:', error);
         }
 
-        // Don't navigate here - let the layout's auth state change handler do it
-        // This prevents race conditions and duplicate API calls
+        // Simple navigation to marketplace for all users
+        console.log('🚀 Navigating to marketplace');
+        safeNavigate('/');
 
       } catch (error: any) {
         console.error('❌ OAuth callback error:', error);
@@ -137,18 +138,11 @@ export default function AuthCallback() {
       }
     };
 
-    // Much faster processing with fallback
+    // Much faster processing - let layout handle the rest
     const timer = setTimeout(handleCallback, 500);
-
-    // Add a safety fallback timer
-    const fallbackTimer = setTimeout(() => {
-      console.log('⚠️ Callback taking too long, redirecting to login');
-      safeNavigate('/auth/login?error=' + encodeURIComponent('Authentication took too long. Please try again.'));
-    }, 30000); // 30 second max wait
 
     return () => {
       clearTimeout(timer);
-      clearTimeout(fallbackTimer);
     };
   }, [isClient, isRouterReady]);
 

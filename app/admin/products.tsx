@@ -13,6 +13,7 @@ import {
 } from 'react-native';
 import { router } from 'expo-router';
 import ConfirmationModal from '../../components/ConfirmationModal';
+import FilterSidebar, { FilterSection, FilterState } from '../../components/FilterSidebar';
 import HeaderComponent from '../../components/HeaderComponent';
 import { supabase } from '../../lib/supabase';
 import { getUserWithProfile } from '../../services/auth';
@@ -38,11 +39,13 @@ export default function AdminProducts() {
   const [refreshing, setRefreshing] = useState(false);
   const [processing, setProcessing] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
-  const [selectedStatus, setSelectedStatus] = useState('all');
-  const [selectedCategory, setSelectedCategory] = useState('all');
-  const [sortBy, setSortBy] = useState('newest');
   const [showSidebar, setShowSidebar] = useState(false);
   const [profile, setProfile] = useState<Profile | null>(null);
+  const [filterState, setFilterState] = useState<FilterState>({
+    status: 'all',
+    category: 'all',
+    sort: 'newest'
+  });
   const [confirmModal, setConfirmModal] = useState<{
     visible: boolean;
     title: string;
@@ -70,7 +73,7 @@ export default function AdminProducts() {
 
   useEffect(() => {
     filterProducts();
-  }, [products, searchQuery, selectedStatus, selectedCategory, sortBy]);
+  }, [products, searchQuery, filterState]);
 
   const loadProfile = async () => {
     try {
@@ -83,17 +86,24 @@ export default function AdminProducts() {
     }
   };
 
+  const handleFilterChange = (key: string, value: any) => {
+    setFilterState(prev => ({
+      ...prev,
+      [key]: value
+    }));
+  };
+
   const filterProducts = () => {
     let filtered = products;
 
     // Filter by status
-    if (selectedStatus !== 'all') {
-      filtered = filtered.filter(product => product.status === selectedStatus);
+    if (filterState.status !== 'all') {
+      filtered = filtered.filter(product => product.status === filterState.status);
     }
 
     // Filter by category
-    if (selectedCategory !== 'all') {
-      filtered = filtered.filter(product => product.category.toLowerCase() === selectedCategory);
+    if (filterState.category !== 'all') {
+      filtered = filtered.filter(product => product.category.toLowerCase() === filterState.category);
     }
 
     // Filter by search query
@@ -109,7 +119,7 @@ export default function AdminProducts() {
     }
 
     // Sort products
-    switch (sortBy) {
+    switch (filterState.sort) {
       case 'price-low':
         filtered = filtered.sort((a, b) => a.price - b.price);
         break;
@@ -280,118 +290,62 @@ export default function AdminProducts() {
     }
   };
 
-  const categories = [
-    { key: 'all', label: 'All Categories' },
-    { key: 'vegetables', label: 'Vegetables' },
-    { key: 'fruits', label: 'Fruits' },
-    { key: 'grains', label: 'Grains' },
-    { key: 'herbs', label: 'Herbs' },
-    { key: 'dairy', label: 'Dairy' },
-    { key: 'meat', label: 'Meat' }
+  const getFilterSections = (): FilterSection[] => [
+    {
+      key: 'status',
+      title: 'Status',
+      type: 'category',
+      options: [
+        { key: 'all', label: 'All Status', count: products.length },
+        { key: 'pending', label: 'Pending Review', count: products.filter(p => p.status === 'pending').length },
+        { key: 'approved', label: 'Approved', count: products.filter(p => p.status === 'approved').length },
+        { key: 'rejected', label: 'Rejected', count: products.filter(p => p.status === 'rejected').length }
+      ]
+    },
+    {
+      key: 'category',
+      title: 'Categories',
+      type: 'category',
+      options: [
+        { key: 'all', label: 'All Categories', count: products.length },
+        { key: 'vegetables', label: 'Vegetables', count: products.filter(p => p.category.toLowerCase() === 'vegetables').length },
+        { key: 'fruits', label: 'Fruits', count: products.filter(p => p.category.toLowerCase() === 'fruits').length },
+        { key: 'grains', label: 'Grains', count: products.filter(p => p.category.toLowerCase() === 'grains').length },
+        { key: 'herbs', label: 'Herbs', count: products.filter(p => p.category.toLowerCase() === 'herbs').length },
+        { key: 'dairy', label: 'Dairy', count: products.filter(p => p.category.toLowerCase() === 'dairy').length },
+        { key: 'meat', label: 'Meat', count: products.filter(p => p.category.toLowerCase() === 'meat').length }
+      ]
+    },
+    {
+      key: 'sort',
+      title: 'Sort By',
+      type: 'sort',
+      options: [
+        { key: 'newest', label: 'Newest First' },
+        { key: 'name', label: 'Name A-Z' },
+        { key: 'farmer', label: 'Farmer Name' },
+        { key: 'price-low', label: 'Price: Low to High' },
+        { key: 'price-high', label: 'Price: High to Low' }
+      ]
+    }
   ];
 
-  const renderSidebar = () => (
-    <View style={styles.sidebar}>
-      {/* Status Filter */}
-      <View style={styles.sidebarSection}>
-        <Text style={styles.sidebarSectionTitle}>Status</Text>
-        {[
-          { key: 'all', label: 'All Status' },
-          { key: 'pending', label: 'Pending Review' },
-          { key: 'approved', label: 'Approved' },
-          { key: 'rejected', label: 'Rejected' }
-        ].map((status) => (
-          <TouchableOpacity
-            key={status.key}
-            style={[
-              styles.sidebarCategoryItem,
-              selectedStatus === status.key && styles.sidebarCategoryItemActive
-            ]}
-            onPress={() => setSelectedStatus(status.key)}
-          >
-            <Text style={[
-              styles.sidebarCategoryText,
-              selectedStatus === status.key && styles.sidebarCategoryTextActive
-            ]}>
-              {status.label}
-            </Text>
-            <Text style={styles.sidebarCategoryCount}>
-              {status.key === 'all'
-                ? products.length
-                : products.filter(p => p.status === status.key).length}
-            </Text>
-          </TouchableOpacity>
-        ))}
-      </View>
+  const resetFilters = () => {
+    setFilterState({
+      status: 'all',
+      category: 'all',
+      sort: 'newest'
+    });
+    setSearchQuery('');
+  };
 
-      {/* Categories */}
-      <View style={styles.sidebarSection}>
-        <Text style={styles.sidebarSectionTitle}>Categories</Text>
-        {categories.map((category) => (
-          <TouchableOpacity
-            key={category.key}
-            style={[
-              styles.sidebarCategoryItem,
-              selectedCategory === category.key && styles.sidebarCategoryItemActive
-            ]}
-            onPress={() => setSelectedCategory(category.key)}
-          >
-            <Text style={[
-              styles.sidebarCategoryText,
-              selectedCategory === category.key && styles.sidebarCategoryTextActive
-            ]}>
-              {category.label}
-            </Text>
-            <Text style={styles.sidebarCategoryCount}>
-              {category.key === 'all'
-                ? products.length
-                : products.filter(p => p.category.toLowerCase() === category.key).length}
-            </Text>
-          </TouchableOpacity>
-        ))}
-      </View>
-
-      {/* Sort By */}
-      <View style={styles.sidebarSection}>
-        <Text style={styles.sidebarSectionTitle}>Sort By</Text>
-        {[
-          { key: 'newest', label: 'Newest First' },
-          { key: 'name', label: 'Name A-Z' },
-          { key: 'farmer', label: 'Farmer Name' },
-          { key: 'price-low', label: 'Price: Low to High' },
-          { key: 'price-high', label: 'Price: High to Low' }
-        ].map((sort) => (
-          <TouchableOpacity
-            key={sort.key}
-            style={[
-              styles.sortItem,
-              sortBy === sort.key && styles.sortItemActive
-            ]}
-            onPress={() => setSortBy(sort.key)}
-          >
-            <Text style={[
-              styles.sortText,
-              sortBy === sort.key && styles.sortTextActive
-            ]}>
-              {sort.label}
-            </Text>
-          </TouchableOpacity>
-        ))}
-      </View>
-
-      {/* Reset Filters */}
-      <TouchableOpacity
-        style={styles.resetButton}
-        onPress={() => {
-          setSelectedCategory('all');
-          setSelectedStatus('all');
-          setSortBy('newest');
-          setSearchQuery('');
-        }}
-      >
-        <Text style={styles.resetButtonText}>Reset All Filters</Text>
-      </TouchableOpacity>
-    </View>
+  const renderResetButton = () => (
+    <TouchableOpacity
+      style={styles.resetButton}
+      onPress={resetFilters}
+    >
+      <Text style={styles.resetButtonText}>Reset All Filters</Text>
+    </TouchableOpacity>
   );
 
   const renderCompactProduct = (product: Product) => {
@@ -584,19 +538,29 @@ export default function AdminProducts() {
   return (
     <View style={styles.container}>
       <HeaderComponent
+        profile={profile}
         showSearch={true}
         searchQuery={searchQuery}
         onSearchChange={setSearchQuery}
         searchPlaceholder="Search products, farmers..."
         showFilterButton={!isDesktop}
         onFilterPress={() => setShowSidebar(!showSidebar)}
+        showNotifications={true}
       />
 
       {/* Desktop Layout with Sidebar */}
       {isDesktop ? (
         <View style={styles.desktopLayout}>
           {/* Sidebar */}
-          {renderSidebar()}
+          <View style={styles.sidebarContainer}>
+            <FilterSidebar
+              sections={getFilterSections()}
+              filterState={filterState}
+              onFilterChange={handleFilterChange}
+              title="Product Filters"
+            />
+            {renderResetButton()}
+          </View>
 
           {/* Main Content */}
           <ScrollView
@@ -641,24 +605,15 @@ export default function AdminProducts() {
       ) : (
         /* Mobile/Tablet Layout */
         <View style={styles.container}>
-          {/* Mobile Sidebar Overlay */}
-          {showSidebar && (
-            <View style={styles.mobileOverlay}>
-              <TouchableOpacity
-                style={styles.overlayBackground}
-                onPress={() => setShowSidebar(false)}
-              />
-              <View style={styles.mobileSidebar}>
-                {renderSidebar()}
-                <TouchableOpacity
-                  style={styles.closeSidebarButton}
-                  onPress={() => setShowSidebar(false)}
-                >
-                  <Text style={styles.closeSidebarText}>Apply Filters</Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-          )}
+          {/* Mobile Sidebar */}
+          <FilterSidebar
+            sections={getFilterSections()}
+            filterState={filterState}
+            onFilterChange={handleFilterChange}
+            showMobile={showSidebar}
+            onCloseMobile={() => setShowSidebar(false)}
+            title="Product Filters"
+          />
 
           <ScrollView
             style={styles.content}
@@ -853,89 +808,13 @@ const styles = StyleSheet.create({
     backgroundColor: '#f8fafc',
   },
 
-  // Sidebar Styles
-  sidebar: {
+  // Sidebar Container
+  sidebarContainer: {
     width: 280,
     backgroundColor: '#FFFFFF',
     borderRightWidth: 1,
     borderRightColor: '#e2e8f0',
-    paddingVertical: 20,
-    paddingHorizontal: 16,
-  },
-
-  sidebarSection: {
-    marginBottom: 24,
     paddingBottom: 20,
-    borderBottomWidth: 1,
-    borderBottomColor: '#f1f5f9',
-  },
-
-  sidebarSectionTitle: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#0f172a',
-    marginBottom: 12,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-  },
-
-  sidebarCategoryItem: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    borderRadius: 6,
-    marginBottom: 4,
-  },
-
-  sidebarCategoryItemActive: {
-    backgroundColor: '#ecfdf5',
-    borderWidth: 1,
-    borderColor: '#bbf7d0',
-  },
-
-  sidebarCategoryText: {
-    fontSize: 14,
-    color: '#64748b',
-    fontWeight: '500',
-  },
-
-  sidebarCategoryTextActive: {
-    color: '#10B981',
-    fontWeight: '600',
-  },
-
-  sidebarCategoryCount: {
-    fontSize: 12,
-    color: '#9ca3af',
-    backgroundColor: '#f3f4f6',
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 10,
-    minWidth: 20,
-    textAlign: 'center',
-  },
-
-  sortItem: {
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    borderRadius: 6,
-  },
-
-  sortItemActive: {
-    backgroundColor: '#ecfdf5',
-  },
-
-  sortText: {
-    fontSize: 14,
-    color: '#64748b',
-    fontWeight: '500',
-  },
-
-  sortTextActive: {
-    color: '#10B981',
-    fontWeight: '600',
   },
 
   resetButton: {
@@ -1168,36 +1047,4 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
 
-  // Mobile Sidebar Overlay
-  mobileOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    zIndex: 1000,
-    flexDirection: 'row',
-  },
-
-  overlayBackground: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-  },
-
-  mobileSidebar: {
-    width: 300,
-    backgroundColor: '#FFFFFF',
-    paddingTop: 20,
-  },
-
-  closeSidebarButton: {
-    backgroundColor: '#10B981',
-    paddingVertical: 16,
-    alignItems: 'center',
-    marginTop: 20,
-    marginHorizontal: 16,
-    borderRadius: 8,
-  },
-
-  closeSidebarText: {
-    color: '#FFFFFF',
-    fontSize: 16,
-    fontWeight: '600',
-  },
 });

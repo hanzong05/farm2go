@@ -59,6 +59,8 @@ export default function AddProductScreen() {
   });
   const [errors, setErrors] = useState<{[key: string]: string}>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [focusedInput, setFocusedInput] = useState<string | null>(null);
+  const [selectedImage, setSelectedImage] = useState<string | null>(null);
 
   useEffect(() => {
     loadProfile();
@@ -83,8 +85,6 @@ export default function AddProductScreen() {
       console.error('Error loading profile:', error);
     }
   };
-  const [focusedInput, setFocusedInput] = useState<string | null>(null);
-  const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const [uploadingImage, setUploadingImage] = useState(false);
   const [confirmModal, setConfirmModal] = useState<{
     visible: boolean;

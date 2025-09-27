@@ -116,7 +116,7 @@ export default function ContactFarmerScreen() {
           },
           {
             text: 'Back to Marketplace',
-            onPress: () => router.push('/buyer/marketplace'),
+            onPress: () => router.push('/'),
             style: 'cancel',
           },
         ]

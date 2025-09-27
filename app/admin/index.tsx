@@ -58,7 +58,7 @@ export default function AdminDashboard() {
       const userData = await getUserWithProfile();
       if (userData?.profile?.user_type !== 'admin') {
         Alert.alert('Access Denied', 'You do not have admin privileges.');
-        router.replace('/buyer/marketplace');
+        router.replace('/');
         return;
       }
       setProfile(userData.profile);

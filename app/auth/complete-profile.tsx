@@ -465,14 +465,11 @@ export default function CompleteProfileScreen() {
             onPress={() => {
               setShowSuccessModal(false);
               // Redirect based on user type
-              if (userType === 'farmer') {
-                router.replace('/farmer/my-products');
-              } else {
-                router.replace('/buyer/marketplace');
-              }
+              // All users go to marketplace
+              router.replace('/');
             }}
           >
-            <Text style={styles.modalButtonText}>Continue to Dashboard</Text>
+            <Text style={styles.modalButtonText}>Continue to Marketplace</Text>
           </TouchableOpacity>
         </View>
       </View>

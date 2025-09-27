@@ -100,13 +100,13 @@ export default function RegisterScreen() {
               const profile = existingProfile as Database['public']['Tables']['profiles']['Row'];
               switch (profile.user_type) {
                 case 'farmer':
-                  router.replace('/farmer/my-products');
+                  router.replace('/');
                   break;
                 case 'buyer':
-                  router.replace('/buyer/marketplace');
+                  router.replace('/');
                   break;
                 default:
-                  router.replace('/buyer/marketplace');
+                  router.replace('/');
               }
             }
             return true;
@@ -187,13 +187,13 @@ export default function RegisterScreen() {
               const profile = existingProfile as Database['public']['Tables']['profiles']['Row'];
               switch (profile.user_type) {
                 case 'farmer':
-                  router.replace('/farmer/my-products');
+                  router.replace('/');
                   break;
                 case 'buyer':
-                  router.replace('/buyer/marketplace');
+                  router.replace('/');
                   break;
                 default:
-                  router.replace('/buyer/marketplace');
+                  router.replace('/');
               }
             }
             return;

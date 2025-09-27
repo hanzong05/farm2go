@@ -140,14 +140,19 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
         console.log('🔄 AuthContext: Getting initial session...');
 
-        // Add timeout protection to prevent infinite loading (increased for OAuth)
-        const timeoutPromise = new Promise((_, reject) => {
-          setTimeout(() => reject(new Error('Session initialization timeout')), 30000);
-        });
+        // Use a more lenient approach during OAuth flows
+        let session = null;
+        let error = null;
 
-        const sessionPromise = supabase.auth.getSession();
-
-        const { data: { session }, error } = await Promise.race([sessionPromise, timeoutPromise]) as any;
+        try {
+          // Try direct session fetch first
+          const sessionResult = await supabase.auth.getSession();
+          session = sessionResult.data.session;
+          error = sessionResult.error;
+        } catch (fetchError) {
+          console.log('📱 AuthContext: Session fetch failed, this is normal during OAuth flows');
+          error = fetchError;
+        }
 
         if (error) {
           console.error('Error getting session:', error);
@@ -191,13 +196,23 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
             return;
           }
 
-          setLoading(true);
+          // Only show loading for sign in/out events
+          if (event === 'SIGNED_IN' || event === 'SIGNED_OUT') {
+            setLoading(true);
+          }
+
           setSession(session);
           setUser(session?.user ?? null);
 
           if (session?.user) {
-            const profileData = await fetchProfile(session.user.id);
-            if (isMounted) setProfile(profileData);
+            try {
+              const profileData = await fetchProfile(session.user.id);
+              if (isMounted) setProfile(profileData);
+            } catch (profileError) {
+              console.log('⚠️ Profile fetch failed during auth state change:', profileError);
+              // Don't block the auth flow if profile fetch fails
+              if (isMounted) setProfile(null);
+            }
           } else {
             if (isMounted) setProfile(null);
           }

@@ -418,7 +418,7 @@ export default function OrderProductScreen() {
           }}
           onBackToMarketplace={() => {
             setShowSuccessModal(false);
-            router.push('/buyer/marketplace');
+            router.push('/');
           }}
         />
       )}
