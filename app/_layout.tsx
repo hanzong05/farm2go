@@ -106,17 +106,15 @@ export default function RootLayout() {
           setPendingNavigation(null);
         } catch (error) {
           console.error('❌ Pending navigation failed:', error);
-          // Retry after a short delay
-          setTimeout(() => {
-            if (pendingNavigation) {
-              executePendingNavigation();
-            }
-          }, 500);
+          // Immediate retry
+          if (pendingNavigation) {
+            executePendingNavigation();
+          }
         }
       };
 
-      // Small delay to ensure router is fully ready
-      setTimeout(executePendingNavigation, 100);
+      // Execute immediately if router is ready
+      executePendingNavigation();
     }
   }, [isRouterReady, pendingNavigation, router]);
 
@@ -213,18 +211,11 @@ export default function RootLayout() {
       }
     };
 
-    // Increased delay for better reliability, especially during OAuth
-    const currentPath = Platform.OS === 'web' && typeof window !== 'undefined'
-      ? window.location.pathname
-      : `/${segments.join('/')}`;
-
-    // Longer delay if we're on the callback page to avoid race conditions
-    const delay = currentPath.startsWith('/auth/callback') ? 3000 : 1000;
-    const timeoutId = setTimeout(checkUserSessionAndRedirect, delay);
+    // Execute session check immediately
+    checkUserSessionAndRedirect();
 
     return () => {
       isMounted = false;
-      clearTimeout(timeoutId);
     };
   }, [isRouterReady, router, segments]);
 
@@ -266,35 +257,15 @@ export default function RootLayout() {
     const handleDeepLink = (url: string) => {
       console.log('🛒 Deep link handler:', url);
 
-      // Handle OAuth callback - support both token-based and code-based (PKCE) flows
+      // Handle OAuth callback - just redirect to callback page
       if (url.includes('access_token=') || url.includes('refresh_token=') || url.includes('code=')) {
-        console.log('🔗 OAuth callback detected, processing callback...');
-
-        // Extract authorization code for mobile processing
-        if (url.includes('code=')) {
-          try {
-            const urlObj = new URL(url);
-            const authCode = urlObj.searchParams.get('code');
-            if (authCode) {
-              console.log('🔑 Extracted authorization code from deep link');
-              // Store it for callback processing on mobile
-              if (Platform.OS !== 'web') {
-                const AsyncStorage = require('@react-native-async-storage/async-storage').default;
-                AsyncStorage.setItem('oauth_authorization_code', authCode);
-              }
-            }
-          } catch (error) {
-            console.log('⚠️ Error parsing deep link URL:', error);
-          }
-        }
+        console.log('🔗 OAuth callback detected, redirecting to callback page...');
 
         if (isRouterReady) {
           router.replace('/auth/callback');
         } else {
-          // Wait for router to be ready then redirect
-          setTimeout(() => {
-            router.replace('/auth/callback');
-          }, 1000);
+          // Router not ready, queue navigation
+          setPendingNavigation('/auth/callback');
         }
         return;
       }

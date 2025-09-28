@@ -1,12 +1,14 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRootNavigationState, useRouter } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Platform, StyleSheet, Text, View } from 'react-native';
 import { supabase } from '../../lib/supabase';
 import { safeLocalStorage } from '../../utils/platformUtils';
 
 export default function AuthCallback() {
   const [isClient, setIsClient] = useState(false);
+  const [isProcessing, setIsProcessing] = useState(false);
+  const hasProcessedRef = useRef(false);
   const router = useRouter();
   const navigationState = useRootNavigationState();
   const [pendingNavigation, setPendingNavigation] = useState<string | null>(null);
@@ -39,8 +41,16 @@ export default function AuthCallback() {
   }, []);
 
   useEffect(() => {
-    if (!isClient || !isRouterReady) return;
+    if (!isClient || !isRouterReady || isProcessing || hasProcessedRef.current) return;
+
+    let isMounted = true;
+
     const handleCallback = async () => {
+      if (!isMounted || isProcessing || hasProcessedRef.current) return;
+
+      console.log('🔄 OAuth callback starting processing (mounted)...');
+      hasProcessedRef.current = true;
+      setIsProcessing(true);
       try {
         console.log('🔄 OAuth callback processing...');
 
@@ -87,11 +97,7 @@ export default function AuthCallback() {
           } catch (exchangeError) {
             console.error('❌ Code exchange exception:', exchangeError);
           }
-          // Wait longer for session establishment after code exchange
-          await new Promise(resolve => setTimeout(resolve, 2000));
-        } else {
-          // Still wait a bit for session to stabilize
-          await new Promise(resolve => setTimeout(resolve, 1000));
+          // Code exchange completed
         }
 
         // OAuth processing complete - navigate directly to marketplace
@@ -135,22 +141,32 @@ export default function AuthCallback() {
         }
 
         safeNavigate(`/auth/login?error=${encodeURIComponent(error.message || 'OAuth sign-in failed. Please try again.')}`);
+      } finally {
+        if (isMounted) {
+          setIsProcessing(false);
+        }
       }
     };
 
-    // Much faster processing - let layout handle the rest
-    const timer = setTimeout(handleCallback, 500);
+    // Process callback when properly mounted
+    handleCallback();
 
     return () => {
-      clearTimeout(timer);
+      isMounted = false;
     };
-  }, [isClient, isRouterReady]);
+  }, [isClient, isRouterReady]); // Remove isProcessing and hasProcessed from deps
 
   return (
     <View style={styles.container}>
       <ActivityIndicator size="large" color="#10b981" />
-      <Text style={styles.loadingText}>Processing sign in...</Text>
-      <Text style={styles.subText}>Please wait while we verify your account</Text>
+      <Text style={styles.loadingText}>
+        {isProcessing ? 'Processing sign in...' : 'Preparing...'}
+      </Text>
+      <Text style={styles.subText}>
+        {isProcessing
+          ? 'Please wait while we verify your account'
+          : 'Getting ready to sign you in'}
+      </Text>
     </View>
   );
 }

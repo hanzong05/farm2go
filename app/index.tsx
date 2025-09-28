@@ -193,6 +193,7 @@ export default function MarketplaceScreen() {
 
   const renderCompactProduct = (product: Product) => (
     <TouchableOpacity
+      key={product.id}
       style={styles.compactProductCard}
       onPress={() => checkAuthAndNavigate(`/buyer/products/${product.id}`)}
       activeOpacity={0.8}
@@ -249,6 +250,7 @@ export default function MarketplaceScreen() {
 
   const renderGridProduct = (product: Product) => (
     <TouchableOpacity
+      key={product.id}
       style={styles.gridProductCard}
       onPress={() => checkAuthAndNavigate(`/buyer/products/${product.id}`)}
       activeOpacity={0.8}

@@ -71,21 +71,10 @@ export const registerUser = async (data: RegisterData) => {
     console.log('📡 Creating Supabase auth user...');
 
     // Create auth user using email with timeout
-    const signupPromise = supabase.auth.signUp({
+    const authResult = await supabase.auth.signUp({
       email: data.email,
       password: data.password,
     });
-
-    const timeoutPromise = new Promise((_, reject) => {
-      setTimeout(() => {
-        reject(new Error('Registration timeout after 30 seconds. Please check your internet connection and try again.'));
-      }, 30000);
-    });
-
-    const authResult = await Promise.race([
-      signupPromise,
-      timeoutPromise
-    ]) as AuthResponse;
 
     const { data: authData, error: authError } = authResult;
 

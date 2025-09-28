@@ -10,6 +10,7 @@ import {
   TouchableOpacity,
   View
 } from 'react-native';
+import { useCustomAlert } from './CustomAlert';
 
 // Get window dimensions and add listener for changes
 const getScreenDimensions = () => {
@@ -180,6 +181,27 @@ const NAV_ITEMS: NavItem[] = [
     route: '/super-admin/users',
     userTypes: ['super-admin'],
   },
+  {
+    id: 'super-admin-settings',
+    title: 'System Settings',
+    icon: 'cogs',
+    route: '/super-admin/settings',
+    userTypes: ['super-admin'],
+  },
+  {
+    id: 'super-admin-reports',
+    title: 'System Reports',
+    icon: 'chart-line',
+    route: '/super-admin/reports',
+    userTypes: ['super-admin'],
+  },
+  {
+    id: 'super-admin-backup',
+    title: 'Backup & Restore',
+    icon: 'database',
+    route: '/super-admin/backup',
+    userTypes: ['super-admin'],
+  },
 ];
 
 interface HeaderComponentProps {
@@ -298,9 +320,12 @@ export default function HeaderComponent({
   // Use state to track screen dimensions
   const [screenData, setScreenData] = useState(getScreenDimensions());
   const [showMobileNav, setShowMobileNav] = useState(false);
-  
+
   // State to manage message and notification panel visibility
   const [activePanel, setActivePanel] = useState<'messages' | 'notifications' | null>(null);
+
+  // Custom alert hook for web/mobile compatibility
+  const { showAlert, AlertComponent } = useCustomAlert();
 
   // Real-time notifications
   const {
@@ -385,21 +410,32 @@ export default function HeaderComponent({
 
   const handleAuthAction = async () => {
     if (profile) {
-      // User is signed in, perform logout
-      try {
-        console.log('🚪 Starting logout process...');
-        await logoutUser();
-        console.log('✅ Logout completed, session cleared');
+      // User is signed in, show logout confirmation
+      showAlert(
+        'Confirm Logout',
+        'Are you sure you want to logout?',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          {
+            text: 'Logout',
+            style: 'destructive',
+            onPress: async () => {
+              try {
+                console.log('🚪 Starting logout process...');
+                await logoutUser();
+                console.log('✅ Logout completed, session cleared');
 
-        // Redirect to landing page (marketplace)
-        console.log('🔄 Redirecting to landing page...');
-        router.replace('/' as any);
-        console.log('✅ Redirect to landing page completed');
-      } catch (error) {
-        console.error('❌ Logout error:', error);
-        // Fallback redirect if logout fails
-        router.replace('/' as any);
-      }
+                // Redirect to landing page (marketplace)
+                console.log('🔄 Redirecting to landing page...');
+                router.replace('/' as any);
+                console.log('✅ Redirect to landing page completed');
+              } catch (error) {
+                console.error('❌ Logout error:', error);
+              }
+            },
+          },
+        ]
+      );
     } else {
       // No user signed in, redirect to login page
       console.log('🔄 Redirecting to login...');
@@ -1019,6 +1055,9 @@ export default function HeaderComponent({
           </ScrollView>
         </View>
       )}
+
+      {/* Custom Alert for web/mobile compatibility */}
+      {AlertComponent}
     </View>
   );
 }

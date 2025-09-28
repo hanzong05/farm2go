@@ -6,7 +6,6 @@ import {
   ScrollView,
   TouchableOpacity,
   TextInput,
-  Alert,
   ActivityIndicator,
   Switch,
   RefreshControl,
@@ -16,6 +15,7 @@ import { supabase } from '../lib/supabase';
 import { getUserWithProfile, logoutUser } from '../services/auth';
 import { Database } from '../types/database';
 import HeaderComponent from './HeaderComponent';
+import { useCustomAlert } from './CustomAlert';
 
 type Profile = Database['public']['Tables']['profiles']['Row'];
 
@@ -73,6 +73,9 @@ export default function Settings({ userType, currentRoute, onNavigateBack }: Set
   const [notifications, setNotifications] = useState(true);
   const [marketingEmails, setMarketingEmails] = useState(false);
   const [formData, setFormData] = useState<Record<string, string>>({});
+
+  // Custom alert hook for web/mobile compatibility
+  const { showAlert, AlertComponent } = useCustomAlert();
 
   const fieldConfigs = FIELD_CONFIGS[userType] || FIELD_CONFIGS.farmer;
   const sectionTitle = SECTION_TITLES[userType] || 'Profile';
@@ -137,7 +140,7 @@ export default function Settings({ userType, currentRoute, onNavigateBack }: Set
   };
 
   const handleLogout = async () => {
-    Alert.alert(
+    showAlert(
       'Confirm Logout',
       'Are you sure you want to logout?',
       [
@@ -159,7 +162,7 @@ export default function Settings({ userType, currentRoute, onNavigateBack }: Set
   };
 
   const handleDeleteAccount = () => {
-    Alert.alert(
+    showAlert(
       'Delete Account',
       'This action cannot be undone. Are you sure you want to delete your account?',
       [
@@ -168,7 +171,9 @@ export default function Settings({ userType, currentRoute, onNavigateBack }: Set
           text: 'Delete',
           style: 'destructive',
           onPress: () => {
-            Alert.alert('Feature Coming Soon', 'Account deletion will be available in a future update.');
+            showAlert('Feature Coming Soon', 'Account deletion will be available in a future update.', [
+              { text: 'OK', style: 'default' }
+            ]);
           },
         },
       ]
@@ -394,6 +399,9 @@ export default function Settings({ userType, currentRoute, onNavigateBack }: Set
 
       <View style={styles.bottomSpacing} />
     </ScrollView>
+
+    {/* Custom Alert for web/mobile compatibility */}
+    {AlertComponent}
     </View>
   );
 }

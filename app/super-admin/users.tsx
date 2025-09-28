@@ -1,17 +1,23 @@
 import { createClient } from '@supabase/supabase-js';
+import { BlurView } from 'expo-blur';
+import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import {
-    ActivityIndicator,
-    Alert,
-    FlatList,
-    Modal,
-    RefreshControl,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View
+  ActivityIndicator,
+  Alert,
+  Animated,
+  Dimensions,
+  FlatList,
+  Modal,
+  Platform,
+  RefreshControl,
+  StatusBar,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View
 } from 'react-native';
 import Icon from 'react-native-vector-icons/FontAwesome5';
 import HeaderComponent from '../../components/HeaderComponent';
@@ -19,6 +25,8 @@ import LocationPicker from '../../components/LocationPicker';
 import { supabase } from '../../lib/supabase';
 import { getUserWithProfile } from '../../services/auth';
 import { Database } from '../../types/database';
+
+const { width } = Dimensions.get('window');
 
 type Profile = Database['public']['Tables']['profiles']['Row'];
 
@@ -49,17 +57,29 @@ interface CreateUserForm {
 
 const colors = {
   primary: '#059669',
+  primaryLight: '#34d399',
+  primaryDark: '#047857',
   secondary: '#10b981',
   white: '#ffffff',
-  background: '#f0f9f4',
+  background: '#f0fdf4',
+  backgroundLight: '#ecfdf5',
   text: '#0f172a',
-  textSecondary: '#6b7280',
+  textSecondary: '#64748b',
+  textLight: '#94a3b8',
   border: '#d1fae5',
+  borderLight: '#dcfce7',
   shadow: 'rgba(0,0,0,0.1)',
+  shadowLight: 'rgba(0,0,0,0.05)',
   danger: '#ef4444',
+  dangerLight: '#fca5a5',
   warning: '#f59e0b',
-  gray100: '#f9fafb',
-  gray200: '#e5e7eb',
+  warningLight: '#fbbf24',
+  success: '#22c55e',
+  gray50: '#f8fafc',
+  gray100: '#f1f5f9',
+  gray200: '#e2e8f0',
+  gray300: '#cbd5e1',
+  glass: 'rgba(255, 255, 255, 0.8)',
 };
 
 export default function SuperAdminUsers() {
@@ -73,8 +93,11 @@ export default function SuperAdminUsers() {
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [emailError, setEmailError] = useState('');
-  // Removed filterType since we only show admin users
-
+  
+  // Animation values
+  const fadeAnim = new Animated.Value(0);
+  const slideAnim = new Animated.Value(50);
+  const scaleAnim = new Animated.Value(0.9);
 
   const [createForm, setCreateForm] = useState<CreateUserForm>({
     email: '',
@@ -89,6 +112,24 @@ export default function SuperAdminUsers() {
 
   useEffect(() => {
     loadData();
+    // Start animations
+    Animated.parallel([
+      Animated.timing(fadeAnim, {
+        toValue: 1,
+        duration: 800,
+        useNativeDriver: true,
+      }),
+      Animated.timing(slideAnim, {
+        toValue: 0,
+        duration: 600,
+        useNativeDriver: true,
+      }),
+      Animated.timing(scaleAnim, {
+        toValue: 1,
+        duration: 500,
+        useNativeDriver: true,
+      }),
+    ]).start();
   }, []);
 
   const loadData = async () => {
@@ -158,7 +199,6 @@ export default function SuperAdminUsers() {
         throw error;
       }
 
-      // Convert to User format (simplified for super admin view)
       const usersData: User[] = data?.map(profile => ({
           id: profile.id,
           email: profile.email || '',
@@ -194,19 +234,16 @@ export default function SuperAdminUsers() {
 
   const createUser = async () => {
     try {
-      // Validate required fields
       if (!createForm.email || !createForm.password || !createForm.first_name || !createForm.barangay) {
         Alert.alert('Error', 'Please fill in all required fields including barangay location');
         return;
       }
 
-      // Validate email format
       if (!validateEmail(createForm.email.trim())) {
         Alert.alert('Error', 'Please enter a valid email address');
         return;
       }
 
-      // Validate password length
       if (createForm.password.length < 6) {
         Alert.alert('Error', 'Password must be at least 6 characters long');
         return;
@@ -214,7 +251,6 @@ export default function SuperAdminUsers() {
 
       console.log('🚀 Creating auth user with email:', createForm.email.trim().toLowerCase());
 
-      // First create auth user
       const { data: authData, error: authError } = await supabase.auth.signUp({
         email: createForm.email.trim().toLowerCase(),
         password: createForm.password,
@@ -234,7 +270,6 @@ export default function SuperAdminUsers() {
       if (authData.user) {
         console.log('👤 Creating profile for user:', authData.user.id);
 
-        // Create profile using untyped client
         const untypedSupabase = createClient(
           process.env.EXPO_PUBLIC_SUPABASE_URL || 'https://demo.supabase.co',
           process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || 'demo-anon-key'
@@ -270,7 +305,6 @@ export default function SuperAdminUsers() {
           throw profileError;
         }
 
-        // Verify the profile was created
         console.log('🔍 Verifying profile creation...');
         const { data: verifyProfile, error: verifyError } = await untypedSupabase
           .from('profiles')
@@ -306,7 +340,6 @@ export default function SuperAdminUsers() {
           style: 'destructive',
           onPress: async () => {
             try {
-              // Delete profile first
               const { error: profileError } = await supabase
                 .from('profiles')
                 .delete()
@@ -335,7 +368,7 @@ export default function SuperAdminUsers() {
       user_type: 'admin',
       phone: '',
       farm_name: '',
-        barangay: '',
+      barangay: '',
     });
     setEmailError('');
   };
@@ -343,7 +376,6 @@ export default function SuperAdminUsers() {
   const handleEmailChange = (text: string) => {
     setCreateForm({ ...createForm, email: text });
 
-    // Real-time email validation
     if (text.trim() && !validateEmail(text.trim())) {
       setEmailError('Please enter a valid email address');
     } else {
@@ -368,202 +400,431 @@ export default function SuperAdminUsers() {
 
   const getUserTypeColor = (userType: string) => {
     switch (userType) {
-      case 'farmer': return colors.primary;
-      case 'buyer': return colors.secondary;
-      case 'admin': return colors.danger;
-      default: return colors.textSecondary;
+      case 'farmer': return [colors.primary, colors.primaryLight];
+      case 'buyer': return [colors.secondary, '#6ee7b7'];
+      case 'admin': return [colors.danger, colors.dangerLight];
+      default: return [colors.textSecondary, colors.textLight];
     }
   };
 
-  const renderUser = ({ item }: { item: User }) => (
-    <View style={styles.userCard}>
-      <View style={styles.userInfo}>
-        <View style={styles.userHeader}>
-          <Text style={styles.userName}>
-            {item.profiles?.first_name} {item.profiles?.last_name}
-          </Text>
-          <View style={[styles.userTypeBadge, { backgroundColor: getUserTypeColor(item.profiles?.user_type || '') }]}>
-            <Text style={styles.userTypeText}>{item.profiles?.user_type?.toUpperCase()}</Text>
+  const renderUser = ({ item, index }: { item: User; index: number }) => {
+    const animatedValue = new Animated.Value(0);
+    
+    Animated.timing(animatedValue, {
+      toValue: 1,
+      duration: 500,
+      delay: index * 100,
+      useNativeDriver: true,
+    }).start();
+
+    const translateY = animatedValue.interpolate({
+      inputRange: [0, 1],
+      outputRange: [30, 0],
+    });
+
+    const userTypeColors = getUserTypeColor(item.profiles?.user_type || '');
+
+    return (
+      <Animated.View
+        style={[
+          styles.userCard,
+          {
+            opacity: animatedValue,
+            transform: [{ translateY }],
+          },
+        ]}
+      >
+        <LinearGradient
+          colors={[colors.white, colors.gray50]}
+          style={styles.cardGradient}
+        >
+          <View style={styles.userInfo}>
+            <View style={styles.userHeader}>
+              <View style={styles.userTitleContainer}>
+                <View style={styles.avatarContainer}>
+                  <LinearGradient
+                    colors={userTypeColors}
+                    style={styles.avatar}
+                  >
+                    <Text style={styles.avatarText}>
+                      {item.profiles?.first_name?.charAt(0) || 'A'}
+                      {item.profiles?.last_name?.charAt(0) || ''}
+                    </Text>
+                  </LinearGradient>
+                </View>
+                <View style={styles.userNameContainer}>
+                  <Text style={styles.userName}>
+                    {item.profiles?.first_name} {item.profiles?.last_name}
+                  </Text>
+                  <LinearGradient
+                    colors={userTypeColors}
+                    style={styles.userTypeBadge}
+                  >
+                    <Text style={styles.userTypeText}>
+                      {item.profiles?.user_type?.toUpperCase()}
+                    </Text>
+                  </LinearGradient>
+                </View>
+              </View>
+            </View>
+
+            <View style={styles.userDetailsContainer}>
+              <View style={styles.userDetailRow}>
+                <View style={styles.iconContainer}>
+                  <Icon name="envelope" size={14} color={colors.primary} />
+                </View>
+                <Text style={styles.userDetail}>{item.email}</Text>
+              </View>
+
+              {item.profiles?.phone && (
+                <View style={styles.userDetailRow}>
+                  <View style={styles.iconContainer}>
+                    <Icon name="phone" size={14} color={colors.primary} />
+                  </View>
+                  <Text style={styles.userDetail}>{item.profiles.phone}</Text>
+                </View>
+              )}
+
+              {item.profiles?.barangay && (
+                <View style={styles.userDetailRow}>
+                  <View style={styles.iconContainer}>
+                    <Icon name="map-marker-alt" size={14} color={colors.primary} />
+                  </View>
+                  <Text style={styles.userDetail}>{item.profiles.barangay}</Text>
+                </View>
+              )}
+
+              <View style={styles.userDetailRow}>
+                <View style={styles.iconContainer}>
+                  <Icon name="calendar" size={14} color={colors.textLight} />
+                </View>
+                <Text style={styles.userDate}>
+                  Created: {new Date(item.created_at).toLocaleDateString()}
+                </Text>
+              </View>
+            </View>
           </View>
-        </View>
 
-        <Text style={styles.userDetail}>📧 {item.email}</Text>
+          <View style={styles.userActions}>
+            <TouchableOpacity
+              style={styles.actionButton}
+              onPress={() => {
+                setSelectedUser(item);
+                setShowEditModal(true);
+              }}
+            >
+              <LinearGradient
+                colors={[colors.warning, colors.warningLight]}
+                style={styles.actionButtonGradient}
+              >
+                <Icon name="edit" size={16} color={colors.white} />
+              </LinearGradient>
+            </TouchableOpacity>
 
-        {item.profiles?.farm_name && (
-          <Text style={styles.userDetail}>🏡 {item.profiles.farm_name}</Text>
-        )}
-        {item.profiles?.phone && (
-          <Text style={styles.userDetail}>📞 {item.profiles.phone}</Text>
-        )}
-        {item.profiles?.barangay && (
-          <Text style={styles.userDetail}>📍 {item.profiles.barangay}</Text>
-        )}
-
-        <Text style={styles.userDate}>
-          Created: {new Date(item.created_at).toLocaleDateString()}
-        </Text>
-      </View>
-
-      <View style={styles.userActions}>
-        <TouchableOpacity
-          style={[styles.actionButton, styles.editButton]}
-          onPress={() => {
-            setSelectedUser(item);
-            setShowEditModal(true);
-          }}
-        >
-          <Icon name="edit" size={16} color={colors.white} />
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={[styles.actionButton, styles.deleteButton]}
-          onPress={() => deleteUser(item.id)}
-        >
-          <Icon name="trash" size={16} color={colors.white} />
-        </TouchableOpacity>
-      </View>
-    </View>
-  );
+            <TouchableOpacity
+              style={styles.actionButton}
+              onPress={() => deleteUser(item.id)}
+            >
+              <LinearGradient
+                colors={[colors.danger, colors.dangerLight]}
+                style={styles.actionButtonGradient}
+              >
+                <Icon name="trash" size={16} color={colors.white} />
+              </LinearGradient>
+            </TouchableOpacity>
+          </View>
+        </LinearGradient>
+      </Animated.View>
+    );
+  };
 
   if (loading) {
     return (
-      <View style={styles.container}>
+      <LinearGradient
+        colors={[colors.background, colors.backgroundLight]}
+        style={styles.container}
+      >
+        <StatusBar barStyle="dark-content" backgroundColor={colors.background} />
         <HeaderComponent
           profile={profile}
-          userType="admin"
+          userType="super-admin"
           currentRoute="/super-admin/users"
         />
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={colors.primary} />
-          <Text style={styles.loadingText}>Loading users...</Text>
+          <View style={styles.loadingCard}>
+            <LinearGradient
+              colors={[colors.primary, colors.primaryLight]}
+              style={styles.loadingSpinner}
+            >
+              <ActivityIndicator size="large" color={colors.white} />
+            </LinearGradient>
+            <Text style={styles.loadingText}>Loading users...</Text>
+          </View>
         </View>
-      </View>
+      </LinearGradient>
     );
   }
 
   return (
-    <View style={styles.container}>
+    <LinearGradient
+      colors={[colors.background, colors.backgroundLight]}
+      style={styles.container}
+    >
+      <StatusBar barStyle="dark-content" backgroundColor={colors.background} />
       <HeaderComponent
         profile={profile}
-        userType="admin"
+        userType="super-admin"
         currentRoute="/super-admin/users"
         searchQuery={searchQuery}
         onSearchChange={setSearchQuery}
         searchPlaceholder="Search users..."
       />
 
-      <View style={styles.content}>
-        {/* Header */}
+      <Animated.View
+        style={[
+          styles.content,
+          {
+            opacity: fadeAnim,
+            transform: [{ translateY: slideAnim }, { scale: scaleAnim }],
+          },
+        ]}
+      >
+        {/* Enhanced Header */}
         <View style={styles.header}>
-          <Text style={styles.title}>Admin User Management</Text>
+          <View style={styles.titleContainer}>
+            <LinearGradient
+              colors={[colors.primary, colors.primaryLight]}
+              style={styles.titleIcon}
+            >
+              <Icon name="users-cog" size={24} color={colors.white} />
+            </LinearGradient>
+            <View>
+              <Text style={styles.title}>Admin Management</Text>
+              <Text style={styles.subtitle}>
+                {filteredUsers.length} admin{filteredUsers.length !== 1 ? 's' : ''} found
+              </Text>
+            </View>
+          </View>
+          
           <TouchableOpacity
-            style={styles.addButton}
+            style={styles.addButtonContainer}
             onPress={() => setShowCreateModal(true)}
           >
-            <Icon name="plus" size={16} color={colors.white} />
-            <Text style={styles.addButtonText}>Add Admin</Text>
+            <LinearGradient
+              colors={[colors.primary, colors.primaryLight]}
+              style={styles.addButton}
+            >
+              <Icon name="plus" size={16} color={colors.white} />
+              <Text style={styles.addButtonText}>Add Admin</Text>
+            </LinearGradient>
           </TouchableOpacity>
         </View>
 
-        {/* Users List */}
+        {/* Statistics Cards */}
+        <View style={styles.statsContainer}>
+          <LinearGradient
+            colors={[colors.white, colors.gray50]}
+            style={styles.statCard}
+          >
+            <View style={styles.statIconContainer}>
+              <LinearGradient
+                colors={[colors.success, '#4ade80']}
+                style={styles.statIcon}
+              >
+                <Icon name="user-shield" size={20} color={colors.white} />
+              </LinearGradient>
+            </View>
+            <View>
+              <Text style={styles.statNumber}>{users.length}</Text>
+              <Text style={styles.statLabel}>Total Admins</Text>
+            </View>
+          </LinearGradient>
+
+          <LinearGradient
+            colors={[colors.white, colors.gray50]}
+            style={styles.statCard}
+          >
+            <View style={styles.statIconContainer}>
+              <LinearGradient
+                colors={[colors.warning, colors.warningLight]}
+                style={styles.statIcon}
+              >
+                <Icon name="clock" size={20} color={colors.white} />
+              </LinearGradient>
+            </View>
+            <View>
+              <Text style={styles.statNumber}>
+                {users.filter(u => {
+                  const createdDate = new Date(u.created_at);
+                  const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+                  return createdDate > thirtyDaysAgo;
+                }).length}
+              </Text>
+              <Text style={styles.statLabel}>Recent</Text>
+            </View>
+          </LinearGradient>
+        </View>
+
+        {/* Enhanced Users List */}
         <FlatList
           data={filteredUsers}
           renderItem={renderUser}
           keyExtractor={(item) => item.id}
           contentContainerStyle={styles.listContainer}
+          showsVerticalScrollIndicator={false}
           refreshControl={
             <RefreshControl
               refreshing={refreshing}
               onRefresh={onRefresh}
               tintColor={colors.primary}
               colors={[colors.primary]}
+              progressBackgroundColor={colors.white}
             />
           }
           ListEmptyComponent={
             <View style={styles.emptyContainer}>
-              <Text style={styles.emptyText}>No admin users found</Text>
+              <LinearGradient
+                colors={[colors.gray100, colors.gray50]}
+                style={styles.emptyIcon}
+              >
+                <Icon name="users" size={40} color={colors.textLight} />
+              </LinearGradient>
+              <Text style={styles.emptyTitle}>No admins found</Text>
+              <Text style={styles.emptyText}>
+                {searchQuery ? 'Try adjusting your search terms' : 'Create your first admin user'}
+              </Text>
             </View>
           }
         />
-      </View>
+      </Animated.View>
 
-      {/* Create User Modal */}
+      {/* Enhanced Create User Modal */}
       <Modal
         visible={showCreateModal}
-        animationKeyframesType="slide"
+        animationType="slide"
         presentationStyle="pageSheet"
       >
-        <View style={styles.modalContainer}>
-          <View style={styles.modalHeader}>
-            <Text style={styles.modalTitle}>Create New Admin</Text>
-            <TouchableOpacity onPress={() => setShowCreateModal(false)}>
+        <LinearGradient
+          colors={[colors.background, colors.white]}
+          style={styles.modalContainer}
+        >
+          <BlurView intensity={10} style={styles.modalHeader}>
+            <View style={styles.modalTitleContainer}>
+              <LinearGradient
+                colors={[colors.primary, colors.primaryLight]}
+                style={styles.modalTitleIcon}
+              >
+                <Icon name="user-plus" size={20} color={colors.white} />
+              </LinearGradient>
+              <Text style={styles.modalTitle}>Create New Admin</Text>
+            </View>
+            <TouchableOpacity
+              onPress={() => setShowCreateModal(false)}
+              style={styles.closeButton}
+            >
               <Icon name="times" size={24} color={colors.textSecondary} />
             </TouchableOpacity>
-          </View>
+          </BlurView>
 
           <View style={styles.form}>
-            <View>
-              <TextInput
-                style={[styles.input, emailError ? styles.inputError : null]}
-                placeholder="Email *"
-                value={createForm.email}
-                onChangeText={handleEmailChange}
-                keyboardType="email-address"
-                autoCapitalize="none"
-              />
+            <View style={styles.inputGroup}>
+              <Text style={styles.inputLabel}>Email Address *</Text>
+              <View style={[styles.inputContainer, emailError ? styles.inputError : null]}>
+                <Icon name="envelope" size={16} color={colors.textSecondary} style={styles.inputIcon} />
+                <TextInput
+                  style={styles.input}
+                  placeholder="Enter email address"
+                  value={createForm.email}
+                  onChangeText={handleEmailChange}
+                  keyboardType="email-address"
+                  autoCapitalize="none"
+                />
+              </View>
               {emailError ? (
                 <Text style={styles.errorText}>{emailError}</Text>
               ) : null}
             </View>
 
-            <TextInput
-              style={styles.input}
-              placeholder="Password *"
-              value={createForm.password}
-              onChangeText={(text) => setCreateForm({ ...createForm, password: text })}
-              secureTextEntry
-            />
-
-            <TextInput
-              style={styles.input}
-              placeholder="First Name *"
-              value={createForm.first_name}
-              onChangeText={(text) => setCreateForm({ ...createForm, first_name: text })}
-            />
-
-            <TextInput
-              style={styles.input}
-              placeholder="Last Name"
-              value={createForm.last_name}
-              onChangeText={(text) => setCreateForm({ ...createForm, last_name: text })}
-            />
-
-            <View style={styles.userTypeSelector}>
-              <Text style={styles.label}>User Type:</Text>
-              <View style={styles.fixedUserType}>
-                <Text style={styles.fixedUserTypeText}>Admin</Text>
+            <View style={styles.inputGroup}>
+              <Text style={styles.inputLabel}>Password *</Text>
+              <View style={styles.inputContainer}>
+                <Icon name="lock" size={16} color={colors.textSecondary} style={styles.inputIcon} />
+                <TextInput
+                  style={styles.input}
+                  placeholder="Create strong password"
+                  value={createForm.password}
+                  onChangeText={(text) => setCreateForm({ ...createForm, password: text })}
+                  secureTextEntry
+                />
               </View>
             </View>
 
-            <TextInput
-              style={styles.input}
-              placeholder="Phone"
-              value={createForm.phone}
-              onChangeText={(text) => setCreateForm({ ...createForm, phone: text })}
-              keyboardType="phone-pad"
-            />
+            <View style={styles.nameRow}>
+              <View style={[styles.inputGroup, { flex: 1, marginRight: 8 }]}>
+                <Text style={styles.inputLabel}>First Name *</Text>
+                <View style={styles.inputContainer}>
+                  <Icon name="user" size={16} color={colors.textSecondary} style={styles.inputIcon} />
+                  <TextInput
+                    style={styles.input}
+                    placeholder="First name"
+                    value={createForm.first_name}
+                    onChangeText={(text) => setCreateForm({ ...createForm, first_name: text })}
+                  />
+                </View>
+              </View>
 
-            {/* Location Picker - Tarlac City Barangays */}
-            <LocationPicker
-              onLocationSelect={handleLocationSelect}
-              initialBarangay={createForm.barangay}
-              focusedInput={focusedInput}
-              setFocusedInput={setFocusedInput}
-            />
+              <View style={[styles.inputGroup, { flex: 1, marginLeft: 8 }]}>
+                <Text style={styles.inputLabel}>Last Name</Text>
+                <View style={styles.inputContainer}>
+                  <Icon name="user" size={16} color={colors.textSecondary} style={styles.inputIcon} />
+                  <TextInput
+                    style={styles.input}
+                    placeholder="Last name"
+                    value={createForm.last_name}
+                    onChangeText={(text) => setCreateForm({ ...createForm, last_name: text })}
+                  />
+                </View>
+              </View>
+            </View>
+
+            <View style={styles.userTypeSelector}>
+              <Text style={styles.inputLabel}>User Type</Text>
+              <LinearGradient
+                colors={[colors.danger, colors.dangerLight]}
+                style={styles.fixedUserType}
+              >
+                <Icon name="shield-alt" size={16} color={colors.white} />
+                <Text style={styles.fixedUserTypeText}>Administrator</Text>
+              </LinearGradient>
+            </View>
+
+            <View style={styles.inputGroup}>
+              <Text style={styles.inputLabel}>Phone Number</Text>
+              <View style={styles.inputContainer}>
+                <Icon name="phone" size={16} color={colors.textSecondary} style={styles.inputIcon} />
+                <TextInput
+                  style={styles.input}
+                  placeholder="Phone number"
+                  value={createForm.phone}
+                  onChangeText={(text) => setCreateForm({ ...createForm, phone: text })}
+                  keyboardType="phone-pad"
+                />
+              </View>
+            </View>
+
+            <View style={styles.inputGroup}>
+              <Text style={styles.inputLabel}>Location *</Text>
+              <LocationPicker
+                onLocationSelect={handleLocationSelect}
+                initialBarangay={createForm.barangay}
+                focusedInput={focusedInput}
+                setFocusedInput={setFocusedInput}
+              />
+            </View>
 
             <View style={styles.modalActions}>
               <TouchableOpacity
-                style={styles.cancelButton}
+                style={styles.cancelButtonContainer}
                 onPress={() => {
                   setShowCreateModal(false);
                   resetCreateForm();
@@ -573,167 +834,344 @@ export default function SuperAdminUsers() {
               </TouchableOpacity>
 
               <TouchableOpacity
-                style={styles.createButton}
+                style={styles.createButtonContainer}
                 onPress={createUser}
               >
-                <Text style={styles.createButtonText}>Create Admin</Text>
+                <LinearGradient
+                  colors={[colors.primary, colors.primaryLight]}
+                  style={styles.createButton}
+                >
+                  <Icon name="user-plus" size={16} color={colors.white} />
+                  <Text style={styles.createButtonText}>Create Admin</Text>
+                </LinearGradient>
               </TouchableOpacity>
             </View>
           </View>
-        </View>
+        </LinearGradient>
       </Modal>
-    </View>
+    </LinearGradient>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.background,
   },
   content: {
     flex: 1,
-    padding: 16,
+    padding: 20,
   },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
+    padding: 40,
+  },
+  loadingCard: {
+    alignItems: 'center',
+    padding: 30,
+    backgroundColor: colors.white,
+    borderRadius: 20,
+    ...Platform.select({
+      ios: {
+        shadowColor: colors.shadow,
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.1,
+        shadowRadius: 12,
+      },
+      android: {
+        elevation: 8,
+      },
+    }),
+  },
+  loadingSpinner: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 16,
   },
   loadingText: {
-    marginTop: 16,
     fontSize: 16,
     color: colors.textSecondary,
+    fontWeight: '500',
   },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 20,
+    marginBottom: 24,
+    paddingHorizontal: 4,
+  },
+  titleContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  titleIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 16,
+    ...Platform.select({
+      ios: {
+        shadowColor: colors.primary,
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.3,
+        shadowRadius: 8,
+      },
+      android: {
+        elevation: 6,
+      },
+    }),
   },
   title: {
-    fontSize: 24,
+    fontSize: 28,
     fontWeight: 'bold',
     color: colors.text,
+    marginBottom: 4,
+  },
+  subtitle: {
+    fontSize: 14,
+    color: colors.textSecondary,
+    fontWeight: '500',
+  },
+  addButtonContainer: {
+    borderRadius: 16,
+    ...Platform.select({
+      ios: {
+        shadowColor: colors.primary,
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.3,
+        shadowRadius: 8,
+      },
+      android: {
+        elevation: 6,
+      },
+    }),
   },
   addButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: colors.primary,
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 8,
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderRadius: 16,
     gap: 8,
   },
   addButtonText: {
     color: colors.white,
     fontWeight: '600',
+    fontSize: 16,
   },
-  filterTabs: {
+  statsContainer: {
     flexDirection: 'row',
-    marginBottom: 16,
-    gap: 8,
+    gap: 16,
+    marginBottom: 24,
   },
-  filterTab: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 20,
-    backgroundColor: colors.white,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  filterTabActive: {
-    backgroundColor: colors.primary,
-    borderColor: colors.primary,
-  },
-  filterTabText: {
-    fontSize: 14,
-    color: colors.textSecondary,
-  },
-  filterTabTextActive: {
-    color: colors.white,
-    fontWeight: '600',
-  },
-  listContainer: {
-    gap: 12,
-  },
-  userCard: {
-    backgroundColor: colors.white,
-    padding: 16,
-    borderRadius: 12,
+  statCard: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    elevation: 2,
-    shadowColor: colors.shadow,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
+    padding: 16,
+    borderRadius: 16,
+    ...Platform.select({
+      ios: {
+        shadowColor: colors.shadow,
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.1,
+        shadowRadius: 8,
+      },
+      android: {
+        elevation: 4,
+      },
+    }),
+  },
+  statIconContainer: {
+    marginRight: 12,
+  },
+  statIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  statNumber: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: colors.text,
+    marginBottom: 2,
+  },
+  statLabel: {
+    fontSize: 12,
+    color: colors.textSecondary,
+    fontWeight: '500',
+  },
+  listContainer: {
+    gap: 16,
+    paddingBottom: 20,
+  },
+  userCard: {
+    borderRadius: 20,
+    overflow: 'hidden',
+    ...Platform.select({
+      ios: {
+        shadowColor: colors.shadow,
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.1,
+        shadowRadius: 12,
+      },
+      android: {
+        elevation: 6,
+      },
+    }),
+  },
+  cardGradient: {
+    padding: 20,
+    flexDirection: 'row',
+    alignItems: 'center',
   },
   userInfo: {
     flex: 1,
   },
   userHeader: {
+    marginBottom: 16,
+  },
+  userTitleContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 8,
   },
-  userName: {
+  avatarContainer: {
+    marginRight: 12,
+  },
+  avatar: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    justifyContent: 'center',
+    alignItems: 'center',
+    ...Platform.select({
+      ios: {
+        shadowColor: colors.shadow,
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.2,
+        shadowRadius: 4,
+      },
+      android: {
+        elevation: 4,
+      },
+    }),
+  },
+  avatarText: {
     fontSize: 16,
     fontWeight: 'bold',
-    color: colors.text,
+    color: colors.white,
+  },
+  userNameContainer: {
     flex: 1,
   },
+  userName: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: colors.text,
+    marginBottom: 6,
+  },
   userTypeBadge: {
-    paddingHorizontal: 8,
+    alignSelf: 'flex-start',
+    paddingHorizontal: 12,
     paddingVertical: 4,
     borderRadius: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
   },
   userTypeText: {
-    fontSize: 10,
+    fontSize: 11,
     color: colors.white,
     fontWeight: 'bold',
+    letterSpacing: 0.5,
+  },
+  userDetailsContainer: {
+    gap: 8,
+  },
+  userDetailRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  iconContainer: {
+    width: 32,
+    height: 20,
+    justifyContent: 'center',
+    alignItems: 'flex-start',
   },
   userDetail: {
     fontSize: 14,
     color: colors.textSecondary,
-    marginBottom: 2,
+    fontWeight: '500',
+    flex: 1,
   },
   userDate: {
     fontSize: 12,
-    color: colors.textSecondary,
-    marginTop: 4,
+    color: colors.textLight,
+    fontWeight: '400',
+    flex: 1,
   },
   userActions: {
-    flexDirection: 'row',
-    gap: 8,
+    flexDirection: 'column',
+    gap: 12,
+    marginLeft: 16,
   },
   actionButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    borderRadius: 12,
+    ...Platform.select({
+      ios: {
+        shadowColor: colors.shadow,
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.2,
+        shadowRadius: 4,
+      },
+      android: {
+        elevation: 4,
+      },
+    }),
+  },
+  actionButtonGradient: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
     justifyContent: 'center',
     alignItems: 'center',
   },
-  editButton: {
-    backgroundColor: colors.warning,
-  },
-  deleteButton: {
-    backgroundColor: colors.danger,
-  },
   emptyContainer: {
-    padding: 40,
+    padding: 60,
     alignItems: 'center',
+  },
+  emptyIcon: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 24,
+  },
+  emptyTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: colors.text,
+    marginBottom: 8,
   },
   emptyText: {
     fontSize: 16,
     color: colors.textSecondary,
+    textAlign: 'center',
+    lineHeight: 24,
   },
 
   // Modal Styles
   modalContainer: {
     flex: 1,
-    backgroundColor: colors.white,
   },
   modalHeader: {
     flexDirection: 'row',
@@ -741,25 +1179,76 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     padding: 20,
     borderBottomWidth: 1,
-    borderBottomColor: colors.border,
+    borderBottomColor: colors.borderLight,
+  },
+  modalTitleContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  modalTitleIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
   },
   modalTitle: {
     fontSize: 20,
     fontWeight: 'bold',
     color: colors.text,
   },
-  form: {
-    padding: 20,
-    gap: 16,
+  closeButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: colors.gray100,
   },
-  input: {
-    borderWidth: 1,
+  form: {
+    flex: 1,
+    padding: 20,
+    gap: 20,
+  },
+  inputGroup: {
+    gap: 8,
+  },
+  inputLabel: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: colors.text,
+    marginBottom: 4,
+  },
+  inputContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 2,
     borderColor: colors.border,
-    borderRadius: 8,
+    borderRadius: 12,
+    backgroundColor: colors.white,
     paddingHorizontal: 16,
     paddingVertical: 12,
+    ...Platform.select({
+      ios: {
+        shadowColor: colors.shadowLight,
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.1,
+        shadowRadius: 4,
+      },
+      android: {
+        elevation: 2,
+      },
+    }),
+  },
+  inputIcon: {
+    marginRight: 12,
+  },
+  input: {
+    flex: 1,
     fontSize: 16,
-    backgroundColor: colors.white,
+    color: colors.text,
   },
   inputError: {
     borderColor: colors.danger,
@@ -767,78 +1256,84 @@ const styles = StyleSheet.create({
   errorText: {
     color: colors.danger,
     fontSize: 12,
+    fontWeight: '500',
     marginTop: 4,
     marginLeft: 4,
   },
-  label: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: colors.text,
-    marginBottom: 8,
+  nameRow: {
+    flexDirection: 'row',
   },
   userTypeSelector: {
     gap: 8,
   },
-  userTypeButtons: {
-    flexDirection: 'row',
-    gap: 8,
-  },
-  userTypeButton: {
-    flex: 1,
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: colors.border,
-    alignItems: 'center',
-  },
-  userTypeButtonActive: {
-    backgroundColor: colors.primary,
-    borderColor: colors.primary,
-  },
-  userTypeButtonText: {
-    fontSize: 14,
-    color: colors.textSecondary,
-  },
-  userTypeButtonTextActive: {
-    color: colors.white,
-    fontWeight: '600',
-  },
   fixedUserType: {
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    borderRadius: 8,
-    backgroundColor: colors.danger,
+    flexDirection: 'row',
     alignItems: 'center',
+    paddingVertical: 16,
+    paddingHorizontal: 20,
+    borderRadius: 12,
+    gap: 8,
+    ...Platform.select({
+      ios: {
+        shadowColor: colors.danger,
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.2,
+        shadowRadius: 4,
+      },
+      android: {
+        elevation: 4,
+      },
+    }),
   },
   fixedUserTypeText: {
-    fontSize: 14,
+    fontSize: 16,
     color: colors.white,
     fontWeight: '600',
   },
   modalActions: {
     flexDirection: 'row',
-    gap: 12,
-    marginTop: 20,
+    gap: 16,
+    marginTop: 24,
+    paddingTop: 20,
+    borderTopWidth: 1,
+    borderTopColor: colors.borderLight,
   },
-  cancelButton: {
+  cancelButtonContainer: {
     flex: 1,
-    paddingVertical: 12,
-    borderRadius: 8,
-    borderWidth: 1,
+    paddingVertical: 16,
+    borderRadius: 12,
+    borderWidth: 2,
     borderColor: colors.border,
     alignItems: 'center',
+    backgroundColor: colors.white,
   },
   cancelButtonText: {
     fontSize: 16,
     color: colors.textSecondary,
+    fontWeight: '600',
+  },
+  createButtonContainer: {
+    flex: 1,
+    borderRadius: 12,
+    overflow: 'hidden',
+    ...Platform.select({
+      ios: {
+        shadowColor: colors.primary,
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.3,
+        shadowRadius: 8,
+      },
+      android: {
+        elevation: 6,
+      },
+    }),
   },
   createButton: {
-    flex: 1,
-    paddingVertical: 12,
-    borderRadius: 8,
-    backgroundColor: colors.primary,
+    flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 16,
+    gap: 8,
   },
   createButtonText: {
     fontSize: 16,
