@@ -1,3 +1,4 @@
+import { router } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
@@ -11,13 +12,12 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import { router } from 'expo-router';
 import ConfirmationModal from '../../components/ConfirmationModal';
 import FilterSidebar, { FilterSection, FilterState } from '../../components/FilterSidebar';
 import HeaderComponent from '../../components/HeaderComponent';
 import { supabase } from '../../lib/supabase';
 import { getUserWithProfile } from '../../services/auth';
-import { notifyUserAction, notifyAllAdmins } from '../../services/notifications';
+import { notifyAllAdmins, notifyUserAction } from '../../services/notifications';
 import { Database } from '../../types/database';
 
 const { width } = Dimensions.get('window');
@@ -221,10 +221,7 @@ export default function AdminProducts() {
 
       const { error } = await supabase
         .from('products')
-        .update({
-          status,
-          updated_at: new Date().toISOString()
-        })
+        .update({ status } as any)
         .eq('id', productId);
 
       if (error) throw error;
@@ -270,6 +267,10 @@ export default function AdminProducts() {
     } finally {
       setProcessing(null);
     }
+  };
+
+  const openProductDetails = (product: Product) => {
+    router.push(`/products/${product.id}` as any);
   };
 
   const getStatusColor = (status: string) => {
@@ -356,7 +357,11 @@ export default function AdminProducts() {
     const isProcessing = processing === product.id;
 
     return (
-      <View style={styles.compactProductCard}>
+      <TouchableOpacity
+        style={styles.compactProductCard}
+        onPress={() => openProductDetails(product)}
+        activeOpacity={0.8}
+      >
         {/* Product Image */}
         <View style={styles.compactImageContainer}>
           {product.image_url ? (
@@ -439,7 +444,7 @@ export default function AdminProducts() {
             </View>
           )}
         </View>
-      </View>
+      </TouchableOpacity>
     );
   };
 
@@ -452,7 +457,12 @@ export default function AdminProducts() {
     const isProcessing = processing === product.id;
 
     return (
-      <View key={product.id} style={styles.productCard}>
+      <TouchableOpacity
+        key={product.id}
+        style={styles.productCard}
+        onPress={() => openProductDetails(product)}
+        activeOpacity={0.8}
+      >
         {/* Product Image */}
         <View style={styles.imageContainer}>
           {product.image_url ? (
@@ -519,7 +529,7 @@ export default function AdminProducts() {
             </View>
           )}
         </View>
-      </View>
+      </TouchableOpacity>
     );
   };
 

@@ -1,25 +1,28 @@
-import { useLocalSearchParams, router } from 'expo-router';
-import React, { useEffect, useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   ScrollView,
+  TextInput,
   TouchableOpacity,
   Alert,
-  ActivityIndicator,
-  TextInput,
   KeyboardAvoidingView,
   Platform,
-  StatusBar,
-  Image,
   Dimensions,
+  Image,
+  ActivityIndicator,
 } from 'react-native';
+import { router, useLocalSearchParams } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
 import ConfirmationModal from '../../../../components/ConfirmationModal';
+import HeaderComponent from '../../../../components/HeaderComponent';
+import VerificationGuard from '../../../../components/VerificationGuard';
 import { supabase } from '../../../../lib/supabase';
-import { useAuth } from '../../../../contexts/AuthContext';
-import { notifyAllAdmins } from '../../../../services/notifications';
+import { getUserWithProfile } from '../../../../services/auth';
+import { Database } from '../../../../types/database';
+
+type Profile = Database['public']['Tables']['profiles']['Row'];
 
 const { width } = Dimensions.get('window');
 
@@ -43,22 +46,6 @@ const UNITS = [
   'gallons'
 ];
 
-// Farm2Go green color scheme
-const colors = {
-  primary: '#059669',
-  secondary: '#10b981',
-  success: '#10b981',
-  warning: '#f59e0b',
-  danger: '#ef4444',
-  white: '#ffffff',
-  background: '#f0f9f4',
-  surface: '#ffffff',
-  text: '#0f172a',
-  textSecondary: '#6b7280',
-  border: '#d1fae5',
-  shadow: 'rgba(0,0,0,0.1)',
-};
-
 interface Product {
   id: string;
   name: string;
@@ -69,21 +56,28 @@ interface Product {
   category: string;
   farmer_id: string;
   status: 'pending' | 'approved' | 'rejected';
-  created_at: string;
-  updated_at: string;
   image_url?: string;
 }
 
 export default function EditProductScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
-  const { user } = useAuth();
+  const [profile, setProfile] = useState<Profile | null>(null);
+  const [product, setProduct] = useState<Product | null>(null);
   const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [formData, setFormData] = useState({
+    name: '',
+    description: '',
+    price: '',
+    unit: 'kg',
+    quantity_available: '',
+    category: 'Vegetables',
+  });
+  const [errors, setErrors] = useState<{[key: string]: string}>({});
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [focusedInput, setFocusedInput] = useState<string | null>(null);
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const [uploadingImage, setUploadingImage] = useState(false);
-  const [errors, setErrors] = useState<{[key: string]: string}>({});
+  const [imageChanged, setImageChanged] = useState(false);
   const [confirmModal, setConfirmModal] = useState<{
     visible: boolean;
     title: string;
@@ -100,53 +94,60 @@ export default function EditProductScreen() {
     onConfirm: () => {},
   });
 
-  const [formData, setFormData] = useState({
-    name: '',
-    description: '',
-    price: '',
-    quantity_available: '',
-    unit: 'kg',
-    category: 'Vegetables',
-  });
+  useEffect(() => {
+    loadProfile();
+  }, []);
 
   useEffect(() => {
-    if (id) {
+    if (id && profile) {
       fetchProduct();
     }
-  }, [id]);
+  }, [id, profile]);
+
+  const loadProfile = async () => {
+    try {
+      const userData = await getUserWithProfile();
+      if (userData?.profile) {
+        setProfile(userData.profile);
+      }
+    } catch (error) {
+      console.error('Error loading profile:', error);
+    }
+  };
 
   const fetchProduct = async () => {
+    if (!profile) return;
+
     try {
       setLoading(true);
       const { data, error } = await supabase
         .from('products')
         .select('*')
-        .eq('id', id || '')
-        .eq('farmer_id', user?.id || '')
+        .eq('id', id)
+        .eq('farmer_id', profile.id)
         .single();
 
       if (error) {
         console.error('Error fetching product:', error);
-        setError('Failed to load product');
+        Alert.alert('Error', 'Product not found or you do not have permission to edit it');
+        router.back();
         return;
       }
 
-      const productData = data as any;
+      setProduct(data);
       setFormData({
-        name: productData.name,
-        description: productData.description,
-        price: productData.price.toString(),
-        quantity_available: productData.quantity_available.toString(),
-        unit: productData.unit,
-        category: productData.category,
+        name: data.name,
+        description: data.description || '',
+        price: data.price.toString(),
+        unit: data.unit,
+        quantity_available: data.quantity_available.toString(),
+        category: data.category,
       });
-
-      if (productData.image_url) {
-        setSelectedImage(productData.image_url);
-      }
+      setSelectedImage(data.image_url);
     } catch (err) {
       console.error('Product fetch error:', err);
-      setError('An error occurred while loading the product');
+      Alert.alert('Error', 'Failed to load product');
+      router.back();
     } finally {
       setLoading(false);
     }
@@ -192,6 +193,7 @@ export default function EditProductScreen() {
 
       if (!result.canceled && result.assets[0]) {
         setSelectedImage(result.assets[0].uri);
+        setImageChanged(true);
       }
     } catch (error) {
       console.error('Error picking image:', error);
@@ -215,6 +217,7 @@ export default function EditProductScreen() {
 
       if (!result.canceled && result.assets[0]) {
         setSelectedImage(result.assets[0].uri);
+        setImageChanged(true);
       }
     } catch (error) {
       console.error('Error taking photo:', error);
@@ -225,27 +228,35 @@ export default function EditProductScreen() {
   const uploadImage = async (imageUri: string): Promise<string | null> => {
     try {
       setUploadingImage(true);
-
-      // Create a unique filename
       const filename = `product_${Date.now()}_${Math.random().toString(36).substring(7)}.jpg`;
 
-      // Convert image to blob
-      const response = await fetch(imageUri);
-      const blob = await response.blob();
+      let fileData: any;
+      let mimeType = 'image/jpeg';
 
-      // Upload to Supabase storage
+      if (Platform.OS === 'web') {
+        const webFile = (setSelectedImage as any).webFile;
+        if (webFile) {
+          fileData = webFile;
+          mimeType = webFile.type;
+        } else {
+          const response = await fetch(imageUri);
+          fileData = await response.blob();
+        }
+      } else {
+        const response = await fetch(imageUri);
+        const arrayBuffer = await response.arrayBuffer();
+        fileData = new Uint8Array(arrayBuffer);
+      }
+
       const { data, error } = await supabase.storage
         .from('product-images')
-        .upload(filename, blob, {
-          contentType: 'image/jpeg',
+        .upload(filename, fileData, {
+          contentType: mimeType,
           upsert: false
         });
 
-      if (error) {
-        throw error;
-      }
+      if (error) throw error;
 
-      // Get public URL
       const { data: { publicUrl } } = supabase.storage
         .from('product-images')
         .getPublicUrl(data.path);
@@ -261,122 +272,108 @@ export default function EditProductScreen() {
   };
 
   const showImageOptions = () => {
-    Alert.alert(
-      'Update Product Image',
-      'Choose how you want to update the product image',
-      [
-        { text: 'Camera', onPress: takePhoto },
-        { text: 'Photo Library', onPress: pickImage },
-        { text: 'Cancel', style: 'cancel' },
-      ]
-    );
+    if (Platform.OS === 'web') {
+      const input = document.createElement('input');
+      input.type = 'file';
+      input.accept = 'image/*';
+      input.onchange = (event) => {
+        const file = (event.target as HTMLInputElement).files?.[0];
+        if (file) {
+          if (file.size > 5 * 1024 * 1024) {
+            Alert.alert('Error', 'Image size must be less than 5MB');
+            return;
+          }
+          if (!file.type.startsWith('image/')) {
+            Alert.alert('Error', 'Please select a valid image file');
+            return;
+          }
+          const imageUrl = URL.createObjectURL(file);
+          setSelectedImage(imageUrl);
+          setImageChanged(true);
+          (setSelectedImage as any).webFile = file;
+        }
+      };
+      input.click();
+    } else {
+      Alert.alert(
+        'Change Product Image',
+        'Choose how you want to change the product image',
+        [
+          { text: 'Camera', onPress: takePhoto },
+          { text: 'Photo Library', onPress: pickImage },
+          { text: 'Remove Image', onPress: () => { setSelectedImage(null); setImageChanged(true); }, style: 'destructive' },
+          { text: 'Cancel', style: 'cancel' },
+        ]
+      );
+    }
   };
 
-  const handleSave = async () => {
-    if (!validateForm()) {
-      return;
-    }
+  const handleSubmit = async () => {
+    if (!validateForm()) return;
 
-    // Show confirmation modal
     setConfirmModal({
       visible: true,
-      title: 'Save Changes?',
-      message: `Are you sure you want to save changes to "${formData.name}"? This will update the product details and notify admins.`,
+      title: 'Update Product?',
+      message: `Are you sure you want to update "${formData.name.trim()}" with these changes?`,
       isDestructive: false,
-      confirmText: 'Save Changes',
+      confirmText: 'Update Product',
       onConfirm: () => {
-        processSave();
+        processSubmit();
         setConfirmModal(prev => ({ ...prev, visible: false }));
       }
     });
   };
 
-  const processSave = async () => {
+  const processSubmit = async () => {
+    if (!product || !profile) return;
+
+    setIsSubmitting(true);
+
     try {
-      setSaving(true);
+      let imageUrl = product.image_url;
 
-      let imageUrl = selectedImage;
-
-      // Only upload if it's a new local image (not already a URL)
-      if (selectedImage && !selectedImage.startsWith('http')) {
-        imageUrl = await uploadImage(selectedImage);
-        if (!imageUrl) {
-          throw new Error('Failed to upload image');
+      if (imageChanged) {
+        if (selectedImage) {
+          const newImageUrl = await uploadImage(selectedImage);
+          if (!newImageUrl) {
+            throw new Error('Failed to upload image');
+          }
+          imageUrl = newImageUrl;
+        } else {
+          imageUrl = null;
         }
       }
 
-      const { error } = await (supabase as any)
+      const updatedData = {
+        name: formData.name.trim(),
+        description: formData.description.trim(),
+        price: parseFloat(formData.price),
+        unit: formData.unit,
+        quantity_available: parseInt(formData.quantity_available),
+        category: formData.category,
+        image_url: imageUrl,
+        status: product.status === 'rejected' ? 'pending' : product.status,
+        updated_at: new Date().toISOString(),
+      };
+
+      const { error } = await supabase
         .from('products')
-        .update({
-          name: formData.name.trim(),
-          description: formData.description.trim(),
-          price: parseFloat(formData.price),
-          quantity_available: parseInt(formData.quantity_available),
-          unit: formData.unit,
-          category: formData.category,
-          image_url: imageUrl,
-          updated_at: new Date().toISOString(),
-        })
+        .update(updatedData)
         .eq('id', id)
-        .eq('farmer_id', user?.id);
+        .eq('farmer_id', profile.id);
 
-      if (error) {
-        console.error('Error updating product:', error);
-        Alert.alert('Error', 'Failed to update product');
-        return;
-      }
+      if (error) throw error;
 
-      // Send notifications about product update
-      try {
-        console.log('📧 Sending product update notifications...');
-
-        // Get user profile for notifications
-        const { data: userProfile } = await supabase
-          .from('profiles')
-          .select('first_name, last_name, barangay')
-          .eq('id', user?.id || '')
-          .single();
-
-        const farmerName = userProfile
-          ? `${(userProfile as any).first_name} ${(userProfile as any).last_name}`
-          : 'A farmer';
-
-        // Notify admins about product update
-        await notifyAllAdmins(
-          'Product Updated',
-          `${farmerName} updated their product: ${formData.name.trim()}. Changes include pricing, quantity, or details.`,
-          user?.id || '',
-          {
-            productId: id,
-            productName: formData.name.trim(),
-            farmerName,
-            action: 'product_updated',
-            changes: {
-              name: formData.name.trim(),
-              price: parseFloat(formData.price),
-              quantity: parseInt(formData.quantity_available),
-              category: formData.category
-            }
-          }
-        );
-
-        console.log('✅ Product update notifications sent');
-      } catch (notifError) {
-        console.error('⚠️ Failed to send product update notifications:', notifError);
-        // Don't fail the product update if notifications fail
-      }
-
-      Alert.alert('Success', 'Product updated successfully', [
-        {
-          text: 'OK',
-          onPress: () => router.back(),
-        },
-      ]);
-    } catch (err) {
-      console.error('Update error:', err);
-      Alert.alert('Error', 'An error occurred while updating the product');
+      Alert.alert(
+        'Success',
+        'Product updated successfully!',
+        [{ text: 'OK', onPress: () => router.back() }]
+      );
+    } catch (error) {
+      console.error('Error updating product:', error);
+      Alert.alert('Error', 'Failed to update product. Please try again.');
     } finally {
-      setSaving(false);
+      setIsSubmitting(false);
     }
   };
 
@@ -417,7 +414,7 @@ export default function EditProductScreen() {
         keyboardType={options?.keyboardType}
       />
       {errors[key] && (
-        <Text style={styles.fieldErrorText}>{errors[key]}</Text>
+        <Text style={styles.errorText}>{errors[key]}</Text>
       )}
     </View>
   );
@@ -460,512 +457,227 @@ export default function EditProductScreen() {
     </View>
   );
 
+  const getStatusText = (status: string) => {
+    switch (status) {
+      case 'approved': return 'Approved (Live)';
+      case 'pending': return 'Pending Review';
+      case 'rejected': return 'Rejected';
+      default: return status;
+    }
+  };
+
+  const getStatusBackgroundColor = (status: string) => {
+    switch (status) {
+      case 'approved': return '#dcfce7';
+      case 'pending': return '#fef3c7';
+      case 'rejected': return '#fee2e2';
+      default: return '#f3f4f6';
+    }
+  };
+
+  const getStatusTextColor = (status: string) => {
+    switch (status) {
+      case 'approved': return '#166534';
+      case 'pending': return '#92400e';
+      case 'rejected': return '#991b1b';
+      default: return '#374151';
+    }
+  };
+
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
-        <StatusBar barStyle="light-content" backgroundColor={colors.primary} />
-        <View style={styles.loadingContent}>
-          <ActivityIndicator size="large" color={colors.primary} />
-          <Text style={styles.loadingText}>Loading product...</Text>
-        </View>
+        <ActivityIndicator size="large" color="#10b981" />
+        <Text style={styles.loadingText}>Loading product...</Text>
       </View>
     );
   }
 
-  if (error) {
+  if (!profile || !product) {
     return (
-      <View style={styles.errorContainer}>
-        <StatusBar barStyle="light-content" backgroundColor={colors.primary} />
-        <View style={styles.errorContent}>
-          <Text style={styles.errorIcon}>⚠️</Text>
-          <Text style={styles.errorText}>{error}</Text>
-          <TouchableOpacity style={styles.primaryButton} onPress={() => router.back()}>
-            <Text style={styles.primaryButtonText}>Go Back</Text>
-          </TouchableOpacity>
-        </View>
+      <View style={styles.loadingContainer}>
+        <Text style={styles.errorText}>Product not found</Text>
       </View>
     );
   }
 
   return (
-    <KeyboardAvoidingView
-      style={styles.container}
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-    >
-      <StatusBar barStyle="light-content" backgroundColor={colors.primary} />
+    <VerificationGuard userId={profile.id} userType="farmer" action="sell">
+      <KeyboardAvoidingView style={styles.container} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
+        <HeaderComponent profile={profile} showAddButton={false} showMessages={true} showNotifications={true} />
 
-      <View style={styles.header}>
-        <TouchableOpacity
-          style={styles.backButton}
-          onPress={() => router.back()}
-        >
-          <Text style={styles.backButtonText}>← Back</Text>
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Edit Product</Text>
-        <View style={styles.headerSpacer} />
-      </View>
+        <ScrollView style={styles.content} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+          <View style={styles.form}>
+            <Text style={styles.formTitle}>Edit Product</Text>
+            <Text style={styles.formSubtitle}>Update your product details. All fields marked with * are required.</Text>
 
-      <ScrollView
-        style={styles.content}
-        showsVerticalScrollIndicator={false}
-        keyboardShouldPersistTaps="handled"
-      >
-        <View style={styles.form}>
-          <Text style={styles.formTitle}>Update Product Information</Text>
-          <Text style={styles.formSubtitle}>
-            Edit your product details. All fields marked with * are required.
-          </Text>
-
-          {/* Image Section */}
-          <View style={styles.inputContainer}>
-            <Text style={styles.inputLabel}>Product Image</Text>
-            <TouchableOpacity
-              style={styles.imagePickerButton}
-              onPress={showImageOptions}
-              disabled={uploadingImage}
-            >
-              {selectedImage ? (
-                <View style={styles.imagePreviewContainer}>
-                  <Image source={{ uri: selectedImage }} style={styles.imagePreview} />
-                  <View style={styles.imageOverlay}>
-                    <Text style={styles.changeImageText}>Tap to change</Text>
-                  </View>
-                </View>
-              ) : (
-                <View style={styles.imagePlaceholder}>
-                  <Text style={styles.imagePlaceholderIcon}>📷</Text>
-                  <Text style={styles.imagePlaceholderText}>Add Product Photo</Text>
-                  <Text style={styles.imagePlaceholderSubtext}>Tap to select from gallery or take photo</Text>
-                </View>
-              )}
-              {uploadingImage && (
-                <View style={styles.uploadingOverlay}>
-                  <ActivityIndicator size="large" color={colors.primary} />
-                  <Text style={styles.uploadingText}>Uploading...</Text>
-                </View>
-              )}
-            </TouchableOpacity>
-          </View>
-
-          {renderInput('name', 'Product Name')}
-          {renderInput('description', 'Description', {
-            multiline: true,
-            numberOfLines: 4,
-          })}
-
-          <View style={styles.row}>
-            <View style={[styles.inputContainer, { flex: 1, marginRight: 12 }]}>
-              <Text style={styles.inputLabel}>
-                Price
-                <Text style={styles.requiredStar}> *</Text>
-              </Text>
-              <View style={styles.priceInputContainer}>
-                <Text style={styles.currencySymbol}>₱</Text>
-                <TextInput
-                  style={[
-                    styles.input,
-                    styles.priceInput,
-                    focusedInput === 'price' && styles.inputFocused,
-                    errors.price && styles.inputError,
-                  ]}
-                  value={formData.price}
-                  onChangeText={(text) => {
-                    setFormData(prev => ({ ...prev, price: text }));
-                    if (errors.price) {
-                      setErrors(prev => ({ ...prev, price: '' }));
-                    }
-                  }}
-                  placeholder="0.00"
-                  placeholderTextColor="#9ca3af"
-                  onFocus={() => setFocusedInput('price')}
-                  onBlur={() => setFocusedInput(null)}
-                  keyboardType="decimal-pad"
-                />
+            {product.status && (
+              <View style={[styles.statusInfo, { backgroundColor: getStatusBackgroundColor(product.status) }]}>
+                <Text style={[styles.statusText, { color: getStatusTextColor(product.status) }]}>
+                  Current Status: {getStatusText(product.status)}
+                </Text>
+                {product.status === 'rejected' && (
+                  <Text style={styles.statusSubtext}>
+                    This product was rejected. Updating it will resubmit for review.
+                  </Text>
+                )}
               </View>
-              {errors.price && (
-                <Text style={styles.fieldErrorText}>{errors.price}</Text>
-              )}
+            )}
+
+            <View style={styles.inputContainer}>
+              <Text style={styles.inputLabel}>Product Image</Text>
+              <TouchableOpacity style={styles.imagePickerButton} onPress={showImageOptions} disabled={uploadingImage}>
+                {selectedImage ? (
+                  <View style={styles.imagePreviewContainer}>
+                    <Image source={{ uri: selectedImage }} style={styles.imagePreview} />
+                    <View style={styles.imageOverlay}>
+                      <Text style={styles.changeImageText}>Tap to change</Text>
+                    </View>
+                  </View>
+                ) : (
+                  <View style={styles.imagePlaceholder}>
+                    <Text style={styles.imagePlaceholderIcon}>📷</Text>
+                    <Text style={styles.imagePlaceholderText}>Add Product Photo</Text>
+                    <Text style={styles.imagePlaceholderSubtext}>
+                      {Platform.OS === 'web' ? 'Click to select image file' : 'Tap to select from gallery or take photo'}
+                    </Text>
+                  </View>
+                )}
+                {uploadingImage && (
+                  <View style={styles.uploadingOverlay}>
+                    <ActivityIndicator size="large" color="#10b981" />
+                    <Text style={styles.uploadingText}>Uploading...</Text>
+                  </View>
+                )}
+              </TouchableOpacity>
             </View>
 
-            <View style={[styles.inputContainer, { flex: 1, marginLeft: 12 }]}>
-              {renderInput('quantity_available', 'Quantity', {
-                keyboardType: 'numeric',
-              })}
+            {renderInput('name', 'Product Name')}
+            {renderInput('description', 'Description', { multiline: true, numberOfLines: 4 })}
+
+            <View style={styles.row}>
+              <View style={[styles.inputContainer, { flex: 1, marginRight: 12 }]}>
+                <Text style={styles.inputLabel}>
+                  Price<Text style={styles.requiredStar}> *</Text>
+                </Text>
+                <View style={styles.priceInputContainer}>
+                  <Text style={styles.currencySymbol}>₱</Text>
+                  <TextInput
+                    style={[
+                      styles.input,
+                      styles.priceInput,
+                      focusedInput === 'price' && styles.inputFocused,
+                      errors.price && styles.inputError,
+                    ]}
+                    value={formData.price}
+                    onChangeText={(text) => {
+                      setFormData(prev => ({ ...prev, price: text }));
+                      if (errors.price) {
+                        setErrors(prev => ({ ...prev, price: '' }));
+                      }
+                    }}
+                    placeholder="0.00"
+                    placeholderTextColor="#9ca3af"
+                    onFocus={() => setFocusedInput('price')}
+                    onBlur={() => setFocusedInput(null)}
+                    keyboardType="decimal-pad"
+                  />
+                </View>
+                {errors.price && <Text style={styles.errorText}>{errors.price}</Text>}
+              </View>
+
+              <View style={[styles.inputContainer, { flex: 1, marginLeft: 12 }]}>
+                {renderInput('quantity_available', 'Quantity', { keyboardType: 'numeric' })}
+              </View>
+            </View>
+
+            {renderSelector('unit', 'Unit', UNITS)}
+            {renderSelector('category', 'Category', CATEGORIES)}
+
+            <View style={styles.infoBox}>
+              <Text style={styles.infoTitle}>📝 Update Notes</Text>
+              <Text style={styles.infoText}>
+                Significant changes to your product may require admin review before the updates appear in the marketplace.
+              </Text>
             </View>
           </View>
+        </ScrollView>
 
-          {renderSelector('unit', 'Unit', UNITS)}
-          {renderSelector('category', 'Category', CATEGORIES)}
+        <View style={styles.footer}>
+          <TouchableOpacity style={styles.cancelButton} onPress={() => router.back()} disabled={isSubmitting}>
+            <Text style={styles.cancelButtonText}>Cancel</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.submitButton, isSubmitting && styles.submitButtonDisabled]}
+            onPress={handleSubmit}
+            disabled={isSubmitting}
+          >
+            <Text style={styles.submitButtonText}>
+              {isSubmitting ? 'Updating...' : 'Update Product'}
+            </Text>
+          </TouchableOpacity>
         </View>
-      </ScrollView>
 
-      <View style={styles.footer}>
-        <TouchableOpacity
-          style={styles.cancelButton}
-          onPress={() => router.back()}
-          disabled={saving}
-        >
-          <Text style={styles.cancelButtonText}>Cancel</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[styles.saveButton, saving && styles.saveButtonDisabled]}
-          onPress={handleSave}
-          disabled={saving}
-        >
-          <Text style={styles.saveButtonText}>
-            {saving ? 'Saving...' : 'Save Changes'}
-          </Text>
-        </TouchableOpacity>
-      </View>
-
-      <ConfirmationModal
-        visible={confirmModal.visible}
-        title={confirmModal.title}
-        message={confirmModal.message}
-        confirmText={confirmModal.confirmText}
-        isDestructive={confirmModal.isDestructive}
-        onConfirm={confirmModal.onConfirm}
-        onCancel={() => setConfirmModal(prev => ({ ...prev, visible: false }))}
-      />
-    </KeyboardAvoidingView>
+        <ConfirmationModal
+          visible={confirmModal.visible}
+          title={confirmModal.title}
+          message={confirmModal.message}
+          confirmText={confirmModal.confirmText}
+          isDestructive={confirmModal.isDestructive}
+          onConfirm={confirmModal.onConfirm}
+          onCancel={() => setConfirmModal(prev => ({ ...prev, visible: false }))}
+        />
+      </KeyboardAvoidingView>
+    </VerificationGuard>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: colors.background,
-  },
-
-  // Loading States
-  loadingContainer: {
-    flex: 1,
-    backgroundColor: colors.background,
-  },
-  loadingContent: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  loadingText: {
-    marginTop: 16,
-    fontSize: 16,
-    color: colors.textSecondary,
-    fontWeight: '500',
-  },
-
-  // Error States
-  errorContainer: {
-    flex: 1,
-    backgroundColor: colors.background,
-  },
-  errorContent: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingHorizontal: 32,
-  },
-  errorIcon: {
-    fontSize: 64,
-    marginBottom: 24,
-  },
-  errorText: {
-    fontSize: 18,
-    color: colors.danger,
-    textAlign: 'center',
-    marginBottom: 32,
-    lineHeight: 24,
-  },
-
-  // Header
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingTop: Platform.OS === 'ios' ? 50 : (StatusBar.currentHeight || 0) + 10,
-    paddingBottom: 16,
-    paddingHorizontal: 20,
-    backgroundColor: colors.primary,
-    elevation: 4,
-    shadowColor: colors.shadow,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-  },
-  backButton: {
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    borderRadius: 8,
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
-  },
-  backButtonText: {
-    color: colors.white,
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  headerTitle: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: colors.white,
-    letterSpacing: -0.3,
-  },
-  headerSpacer: {
-    width: 80,
-  },
-
-  // Content
-  content: {
-    flex: 1,
-    backgroundColor: colors.surface,
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    marginTop: -15,
-  },
-
-  // Form
-  form: {
-    padding: 24,
-    paddingTop: 32,
-  },
-  formTitle: {
-    fontSize: 28,
-    fontWeight: '700',
-    color: colors.text,
-    marginBottom: 8,
-    letterSpacing: -0.5,
-  },
-  formSubtitle: {
-    fontSize: 16,
-    color: colors.textSecondary,
-    marginBottom: 32,
-    lineHeight: 24,
-  },
-
-  // Input Fields
-  inputContainer: {
-    marginBottom: 24,
-  },
-  inputLabel: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: colors.text,
-    marginBottom: 8,
-  },
-  requiredStar: {
-    color: colors.danger,
-  },
-  input: {
-    borderWidth: 2,
-    borderColor: colors.border,
-    borderRadius: 12,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    fontSize: 16,
-    color: colors.text,
-    backgroundColor: colors.surface,
-  },
-  inputFocused: {
-    borderColor: colors.primary,
-    shadowColor: colors.primary,
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
-    elevation: 2,
-  },
-  inputError: {
-    borderColor: colors.danger,
-  },
-  multilineInput: {
-    minHeight: 100,
-    textAlignVertical: 'top',
-  },
-  priceInputContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    borderWidth: 2,
-    borderColor: colors.border,
-    borderRadius: 12,
-    backgroundColor: colors.surface,
-  },
-  currencySymbol: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: colors.textSecondary,
-    paddingLeft: 16,
-    paddingRight: 8,
-  },
-  priceInput: {
-    flex: 1,
-    borderWidth: 0,
-    paddingLeft: 0,
-  },
-  row: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-  },
-
-  // Selector
-  selectorContainer: {
-    paddingVertical: 4,
-    gap: 12,
-  },
-  selectorOption: {
-    paddingHorizontal: 20,
-    paddingVertical: 12,
-    borderRadius: 24,
-    backgroundColor: '#f3f4f6',
-    borderWidth: 2,
-    borderColor: colors.border,
-  },
-  selectorOptionSelected: {
-    backgroundColor: colors.primary,
-    borderColor: colors.primary,
-  },
-  selectorOptionText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: colors.textSecondary,
-  },
-  selectorOptionTextSelected: {
-    color: colors.white,
-  },
-  fieldErrorText: {
-    fontSize: 14,
-    color: colors.danger,
-    marginTop: 6,
-    fontWeight: '500',
-  },
-
-  // Image Picker
-  imagePickerButton: {
-    borderWidth: 2,
-    borderColor: colors.border,
-    borderRadius: 12,
-    borderStyle: 'dashed',
-    backgroundColor: colors.surface,
-    overflow: 'hidden',
-  },
-  imagePlaceholder: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 48,
-    paddingHorizontal: 24,
-  },
-  imagePlaceholderIcon: {
-    fontSize: 48,
-    marginBottom: 16,
-  },
-  imagePlaceholderText: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: colors.text,
-    marginBottom: 8,
-  },
-  imagePlaceholderSubtext: {
-    fontSize: 14,
-    color: colors.textSecondary,
-    textAlign: 'center',
-    lineHeight: 20,
-  },
-  imagePreviewContainer: {
-    position: 'relative',
-    aspectRatio: 1,
-    width: '100%',
-  },
-  imagePreview: {
-    width: '100%',
-    height: '100%',
-    resizeMode: 'cover',
-  },
-  imageOverlay: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    backgroundColor: 'rgba(0, 0, 0, 0.7)',
-    paddingVertical: 12,
-    alignItems: 'center',
-  },
-  changeImageText: {
-    color: colors.white,
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  uploadingOverlay: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: 'rgba(255, 255, 255, 0.9)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  uploadingText: {
-    marginTop: 12,
-    fontSize: 16,
-    fontWeight: '600',
-    color: colors.primary,
-  },
-
-  // Footer
-  footer: {
-    flexDirection: 'row',
-    padding: 24,
-    paddingTop: 16,
-    backgroundColor: colors.surface,
-    borderTopWidth: 1,
-    borderTopColor: colors.border,
-    gap: 16,
-  },
-  cancelButton: {
-    flex: 1,
-    paddingVertical: 16,
-    borderRadius: 12,
-    alignItems: 'center',
-    backgroundColor: '#f8fafc',
-    borderWidth: 2,
-    borderColor: colors.border,
-  },
-  cancelButtonText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: colors.textSecondary,
-  },
-  saveButton: {
-    flex: 2,
-    paddingVertical: 16,
-    borderRadius: 12,
-    alignItems: 'center',
-    backgroundColor: colors.primary,
-    shadowColor: colors.primary,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 4,
-  },
-  saveButtonDisabled: {
-    backgroundColor: '#9ca3af',
-    shadowOpacity: 0,
-    elevation: 0,
-  },
-  saveButtonText: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: colors.white,
-    letterSpacing: 0.5,
-  },
-
-  // Utility
-  primaryButton: {
-    backgroundColor: colors.primary,
-    paddingHorizontal: 24,
-    paddingVertical: 12,
-    borderRadius: 8,
-  },
-  primaryButtonText: {
-    color: colors.white,
-    fontSize: 16,
-    fontWeight: '600',
-  },
+  loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#f8fafc' },
+  loadingText: { marginTop: 16, fontSize: 16, color: '#6b7280', fontWeight: '500' },
+  container: { flex: 1, backgroundColor: '#f8fafc' },
+  content: { flex: 1, backgroundColor: '#ffffff', borderTopLeftRadius: 20, borderTopRightRadius: 20, marginTop: -15 },
+  form: { padding: 24, paddingTop: 32 },
+  formTitle: { fontSize: 28, fontWeight: '700', color: '#111827', marginBottom: 8, letterSpacing: -0.5 },
+  formSubtitle: { fontSize: 16, color: '#6b7280', marginBottom: 24, lineHeight: 24 },
+  statusInfo: { borderRadius: 12, padding: 16, marginBottom: 24, borderWidth: 1, borderColor: 'rgba(0,0,0,0.1)' },
+  statusText: { fontSize: 16, fontWeight: '600', marginBottom: 4 },
+  statusSubtext: { fontSize: 14, color: '#6b7280' },
+  inputContainer: { marginBottom: 24 },
+  inputLabel: { fontSize: 16, fontWeight: '600', color: '#374151', marginBottom: 8 },
+  requiredStar: { color: '#ef4444' },
+  input: { borderWidth: 2, borderColor: '#e5e7eb', borderRadius: 12, paddingHorizontal: 16, paddingVertical: 14, fontSize: 16, color: '#111827', backgroundColor: '#ffffff' },
+  inputFocused: { borderColor: '#10b981', shadowColor: '#10b981', shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.2, shadowRadius: 4, elevation: 2 },
+  inputError: { borderColor: '#ef4444' },
+  multilineInput: { minHeight: 100, textAlignVertical: 'top' },
+  priceInputContainer: { flexDirection: 'row', alignItems: 'center', borderWidth: 2, borderColor: '#e5e7eb', borderRadius: 12, backgroundColor: '#ffffff' },
+  currencySymbol: { fontSize: 18, fontWeight: '600', color: '#6b7280', paddingLeft: 16, paddingRight: 8 },
+  priceInput: { flex: 1, borderWidth: 0, paddingLeft: 0 },
+  row: { flexDirection: 'row', alignItems: 'flex-start' },
+  selectorContainer: { paddingVertical: 4, gap: 12 },
+  selectorOption: { paddingHorizontal: 20, paddingVertical: 12, borderRadius: 24, backgroundColor: '#f3f4f6', borderWidth: 2, borderColor: '#e5e7eb' },
+  selectorOptionSelected: { backgroundColor: '#10b981', borderColor: '#10b981' },
+  selectorOptionText: { fontSize: 14, fontWeight: '600', color: '#6b7280' },
+  selectorOptionTextSelected: { color: '#ffffff' },
+  errorText: { fontSize: 14, color: '#ef4444', marginTop: 6, fontWeight: '500' },
+  infoBox: { backgroundColor: '#f0f9ff', borderRadius: 16, padding: 20, marginTop: 8, borderWidth: 1, borderColor: '#e0f2fe' },
+  infoTitle: { fontSize: 16, fontWeight: '700', color: '#0369a1', marginBottom: 8 },
+  infoText: { fontSize: 14, color: '#0369a1', lineHeight: 20 },
+  footer: { flexDirection: 'row', padding: 24, paddingTop: 16, backgroundColor: '#ffffff', borderTopWidth: 1, borderTopColor: '#f1f5f9', gap: 16 },
+  cancelButton: { flex: 1, paddingVertical: 16, borderRadius: 12, alignItems: 'center', backgroundColor: '#f8fafc', borderWidth: 2, borderColor: '#e5e7eb' },
+  cancelButtonText: { fontSize: 16, fontWeight: '600', color: '#6b7280' },
+  submitButton: { flex: 2, paddingVertical: 16, borderRadius: 12, alignItems: 'center', backgroundColor: '#10b981', shadowColor: '#10b981', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 8, elevation: 4 },
+  submitButtonDisabled: { backgroundColor: '#9ca3af', shadowOpacity: 0, elevation: 0 },
+  submitButtonText: { fontSize: 16, fontWeight: '700', color: '#ffffff', letterSpacing: 0.5 },
+  imagePickerButton: { borderWidth: 2, borderColor: '#e5e7eb', borderRadius: 12, borderStyle: 'dashed', backgroundColor: '#ffffff', overflow: 'hidden' },
+  imagePlaceholder: { alignItems: 'center', justifyContent: 'center', paddingVertical: 48, paddingHorizontal: 24 },
+  imagePlaceholderIcon: { fontSize: 48, marginBottom: 16 },
+  imagePlaceholderText: { fontSize: 18, fontWeight: '600', color: '#374151', marginBottom: 8 },
+  imagePlaceholderSubtext: { fontSize: 14, color: '#6b7280', textAlign: 'center', lineHeight: 20 },
+  imagePreviewContainer: { position: 'relative', aspectRatio: 1, width: '100%' },
+  imagePreview: { width: '100%', height: '100%', resizeMode: 'cover' },
+  imageOverlay: { position: 'absolute', bottom: 0, left: 0, right: 0, backgroundColor: 'rgba(0, 0, 0, 0.7)', paddingVertical: 12, alignItems: 'center' },
+  changeImageText: { color: '#ffffff', fontSize: 14, fontWeight: '600' },
+  uploadingOverlay: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(255, 255, 255, 0.9)', alignItems: 'center', justifyContent: 'center' },
+  uploadingText: { marginTop: 12, fontSize: 16, fontWeight: '600', color: '#10b981' },
 });

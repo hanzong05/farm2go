@@ -12,13 +12,13 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import ConfirmationModal from '../../../components/ConfirmationModal';
-import PurchaseSuccessModal from '../../../components/PurchaseSuccessModal';
-import VerificationGuard from '../../../components/VerificationGuard';
-import { useAuth } from '../../../contexts/AuthContext';
-import { supabase } from '../../../lib/supabase';
-import { notifyOrderCreated, notifyLowStock } from '../../../services/notifications';
-import { generateUniquePurchaseCode } from '../../../utils/purchaseCode';
+import ConfirmationModal from '../../components/ConfirmationModal';
+import PurchaseSuccessModal from '../../components/PurchaseSuccessModal';
+import VerificationGuard from '../../components/VerificationGuard';
+import { useAuth } from '../../contexts/AuthContext';
+import { supabase } from '../../lib/supabase';
+import { notifyOrderCreated, notifyLowStock } from '../../services/notifications';
+import { generateUniquePurchaseCode } from '../../utils/purchaseCode';
 
 interface Product {
   id: string;
@@ -37,10 +37,18 @@ interface Product {
   };
 }
 
+interface Profile {
+  id: string;
+  user_type: 'buyer' | 'farmer' | 'admin' | 'super-admin';
+  first_name: string | null;
+  last_name: string | null;
+}
+
 export default function OrderProductScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { user } = useAuth();
   const [product, setProduct] = useState<Product | null>(null);
+  const [userProfile, setUserProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
   const [ordering, setOrdering] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -65,14 +73,35 @@ export default function OrderProductScreen() {
   const [orderData, setOrderData] = useState({
     quantity: '1',
     notes: '',
-    deliveryAddress: '',
   });
 
   useEffect(() => {
-    if (id) {
+    if (id && user) {
+      fetchUserProfile();
       fetchProduct();
     }
-  }, [id]);
+  }, [id, user]);
+
+  const fetchUserProfile = async () => {
+    if (!user) return;
+
+    try {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('id, user_type, first_name, last_name')
+        .eq('id', user.id)
+        .single();
+
+      if (error) {
+        console.error('Error fetching user profile:', error);
+        return;
+      }
+
+      setUserProfile(data);
+    } catch (err) {
+      console.error('User profile fetch error:', err);
+    }
+  };
 
   const fetchProduct = async () => {
     try {
@@ -98,6 +127,12 @@ export default function OrderProductScreen() {
         return;
       }
 
+      // Prevent users from ordering their own products
+      if (user && data.farmer_id === user.id) {
+        setError('You cannot order your own products');
+        return;
+      }
+
       setProduct(data);
     } catch (err) {
       console.error('Product fetch error:', err);
@@ -114,7 +149,7 @@ export default function OrderProductScreen() {
   };
 
   const handleOrder = async () => {
-    if (!product || !user) return;
+    if (!product || !user || !userProfile) return;
 
     const quantity = parseInt(orderData.quantity);
 
@@ -125,11 +160,6 @@ export default function OrderProductScreen() {
 
     if (quantity > product.quantity_available) {
       Alert.alert('Error', 'Requested quantity exceeds available stock');
-      return;
-    }
-
-    if (!orderData.deliveryAddress.trim()) {
-      Alert.alert('Error', 'Please enter a delivery address');
       return;
     }
 
@@ -149,7 +179,7 @@ export default function OrderProductScreen() {
   };
 
   const processOrder = async () => {
-    if (!product || !user) return;
+    if (!product || !user || !userProfile) return;
 
     const quantity = parseInt(orderData.quantity);
 
@@ -168,7 +198,7 @@ export default function OrderProductScreen() {
           product_id: product.id,
           quantity: quantity,
           total_price: calculateTotal(),
-          delivery_address: orderData.deliveryAddress,
+          delivery_address: product.profiles?.barangay || 'Delivery location not available',
           notes: orderData.notes,
           status: 'pending',
           purchase_code: uniquePurchaseCode,
@@ -185,13 +215,6 @@ export default function OrderProductScreen() {
 
       // Send notifications about order creation
       try {
-        // Get buyer profile for notification
-        const { data: buyerProfile } = await supabase
-          .from('profiles')
-          .select('first_name, last_name')
-          .eq('id', user.id)
-          .single();
-
         await notifyOrderCreated(
           newOrder.id,
           user.id,
@@ -199,7 +222,7 @@ export default function OrderProductScreen() {
           {
             totalAmount: calculateTotal(),
             itemCount: 1, // Single product order
-            buyerName: buyerProfile ? `${buyerProfile.first_name} ${buyerProfile.last_name}` : undefined,
+            buyerName: userProfile ? `${userProfile.first_name} ${userProfile.last_name}` : undefined,
             farmerName: product.profiles ? `${product.profiles.first_name} ${product.profiles.last_name}` : undefined,
             productName: product.name,
             farmerBarangay: product.profiles?.barangay || undefined
@@ -261,6 +284,23 @@ export default function OrderProductScreen() {
     }
   };
 
+  const getMyOrdersRoute = () => {
+    if (!userProfile) return '/';
+
+    switch (userProfile.user_type) {
+      case 'buyer':
+        return '/buyer/my-orders';
+      case 'farmer':
+        return '/farmer/my-orders';
+      default:
+        return '/';
+    }
+  };
+
+  const getUserTypeForVerification = () => {
+    return userProfile?.user_type === 'farmer' ? 'farmer' : 'buyer';
+  };
+
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
@@ -281,7 +321,7 @@ export default function OrderProductScreen() {
     );
   }
 
-  if (!user) {
+  if (!user || !userProfile) {
     return (
       <View style={styles.loadingContainer}>
         <ActivityIndicator size="large" color="#10b981" />
@@ -293,7 +333,7 @@ export default function OrderProductScreen() {
   return (
     <VerificationGuard
       userId={user.id}
-      userType="buyer"
+      userType={getUserTypeForVerification()}
       action="buy"
     >
       <KeyboardAvoidingView
@@ -341,18 +381,15 @@ export default function OrderProductScreen() {
           </View>
 
           <View style={styles.inputGroup}>
-            <Text style={styles.label}>
-              Delivery Address <Text style={styles.required}>*</Text>
-            </Text>
-            <TextInput
-              style={[styles.input, styles.textArea]}
-              value={orderData.deliveryAddress}
-              onChangeText={(text) => setOrderData({ ...orderData, deliveryAddress: text })}
-              placeholder="Enter your full delivery address"
-              placeholderTextColor="#9ca3af"
-              multiline
-              numberOfLines={3}
-            />
+            <Text style={styles.label}>Delivery Location</Text>
+            <View style={styles.deliveryLocationDisplay}>
+              <Text style={styles.deliveryLocationText}>
+                📍 {product.profiles?.barangay || 'Delivery location not available'}
+              </Text>
+              <Text style={styles.deliveryLocationNote}>
+                Delivery will be arranged within the farmer's barangay
+              </Text>
+            </View>
           </View>
 
           <View style={styles.inputGroup}>
@@ -414,7 +451,7 @@ export default function OrderProductScreen() {
           }}
           onViewOrders={() => {
             setShowSuccessModal(false);
-            router.push('/buyer/my-orders');
+            router.push(getMyOrdersRoute());
           }}
           onBackToMarketplace={() => {
             setShowSuccessModal(false);
@@ -561,6 +598,24 @@ const styles = StyleSheet.create({
   textArea: {
     height: 80,
     textAlignVertical: 'top',
+  },
+  deliveryLocationDisplay: {
+    backgroundColor: '#f9fafb',
+    borderRadius: 8,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+  },
+  deliveryLocationText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#059669',
+    marginBottom: 4,
+  },
+  deliveryLocationNote: {
+    fontSize: 14,
+    color: '#6b7280',
+    fontStyle: 'italic',
   },
   totalSection: {
     borderTopWidth: 1,

@@ -541,7 +541,7 @@ const styles = StyleSheet.create({
     right: 0,
     bottom: 0,
     backgroundColor: 'transparent',
-    zIndex: 5,
+    zIndex: 9999,
     ...Platform.select({
       web: {},
       default: {
@@ -563,7 +563,7 @@ const styles = StyleSheet.create({
         boxShadow: '0 8px 32px rgba(0,0,0,0.12), 0 4px 16px rgba(0,0,0,0.08)',
       },
       default: {
-        elevation: 8,
+        elevation: 999,
         shadowColor: colors.shadow,
         shadowOffset: { width: 0, height: 4 },
         shadowOpacity: 0.15,

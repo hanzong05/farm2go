@@ -89,17 +89,33 @@ export default function MarketplaceScreen() {
 
   const loadData = async (page = 0, pageSize = 50) => {
     try {
-      // Get user profile only once (optional for marketplace)
+      // Get user profile and check permissions
       if (!profile) {
         try {
           const userData = await getUserWithProfile();
           if (userData?.profile) {
             setProfile(userData.profile);
+
+            // Redirect admins and super-admins to admin users page
+            if (userData.profile.user_type === 'admin' || userData.profile.user_type === 'super-admin') {
+              console.log('🔒 Redirecting admin to admin users page - marketplace is for farmers and buyers only');
+              router.replace('/admin/users');
+              return;
+            }
           }
         } catch (error) {
-          // Marketplace is public, so it's OK if user is not logged in
-          console.log('📍 Marketplace: No user logged in, continuing as guest user');
+          // Marketplace is public for farmers and buyers, require authentication
+          console.log('🔒 Marketplace: Authentication required, redirecting to login');
+          router.replace('/auth/login');
+          return;
         }
+      }
+
+      // Check if current profile should be redirected (admins should not access marketplace)
+      if (profile && (profile.user_type === 'admin' || profile.user_type === 'super-admin')) {
+        console.log('🔒 Redirecting admin to admin users page - marketplace is for farmers and buyers only');
+        router.replace('/admin/users');
+        return;
       }
 
       // Load approved products with farmer info using pagination
@@ -195,7 +211,7 @@ export default function MarketplaceScreen() {
     <TouchableOpacity
       key={product.id}
       style={styles.compactProductCard}
-      onPress={() => checkAuthAndNavigate(`/buyer/products/${product.id}`)}
+      onPress={() => checkAuthAndNavigate(`/products/${product.id}`)}
       activeOpacity={0.8}
     >
       {/* Product Image */}
@@ -232,18 +248,6 @@ export default function MarketplaceScreen() {
           <Text style={styles.compactStockText}>{product.quantity_available} {product.unit} left</Text>
         </View>
 
-        <View style={styles.compactActions}>
-          <TouchableOpacity
-            style={styles.compactOrderButton}
-            onPress={(e) => {
-              e.stopPropagation();
-              checkAuthAndNavigate(`/buyer/order/${product.id}`);
-            }}
-            activeOpacity={0.7}
-          >
-            <Text style={styles.compactOrderButtonText}>Order</Text>
-          </TouchableOpacity>
-        </View>
       </View>
     </TouchableOpacity>
   );
@@ -252,7 +256,7 @@ export default function MarketplaceScreen() {
     <TouchableOpacity
       key={product.id}
       style={styles.gridProductCard}
-      onPress={() => checkAuthAndNavigate(`/buyer/products/${product.id}`)}
+      onPress={() => checkAuthAndNavigate(`/products/${product.id}`)}
       activeOpacity={0.8}
     >
       {/* Product Image */}
@@ -294,16 +298,6 @@ export default function MarketplaceScreen() {
           </View>
         </View>
 
-        <TouchableOpacity
-          style={styles.gridOrderButton}
-          onPress={(e) => {
-            e.stopPropagation();
-            checkAuthAndNavigate(`/buyer/order/${product.id}`);
-          }}
-          activeOpacity={0.7}
-        >
-          <Text style={styles.gridOrderButtonText}>Order Now</Text>
-        </TouchableOpacity>
       </View>
     </TouchableOpacity>
   );
@@ -810,24 +804,6 @@ const styles = StyleSheet.create({
     fontSize: 15,
     letterSpacing: 0.3,
   },
-  orderButton: {
-    flex: 1,
-    backgroundColor: '#10b981',
-    paddingVertical: 14,
-    borderRadius: 12,
-    alignItems: 'center',
-    elevation: 4,
-    shadowColor: '#10b981',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
-  },
-  orderButtonText: {
-    color: '#ffffff',
-    fontWeight: '600',
-    fontSize: 15,
-    letterSpacing: 0.3,
-  },
 
   // Empty State
   emptyContainer: {
@@ -980,17 +956,6 @@ const styles = StyleSheet.create({
     fontSize: width < 768 ? 10 : 8,
     color: '#6b7280',
     fontWeight: '500',
-  },
-  gridOrderButton: {
-    backgroundColor: '#10b981',
-    paddingVertical: width < 768 ? 6 : 4,
-    borderRadius: 6,
-    alignItems: 'center',
-  },
-  gridOrderButtonText: {
-    color: '#ffffff',
-    fontSize: width < 768 ? 11 : 9,
-    fontWeight: '600',
   },
 
   // Desktop Layout with Sidebar
@@ -1153,23 +1118,5 @@ const styles = StyleSheet.create({
     color: '#9ca3af',
   },
 
-  compactActions: {
-    flexDirection: 'row',
-  },
-
-  compactOrderButton: {
-    backgroundColor: '#10b981',
-    paddingVertical: 8,
-    paddingHorizontal: 16,
-    borderRadius: 6,
-    flex: 1,
-    alignItems: 'center',
-  },
-
-  compactOrderButtonText: {
-    color: '#ffffff',
-    fontSize: 14,
-    fontWeight: '600',
-  },
 
 });

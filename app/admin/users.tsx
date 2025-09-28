@@ -1,8 +1,9 @@
 import { router } from 'expo-router';
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  Animated,
   Dimensions,
   FlatList,
   Modal,
@@ -165,6 +166,11 @@ export default function AdminUsers() {
   const [refreshing, setRefreshing] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [activeTab, setActiveTab] = useState<'farmer' | 'buyer'>('farmer');
+
+  // Animation states for scroll-aware header
+  const headerTranslateY = useRef(new Animated.Value(0)).current;
+  const lastScrollY = useRef(0);
+  const scrollDirection = useRef<'up' | 'down'>('up');
   const [selectedFarmer, setSelectedFarmer] = useState<User | null>(null);
   const [modalVisible, setModalVisible] = useState(false);
   const [farmerDetailTab, setFarmerDetailTab] = useState<'products' | 'orders' | 'inventory'>('products');
@@ -253,6 +259,17 @@ export default function AdminUsers() {
     }
   }, [activeTab, profile]);
 
+  // Calculate sales data when tab changes or users are loaded
+  useEffect(() => {
+    if (users.length > 0 && !loading) {
+      console.log('🔄 Checking if sales data needed for', users.length, 'users in', activeTab, 'tab');
+
+      // Always try to load sales data when tab changes or users load
+      // Let the loadSalesDataInBackground function handle the detailed checking
+      loadSalesDataInBackground(users);
+    }
+  }, [activeTab, users.length, loading]);
+
   // Camera permission check (mobile only)
   useEffect(() => {
     const checkPermissions = async () => {
@@ -274,16 +291,50 @@ export default function AdminUsers() {
   const loadData = async () => {
     try {
       // Wait a bit for auth state to stabilize on refresh
-      await new Promise(resolve => setTimeout(resolve, 100));
+      await new Promise(resolve => setTimeout(resolve, 200));
 
-      const userData = await getUserWithProfile();
+      let userData = await getUserWithProfile();
       console.log('🔍 Admin Page - User data:', userData);
       console.log('🔍 Admin Page - User type:', userData?.profile?.user_type);
       console.log('🔍 Admin Page - User barangay:', userData?.profile?.barangay);
-      console.log('🔍 Admin Page - Full profile:', JSON.stringify(userData?.profile, null, 2));
 
+      // Retry logic if profile is undefined but user exists
+      if (userData?.user && !userData?.profile) {
+        console.log('🔄 Profile undefined, retrying in 500ms...');
+        await new Promise(resolve => setTimeout(resolve, 500));
+        userData = await getUserWithProfile();
+        console.log('🔍 Admin Page - Retry result:', userData?.profile?.user_type);
+      }
+
+      // If still no profile after retry, try one more time
+      if (userData?.user && !userData?.profile) {
+        console.log('🔄 Profile still undefined, final retry in 1000ms...');
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        userData = await getUserWithProfile();
+        console.log('🔍 Admin Page - Final retry result:', userData?.profile?.user_type);
+      }
+
+      console.log('🔍 Admin Page - Full profile:', JSON.stringify(userData?.profile, null, 2));
       setAuthChecked(true);
 
+      // Check if we have a user but no profile (database issue)
+      if (userData?.user && !userData?.profile) {
+        console.log('❌ User exists but no profile found in database');
+        Alert.alert('Profile Error', 'User profile not found. Please contact support.');
+        setLoading(false);
+        router.replace('/');
+        return;
+      }
+
+      // Check if no user at all
+      if (!userData?.user) {
+        console.log('❌ No user session found');
+        setLoading(false);
+        router.replace('/');
+        return;
+      }
+
+      // Check permissions
       if (!userData?.profile || !['admin', 'super-admin'].includes(userData.profile.user_type)) {
         console.log('❌ Access denied - User type:', userData?.profile?.user_type);
         // Only show alert if we actually have user data but wrong permissions
@@ -311,6 +362,33 @@ export default function AdminUsers() {
         router.replace('/');
       }, 1000);
     }
+  };
+
+  // Handle scroll for header animation
+  const handleScroll = (event: any) => {
+    const currentScrollY = event.nativeEvent.contentOffset.y;
+
+    // Hide header completely when scrolling (any direction)
+    if (currentScrollY > 50) { // Only hide after scrolling past initial position
+      if (headerTranslateY._value !== -300) {
+        Animated.timing(headerTranslateY, {
+          toValue: -300,
+          duration: 200,
+          useNativeDriver: true,
+        }).start();
+      }
+    } else {
+      // Show header when at the top
+      if (headerTranslateY._value !== 0) {
+        Animated.timing(headerTranslateY, {
+          toValue: 0,
+          duration: 200,
+          useNativeDriver: true,
+        }).start();
+      }
+    }
+
+    lastScrollY.current = currentScrollY;
   };
 
   const generateDateRange = (): string[] => {
@@ -412,6 +490,87 @@ export default function AdminUsers() {
     }
   };
 
+  const fetchFarmerSalesData = async (userId: string): Promise<User['salesData']> => {
+    try {
+      const endDate = new Date();
+      const startDate = new Date();
+      startDate.setDate(endDate.getDate() - 7); // Last 7 days
+
+      // Fetch all delivered orders for lifetime total (farmer earnings)
+      const { data: allOrders, error: allOrdersError } = await supabase
+        .from('orders')
+        .select('total_price')
+        .eq('farmer_id', userId)
+        .in('status', ['delivered']);
+
+      if (allOrdersError) {
+        console.error(`Error fetching all farmer orders for user ${userId}:`, allOrdersError);
+      }
+
+      // Fetch orders for this farmer (last 7 days)
+      const { data: orders, error } = await supabase
+        .from('orders')
+        .select('total_price, created_at, status')
+        .eq('farmer_id', userId)
+        .gte('created_at', startDate.toISOString())
+        .lte('created_at', endDate.toISOString())
+        .in('status', ['delivered']);
+
+      type OrderData = {
+        total_price: number;
+        created_at: string;
+        status: string;
+      };
+
+      type AllOrderData = {
+        total_price: number;
+      };
+
+      if (error) {
+        console.error(`Error fetching farmer orders for user ${userId}:`, error);
+        return { totalSales: 0, totalLifetime: 0, chartData: [] };
+      }
+
+      // Group orders by date
+      const salesByDate: { [date: string]: number } = {};
+      const dates = generateDateRange();
+
+      // Initialize all dates with 0
+      dates.forEach(date => {
+        salesByDate[date] = 0;
+      });
+
+      // Add actual sales data
+      (orders as OrderData[] | null)?.forEach(order => {
+        const orderDate = new Date(order.created_at).toLocaleDateString('en-US', {
+          month: 'short',
+          day: 'numeric'
+        });
+        if (salesByDate.hasOwnProperty(orderDate)) {
+          salesByDate[orderDate] += order.total_price || 0;
+        }
+      });
+
+      // Convert to chart data format
+      const chartData = dates.map(date => ({
+        date,
+        amount: salesByDate[date] || 0
+      }));
+
+      const totalSales = chartData.reduce((sum, day) => sum + day.amount, 0);
+      const totalLifetime = (allOrders as AllOrderData[] | null)?.reduce((sum, order) => sum + (order.total_price || 0), 0) || 0;
+
+      return {
+        totalSales,
+        totalLifetime,
+        chartData
+      };
+    } catch (error) {
+      console.error(`Error fetching farmer sales data for user ${userId}:`, error);
+      return { totalSales: 0, totalLifetime: 0, chartData: [] };
+    }
+  };
+
   const loadUsers = async (adminProfile?: Profile) => {
     const currentProfile = adminProfile || profile;
     if (!currentProfile) return;
@@ -438,12 +597,15 @@ export default function AdminUsers() {
         query = query.eq('barangay', currentProfile.barangay);
       }
 
+      console.log('🔍 Query for', activeTab, 'users in barangay:', currentProfile?.barangay);
       const { data, error } = await query;
 
       if (error) {
         console.error('❌ Error loading users:', error);
         throw error;
       }
+
+      console.log('📊 Raw data from database:', data?.length, 'users found');
 
       // Convert to User format without fetching sales data initially
       let usersData: User[] = (data as ProfileResponse[] | null)?.map(profile => ({
@@ -465,6 +627,7 @@ export default function AdminUsers() {
         }
       })) || [];
 
+      console.log('✅ Loaded', usersData.length, activeTab + 's');
       setUsers(usersData);
       setLoading(false);
 
@@ -480,15 +643,47 @@ export default function AdminUsers() {
 
   const loadSalesDataInBackground = async (usersData: User[]) => {
     try {
-      // Only fetch sales data for buyers to show spending
-      const usersToUpdate = activeTab === 'buyer' ? usersData : [];
+      console.log('💰 loadSalesDataInBackground called with', usersData.length, 'users, loading:', loading);
 
-      if (usersToUpdate.length === 0) return;
+      // Fetch sales data for both farmers and buyers
+      if (usersData.length === 0 || loading) {
+        console.log('❌ Skipping sales data load: no users or still loading');
+        return;
+      }
+
+      // Check if any users actually need sales data to avoid unnecessary updates
+      const usersNeedingData = usersData.filter(user => {
+        if (!user.salesData) return true;
+        // Only skip if we have meaningful sales data
+        return (user.salesData.totalSales === 0 && user.salesData.totalLifetime === 0 &&
+                (!user.salesData.chartData || user.salesData.chartData.length === 0));
+      });
+
+      console.log('📊 Users needing sales data:', usersNeedingData.length, 'out of', usersData.length);
+      if (usersNeedingData.length === 0) {
+        console.log('✅ All users already have sales data');
+        return;
+      }
 
       const usersWithSalesData = await Promise.all(
-        usersToUpdate.map(async (user) => {
+        usersData.map(async (user) => {
           try {
-            const salesData = await fetchUserSalesData(user.id);
+            // Skip if user already has valid sales data
+            if (user.salesData && (user.salesData.totalSales > 0 || user.salesData.totalLifetime > 0)) {
+              return user;
+            }
+
+            let salesData;
+            if (activeTab === 'farmer') {
+              console.log('🌱 Fetching FARMER sales data for user:', user.id);
+              // For farmers, calculate earnings from delivered orders
+              salesData = await fetchFarmerSalesData(user.id);
+            } else {
+              console.log('🛒 Fetching BUYER sales data for user:', user.id);
+              // For buyers, calculate spending on delivered orders
+              salesData = await fetchUserSalesData(user.id);
+            }
+            console.log('💰 Sales data result:', salesData);
             return {
               ...user,
               salesData
@@ -500,7 +695,14 @@ export default function AdminUsers() {
         })
       );
 
-      setUsers(usersWithSalesData);
+      // Only update if there are actual changes and not loading
+      const hasChanges = usersWithSalesData.some((user, index) =>
+        JSON.stringify(user.salesData) !== JSON.stringify(usersData[index].salesData)
+      );
+
+      if (!loading && hasChanges) {
+        setUsers(usersWithSalesData);
+      }
     } catch (error) {
       console.error('Error loading sales data in background:', error);
     }
@@ -527,8 +729,17 @@ export default function AdminUsers() {
       user.profiles?.barangay?.toLowerCase().includes(searchQuery.toLowerCase()) ||
       user.email?.toLowerCase().includes(searchQuery.toLowerCase());
 
-    return matchesSearch;
+    const matchesUserType = user.profiles?.user_type === activeTab;
+
+    return matchesSearch && matchesUserType;
   });
+
+  // Debug logging
+  console.log('🔍 Debug - Total users:', users.length);
+  console.log('🔍 Debug - Active tab:', activeTab);
+  console.log('🔍 Debug - User types in data:', users.map(u => u.profiles?.user_type));
+  console.log('🔍 Debug - Filtered users:', filteredUsers.length);
+  console.log('🔍 Debug - Search query:', searchQuery);
 
   const getUserTypeColor = (userType: string) => {
     switch (userType) {
@@ -1149,7 +1360,7 @@ export default function AdminUsers() {
 
         {/* Sales Chart */}
         {hasValidData ? (
-          <View style={styles.chartContainer}>
+          <View style={styles.chartContainer} pointerEvents="none">
             <LineChart
               data={chartData}
               width={screenWidth * 0.42}
@@ -1222,94 +1433,72 @@ export default function AdminUsers() {
 
   return (
     <View style={styles.container}>
-      <HeaderComponent
-        profile={profile}
-        userType="admin"
-        currentRoute="/admin/users"
-        searchQuery={searchQuery}
-        onSearchChange={setSearchQuery}
-        searchPlaceholder="Search users..."
-      />
-    <View style={styles.tabWrapper}>
-          <View style={styles.tabContainer}>
-            <TouchableOpacity
-              style={[styles.tab, activeTab === 'farmer' && styles.activeTab]}
-              onPress={() => setActiveTab('farmer')}
-            >
-              <Icon
-                name="seedling"
-                size={16}
-                color={activeTab === 'farmer' ? colors.white : colors.textSecondary}
-              />
-              <Text style={[
-                styles.tabText,
-                activeTab === 'farmer' && styles.activeTabText
-              ]}>
-                Farmers
-              </Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={[styles.tab, activeTab === 'buyer' && styles.activeTab]}
-              onPress={() => setActiveTab('buyer')}
-            >
-              <Icon
-                name="shopping-cart"
-                size={16}
-                color={activeTab === 'buyer' ? colors.white : colors.textSecondary}
-              />
-              <Text style={[
-                styles.tabText,
-                activeTab === 'buyer' && styles.activeTabText
-              ]}>
-                Buyers
-              </Text>
-            </TouchableOpacity>
-          </View>
-          
-          {/* QR Scanner Button (only for buyer tab) */}
-          {activeTab === 'buyer' && (
-            <TouchableOpacity
-              style={styles.qrScannerButton}
-              onPress={() => setQrScannerVisible(true)}
-            >
-              <Icon name="qrcode" size={16} color={colors.white} />
-              <Text style={styles.qrScannerButtonText}>Scan QR</Text>
-            </TouchableOpacity>
-          )}
-
-        </View>
+      <View style={styles.headerComponentWrapper}>
+        <HeaderComponent
+          profile={profile}
+          userType="admin"
+          currentRoute="/admin/users"
+          searchQuery={searchQuery}
+          onSearchChange={setSearchQuery}
+          searchPlaceholder="Search users..."
+        />
+      </View>
 
       <View style={styles.content}>
-        {/* Enhanced Header */}
-        <View style={styles.header}>
-          <View style={styles.titleSection}>
-            <View style={styles.titleWithButton}>
-             
-              <TouchableOpacity
-                style={styles.createUserCircleButton}
-                onPress={openCreateUserModal} 
-              >
-                <Icon name="plus" size={18} color={colors.white} />
+        <Animated.View
+          style={[
+            styles.enhancedHeaderFixed,
+            {
+              transform: [{ translateY: headerTranslateY }]
+            }
+          ]}
+        >
+          <View style={styles.headerTop}>
+            <View style={styles.tabContainer}>
+              <TouchableOpacity style={[styles.tab, activeTab === 'farmer' && styles.activeTab]} onPress={() => setActiveTab('farmer')}>
+                <Icon name="seedling" size={16} color={activeTab === 'farmer' ? colors.white : colors.textSecondary} />
+                <Text style={[styles.tabText, activeTab === 'farmer' && styles.activeTabText]}>Farmers</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={[styles.tab, activeTab === 'buyer' && styles.activeTab]} onPress={() => setActiveTab('buyer')}>
+                <Icon name="shopping-cart" size={16} color={activeTab === 'buyer' ? colors.white : colors.textSecondary} />
+                <Text style={[styles.tabText, activeTab === 'buyer' && styles.activeTabText]}>Buyers</Text>
+              </TouchableOpacity>
+            </View>
+            <View style={styles.headerButtons}>
+              {activeTab === 'buyer' && (
+                <TouchableOpacity style={styles.createUserCircleButton} onPress={() => setQrScannerVisible(true)}>
+                  <Icon name="qrcode" size={20} color={colors.white} />
+                </TouchableOpacity>
+              )}
+              <TouchableOpacity style={styles.createUserCircleButton} onPress={openCreateUserModal}>
+                <Icon name="plus" size={20} color={colors.white} />
               </TouchableOpacity>
             </View>
           </View>
-          
+
           <View style={styles.statsCard}>
             <View style={styles.statItem}>
-              <Text style={styles.statValue}>{filteredUsers.length}</Text>
-              <Text style={styles.statLabel}>Total {activeTab}s</Text>
+              <View style={styles.statIconContainer}>
+                <Icon name="users" size={18} color={colors.primary} />
+              </View>
+              <View style={styles.statContent}>
+                <Text style={styles.statValue}>{filteredUsers.length}</Text>
+                <Text style={styles.statLabel}>Total {activeTab}s</Text>
+              </View>
             </View>
             <View style={styles.statDivider} />
             <View style={styles.statItem}>
-              <Text style={styles.statValue}>{formatCurrency(getTotalSales()).replace('₱', '₱')}</Text>
-              <Text style={styles.statLabel}>{activeTab === 'buyer' ? 'Total Spending' : 'Total Sales'}</Text>
+              <View style={styles.statIconContainer}>
+                <Icon name={activeTab === 'buyer' ? 'shopping-bag' : 'dollar-sign'} size={18} color={colors.secondary} />
+              </View>
+              <View style={styles.statContent}>
+                <Text style={styles.statValue}>{formatCurrency(getTotalSales()).replace('₱', '₱')}</Text>
+                <Text style={styles.statLabel}>{activeTab === 'buyer' ? 'Total Spending' : 'Total Sales'}</Text>
+              </View>
             </View>
           </View>
-        </View>
+        </Animated.View>
 
-        {/* Enhanced Tab Navigation with Create Button */}
-    
         {/* Users Grid */}
         <FlatList
           data={filteredUsers}
@@ -1317,8 +1506,10 @@ export default function AdminUsers() {
           keyExtractor={(item) => item.id}
           numColumns={2}
           columnWrapperStyle={styles.gridRow}
-          contentContainerStyle={styles.listContainer}
+          contentContainerStyle={[styles.listContainer, { paddingTop: 250 }]}
           showsVerticalScrollIndicator={false}
+          onScroll={handleScroll}
+          scrollEventThrottle={16}
           refreshControl={
             <RefreshControl
               refreshing={refreshing}
@@ -1571,7 +1762,7 @@ export default function AdminUsers() {
                       <Icon name="user-plus" size={16} color={colors.white} />
                       <Text style={styles.submitButtonText}>Create User</Text>
                     </>
-                  )}
+                  )}  
                 </TouchableOpacity>
               </View>
             </View>
@@ -2101,9 +2292,15 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.background,
   },
+  headerComponentWrapper: {
+    zIndex: 100,
+    elevation: 100,
+    backgroundColor: colors.background,
+    position: 'relative',
+  },
   content: {
     flex: 1,
-    paddingTop: 20,
+    position: 'relative',
   },
   loadingContainer: {
     flex: 1,
@@ -2152,21 +2349,25 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
   statsCard: {
-    backgroundColor: colors.white,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
+    backgroundColor: 'rgba(255, 255, 255, 0.9)',
+    paddingHorizontal: 20,
+    paddingVertical: 24,
     borderRadius: 16,
     flexDirection: 'row',
     alignItems: 'center',
-    elevation: 2,
+    marginHorizontal: 20,
+    marginBottom: 16,
+    elevation: 4,
     shadowColor: colors.shadow,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 1,
-    shadowRadius: 8,
+    shadowOffset: { width: 0, header: 3 },
+    shadowOpacity: 0.1,
+    shadowRadius: 6,
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: 'rgba(0, 0, 0, 0.05)',
   },
   statItem: {
+    flex: 1,
+    flexDirection: 'row',
     alignItems: 'center',
   },
   statWithButton: {
@@ -2200,15 +2401,16 @@ const styles = StyleSheet.create({
   },
   tabContainer: {
     flexDirection: 'row',
-    backgroundColor: colors.gray100,
-    borderRadius: 16,
-    padding: 4,
-    elevation: 1,
+    backgroundColor: 'rgba(248, 250, 252, 0.8)',
+    borderRadius: 20,
+    padding: 6,
+    elevation: 2,
     shadowColor: colors.shadow,
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 1,
-    shadowRadius: 4,
-    marginBottom: 12,
+    shadowOpacity: 0.08,
+    shadowRadius: 6,
+    borderWidth: 1,
+    borderColor: 'rgba(0, 0, 0, 0.04)',
   },
   tab: {
     flex: 1,
@@ -2257,18 +2459,23 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: colors.white,
   },
+  headerButtons: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
   createUserCircleButton: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
+    width: 52,
+    height: 52,
+    borderRadius: 26,
     backgroundColor: colors.secondary,
     alignItems: 'center',
     justifyContent: 'center',
     shadowColor: colors.shadowDark,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 1,
-    shadowRadius: 4,
-    elevation: 3,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 6,
   },
   qrScannerButton: {
     flexDirection: 'row',
@@ -2866,7 +3073,6 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
 
-  // QR Scanner Styles
   qrScannerContainer: {
     flex: 1,
     backgroundColor: colors.text,
@@ -3051,5 +3257,62 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '600',
     color: colors.white,
+  },
+  // Enhanced Header Styles
+  enhancedHeaderFixed: {
+    position: 'absolute',
+    top: 20,
+    left: 0,
+    right: 0,
+    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+    borderRadius: 20,
+    marginHorizontal: 16,
+    elevation: 5,
+    shadowColor: colors.shadow,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.15,
+    shadowRadius: 12,
+    overflow: 'hidden',
+    zIndex: 1,
+  },
+  headerTop: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingTop: 20,
+    paddingBottom: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(0, 0, 0, 0.05)',
+  },
+  pageTitle: {
+    fontSize: 24,
+    fontWeight: '700',
+    color: colors.text,
+    marginBottom: 4,
+  },
+  pageSubtitle: {
+    fontSize: 14,
+    color: colors.textSecondary,
+    fontWeight: '500',
+  },
+  tabSection: {
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  statIconContainer: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(76, 175, 80, 0.1)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+  },
+  statContent: {
+    flex: 1,
   },
 });

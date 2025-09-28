@@ -314,7 +314,7 @@ export default function Farm2GoInventoryScreen() {
     return (
       <TouchableOpacity 
         style={styles.tableRow}
-        onPress={() => router.push(`/farmer/products/${product.id}` as any)}
+        onPress={() => router.push(`/products/${product.id}` as any)}
         activeOpacity={0.7}
       >
         {/* Product Column */}

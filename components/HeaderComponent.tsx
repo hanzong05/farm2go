@@ -44,13 +44,13 @@ interface NavItem {
 }
 
 const NAV_ITEMS: NavItem[] = [
-  // Public Marketplace - accessible to all user types
+  // Marketplace - accessible only to farmers and buyers
   {
     id: 'marketplace',
     title: 'Marketplace',
     icon: 'store',
-    route: '/',
-    userTypes: ['farmer', 'buyer', 'admin', 'super-admin'],
+    route: '/products',
+    userTypes: ['farmer', 'buyer'],
   },
 
   // Farmer items
@@ -58,7 +58,7 @@ const NAV_ITEMS: NavItem[] = [
     id: 'farmer-products',
     title: 'My Products',
     icon: 'seedling',
-    route: '/farmer/my-products',
+    route: '/farmer/products',
     userTypes: ['farmer'],
   },
   {
@@ -72,7 +72,7 @@ const NAV_ITEMS: NavItem[] = [
     id: 'farmer-orders',
     title: 'Orders',
     icon: 'box',
-    route: '/farmer/orders',
+    route: '/order',
     userTypes: ['farmer'],
   },
   {
@@ -99,6 +99,13 @@ const NAV_ITEMS: NavItem[] = [
 
   // Buyer items
   {
+    id: 'buyer-orders',
+    title: 'My Orders',
+    icon: 'shopping-bag',
+    route: '/order',
+    userTypes: ['buyer'],
+  },
+  {
     id: 'buyer-search',
     title: 'Search',
     icon: 'search',
@@ -106,24 +113,10 @@ const NAV_ITEMS: NavItem[] = [
     userTypes: ['buyer'],
   },
   {
-    id: 'buyer-orders',
-    title: 'My Orders',
-    icon: 'shopping-bag',
-    route: '/buyer/my-orders',
-    userTypes: ['buyer'],
-  },
-  {
-    id: 'buyer-history',
-    title: 'History',
+    id: 'buyer-purchase-history',
+    title: 'Purchase History',
     icon: 'history',
     route: '/buyer/purchase-history',
-    userTypes: ['buyer'],
-  },
-  {
-    id: 'buyer-verification',
-    title: 'Verification',
-    icon: 'id-card',
-    route: '/verification/status',
     userTypes: ['buyer'],
   },
   {
@@ -209,7 +202,6 @@ interface HeaderComponentProps {
   userType?: 'farmer' | 'buyer' | 'admin' | 'super-admin';
   currentRoute?: string;
 
-  // Search functionality
   showSearch?: boolean;
   searchQuery?: string;
   onSearchChange?: (query: string) => void;
@@ -514,12 +506,17 @@ export default function HeaderComponent({
     header: {
       backgroundColor: colors.white,
       marginBottom: 2,
+      zIndex: 1000,
+      elevation: 1000,
+      position: 'relative',
       ...Platform.select({
         web: {
           boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
+          zIndex: 1000,
+          position: 'relative',
         },
         default: {
-          elevation: 2,
+          elevation: 1000,
           shadowColor: colors.shadow,
           shadowOffset: { width: 0, height: 2 },
           shadowOpacity: 0.1,
@@ -653,6 +650,16 @@ export default function HeaderComponent({
       paddingHorizontal: isMobile ? 12 : isTablet ? 16 : 24,
       paddingVertical: isMobile ? 4 : 8,
       backgroundColor: colors.primary,
+      zIndex: -1,
+      position: 'relative',
+      ...Platform.select({
+        web: {
+          zIndex: -1,
+        },
+        default: {
+          elevation: 0,
+        },
+      }),
     },
 
     searchContainer: {
@@ -669,12 +676,15 @@ export default function HeaderComponent({
       borderRadius: 8,
       paddingHorizontal: isMobile ? 8 : 12,
       height: isMobile ? 32 : isTablet ? 36 : 40,
+      zIndex: -1,
+      position: 'relative',
       ...Platform.select({
         web: {
           boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
+          zIndex: -1,
         },
         default: {
-          elevation: 2,
+          elevation: 0,
           shadowColor: colors.shadow,
           shadowOffset: { width: 0, height: 2 },
           shadowOpacity: 0.1,
@@ -699,6 +709,17 @@ export default function HeaderComponent({
       paddingVertical: isMobile ? 4 : 8,
       borderBottomWidth: 1,
       borderBottomColor: colors.gray200,
+      zIndex: 1,
+      elevation: 1,
+      position: 'relative',
+      ...Platform.select({
+        web: {
+          zIndex: 1,
+        },
+        default: {
+          elevation: 1,
+        },
+      }),
     },
 
     // Mobile Navigation - Dynamic Styles
@@ -834,50 +855,46 @@ export default function HeaderComponent({
         <View style={dynamicStyles.headerActions}>
           {/* Messages and Notifications - Always show on all devices */}
           {showMessages && (
-            <MessageComponent
-              conversations={conversations}
-              onConversationPress={onConversationPress}
-              onSendMessage={onSendMessage}
-              onMarkAsRead={onMarkMessageAsRead}
-              onNewConversation={onNewConversation}
-            />
+            <View style={styles.notificationContainer}>
+              <MessageComponent
+                conversations={conversations}
+                onConversationPress={onConversationPress}
+                onSendMessage={onSendMessage}
+                onMarkAsRead={onMarkMessageAsRead}
+                onNewConversation={onNewConversation}
+              />
+            </View>
           )}
 
           {showNotifications && (
-            <NotificationComponent
-              notifications={convertedNotifications}
-              onNotificationPress={(notification) => {
-                // Mark as read when clicked
-                markAsRead(notification.id);
-                // Call original handler if provided
-                if (onNotificationPress) {
-                  onNotificationPress(notification);
-                }
-              }}
-              onMarkAsRead={(notificationId) => {
-                markAsRead(notificationId);
-                // Call original handler if provided
-                if (onMarkNotificationAsRead) {
-                  onMarkNotificationAsRead(notificationId);
-                }
-              }}
-              onMarkAllAsRead={() => {
-                // Mark all as read
-                convertedNotifications.forEach(notif => {
-                  if (!notif.read) {
-                    markAsRead(notif.id);
+            <View style={styles.notificationContainer}>
+              <NotificationComponent
+                notifications={convertedNotifications}
+                onMarkAsRead={(notificationId) => {
+                  markAsRead(notificationId);
+                  // Call original handler if provided
+                  if (onMarkNotificationAsRead) {
+                    onMarkNotificationAsRead(notificationId);
                   }
-                });
-                // Call original handler if provided
-                if (onMarkAllNotificationsAsRead) {
-                  onMarkAllNotificationsAsRead();
-                }
-              }}
-              onClearAll={onClearAllNotifications}
-              onRefresh={refreshNotifications}
-              loading={false}
-              unreadCount={unreadCount}
-            />
+                }}
+                onMarkAllAsRead={() => {
+                  // Mark all as read
+                  convertedNotifications.forEach(notif => {
+                    if (!notif.read) {
+                      markAsRead(notif.id);
+                    }
+                  });
+                  // Call original handler if provided
+                  if (onMarkAllNotificationsAsRead) {
+                    onMarkAllNotificationsAsRead();
+                  }
+                }}
+                onClearAll={onClearAllNotifications}
+                onRefresh={refreshNotifications}
+                loading={false}
+                unreadCount={unreadCount}
+              />
+            </View>
           )}
 
           {/* Push Notification Test Button */}
@@ -1064,6 +1081,21 @@ export default function HeaderComponent({
 
 // Keep the original styles for components that don't need dynamic changes
 const styles = StyleSheet.create({
+  notificationContainer: {
+    zIndex: 99999,
+    elevation: 9999,
+    position: 'relative',
+    ...Platform.select({
+      web: {
+        zIndex: 99999,
+        position: 'relative',
+      },
+      default: {
+        elevation: 9999,
+      },
+    }),
+  },
+
   headerButton: {
     backgroundColor: colors.white,
     paddingHorizontal: 12,

@@ -362,7 +362,7 @@ export default function Farm2GoFarmerProducts() {
   const renderCompactProduct = (product: Product) => (
     <TouchableOpacity
       style={styles.compactProductCard}
-      onPress={() => router.push(`/farmer/products/${product.id}` as any)}
+      onPress={() => router.push(`/products/${product.id}` as any)}
       activeOpacity={0.8}
     >
       {/* Product Image */}
@@ -428,7 +428,7 @@ export default function Farm2GoFarmerProducts() {
     return (
       <TouchableOpacity
         style={[styles.productCard, { width: itemWidth }]}
-        onPress={() => router.push(`/farmer/products/${item.id}` as any)}
+        onPress={() => router.push(`/products/${item.id}` as any)}
         activeOpacity={0.8}
       >
         {/* Product Image */}

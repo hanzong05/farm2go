@@ -132,12 +132,123 @@ export default function NotificationComponent({
       onMarkAsRead(notification.id);
     }
 
-    // Handle navigation if actionUrl exists
-    if (notification.actionUrl) {
-      try {
-        router.push(notification.actionUrl as any);
-      } catch (error) {
-        console.error('Navigation error:', error);
+    // Handle navigation based on notification type and data
+    try {
+      let targetRoute = null;
+
+      if (notification.actionUrl) {
+        // Use direct actionUrl if provided
+        targetRoute = notification.actionUrl;
+      } else if (notification.action_data) {
+        // Create smart routing based on notification type and data
+        const { type, data } = notification.action_data;
+
+        switch (type) {
+          case 'new_order':
+          case 'order_updated':
+          case 'order_cancelled':
+            // Navigate to specific order
+            if (data.orderId) {
+              targetRoute = `/order/${data.orderId}`;
+            } else {
+              targetRoute = '/order';
+            }
+            break;
+
+          case 'product_approved':
+          case 'product_rejected':
+          case 'product_updated':
+            // Navigate to specific product
+            if (data.productId) {
+              targetRoute = `/products/${data.productId}`;
+            } else {
+              targetRoute = '/products';
+            }
+            break;
+
+          case 'verification_approved':
+          case 'verification_rejected':
+            // Navigate to verification status
+            targetRoute = '/verification/status';
+            break;
+
+          case 'new_message':
+            // Navigate to messages or specific conversation
+            if (data.conversationId) {
+              targetRoute = `/messages/${data.conversationId}`;
+            } else {
+              targetRoute = '/messages';
+            }
+            break;
+
+          default:
+            // Default navigation based on notification title/message content
+            if (notification.title.toLowerCase().includes('order')) {
+              targetRoute = '/order';
+            } else if (notification.title.toLowerCase().includes('product')) {
+              targetRoute = '/products';
+            } else if (notification.title.toLowerCase().includes('verification')) {
+              targetRoute = '/verification/status';
+            } else {
+              // Fallback to marketplace
+              targetRoute = '/products';
+            }
+        }
+      } else {
+        // Fallback navigation based on notification content
+        if (notification.title.toLowerCase().includes('order')) {
+          targetRoute = '/order';
+        } else if (notification.title.toLowerCase().includes('product')) {
+          targetRoute = '/products';
+        } else if (notification.title.toLowerCase().includes('verification')) {
+          targetRoute = '/verification/status';
+        } else {
+          // Default to marketplace
+          targetRoute = '/products';
+        }
+      }
+
+      // Handle navigation differently for web vs mobile
+      if (targetRoute) {
+        console.log('Notification clicked - Navigating to:', targetRoute);
+
+        if (Platform.OS === 'web') {
+          // For web, try multiple approaches
+          try {
+            router.push(targetRoute as any);
+            console.log('Router.push called for web');
+          } catch (error) {
+            console.log('Router.push failed, using window.location:', error);
+            if (typeof window !== 'undefined') {
+              window.location.href = targetRoute;
+            }
+          }
+        } else {
+          // For mobile/expo app
+          try {
+            router.push(targetRoute as any);
+            console.log('Router.push called for mobile');
+          } catch (error) {
+            console.error('Navigation failed on mobile:', error);
+          }
+        }
+      } else {
+        console.log('No target route determined for notification:', notification);
+      }
+    } catch (error) {
+      console.error('Navigation error:', error);
+      // Fallback to marketplace on error
+      const fallbackRoute = '/products';
+
+      if (Platform.OS === 'web') {
+        router.push(fallbackRoute as any);
+        if (typeof window !== 'undefined') {
+          setTimeout(() => {
+            window.location.href = fallbackRoute;
+          }, 100);
+        }
+      } else {
+        router.push(fallbackRoute as any);
       }
     }
 
@@ -151,11 +262,6 @@ export default function NotificationComponent({
   const recentNotifications = notifications.filter(n => {
     const diffInDays = Math.floor((new Date().getTime() - new Date(n.timestamp).getTime()) / (1000 * 60 * 60 * 24));
     return diffInDays === 0;
-  });
-
-  const earlierNotifications = notifications.filter(n => {
-    const diffInDays = Math.floor((new Date().getTime() - new Date(n.timestamp).getTime()) / (1000 * 60 * 60 * 24));
-    return diffInDays > 0;
   });
 
   const handleToggleNotifications = () => {
@@ -172,7 +278,14 @@ export default function NotificationComponent({
         styles.notificationItem,
         !item.read && styles.notificationItemUnread
       ]}
-      onPress={() => handleNotificationPress(item)}
+      onPress={() => {
+        // Close modal first, then navigate
+        setModalVisible(false);
+        // Add small delay to ensure modal closes before navigation
+        setTimeout(() => {
+          handleNotificationPress(item);
+        }, 100);
+      }}
       activeOpacity={0.7}
     >
       <View style={styles.notificationIcon}>
@@ -251,8 +364,12 @@ export default function NotificationComponent({
                       !item.read && styles.desktopNotificationItemUnread
                     ]}
                     onPress={() => {
-                      handleNotificationPress(item);
+                      // Close dropdown first, then navigate
                       setDropdownVisible(false);
+                      // Add small delay to ensure dropdown closes before navigation
+                      setTimeout(() => {
+                        handleNotificationPress(item);
+                      }, 50);
                     }}
                     activeOpacity={0.9}
                   >
@@ -295,78 +412,7 @@ export default function NotificationComponent({
             </View>
           )}
 
-          {/* Earlier Section */}
-          {earlierNotifications.length > 0 && (
-            <View style={styles.desktopNotificationSection}>
-              <View style={styles.desktopSectionHeader}>
-                <Text style={styles.desktopSectionTitle}>Earlier</Text>
-              </View>
-              <View style={styles.desktopNotificationsList}>
-                {earlierNotifications.slice(0, 3).map((item) => (
-                  <TouchableOpacity
-                    key={item.id}
-                    style={[
-                      styles.desktopNotificationItem,
-                      !item.read && styles.desktopNotificationItemUnread
-                    ]}
-                    onPress={() => {
-                      handleNotificationPress(item);
-                      setDropdownVisible(false);
-                    }}
-                    activeOpacity={0.9}
-                  >
-                    <View style={styles.desktopNotificationIconContainer}>
-                      <View style={[
-                        styles.desktopNotificationIcon,
-                        { backgroundColor: getTypeColor(item.type) + '20' }
-                      ]}>
-                        <Icon
-                          name={getTypeIcon(item.type)}
-                          size={20}
-                          color={getTypeColor(item.type)}
-                        />
-                      </View>
-                      {!item.read && (
-                        <View style={styles.desktopUnreadIndicator} />
-                      )}
-                    </View>
 
-                    <View style={styles.desktopNotificationContent}>
-                      <Text style={[
-                        styles.desktopNotificationTitle,
-                        !item.read && styles.desktopNotificationTitleUnread
-                      ]}>
-                        {item.title}
-                      </Text>
-                      <Text style={[
-                        styles.desktopNotificationMessage,
-                        !item.read && styles.desktopNotificationMessageUnread
-                      ]} numberOfLines={2}>
-                        {item.message}
-                      </Text>
-                      <Text style={styles.desktopTimestamp}>
-                        {formatTimestamp(item.timestamp)}
-                      </Text>
-                    </View>
-                  </TouchableOpacity>
-                ))}
-              </View>
-            </View>
-          )}
-
-          {notifications.length > 7 && (
-            <View style={styles.desktopDropdownFooter}>
-              <TouchableOpacity
-                style={styles.desktopViewAllButton}
-                onPress={() => {
-                  setDropdownVisible(false);
-                  setModalVisible(true);
-                }}
-              >
-                <Text style={styles.desktopViewAllText}>See all notifications</Text>
-              </TouchableOpacity>
-            </View>
-          )}
         </>
       )}
     </View>
@@ -513,7 +559,7 @@ const styles = StyleSheet.create({
     right: 0,
     bottom: 0,
     backgroundColor: 'transparent',
-    zIndex: 5,
+    zIndex: 9999,
     ...Platform.select({
       web: {},
       default: {
@@ -535,7 +581,7 @@ const styles = StyleSheet.create({
         boxShadow: '0 8px 32px rgba(0,0,0,0.12), 0 4px 16px rgba(0,0,0,0.08)',
       },
       default: {
-        elevation: 8,
+        elevation: 999,
         shadowColor: colors.shadow,
         shadowOffset: { width: 0, height: 4 },
         shadowOpacity: 0.15,
