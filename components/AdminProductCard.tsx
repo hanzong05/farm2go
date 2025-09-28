@@ -23,6 +23,7 @@ interface AdminProductCardProps {
   description?: string;
   farmer?: string;
   onStatusUpdate?: () => void;
+  onDelete?: (productId: string) => void;
 }
 
 export default function AdminProductCard({
@@ -37,6 +38,7 @@ export default function AdminProductCard({
   description,
   farmer,
   onStatusUpdate,
+  onDelete,
 }: AdminProductCardProps) {
   const [processing, setProcessing] = useState(false);
 
@@ -159,34 +161,48 @@ export default function AdminProductCard({
           </Text>
         )}
 
-        {/* Admin Actions - Only show for pending products */}
-        {status === 'pending' && (
-          <View style={styles.actionButtons}>
-            <TouchableOpacity
-              style={[styles.actionButton, styles.rejectButton]}
-              onPress={() => handleProductAction('rejected')}
-              disabled={processing}
-            >
-              {processing ? (
-                <ActivityIndicator size="small" color="#fff" />
-              ) : (
-                <Text style={styles.actionButtonText}>Reject</Text>
-              )}
-            </TouchableOpacity>
+        {/* Admin Actions */}
+        <View style={styles.actionButtons}>
+          {/* Show approve/reject for pending products */}
+          {status === 'pending' && (
+            <>
+              <TouchableOpacity
+                style={[styles.actionButton, styles.rejectButton]}
+                onPress={() => handleProductAction('rejected')}
+                disabled={processing}
+              >
+                {processing ? (
+                  <ActivityIndicator size="small" color="#fff" />
+                ) : (
+                  <Text style={styles.actionButtonText}>Reject</Text>
+                )}
+              </TouchableOpacity>
 
+              <TouchableOpacity
+                style={[styles.actionButton, styles.approveButton]}
+                onPress={() => handleProductAction('approved')}
+                disabled={processing}
+              >
+                {processing ? (
+                  <ActivityIndicator size="small" color="#fff" />
+                ) : (
+                  <Text style={styles.actionButtonText}>Approve</Text>
+                )}
+              </TouchableOpacity>
+            </>
+          )}
+
+          {/* Delete button - show for all products if onDelete is provided */}
+          {onDelete && (
             <TouchableOpacity
-              style={[styles.actionButton, styles.approveButton]}
-              onPress={() => handleProductAction('approved')}
+              style={[styles.actionButton, styles.deleteButton, status === 'pending' && { marginTop: 8 }]}
+              onPress={() => onDelete(id)}
               disabled={processing}
             >
-              {processing ? (
-                <ActivityIndicator size="small" color="#fff" />
-              ) : (
-                <Text style={styles.actionButtonText}>Approve</Text>
-              )}
+              <Text style={styles.actionButtonText}>Delete</Text>
             </TouchableOpacity>
-          </View>
-        )}
+          )}
+        </View>
       </View>
     </View>
   );
@@ -285,6 +301,7 @@ const styles = StyleSheet.create({
   actionButtons: {
     flexDirection: 'row',
     gap: Theme.spacing.sm,
+    flexWrap: 'wrap',
   },
   actionButton: {
     flex: 1,
@@ -300,6 +317,10 @@ const styles = StyleSheet.create({
   },
   approveButton: {
     backgroundColor: Theme.colors.success,
+  },
+  deleteButton: {
+    backgroundColor: '#dc2626', // Red color for delete
+    minWidth: '100%', // Full width when standalone
   },
   actionButtonText: {
     color: Theme.colors.text.inverse,

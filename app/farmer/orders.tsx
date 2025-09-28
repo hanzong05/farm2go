@@ -57,6 +57,7 @@ interface DatabaseOrder {
 interface Order {
   id: string;
   buyer_id: string;
+  farmer_id?: string;
   total_amount: number;
   status: 'pending' | 'confirmed' | 'processing' | 'ready' | 'delivered' | 'cancelled';
   created_at: string;
@@ -67,6 +68,12 @@ interface Order {
     first_name: string | null;
     last_name: string | null;
     phone: string | null;
+  };
+  farmer_profile?: {
+    first_name: string | null;
+    last_name: string | null;
+    phone: string | null;
+    farm_name: string | null;
   };
   order_items?: Array<{
     order_id: string;
@@ -115,6 +122,7 @@ const SORT_OPTIONS = [
 
 export default function FarmerOrdersScreen() {
   const [orders, setOrders] = useState<Order[]>([]);
+  const [myOrders, setMyOrders] = useState<Order[]>([]);
   const [filteredOrders, setFilteredOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -123,6 +131,7 @@ export default function FarmerOrdersScreen() {
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
   const [showActionModal, setShowActionModal] = useState(false);
   const [showSidebar, setShowSidebar] = useState(false);
+  const [activeTab, setActiveTab] = useState<'received' | 'placed'>('received');
   const [confirmModal, setConfirmModal] = useState<{
     visible: boolean;
     title: string;
@@ -155,7 +164,7 @@ export default function FarmerOrdersScreen() {
 
   useEffect(() => {
     filterOrders();
-  }, [orders, selectedStatus, filterState, searchQuery]);
+  }, [orders, myOrders, selectedStatus, filterState, searchQuery, activeTab]);
 
   const loadData = async () => {
     try {
@@ -166,7 +175,10 @@ export default function FarmerOrdersScreen() {
       }
 
       setProfile(userData.profile);
-      await loadOrders(userData.user.id);
+      await Promise.all([
+        loadOrders(userData.user.id),
+        loadMyOrders(userData.user.id)
+      ]);
     } catch (error) {
       console.error('Error loading data:', error);
       Alert.alert('Error', 'Failed to load orders');
@@ -244,8 +256,81 @@ export default function FarmerOrdersScreen() {
     }
   };
 
+  const loadMyOrders = async (userId: string) => {
+    try {
+      // Get orders placed by this farmer (as a buyer) with farmer and product information
+      const { data: myOrdersData, error: myOrdersError } = await supabase
+        .from('orders')
+        .select(`
+          id,
+          buyer_id,
+          farmer_id,
+          product_id,
+          quantity,
+          total_price,
+          status,
+          delivery_address,
+          notes,
+          created_at,
+          products (
+            name,
+            unit,
+            price
+          ),
+          profiles!orders_farmer_id_fkey (
+            first_name,
+            last_name,
+            phone,
+            farm_name
+          )
+        `)
+        .eq('buyer_id', userId);
+
+      if (myOrdersError) throw myOrdersError;
+
+      if (!myOrdersData || myOrdersData.length === 0) {
+        setMyOrders([]);
+        return;
+      }
+
+      // Transform orders into the expected format
+      const myOrdersWithItems: Order[] = (myOrdersData as DatabaseOrder[]).map(order => ({
+        id: order.id,
+        buyer_id: order.buyer_id,
+        farmer_id: order.farmer_id,
+        total_amount: order.total_price,
+        status: order.status as Order['status'],
+        created_at: order.created_at,
+        delivery_date: null,
+        delivery_address: order.delivery_address,
+        notes: order.notes,
+        farmer_profile: order.profiles ? {
+          first_name: order.profiles.first_name,
+          last_name: order.profiles.last_name,
+          phone: order.profiles.phone,
+          farm_name: order.profiles.farm_name,
+        } : undefined,
+        order_items: [{
+          order_id: order.id,
+          quantity: order.quantity,
+          unit_price: order.products?.price || 0,
+          product: {
+            name: order.products?.name || '',
+            unit: order.products?.unit || '',
+          },
+        }],
+      }));
+
+      setMyOrders(myOrdersWithItems);
+    } catch (error) {
+      console.error('Error loading my orders:', error);
+      throw error;
+    }
+  };
+
   const filterOrders = () => {
-    let filtered = orders;
+    const sourceOrders = activeTab === 'received' ? orders : myOrders;
+    let filtered = sourceOrders;
 
     // Filter by status first
     if (selectedStatus !== 'all') {
@@ -257,17 +342,32 @@ export default function FarmerOrdersScreen() {
       const searchLower = searchQuery.toLowerCase();
       filtered = filtered.filter(order => {
         const orderId = order.id.slice(-8).toLowerCase();
-        const buyerName = (`${order.buyer_profile?.first_name || ''} ${order.buyer_profile?.last_name || ''}`.trim() ||
-          'unknown buyer').toLowerCase();
-        const phone = order.buyer_profile?.phone?.toLowerCase() || '';
-        const address = order.delivery_address?.toLowerCase() || '';
-        const notes = order.notes?.toLowerCase() || '';
+        if (activeTab === 'received') {
+          const buyerName = (`${order.buyer_profile?.first_name || ''} ${order.buyer_profile?.last_name || ''}`.trim() ||
+            'unknown buyer').toLowerCase();
+          const phone = order.buyer_profile?.phone?.toLowerCase() || '';
+          const address = order.delivery_address?.toLowerCase() || '';
+          const notes = order.notes?.toLowerCase() || '';
 
-        return orderId.includes(searchLower) ||
-               buyerName.includes(searchLower) ||
-               phone.includes(searchLower) ||
-               address.includes(searchLower) ||
-               notes.includes(searchLower);
+          return orderId.includes(searchLower) ||
+                 buyerName.includes(searchLower) ||
+                 phone.includes(searchLower) ||
+                 address.includes(searchLower) ||
+                 notes.includes(searchLower);
+        } else {
+          // For placed orders, search by farmer name and product names
+          const farmerName = (`${order.farmer_profile?.first_name || ''} ${order.farmer_profile?.last_name || ''}`.trim() ||
+            'unknown farmer').toLowerCase();
+          const productNames = (order.order_items || []).map(item => item.product.name.toLowerCase()).join(' ');
+          const address = order.delivery_address?.toLowerCase() || '';
+          const notes = order.notes?.toLowerCase() || '';
+
+          return orderId.includes(searchLower) ||
+                 farmerName.includes(searchLower) ||
+                 productNames.includes(searchLower) ||
+                 address.includes(searchLower) ||
+                 notes.includes(searchLower);
+        }
       });
     }
 
@@ -286,7 +386,10 @@ export default function FarmerOrdersScreen() {
     try {
       const userData = await getUserWithProfile();
       if (userData?.user) {
-        await loadOrders(userData.user.id);
+        await Promise.all([
+          loadOrders(userData.user.id),
+          loadMyOrders(userData.user.id)
+        ]);
       }
     } catch (error) {
       console.error('Error refreshing:', error);
@@ -452,44 +555,47 @@ export default function FarmerOrdersScreen() {
   };
 
   // Create filter sections for the FilterSidebar component
-  const getFilterSections = () => [
-    {
-      key: 'category',
-      title: 'Categories',
-      type: 'category' as const,
-      options: CATEGORY_FILTERS.map(category => ({
-        key: category.key,
-        label: category.label,
-        count: category.key === 'all'
-          ? orders.length
-          : orders.filter(o => {
-              // Since farmer orders don't have product categories in the current structure,
-              // we'll use a placeholder count
-              return true;
-            }).length
-      }))
-    },
-    {
-      key: 'amountRange',
-      title: 'Amount Range',
-      type: 'range' as const,
-      options: AMOUNT_RANGES.map(range => ({
-        key: range.key,
-        label: range.label,
-        min: range.min,
-        max: range.max
-      }))
-    },
-    {
-      key: 'sortBy',
-      title: 'Sort By',
-      type: 'sort' as const,
-      options: SORT_OPTIONS.map(sort => ({
-        key: sort.key,
-        label: sort.label
-      }))
-    }
-  ];
+  const getFilterSections = () => {
+    const sourceOrders = activeTab === 'received' ? orders : myOrders;
+    return [
+      {
+        key: 'category',
+        title: 'Categories',
+        type: 'category' as const,
+        options: CATEGORY_FILTERS.map(category => ({
+          key: category.key,
+          label: category.label,
+          count: category.key === 'all'
+            ? sourceOrders.length
+            : sourceOrders.filter(o => {
+                // Since farmer orders don't have product categories in the current structure,
+                // we'll use a placeholder count
+                return true;
+              }).length
+        }))
+      },
+      {
+        key: 'amountRange',
+        title: 'Amount Range',
+        type: 'range' as const,
+        options: AMOUNT_RANGES.map(range => ({
+          key: range.key,
+          label: range.label,
+          min: range.min,
+          max: range.max
+        }))
+      },
+      {
+        key: 'sortBy',
+        title: 'Sort By',
+        type: 'sort' as const,
+        options: SORT_OPTIONS.map(sort => ({
+          key: sort.key,
+          label: sort.label
+        }))
+      }
+    ];
+  };
 
   // Handle filter changes
   const handleFilterChange = (key: string, value: any) => {
@@ -541,21 +647,53 @@ export default function FarmerOrdersScreen() {
           styles.buyerSection,
           isDesktop && styles.buyerSectionDesktop
         ]}>
-          <Text style={[
-            styles.buyerName,
-            isCompact && styles.buyerNameCompact
-          ]}>
-{`${order.buyer_profile?.first_name || ''} ${order.buyer_profile?.last_name || ''}`.trim() ||
-             'Unknown Buyer'}
-          </Text>
-          {order.buyer_profile?.phone && (
-            <View style={styles.buyerPhoneContainer}>
-              <Icon name="phone" size={12} color="#64748b" style={{marginRight: 6}} />
+          {activeTab === 'received' ? (
+            <>
               <Text style={[
-                styles.buyerPhone,
-                isCompact && styles.buyerPhoneCompact
-              ]}>{order.buyer_profile.phone}</Text>
-            </View>
+                styles.sectionLabel,
+                isCompact && styles.sectionLabelCompact
+              ]}>Customer:</Text>
+              <Text style={[
+                styles.buyerName,
+                isCompact && styles.buyerNameCompact
+              ]}>
+                {`${order.buyer_profile?.first_name || ''} ${order.buyer_profile?.last_name || ''}`.trim() ||
+                 'Unknown Buyer'}
+              </Text>
+              {order.buyer_profile?.phone && (
+                <View style={styles.buyerPhoneContainer}>
+                  <Icon name="phone" size={12} color="#64748b" style={{marginRight: 6}} />
+                  <Text style={[
+                    styles.buyerPhone,
+                    isCompact && styles.buyerPhoneCompact
+                  ]}>{order.buyer_profile.phone}</Text>
+                </View>
+              )}
+            </>
+          ) : (
+            <>
+              <Text style={[
+                styles.sectionLabel,
+                isCompact && styles.sectionLabelCompact
+              ]}>Farmer:</Text>
+              <Text style={[
+                styles.buyerName,
+                isCompact && styles.buyerNameCompact
+              ]}>
+                {order.farmer_profile?.farm_name ||
+                 `${order.farmer_profile?.first_name || ''} ${order.farmer_profile?.last_name || ''}`.trim() ||
+                 'Unknown Farmer'}
+              </Text>
+              {order.farmer_profile?.phone && (
+                <View style={styles.buyerPhoneContainer}>
+                  <Icon name="phone" size={12} color="#64748b" style={{marginRight: 6}} />
+                  <Text style={[
+                    styles.buyerPhone,
+                    isCompact && styles.buyerPhoneCompact
+                  ]}>{order.farmer_profile.phone}</Text>
+                </View>
+              )}
+            </>
           )}
         </View>
 
@@ -604,78 +742,80 @@ export default function FarmerOrdersScreen() {
           </View>
         </View>
 
-        {/* Action Buttons */}
-        <View style={[
-          styles.actionSection,
-          isDesktop && styles.actionSectionDesktop
-        ]}>
-          {order.status === 'pending' && (
-            <View style={[
-              styles.actionButtons,
-              isDesktop && styles.actionButtonsDesktop
-            ]}>
-              <TouchableOpacity
-                style={[styles.actionButton, styles.confirmButton]}
-                onPress={() => handleOrderStatusUpdate(order, 'confirmed')}
-                activeOpacity={0.8}
-              >
-                <View style={styles.actionButtonContent}>
-                <Icon name="check" size={14} color="#ffffff" style={{marginRight: 6}} />
-                <Text style={styles.actionButtonText}>Accept</Text>
+        {/* Action Buttons - Only show for received orders */}
+        {activeTab === 'received' && (
+          <View style={[
+            styles.actionSection,
+            isDesktop && styles.actionSectionDesktop
+          ]}>
+            {order.status === 'pending' && (
+              <View style={[
+                styles.actionButtons,
+                isDesktop && styles.actionButtonsDesktop
+              ]}>
+                <TouchableOpacity
+                  style={[styles.actionButton, styles.confirmButton]}
+                  onPress={() => handleOrderStatusUpdate(order, 'confirmed')}
+                  activeOpacity={0.8}
+                >
+                  <View style={styles.actionButtonContent}>
+                  <Icon name="check" size={14} color="#ffffff" style={{marginRight: 6}} />
+                  <Text style={styles.actionButtonText}>Accept</Text>
+                </View>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.actionButton, styles.cancelButton]}
+                  onPress={() => handleOrderStatusUpdate(order, 'cancelled')}
+                  activeOpacity={0.8}
+                >
+                  <View style={styles.actionButtonContent}>
+                    <Icon name="times" size={14} color="#ffffff" style={{marginRight: 6}} />
+                    <Text style={styles.actionButtonText}>Decline</Text>
+                  </View>
+                </TouchableOpacity>
               </View>
-              </TouchableOpacity>
+            )}
+
+            {order.status === 'confirmed' && (
               <TouchableOpacity
-                style={[styles.actionButton, styles.cancelButton]}
-                onPress={() => handleOrderStatusUpdate(order, 'cancelled')}
+                style={[styles.actionButton, styles.processingButton]}
+                onPress={() => handleOrderStatusUpdate(order, 'processing')}
                 activeOpacity={0.8}
               >
                 <View style={styles.actionButtonContent}>
-                  <Icon name="times" size={14} color="#ffffff" style={{marginRight: 6}} />
-                  <Text style={styles.actionButtonText}>Decline</Text>
+                  <Icon name="utensils" size={14} color="#ffffff" style={{marginRight: 6}} />
+                  <Text style={styles.actionButtonText}>Start Preparing</Text>
                 </View>
               </TouchableOpacity>
-            </View>
-          )}
+            )}
 
-          {order.status === 'confirmed' && (
-            <TouchableOpacity
-              style={[styles.actionButton, styles.processingButton]}
-              onPress={() => handleOrderStatusUpdate(order, 'processing')}
-              activeOpacity={0.8}
-            >
-              <View style={styles.actionButtonContent}>
-                <Icon name="utensils" size={14} color="#ffffff" style={{marginRight: 6}} />
-                <Text style={styles.actionButtonText}>Start Preparing</Text>
-              </View>
-            </TouchableOpacity>
-          )}
+            {order.status === 'processing' && (
+              <TouchableOpacity
+                style={[styles.actionButton, styles.readyButton]}
+                onPress={() => handleOrderStatusUpdate(order, 'ready')}
+                activeOpacity={0.8}
+              >
+                <View style={styles.actionButtonContent}>
+                  <Icon name="check-circle" size={14} color="#ffffff" style={{marginRight: 6}} />
+                  <Text style={styles.actionButtonText}>Mark Ready</Text>
+                </View>
+              </TouchableOpacity>
+            )}
 
-          {order.status === 'processing' && (
-            <TouchableOpacity
-              style={[styles.actionButton, styles.readyButton]}
-              onPress={() => handleOrderStatusUpdate(order, 'ready')}
-              activeOpacity={0.8}
-            >
-              <View style={styles.actionButtonContent}>
-                <Icon name="check-circle" size={14} color="#ffffff" style={{marginRight: 6}} />
-                <Text style={styles.actionButtonText}>Mark Ready</Text>
-              </View>
-            </TouchableOpacity>
-          )}
-
-          {order.status === 'ready' && (
-            <TouchableOpacity
-              style={[styles.actionButton, styles.completeButton]}
-              onPress={() => handleOrderStatusUpdate(order, 'delivered')}
-              activeOpacity={0.8}
-            >
-              <View style={styles.actionButtonContent}>
-                <Icon name="truck" size={14} color="#ffffff" style={{marginRight: 6}} />
-                <Text style={styles.actionButtonText}>Complete Delivery</Text>
-              </View>
-            </TouchableOpacity>
-          )}
-        </View>
+            {order.status === 'ready' && (
+              <TouchableOpacity
+                style={[styles.actionButton, styles.completeButton]}
+                onPress={() => handleOrderStatusUpdate(order, 'delivered')}
+                activeOpacity={0.8}
+              >
+                <View style={styles.actionButtonContent}>
+                  <Icon name="truck" size={14} color="#ffffff" style={{marginRight: 6}} />
+                  <Text style={styles.actionButtonText}>Complete Delivery</Text>
+                </View>
+              </TouchableOpacity>
+            )}
+          </View>
+        )}
 
         {/* Additional Info */}
         {order.delivery_address && (
@@ -712,25 +852,31 @@ export default function FarmerOrdersScreen() {
     ]}>
       <View style={styles.emptyIllustration}>
         <View style={styles.emptyIconContainer}>
-          <Icon name="file-text" size={60} color="#10b981" />
+          <Icon name={activeTab === 'received' ? 'file-text' : 'shopping-cart'} size={60} color="#10b981" />
         </View>
       </View>
-      
+
       <Text style={styles.emptyTitle}>No Orders Found</Text>
       <Text style={styles.emptyDescription}>
-        {selectedStatus === 'all'
-          ? 'You haven\'t received any orders yet. Keep your products updated to attract buyers!'
-          : `No ${selectedStatus} orders at the moment.`}
+        {activeTab === 'received' ? (
+          selectedStatus === 'all'
+            ? 'You haven\'t received any orders yet. Keep your products updated to attract buyers!'
+            : `No ${selectedStatus} orders received at the moment.`
+        ) : (
+          selectedStatus === 'all'
+            ? 'You haven\'t placed any orders yet. Browse the marketplace to order from other farmers!'
+            : `No ${selectedStatus} orders placed at the moment.`
+        )}
       </Text>
 
       {selectedStatus === 'all' && (
         <TouchableOpacity
           style={styles.ctaButton}
-          onPress={() => router.push('/farmer/products/add')}
+          onPress={() => router.push(activeTab === 'received' ? '/farmer/products/add' : '/')}
           activeOpacity={0.8}
         >
-          <Text style={styles.ctaIcon}>+</Text>
-          <Text style={styles.ctaText}>Add Products</Text>
+          <Text style={styles.ctaIcon}>{activeTab === 'received' ? '+' : '🛒'}</Text>
+          <Text style={styles.ctaText}>{activeTab === 'received' ? 'Add Products' : 'Browse Marketplace'}</Text>
         </TouchableOpacity>
       )}
     </View>
@@ -836,6 +982,40 @@ export default function FarmerOrdersScreen() {
         showFilterButton={!isDesktop}
         onFilterPress={() => setShowSidebar(!showSidebar)}
       />
+
+      {/* Main Tab Navigation */}
+      <View style={styles.mainTabBar}>
+        <TouchableOpacity
+          style={[
+            styles.mainTab,
+            activeTab === 'received' && styles.activeMainTab
+          ]}
+          onPress={() => setActiveTab('received')}
+        >
+          <Text style={[
+            styles.mainTabText,
+            activeTab === 'received' && styles.activeMainTabText
+          ]}>
+            Orders Received
+          </Text>
+          {activeTab === 'received' && <View style={styles.mainTabIndicator} />}
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[
+            styles.mainTab,
+            activeTab === 'placed' && styles.activeMainTab
+          ]}
+          onPress={() => setActiveTab('placed')}
+        >
+          <Text style={[
+            styles.mainTabText,
+            activeTab === 'placed' && styles.activeMainTabText
+          ]}>
+            My Orders
+          </Text>
+          {activeTab === 'placed' && <View style={styles.mainTabIndicator} />}
+        </TouchableOpacity>
+      </View>
 
       {/* Status Tab Bar */}
       <View style={styles.tabBar}>
@@ -947,16 +1127,58 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
 
-  // Status Tab Bar (Main horizontal tabs)
-  tabBar: {
+  // Main Tab Bar (Order type selection)
+  mainTabBar: {
     flexDirection: 'row',
     backgroundColor: '#ffffff',
+    borderBottomWidth: 1,
+    borderBottomColor: '#e5e5e5',
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+  },
+  mainTab: {
+    flex: 1,
+    paddingVertical: 16,
+    paddingHorizontal: 12,
+    alignItems: 'center',
+    position: 'relative',
+  },
+  activeMainTab: {
+    borderBottomWidth: 3,
+    borderBottomColor: '#10b981',
+  },
+  mainTabText: {
+    fontSize: 16,
+    color: '#666',
+    fontWeight: '600',
+    textAlign: 'center',
+  },
+  activeMainTabText: {
+    color: '#10b981',
+    fontWeight: '700',
+  },
+  mainTabIndicator: {
+    position: 'absolute',
+    bottom: -1,
+    height: 3,
+    width: '80%',
+    backgroundColor: '#10b981',
+    borderRadius: 2,
+  },
+
+  // Status Tab Bar (Status filter)
+  tabBar: {
+    flexDirection: 'row',
+    backgroundColor: '#f8f9fa',
     borderBottomWidth: 1,
     borderBottomColor: '#e5e5e5',
     elevation: 1,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
+    shadowOpacity: 0.05,
     shadowRadius: 1,
   },
   tab: {
@@ -1308,6 +1530,20 @@ const styles = StyleSheet.create({
   buyerPhoneContainer: {
     flexDirection: 'row',
     alignItems: 'center',
+  },
+
+  sectionLabel: {
+    fontSize: 12,
+    color: '#64748b',
+    fontWeight: '600',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginBottom: 4,
+  },
+
+  sectionLabelCompact: {
+    fontSize: 11,
+    marginBottom: 2,
   },
 
   additionalInfo: {

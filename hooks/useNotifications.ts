@@ -1,11 +1,11 @@
 import { useEffect, useState } from 'react';
 import { Alert } from 'react-native';
 import {
-  subscribeToNotifications,
   getUserNotifications,
   markNotificationAsRead,
   getUnreadNotificationCount
 } from '../services/notifications';
+import { hybridNotificationService } from '../services/hybridNotifications';
 
 export interface NotificationData {
   id: string;
@@ -33,6 +33,12 @@ export interface UseNotificationsResult {
   markAsRead: (notificationId: string) => Promise<void>;
   refreshNotifications: () => Promise<void>;
   playNotificationSound: () => void;
+  connectionStatus: {
+    supabase: string;
+    websocket: string;
+    polling: boolean;
+  };
+  forceReconnect: () => void;
 }
 
 export const useNotifications = (userId: string | null): UseNotificationsResult => {
@@ -40,6 +46,11 @@ export const useNotifications = (userId: string | null): UseNotificationsResult 
   const [unreadCount, setUnreadCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [connectionStatus, setConnectionStatus] = useState({
+    supabase: 'CLOSED',
+    websocket: 'CLOSED',
+    polling: false
+  });
 
   // Load notifications
   const loadNotifications = async () => {
@@ -92,16 +103,16 @@ export const useNotifications = (userId: string | null): UseNotificationsResult 
     console.log('🔔 Notification sound played');
   };
 
-  // Set up real-time subscription
+  // Set up hybrid real-time notification service
   useEffect(() => {
     if (!userId) return;
 
-    console.log('🔔 Setting up notification subscription for user:', userId);
+    console.log('🚀 Setting up hybrid notification service for user:', userId);
 
-    const subscription = subscribeToNotifications(userId, (newNotification: NotificationData) => {
-      console.log('🔔 New real-time notification received:', newNotification);
+    const handleNewNotification = (newNotification: NotificationData) => {
+      console.log('🔔 New hybrid notification received:', newNotification);
 
-      // Add new notification to the list
+      // Add notification to list (hybrid service handles duplicates)
       setNotifications(prev => [newNotification, ...prev]);
 
       // Increment unread count if notification is unread
@@ -119,19 +130,39 @@ export const useNotifications = (userId: string | null): UseNotificationsResult 
           newNotification.message,
           [
             {
-              text: 'OK',
+              text: 'Mark as Read',
               onPress: () => markAsRead(newNotification.id)
+            },
+            {
+              text: 'Dismiss',
+              style: 'cancel'
             }
           ]
         );
       }
-    });
+    };
+
+    // Subscribe to hybrid notification service
+    hybridNotificationService.subscribe(userId, handleNewNotification);
+
+    // Monitor connection status
+    const statusMonitor = setInterval(() => {
+      const status = hybridNotificationService.getStatus();
+      setConnectionStatus(status);
+    }, 5000); // Check every 5 seconds
 
     return () => {
-      console.log('🔔 Cleaning up notification subscription');
-      subscription.unsubscribe();
+      console.log('🛑 Cleaning up hybrid notification service');
+      hybridNotificationService.unsubscribe();
+      clearInterval(statusMonitor);
     };
   }, [userId]);
+
+  // Force reconnection function
+  const forceReconnect = () => {
+    console.log('🔄 Force reconnecting notifications');
+    hybridNotificationService.forceReconnect();
+  };
 
   // Load initial notifications
   useEffect(() => {
@@ -145,6 +176,8 @@ export const useNotifications = (userId: string | null): UseNotificationsResult 
     error,
     markAsRead,
     refreshNotifications: loadNotifications,
-    playNotificationSound
+    playNotificationSound,
+    connectionStatus,
+    forceReconnect
   };
 };

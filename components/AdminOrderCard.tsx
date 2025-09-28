@@ -8,6 +8,7 @@ import {
   View,
 } from 'react-native';
 import { Theme } from '../constants/theme';
+import { useConfirmationModal } from '../contexts/ConfirmationModalContext';
 import { supabase } from '../lib/supabase';
 
 interface AdminOrderCardProps {
@@ -22,6 +23,7 @@ interface AdminOrderCardProps {
   farmer?: string;
   items?: string; // JSON string or description of items
   onStatusUpdate?: () => void;
+  onCloseModal?: () => void; // Callback to close parent modal
 }
 
 export default function AdminOrderCard({
@@ -33,7 +35,9 @@ export default function AdminOrderCard({
   farmer,
   items,
   onStatusUpdate,
+  onCloseModal,
 }: AdminOrderCardProps) {
+  const { showConfirmation } = useConfirmationModal();
   const [processing, setProcessing] = useState(false);
 
   const formatPrice = (price: number) => {
@@ -85,17 +89,18 @@ export default function AdminOrderCard({
       `${buyerProfile.first_name} ${buyerProfile.last_name}`.trim() :
       'Unknown Buyer';
 
-    Alert.alert(
-      `${action === 'confirmed' ? 'Confirm' : 'Cancel'} Order?`,
-      `Are you sure you want to ${action === 'confirmed' ? 'confirm' : 'cancel'} this ₱${totalAmount.toFixed(2)} order from ${buyerName}?`,
-      [
-        { text: 'No', style: 'cancel' },
-        {
-          text: `Yes, ${action === 'confirmed' ? 'Confirm' : 'Cancel'}`,
-          style: action === 'confirmed' ? 'default' : 'destructive',
-          onPress: () => updateOrderStatus(action)
-        }
-      ]
+    // Close parent modal if callback is provided
+    if (onCloseModal) {
+      onCloseModal();
+    }
+
+    showConfirmation(
+      `${action === 'confirmed' ? 'Confirm' : 'Cancel'} Order`,
+      `Are you sure you want to ${action === 'confirmed' ? 'confirm' : 'cancel'} this ${formatPrice(totalAmount)} order from ${buyerName}?`,
+      () => updateOrderStatus(action),
+      action === 'cancelled', // isDestructive
+      `Yes, ${action === 'confirmed' ? 'Confirm' : 'Cancel'}`,
+      'No'
     );
   };
 
@@ -113,9 +118,14 @@ export default function AdminOrderCard({
 
       if (error) throw error;
 
+      const actionText = newStatus === 'confirmed' ? 'confirmed' : 'cancelled';
+      const buyerName = buyerProfile ?
+        `${buyerProfile.first_name} ${buyerProfile.last_name}`.trim() :
+        'the buyer';
+
       Alert.alert(
         'Success!',
-        `Order ${newStatus} successfully`,
+        `Order ${actionText} successfully! ${buyerName} has been notified.`,
         [{ text: 'OK', onPress: onStatusUpdate }]
       );
     } catch (error) {

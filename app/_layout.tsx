@@ -8,6 +8,7 @@ import 'react-native-reanimated';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import ErrorBoundary from '../components/ErrorBoundary';
 import { AuthProvider } from '../contexts/AuthContext';
+import { ConfirmationModalProvider } from '../contexts/ConfirmationModalContext';
 import { SessionProvider } from '../contexts/SessionContext';
 import { supabase } from '../lib/supabase';
 import { getUserWithProfile } from '../services/auth';
@@ -312,9 +313,10 @@ export default function RootLayout() {
     <ErrorBoundary>
       <SessionProvider>
         <AuthProvider>
-          <ThemeProvider
-            value={colorScheme === 'dark' ? Farm2GoDarkTheme : Farm2GoTheme}
-          >
+          <ConfirmationModalProvider>
+            <ThemeProvider
+              value={colorScheme === 'dark' ? Farm2GoDarkTheme : Farm2GoTheme}
+            >
         <Stack
           screenOptions={{
             headerShown: false,
@@ -622,7 +624,8 @@ export default function RootLayout() {
           backgroundColor={colorScheme === 'dark' ? '#0f1419' : '#059669'}
           translucent={Platform.OS === 'android'}
         />
-        </ThemeProvider>
+            </ThemeProvider>
+          </ConfirmationModalProvider>
         </AuthProvider>
       </SessionProvider>
     </ErrorBoundary>

@@ -35,6 +35,12 @@ class SimplePushService {
     try {
       console.log('📱 Initializing simple push notifications...');
 
+      // Check if we're on web platform - skip for now
+      if (Platform.OS === 'web') {
+        console.log('🌐 Skipping push notifications on web platform (VAPID keys not configured)');
+        return null;
+      }
+
       // Check if we're in Expo Go
       if (isExpoGo) {
         console.warn('⚠️ Push notifications are not supported in Expo Go. Use a development build or production app.');

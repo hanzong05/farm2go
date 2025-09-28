@@ -103,6 +103,15 @@ export const createNotification = async (params: CreateNotificationParams) => {
 
     console.log('✅ Notification created successfully:', data.id);
     console.log('✅ Full notification data:', data);
+
+    // Immediately broadcast the notification for real-time delivery
+    try {
+      await broadcastNotification(params.recipientId, data);
+      console.log('📡 Notification broadcasted for immediate delivery');
+    } catch (broadcastError) {
+      console.warn('⚠️ Failed to broadcast notification, relying on postgres changes:', broadcastError);
+    }
+
     return data;
   } catch (error) {
     console.error('❌ Failed to create notification:', error);
@@ -375,15 +384,23 @@ export const notifyFarmersAboutAction = async (
   }
 };
 
-// Get notifications for a user with real-time subscription
+// Get notifications for a user with real-time subscription (Enhanced)
 export const subscribeToNotifications = (
   userId: string,
   onNotification: (notification: any) => void
 ) => {
-  console.log('🔔 Setting up real-time notification subscription for user:', userId);
+  console.log('🔔 Setting up enhanced real-time notification subscription for user:', userId);
+
+  const channelName = `notifications_${userId}_${Date.now()}`;
 
   const subscription = supabase
-    .channel(`notifications:${userId}`)
+    .channel(channelName, {
+      config: {
+        broadcast: { self: false },
+        presence: { key: userId },
+        private: false
+      }
+    })
     .on(
       'postgres_changes',
       {
@@ -393,13 +410,63 @@ export const subscribeToNotifications = (
         filter: `recipient_id=eq.${userId}`
       },
       (payload) => {
-        console.log('🔔 New notification received:', payload.new);
+        console.log('🔔 New notification received via postgres_changes:', payload.new);
         onNotification(payload.new);
       }
     )
-    .subscribe();
+    .on(
+      'postgres_changes',
+      {
+        event: 'UPDATE',
+        schema: 'public',
+        table: 'notifications',
+        filter: `recipient_id=eq.${userId}`
+      },
+      (payload) => {
+        console.log('🔔 Notification updated via postgres_changes:', payload.new);
+        // Don't trigger callback for updates (like marking as read)
+      }
+    )
+    .on('presence', { event: 'sync' }, () => {
+      console.log('👥 Presence synced for notifications');
+    })
+    .on('broadcast', { event: 'notification' }, (payload) => {
+      console.log('🔔 Notification received via broadcast:', payload);
+      onNotification(payload.payload);
+    })
+    .subscribe((status, err) => {
+      console.log('📡 Notification subscription status:', status);
+      if (err) {
+        console.error('❌ Notification subscription error:', err);
+      }
+    });
 
   return subscription;
+};
+
+// Enhanced broadcast function for immediate notifications
+export const broadcastNotification = async (
+  recipientId: string,
+  notification: any
+) => {
+  try {
+    console.log('📡 Broadcasting notification to recipient:', recipientId);
+
+    const channelName = `notifications_${recipientId}`;
+
+    const broadcastResult = await supabase
+      .channel(channelName)
+      .send({
+        type: 'broadcast',
+        event: 'notification',
+        payload: notification
+      });
+
+    console.log('📡 Broadcast result:', broadcastResult);
+    return broadcastResult;
+  } catch (error) {
+    console.error('❌ Failed to broadcast notification:', error);
+  }
 };
 
 // Mark notification as read

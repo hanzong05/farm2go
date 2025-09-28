@@ -5,10 +5,15 @@ import { ActivityIndicator, Platform, StyleSheet, Text, View } from 'react-nativ
 import { supabase } from '../../lib/supabase';
 import { safeLocalStorage } from '../../utils/platformUtils';
 
+// Global flag to prevent multiple OAuth processing
+let globalOAuthProcessing = false;
+let globalOAuthTimestamp = 0;
+
 export default function AuthCallback() {
   const [isClient, setIsClient] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const hasProcessedRef = useRef(false);
+  const processingTimestampRef = useRef<number | null>(null);
   const router = useRouter();
   const navigationState = useRootNavigationState();
   const [pendingNavigation, setPendingNavigation] = useState<string | null>(null);
@@ -43,13 +48,38 @@ export default function AuthCallback() {
   useEffect(() => {
     if (!isClient || !isRouterReady || isProcessing || hasProcessedRef.current) return;
 
+    // Global check to prevent any duplicate processing across all instances
+    const now = Date.now();
+    if (globalOAuthProcessing || (globalOAuthTimestamp && (now - globalOAuthTimestamp) < 10000)) {
+      console.log('⏭️ OAuth callback: Skipping - global processing active or recent');
+      return;
+    }
+
+    // Additional local check
+    if (processingTimestampRef.current && (now - processingTimestampRef.current) < 5000) {
+      console.log('⏭️ OAuth callback: Skipping duplicate processing (within 5s)');
+      return;
+    }
+
     let isMounted = true;
 
     const handleCallback = async () => {
-      if (!isMounted || isProcessing || hasProcessedRef.current) return;
+      if (!isMounted || isProcessing || hasProcessedRef.current || globalOAuthProcessing) return;
+
+      // Final check before processing
+      const checkTime = Date.now();
+      if (globalOAuthProcessing || (globalOAuthTimestamp && (checkTime - globalOAuthTimestamp) < 10000)) {
+        console.log('⏭️ OAuth callback: Aborting - global processing detected');
+        return;
+      }
 
       console.log('🔄 OAuth callback starting processing (mounted)...');
+
+      // Set global and local flags
+      globalOAuthProcessing = true;
+      globalOAuthTimestamp = checkTime;
       hasProcessedRef.current = true;
+      processingTimestampRef.current = checkTime;
       setIsProcessing(true);
       try {
         console.log('🔄 OAuth callback processing...');
@@ -142,6 +172,9 @@ export default function AuthCallback() {
 
         safeNavigate(`/auth/login?error=${encodeURIComponent(error.message || 'OAuth sign-in failed. Please try again.')}`);
       } finally {
+        // Clear global flag
+        globalOAuthProcessing = false;
+
         if (isMounted) {
           setIsProcessing(false);
         }
@@ -153,6 +186,11 @@ export default function AuthCallback() {
 
     return () => {
       isMounted = false;
+      // Clear global flag if this component was processing
+      if (globalOAuthProcessing) {
+        console.log('🧹 OAuth callback: Cleaning up global flag on unmount');
+        globalOAuthProcessing = false;
+      }
     };
   }, [isClient, isRouterReady]); // Remove isProcessing and hasProcessed from deps
 

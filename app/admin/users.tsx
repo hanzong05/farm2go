@@ -24,6 +24,7 @@ import AdminProductCard from '../../components/AdminProductCard';
 import HeaderComponent from '../../components/HeaderComponent';
 import OrderQRScanner from '../../components/OrderQRScanner';
 import OrderVerificationModal from '../../components/OrderVerificationModal';
+import { useConfirmationModal } from '../../contexts/ConfirmationModalContext';
 import { supabase } from '../../lib/supabase';
 import { getUserWithProfile } from '../../services/auth';
 import { notifyAllAdmins, notifyUserAction } from '../../services/notifications';
@@ -157,6 +158,7 @@ const colors = {
 };
 
 export default function AdminUsers() {
+  const { showConfirmation } = useConfirmationModal();
   const [profile, setProfile] = useState<Profile | null>(null);
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
@@ -215,6 +217,7 @@ export default function AdminUsers() {
     phone: '',
     barangay: profile?.barangay || '',
   });
+
 
   useEffect(() => {
     loadData();
@@ -710,15 +713,24 @@ export default function AdminUsers() {
   };
 
   const handleDeleteProduct = async (productId: string) => {
-    Alert.alert(
-      'Delete Product',
-      'Are you sure you want to delete this product?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: async () => {
+    // Get product details first for better confirmation message
+    try {
+      const { data: productData, error: fetchError } = await supabase
+        .from('products')
+        .select('name')
+        .eq('id', productId)
+        .single();
+
+      const productName = productData?.name || 'this product';
+
+      // Close the user detail modal immediately when showing confirmation
+      setModalVisible(false);
+      setBuyerModalVisible(false);
+
+      showConfirmation(
+        'Delete Product',
+        `Are you sure you want to delete "${productName}"? This action cannot be undone and will notify the farmer.`,
+        async () => {
             try {
               // Get product details before deletion for notification
               const { data: productData, error: fetchError } = await supabase
@@ -776,14 +788,26 @@ export default function AdminUsers() {
               if (selectedFarmer) {
                 await loadFarmerData(selectedFarmer.id);
               }
+
+              // Show success message
+              Alert.alert(
+                'Success!',
+                `Product "${productData.name}" has been deleted successfully and the farmer has been notified.`,
+                [{ text: 'OK' }]
+              );
             } catch (error) {
               console.error('Error deleting product:', error);
               Alert.alert('Error', 'Failed to delete product');
             }
-          },
         },
-      ]
-    );
+        true, // isDestructive
+        'Delete Product',
+        'Cancel'
+      );
+    } catch (error) {
+      console.error('Error fetching product details:', error);
+      Alert.alert('Error', 'Failed to load product details');
+    }
   };
 
   const getOrderStatusColor = (status: string) => {
@@ -840,33 +864,47 @@ export default function AdminUsers() {
     }
   };
 
-  const handleOrderAction = async (action: 'complete' | 'cancel') => {
+  const handleOrderAction = (action: 'complete' | 'cancel') => {
     if (!scannedOrderData) return;
 
-    try {
-      const newStatus = action === 'complete' ? 'delivered' : 'cancelled';
+    const actionTitle = action === 'complete' ? 'Complete Transaction' : 'Cancel Order';
+    const actionMessage = action === 'complete'
+      ? `Are you sure you want to mark this order as completed? This will finalize the transaction.`
+      : `Are you sure you want to cancel this order? This action cannot be undone and will notify both the buyer and farmer.`;
 
-      const { error } = await supabase
-        .from('orders')
-        .update({ status: newStatus } as any)
-        .eq('id', scannedOrderData.id);
+    showConfirmation(
+      actionTitle,
+      actionMessage,
+      async () => {
+        try {
+          const newStatus = action === 'complete' ? 'delivered' : 'cancelled';
 
-      if (error) throw error;
+          const { error } = await supabase
+            .from('orders')
+            .update({ status: newStatus } as any)
+            .eq('id', scannedOrderData.id);
 
-      Alert.alert(
-        'Success',
-        `Order has been ${action === 'complete' ? 'completed' : 'cancelled'} successfully`
-      );
+          if (error) throw error;
 
-      setOrderProcessingVisible(false);
-      setScannedOrderData(null);
+          Alert.alert(
+            'Success',
+            `Order has been ${action === 'complete' ? 'completed' : 'cancelled'} successfully`
+          );
 
-      // Refresh the users list to update any displayed data
-      loadData();
-    } catch (error) {
-      console.error('Error updating order:', error);
-      Alert.alert('Error', 'Failed to update order status');
-    }
+          setOrderProcessingVisible(false);
+          setScannedOrderData(null);
+
+          // Refresh the users list to update any displayed data
+          loadData();
+        } catch (error) {
+          console.error('Error updating order:', error);
+          Alert.alert('Error', 'Failed to update order status');
+        }
+      },
+      action === 'cancel', // isDestructive - true for cancel, false for complete
+      action === 'complete' ? 'Complete' : 'Cancel Order',
+      'Go Back'
+    );
   };
 
   // Create User Functions
@@ -1192,35 +1230,7 @@ export default function AdminUsers() {
         onSearchChange={setSearchQuery}
         searchPlaceholder="Search users..."
       />
-
-      <View style={styles.content}>
-        {/* Enhanced Header */}
-        <View style={styles.header}>
-          <View style={styles.titleSection}>
-            <Text style={styles.title}>User Management</Text>
-            <View style={styles.locationContainer}>
-              <Icon name="map-marker-alt" size={12} color={colors.textSecondary} />
-              <Text style={styles.barangayInfo}>
-                {profile?.barangay ? profile.barangay : 'All Barangays'}
-              </Text>
-            </View>
-          </View>
-          
-          <View style={styles.statsCard}>
-            <View style={styles.statItem}>
-              <Text style={styles.statValue}>{filteredUsers.length}</Text>
-              <Text style={styles.statLabel}>Total {activeTab}s</Text>
-            </View>
-            <View style={styles.statDivider} />
-            <View style={styles.statItem}>
-              <Text style={styles.statValue}>{formatCurrency(getTotalSales()).replace('₱', '₱')}</Text>
-              <Text style={styles.statLabel}>{activeTab === 'buyer' ? 'Total Spending' : 'Total Sales'}</Text>
-            </View>
-          </View>
-        </View>
-
-        {/* Enhanced Tab Navigation with Create Button */}
-        <View style={styles.tabWrapper}>
+    <View style={styles.tabWrapper}>
           <View style={styles.tabContainer}>
             <TouchableOpacity
               style={[styles.tab, activeTab === 'farmer' && styles.activeTab]}
@@ -1268,16 +1278,38 @@ export default function AdminUsers() {
             </TouchableOpacity>
           )}
 
-          {/* Create New User Button */}
-          <TouchableOpacity
-            style={styles.createUserButton}
-            onPress={openCreateUserModal}
-          >
-            <Icon name="user-plus" size={16} color={colors.white} />
-            <Text style={styles.createUserButtonText}>Create {activeTab}</Text>
-          </TouchableOpacity>
         </View>
 
+      <View style={styles.content}>
+        {/* Enhanced Header */}
+        <View style={styles.header}>
+          <View style={styles.titleSection}>
+            <View style={styles.titleWithButton}>
+             
+              <TouchableOpacity
+                style={styles.createUserCircleButton}
+                onPress={openCreateUserModal} 
+              >
+                <Icon name="plus" size={18} color={colors.white} />
+              </TouchableOpacity>
+            </View>
+          </View>
+          
+          <View style={styles.statsCard}>
+            <View style={styles.statItem}>
+              <Text style={styles.statValue}>{filteredUsers.length}</Text>
+              <Text style={styles.statLabel}>Total {activeTab}s</Text>
+            </View>
+            <View style={styles.statDivider} />
+            <View style={styles.statItem}>
+              <Text style={styles.statValue}>{formatCurrency(getTotalSales()).replace('₱', '₱')}</Text>
+              <Text style={styles.statLabel}>{activeTab === 'buyer' ? 'Total Spending' : 'Total Sales'}</Text>
+            </View>
+          </View>
+        </View>
+
+        {/* Enhanced Tab Navigation with Create Button */}
+    
         {/* Users Grid */}
         <FlatList
           data={filteredUsers}
@@ -1322,9 +1354,10 @@ export default function AdminUsers() {
       {/* Create User Modal */}
       <Modal
         animationKeyframesType="slide"
-        transparent={false}
+        transparent={true}
         visible={createUserModalVisible}
         onRequestClose={closeCreateUserModal}
+        presentationStyle="overFullScreen"
       >
         <View style={styles.modalContainer}>
           {/* Modal Header */}
@@ -1549,9 +1582,10 @@ export default function AdminUsers() {
       {/* Farmer Detail Modal */}
       <Modal
         animationKeyframesType="slide"
-        transparent={false}
+        transparent={true}
         visible={modalVisible}
         onRequestClose={() => setModalVisible(false)}
+        presentationStyle="overFullScreen"
       >
         <View style={styles.modalContainer}>
           {/* Modal Header */}
@@ -1627,6 +1661,7 @@ export default function AdminUsers() {
                         <Icon name="plus" size={16} color={colors.white} />
                         <Text style={styles.addButtonText}>Add Product</Text>
                       </TouchableOpacity>
+
                     </View>
 
                     {farmerProducts.map((product) => (
@@ -1643,6 +1678,7 @@ export default function AdminUsers() {
                         description={product.description}
                         farmer={selectedFarmer ? `${selectedFarmer.profiles?.first_name || ''} ${selectedFarmer.profiles?.last_name || ''}`.trim() : undefined}
                         onStatusUpdate={() => loadFarmerData(selectedFarmer?.id || '')}
+                        onDelete={handleDeleteProduct}
                       />
                     ))}
                   </>
@@ -1667,6 +1703,7 @@ export default function AdminUsers() {
                     farmer={selectedFarmer ? `${selectedFarmer.profiles?.first_name || ''} ${selectedFarmer.profiles?.last_name || ''}`.trim() : undefined}
                     items={`Order details - Total: ${formatCurrency(order.total_price)}`}
                     onStatusUpdate={() => loadFarmerData(selectedFarmer?.id || '')}
+                    onCloseModal={() => setModalVisible(false)}
                   />
                 ))}
               </View>
@@ -1704,9 +1741,10 @@ export default function AdminUsers() {
       {/* Buyer Detail Modal */}
       <Modal
         animationKeyframesType="slide"
-        transparent={false}
+        transparent={true}
         visible={buyerModalVisible}
         onRequestClose={() => setBuyerModalVisible(false)}
+        presentationStyle="overFullScreen"
       >
         <View style={styles.modalContainer}>
           {/* Modal Header */}
@@ -1777,6 +1815,7 @@ export default function AdminUsers() {
                       'Order details'
                     }
                     onStatusUpdate={() => loadBuyerData(selectedBuyer?.id || '')}
+                    onCloseModal={() => setBuyerModalVisible(false)}
                   />
                 ))}
 
@@ -1814,6 +1853,7 @@ export default function AdminUsers() {
                       'Order details'
                     }
                     onStatusUpdate={() => loadBuyerData(selectedBuyer?.id || '')}
+                    onCloseModal={() => setBuyerModalVisible(false)}
                   />
                 ))}
 
@@ -2087,6 +2127,14 @@ const styles = StyleSheet.create({
   titleSection: {
     flex: 1,
   },
+  titleWithButton: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+  },
+  titleContent: {
+    flex: 1,
+  },
   title: {
     fontSize: 28,
     fontWeight: '700',
@@ -2119,6 +2167,14 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
   },
   statItem: {
+    alignItems: 'center',
+  },
+  statWithButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  statContent: {
     alignItems: 'center',
   },
   statValue: {
@@ -2200,6 +2256,19 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '700',
     color: colors.white,
+  },
+  createUserCircleButton: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    backgroundColor: colors.secondary,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: colors.shadowDark,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 1,
+    shadowRadius: 4,
+    elevation: 3,
   },
   qrScannerButton: {
     flexDirection: 'row',
@@ -2423,6 +2492,8 @@ const styles = StyleSheet.create({
   modalContainer: {
     flex: 1,
     backgroundColor: colors.background,
+    zIndex: 1000,
+    elevation: 1000,
   },
   modalHeader: {
     flexDirection: 'row',
