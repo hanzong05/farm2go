@@ -4,6 +4,7 @@ import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, ActivityIn
 import Icon from 'react-native-vector-icons/FontAwesome5';
 import { supabase } from '../../lib/supabase';
 import { getUserWithProfile } from '../../services/auth';
+import ContactWidget, { ContactPerson } from '../../components/ContactWidget';
 
 const { width } = Dimensions.get('window');
 
@@ -59,6 +60,9 @@ export default function ProductDetailScreen() {
   const [processing, setProcessing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [orderQuantity, setOrderQuantity] = useState(1);
+
+  // Contact widget state
+  const [showContactWidget, setShowContactWidget] = useState(false);
 
   useEffect(() => {
     if (id) {
@@ -207,6 +211,22 @@ export default function ProductDetailScreen() {
     }
 
     router.push(`/order/${product.id}?quantity=${orderQuantity}` as any);
+  };
+
+
+  const handleContactOpen = () => {
+    if (!product || !profile) return;
+
+    if (profile.id === '00000000-0000-0000-0000-000000000000') {
+      Alert.alert('Login Required', 'Please log in to contact the seller.');
+      return;
+    }
+
+    setShowContactWidget(true);
+  };
+
+  const handleContactClose = () => {
+    setShowContactWidget(false);
   };
 
   // Utility Functions
@@ -496,24 +516,55 @@ export default function ProductDetailScreen() {
                   </View>
                 </View>
                 <Text style={styles.totalPrice}>Total: {formatPrice(product.price * orderQuantity)}</Text>
-                <TouchableOpacity
-                  style={styles.orderButton}
-                  onPress={handleOrder}
-                  disabled={processing || orderQuantity > product.quantity_available}
-                >
-                  {processing ? (
-                    <ActivityIndicator size="small" color={colors.white} />
-                  ) : (
-                    <Icon name="shopping-cart" size={16} color={colors.white} />
-                  )}
-                  <Text style={styles.orderButtonText}>Place Order</Text>
-                </TouchableOpacity>
+
+                {/* Action Buttons */}
+                <View style={styles.actionButtonsRow}>
+                  <TouchableOpacity
+                    style={styles.contactSellerButton}
+                    onPress={handleContactOpen}
+                    disabled={processing}
+                  >
+                    <Icon name="comment" size={16} color={colors.primary} />
+                    <Text style={styles.contactSellerButtonText}>Contact Seller</Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={styles.orderButton}
+                    onPress={handleOrder}
+                    disabled={processing || orderQuantity > product.quantity_available}
+                  >
+                    {processing ? (
+                      <ActivityIndicator size="small" color={colors.white} />
+                    ) : (
+                      <Icon name="shopping-cart" size={16} color={colors.white} />
+                    )}
+                    <Text style={styles.orderButtonText}>Place Order</Text>
+                  </TouchableOpacity>
+                </View>
               </View>
             )}
           </View>
         </View>
       </ScrollView>
 
+      {/* Contact Widget - floating at bottom right for browser, full screen for mobile */}
+      {product && isBuyer && !isOwner && (
+        <ContactWidget
+          contactPerson={{
+            id: product.farmer_id,
+            name: getFarmerName(),
+            type: 'farmer',
+            isOnline: true
+          }}
+          currentUserId={profile?.id}
+          currentUserName={`${profile?.first_name || ''} ${profile?.last_name || ''}`.trim() || 'Buyer'}
+          currentUserType={profile?.user_type || 'buyer'}
+          visible={showContactWidget}
+          onOpen={handleContactOpen}
+          onClose={handleContactClose}
+          relatedProductId={product.id}
+        />
+      )}
     </View>
   );
 }
@@ -916,7 +967,32 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
 
+  actionButtonsRow: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+
+  contactSellerButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.white,
+    borderWidth: 2,
+    borderColor: colors.primary,
+    padding: 16,
+    borderRadius: 8,
+    gap: 8,
+  },
+
+  contactSellerButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: colors.primary,
+  },
+
   orderButton: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',

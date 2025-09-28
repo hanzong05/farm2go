@@ -13,6 +13,7 @@ import {
 } from 'react-native';
 import FilterSidebar from '../../components/FilterSidebar';
 import HeaderComponent from '../../components/HeaderComponent';
+import ContactButtonSimple from '../../components/ContactButtonSimple';
 import { supabase } from '../../lib/supabase';
 import { getUserWithProfile } from '../../services/auth';
 import { Database } from '../../types/database';
@@ -355,6 +356,20 @@ export default function FarmerSalesHistoryScreen() {
     }
   };
 
+  const handleSendMessageToBuyer = (message: string, buyerId: string) => {
+    // Here you would typically send the message to your backend
+    console.log('💬 Sending message to buyer:', { buyerId, message, from: profile?.id });
+
+    // TODO: Implement actual message sending to your backend
+    // Example:
+    // await supabase.from('messages').insert({
+    //   sender_id: profile?.id,
+    //   receiver_id: buyerId,
+    //   content: message,
+    //   timestamp: new Date().toISOString()
+    // });
+  };
+
 
   const renderSaleCard = ({ item: sale }: { item: Sale }) => (
     <View style={styles.orderCard}>
@@ -403,9 +418,20 @@ export default function FarmerSalesHistoryScreen() {
 
       {/* Action Buttons */}
       <View style={styles.actionButtonsContainer}>
-        <TouchableOpacity style={styles.secondaryButton}>
-          <Text style={styles.secondaryButtonText}>Contact Buyer</Text>
-        </TouchableOpacity>
+        <ContactButtonSimple
+          contactPerson={{
+            id: sale.buyer_id,
+            name: `${sale.buyer_profile?.first_name || ''} ${sale.buyer_profile?.last_name || ''}`.trim() || 'Unknown Buyer',
+            type: 'buyer',
+            isOnline: true
+          }}
+          currentUserId={profile?.id}
+          currentUserName={`${profile?.first_name || ''} ${profile?.last_name || ''}`.trim() || 'Farmer'}
+          currentUserType="farmer"
+          title="Contact Buyer"
+          style={styles.contactBuyerButton}
+          onSendMessage={handleSendMessageToBuyer}
+        />
         <TouchableOpacity style={styles.primaryActionButton}>
           <Text style={styles.primaryButtonText}>Order Details</Text>
         </TouchableOpacity>
@@ -781,6 +807,9 @@ const styles = StyleSheet.create({
     gap: 8,
     borderTopWidth: 1,
     borderTopColor: '#f0f0f0',
+  },
+  contactBuyerButton: {
+    flex: 1,
   },
   secondaryButton: {
     flex: 1,

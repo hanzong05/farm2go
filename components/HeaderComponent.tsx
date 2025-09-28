@@ -30,6 +30,7 @@ import { logoutUser } from '../services/auth';
 import { Database } from '../types/database';
 import MessageComponent, { Conversation } from './MessageComponent';
 import NotificationComponent, { Notification } from './NotificationComponent';
+import RealtimeStatus from './RealtimeStatus';
 import { useNotifications } from '../hooks/useNotifications';
 import { useSimplePush } from '../hooks/useSimplePush';
 
@@ -853,15 +854,19 @@ export default function HeaderComponent({
 
         {/* Header Actions */}
         <View style={dynamicStyles.headerActions}>
+          {/* Real-time Status Indicator */}
+          <View style={styles.notificationContainer}>
+            <RealtimeStatus size="small" />
+          </View>
+
           {/* Messages and Notifications - Always show on all devices */}
           {showMessages && (
             <View style={styles.notificationContainer}>
               <MessageComponent
-                conversations={conversations}
+                currentUserId={profile?.id}
                 onConversationPress={onConversationPress}
-                onSendMessage={onSendMessage}
-                onMarkAsRead={onMarkMessageAsRead}
                 onNewConversation={onNewConversation}
+                visible={true}
               />
             </View>
           )}

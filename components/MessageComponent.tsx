@@ -1,4 +1,4 @@
-import React, { useRef, useState } from 'react';
+import React, { useRef, useState, useEffect } from 'react';
 import {
     Dimensions,
     FlatList,
@@ -11,6 +11,8 @@ import {
     View
 } from 'react-native';
 import Icon from 'react-native-vector-icons/FontAwesome5';
+import { messageService, Conversation as DBConversation, Message as DBMessage } from '../services/messageService';
+import ChatModal, { ChatMessage, ChatParticipant } from './ChatModal';
 
 const { width } = Dimensions.get('window');
 const isDesktop = width >= 1024;
@@ -43,11 +45,10 @@ export interface Conversation {
 }
 
 interface MessageComponentProps {
-  conversations: Conversation[];
-  onConversationPress?: (conversation: Conversation) => void;
-  onSendMessage?: (conversationId: string, content: string) => void;
-  onMarkAsRead?: (conversationId: string) => void;
+  onConversationPress?: (conversation: DBConversation) => void;
   onNewConversation?: () => void;
+  currentUserId?: string;
+  visible?: boolean;
 }
 
 const colors = {
@@ -77,17 +78,165 @@ const colors = {
 };
 
 export default function MessageComponent({
-  conversations,
   onConversationPress,
-  onSendMessage,
-  onMarkAsRead,
   onNewConversation,
+  currentUserId = 'current-user',
+  visible = true,
 }: MessageComponentProps) {
   const [modalVisible, setModalVisible] = useState(false);
   const [dropdownVisible, setDropdownVisible] = useState(false);
-  const [selectedConversation, setSelectedConversation] = useState<Conversation | null>(null);
+  const [chatModalVisible, setChatModalVisible] = useState(false);
+  const [selectedConversation, setSelectedConversation] = useState<DBConversation | null>(null);
+  const [conversations, setConversations] = useState<DBConversation[]>([]);
+  const [messages, setMessages] = useState<DBMessage[]>([]);
   const [messageText, setMessageText] = useState('');
+  const [loading, setLoading] = useState(false);
   const buttonRef = useRef<View>(null);
+
+  // Load conversations on component mount
+  useEffect(() => {
+    const loadConversations = async () => {
+      try {
+        setLoading(true);
+        console.log('📨 Loading conversations...');
+        const userConversations = await messageService.getUserConversations();
+        console.log('📨 Loaded conversations:', userConversations.length, userConversations);
+        setConversations(userConversations);
+      } catch (error) {
+        console.error('❌ Error loading conversations:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadConversations();
+  }, []);
+
+  // Load messages for selected conversation
+  useEffect(() => {
+    const loadMessages = async () => {
+      if (selectedConversation) {
+        try {
+          setLoading(true);
+          const conversationMessages = await messageService.getConversationMessages(selectedConversation.other_user_id);
+          setMessages(conversationMessages);
+
+          // Mark conversation as read
+          await messageService.markConversationAsRead(selectedConversation.other_user_id);
+        } catch (error) {
+          console.error('Error loading messages:', error);
+        } finally {
+          setLoading(false);
+        }
+      }
+    };
+
+    loadMessages();
+  }, [selectedConversation]);
+
+  // Subscribe to real-time message changes
+  useEffect(() => {
+    if (!currentUserId) return;
+
+    console.log('Setting up real-time subscription for MessageComponent:', currentUserId);
+
+    const subscription = messageService.subscribeToAllMessageChanges(
+      (message: DBMessage, type: 'INSERT' | 'UPDATE') => {
+        console.log(`Real-time message ${type} in MessageComponent:`, message);
+
+        if (type === 'INSERT') {
+          // Update conversations list with new message
+          setConversations(prev => {
+            const updated = [...prev];
+            const otherUserId = message.sender_id === currentUserId
+              ? message.receiver_id
+              : message.sender_id;
+
+            const convIndex = updated.findIndex(c => c.other_user_id === otherUserId);
+
+            if (convIndex >= 0) {
+              // Update existing conversation
+              updated[convIndex] = {
+                ...updated[convIndex],
+                last_message: message.content,
+                last_message_at: message.created_at,
+                unread_count: message.receiver_id === currentUserId
+                  ? updated[convIndex].unread_count + 1
+                  : updated[convIndex].unread_count
+              };
+              // Move to top
+              const [conversation] = updated.splice(convIndex, 1);
+              updated.unshift(conversation);
+            } else if (message.receiver_id === currentUserId || message.sender_id === currentUserId) {
+              // Create new conversation
+              const otherUserProfile = message.sender_id === currentUserId
+                ? message.receiver_profile
+                : message.sender_profile;
+
+              const newConversation = {
+                conversation_id: [currentUserId, otherUserId].sort().join('-'),
+                other_user_id: otherUserId,
+                other_user_name: `${otherUserProfile?.first_name || ''} ${otherUserProfile?.last_name || ''}`.trim() || 'Unknown User',
+                other_user_type: otherUserProfile?.user_type || 'buyer',
+                last_message: message.content,
+                last_message_at: message.created_at,
+                unread_count: message.receiver_id === currentUserId ? 1 : 0,
+              };
+              updated.unshift(newConversation);
+            }
+
+            return updated;
+          });
+
+          // Update messages if viewing this conversation
+          if (selectedConversation && (
+            (message.sender_id === selectedConversation.other_user_id && message.receiver_id === currentUserId) ||
+            (message.sender_id === currentUserId && message.receiver_id === selectedConversation.other_user_id)
+          )) {
+            setMessages(prev => {
+              // Check for duplicates
+              const exists = prev.find(m => m.id === message.id);
+              if (exists) return prev;
+              return [...prev, message];
+            });
+
+            // Mark as read if user received it and modal is open
+            if (message.receiver_id === currentUserId && modalVisible) {
+              messageService.markMessageAsRead(message.id);
+            }
+          }
+        } else if (type === 'UPDATE') {
+          // Update message in current conversation if visible
+          if (selectedConversation && (
+            (message.sender_id === selectedConversation.other_user_id && message.receiver_id === currentUserId) ||
+            (message.sender_id === currentUserId && message.receiver_id === selectedConversation.other_user_id)
+          )) {
+            setMessages(prev =>
+              prev.map(m => m.id === message.id ? message : m)
+            );
+          }
+
+          // Update unread counts in conversations list
+          if (message.is_read && message.receiver_id === currentUserId) {
+            setConversations(prev =>
+              prev.map(conv => {
+                if (conv.other_user_id === message.sender_id) {
+                  return { ...conv, unread_count: Math.max(0, conv.unread_count - 1) };
+                }
+                return conv;
+              })
+            );
+          }
+        }
+      },
+      currentUserId
+    );
+
+    return () => {
+      console.log('Cleaning up MessageComponent real-time subscription');
+      subscription?.unsubscribe();
+    };
+  }, [currentUserId, selectedConversation?.other_user_id, modalVisible]);
 
   const formatTimestamp = (timestamp: string) => {
     const date = new Date(timestamp);
@@ -131,24 +280,24 @@ export default function MessageComponent({
     }
   };
 
-  const handleConversationPress = (conversation: Conversation) => {
+  const handleConversationPress = (conversation: DBConversation) => {
     setSelectedConversation(conversation);
-    if (conversation.unreadCount > 0 && onMarkAsRead) {
-      onMarkAsRead(conversation.id);
+    if (conversation.unread_count > 0) {
+      messageService.markConversationAsRead(conversation.other_user_id);
     }
+
+    // Close dropdown/modal and open chat modal
+    setDropdownVisible(false);
+    setModalVisible(false);
+    setChatModalVisible(true);
+
     if (onConversationPress) {
       onConversationPress(conversation);
     }
   };
 
-  const handleSendMessage = () => {
-    if (messageText.trim() && selectedConversation && onSendMessage) {
-      onSendMessage(selectedConversation.id, messageText.trim());
-      setMessageText('');
-    }
-  };
 
-  const totalUnreadCount = conversations.reduce((sum, conv) => sum + conv.unreadCount, 0);
+  const totalUnreadCount = conversations.reduce((sum, conv) => sum + conv.unread_count, 0);
 
   const handleToggleMessages = () => {
     if (isDesktop) {
@@ -158,11 +307,22 @@ export default function MessageComponent({
     }
   };
 
-  const renderConversationItem = ({ item }: { item: Conversation }) => (
+  const handleCloseModal = () => {
+    setModalVisible(false);
+    setDropdownVisible(false);
+    setSelectedConversation(null);
+  };
+
+  const handleCloseChatModal = () => {
+    setChatModalVisible(false);
+    setSelectedConversation(null);
+  };
+
+  const renderConversationItem = ({ item }: { item: DBConversation }) => (
     <TouchableOpacity
       style={[
         styles.conversationItem,
-        item.unreadCount > 0 && styles.conversationItemUnread
+        item.unread_count > 0 && styles.conversationItemUnread
       ]}
       onPress={() => handleConversationPress(item)}
       activeOpacity={0.7}
@@ -170,18 +330,18 @@ export default function MessageComponent({
       <View style={styles.avatarContainer}>
         <View style={[
           styles.avatar,
-          { backgroundColor: getUserIconColor(item.participantType) + '20' }
+          { backgroundColor: getUserIconColor(item.other_user_type) + '20' }
         ]}>
           <Icon
-            name={getUserIcon(item.participantType)}
+            name={getUserIcon(item.other_user_type)}
             size={16}
-            color={getUserIconColor(item.participantType)}
+            color={getUserIconColor(item.other_user_type)}
           />
         </View>
-        {item.unreadCount > 0 && (
+        {item.unread_count > 0 && (
           <View style={styles.unreadBadge}>
             <Text style={styles.unreadBadgeText}>
-              {item.unreadCount > 9 ? '9+' : item.unreadCount}
+              {item.unread_count > 9 ? '9+' : item.unread_count}
             </Text>
           </View>
         )}
@@ -191,115 +351,96 @@ export default function MessageComponent({
         <View style={styles.conversationHeader}>
           <Text style={[
             styles.participantName,
-            item.unreadCount > 0 && styles.participantNameUnread
+            item.unread_count > 0 && styles.participantNameUnread
           ]}>
-            {item.participantName}
+            {item.other_user_name}
           </Text>
           <Text style={styles.timestamp}>
-            {formatTimestamp(item.lastMessage.timestamp)}
+            {formatTimestamp(item.last_message_at)}
           </Text>
         </View>
         <Text style={styles.lastMessage} numberOfLines={1}>
-          {item.lastMessage.content}
+          {item.last_message}
         </Text>
       </View>
     </TouchableOpacity>
   );
 
-  const renderMessageItem = ({ item }: { item: Message }) => {
-    const isOwn = item.senderId === 'current-user'; // This should be replaced with actual user ID logic
 
+  const renderEmptyState = () => {
+    console.log('📨 Rendering empty state, conversations length:', conversations.length);
     return (
-      <View style={[
-        styles.messageItem,
-        isOwn ? styles.messageItemOwn : styles.messageItemOther
-      ]}>
-        <View style={[
-          styles.messageBubble,
-          isOwn ? styles.messageBubbleOwn : styles.messageBubbleOther
-        ]}>
-          <Text style={[
-            styles.messageText,
-            isOwn ? styles.messageTextOwn : styles.messageTextOther
-          ]}>
-            {item.content}
-          </Text>
-          <Text style={[
-            styles.messageTime,
-            isOwn ? styles.messageTimeOwn : styles.messageTimeOther
-          ]}>
-            {formatTimestamp(item.timestamp)}
-          </Text>
-        </View>
+      <View style={[styles.emptyContainer, isDesktop && styles.dropdownEmptyContainer]}>
+        <Icon name="comments" size={isDesktop ? 40 : 48} color={colors.gray400} />
+        <Text style={[styles.emptyTitle, isDesktop && styles.dropdownEmptyTitle]}>No Messages</Text>
+        <Text style={[styles.emptyDescription, isDesktop && styles.dropdownEmptyDescription]}>
+          {isDesktop ? 'Your conversations will appear here' : 'Start a conversation with farmers or buyers to get your business growing!'}
+        </Text>
+        {!isDesktop && (
+          <TouchableOpacity
+            style={styles.newMessageButton}
+            onPress={onNewConversation}
+          >
+            <Icon name="plus" size={16} color={colors.white} />
+            <Text style={styles.newMessageButtonText}>Start New Conversation</Text>
+          </TouchableOpacity>
+        )}
       </View>
     );
   };
 
-  const renderEmptyState = () => (
-    <View style={[styles.emptyContainer, isDesktop && styles.dropdownEmptyContainer]}>
-      <Icon name="comments" size={isDesktop ? 40 : 48} color={colors.gray400} />
-      <Text style={[styles.emptyTitle, isDesktop && styles.dropdownEmptyTitle]}>No Messages</Text>
-      <Text style={[styles.emptyDescription, isDesktop && styles.dropdownEmptyDescription]}>
-        {isDesktop ? 'Your conversations will appear here' : 'Start a conversation with farmers or buyers to get your business growing!'}
-      </Text>
-      {!isDesktop && (
-        <TouchableOpacity
-          style={styles.newMessageButton}
-          onPress={onNewConversation}
-        >
-          <Icon name="plus" size={16} color={colors.white} />
-          <Text style={styles.newMessageButtonText}>Start New Conversation</Text>
-        </TouchableOpacity>
-      )}
-    </View>
-  );
+  const renderDesktopDropdownContent = () => {
+    console.log('📨 Rendering desktop dropdown, conversations:', conversations.length);
+    return (
+      <View style={styles.desktopDropdownContainer}>
+        <View style={styles.desktopDropdownHeader}>
+          <Text style={styles.desktopDropdownTitle}>Messages</Text>
+          <View style={styles.desktopHeaderActions}>
+            <TouchableOpacity
+              style={styles.desktopNewMessageButton}
+              onPress={() => {
+                onNewConversation?.();
+                setDropdownVisible(false);
+              }}
+            >
+              <Icon name="edit" size={14} color={colors.primary} />
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.desktopCloseButton}
+              onPress={handleCloseModal}
+            >
+              <Icon name="times" size={14} color={colors.gray600} />
+            </TouchableOpacity>
+          </View>
+        </View>
 
-  const renderDesktopDropdownContent = () => (
-    <View style={styles.desktopDropdownContainer}>
-      <View style={styles.desktopDropdownHeader}>
-        <Text style={styles.desktopDropdownTitle}>Messages</Text>
-        <TouchableOpacity
-          style={styles.desktopNewMessageButton}
-          onPress={() => {
-            onNewConversation?.();
-            setDropdownVisible(false);
-          }}
-        >
-          <Icon name="edit" size={14} color={colors.primary} />
-        </TouchableOpacity>
-      </View>
-
-      {conversations.length === 0 ? (
-        renderEmptyState()
-      ) : (
+        {conversations.length === 0 ? (
+          renderEmptyState()
+        ) : (
         <>
           <View style={styles.desktopConversationsList}>
             {conversations.slice(0, 6).map((item) => (
               <TouchableOpacity
-                key={item.id}
+                key={item.conversation_id}
                 style={[
                   styles.desktopConversationItem,
-                  item.unreadCount > 0 && styles.desktopConversationItemUnread
+                  item.unread_count > 0 && styles.desktopConversationItemUnread
                 ]}
-                onPress={() => {
-                  handleConversationPress(item);
-                  setDropdownVisible(false);
-                  setModalVisible(true);
-                }}
+                onPress={() => handleConversationPress(item)}
                 activeOpacity={0.9}
               >
                 <View style={styles.desktopAvatarContainer}>
                   <View style={[
                     styles.desktopAvatar,
-                    { backgroundColor: getUserIconColor(item.participantType) + '20' }
+                    { backgroundColor: getUserIconColor(item.other_user_type) + '20' }
                   ]}>
                     <Icon
-                      name={getUserIcon(item.participantType)}
+                      name={getUserIcon(item.other_user_type)}
                       size={20}
-                      color={getUserIconColor(item.participantType)}
+                      color={getUserIconColor(item.other_user_type)}
                     />
                   </View>
-                  {item.unreadCount > 0 && (
+                  {item.unread_count > 0 && (
                     <View style={styles.desktopUnreadIndicator} />
                   )}
                 </View>
@@ -307,27 +448,27 @@ export default function MessageComponent({
                 <View style={styles.desktopConversationContent}>
                   <Text style={[
                     styles.desktopParticipantName,
-                    item.unreadCount > 0 && styles.desktopParticipantNameUnread
+                    item.unread_count > 0 && styles.desktopParticipantNameUnread
                   ]} numberOfLines={1}>
-                    {item.participantName}
+                    {item.other_user_name}
                   </Text>
                   <View style={styles.desktopLastMessageContainer}>
                     <Text style={[
                       styles.desktopLastMessage,
-                      item.unreadCount > 0 && styles.desktopLastMessageUnread
+                      item.unread_count > 0 && styles.desktopLastMessageUnread
                     ]} numberOfLines={1}>
-                      {item.lastMessage.content}
+                      {item.last_message}
                     </Text>
                     <Text style={styles.desktopTimestamp}>
-                      · {formatTimestamp(item.lastMessage.timestamp)}
+                      · {formatTimestamp(item.last_message_at)}
                     </Text>
                   </View>
                 </View>
 
-                {item.unreadCount > 0 && (
+                {item.unread_count > 0 && (
                   <View style={styles.desktopUnreadBadge}>
                     <Text style={styles.desktopUnreadBadgeText}>
-                      {item.unreadCount}
+                      {item.unread_count}
                     </Text>
                   </View>
                 )}
@@ -349,12 +490,18 @@ export default function MessageComponent({
             </View>
           )}
         </>
-      )}
-    </View>
-  );
+        )}
+      </View>
+    );
+  };
+
+  if (!visible) {
+    return null;
+  }
 
   return (
     <View style={styles.messageWrapper}>
+      {/* Header Message Button */}
       <View ref={buttonRef}>
         <TouchableOpacity
           style={styles.messageButton}
@@ -373,14 +520,16 @@ export default function MessageComponent({
 
       {/* Desktop Dropdown */}
       {isDesktop && dropdownVisible && (
-        <>
+        <View style={styles.dropdownContainer}>
           <TouchableOpacity
             style={styles.dropdownBackdrop}
             activeOpacity={1}
-            onPress={() => setDropdownVisible(false)}
+            onPress={handleCloseModal}
           />
-          {renderDesktopDropdownContent()}
-        </>
+          <View style={styles.dropdownContentWrapper}>
+            {renderDesktopDropdownContent()}
+          </View>
+        </View>
       )}
 
       {/* Mobile/Tablet Modal */}
@@ -388,110 +537,79 @@ export default function MessageComponent({
         visible={modalVisible}
         animationKeyframesType="slide"
         presentationStyle="pageSheet"
-        onRequestClose={() => {
-          setModalVisible(false);
-          setSelectedConversation(null);
-        }}
+        onRequestClose={handleCloseModal}
       >
         <View style={styles.modalContainer}>
-          {!selectedConversation ? (
-            // Conversations List View
-            <>
-              <View style={styles.modalHeader}>
-                <Text style={styles.modalTitle}>Messages</Text>
-                <View style={styles.headerActions}>
-                  <TouchableOpacity
-                    style={styles.headerButton}
-                    onPress={onNewConversation}
-                  >
-                    <Icon name="plus" size={14} color={colors.white} />
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={styles.closeButton}
-                    onPress={() => setModalVisible(false)}
-                  >
-                    <Icon name="times" size={20} color={colors.gray600} />
-                  </TouchableOpacity>
-                </View>
-              </View>
+          {/* Conversations List View Only */}
+          <View style={styles.modalHeader}>
+            <Text style={styles.modalTitle}>Messages</Text>
+            <View style={styles.headerActions}>
+              <TouchableOpacity
+                style={styles.headerButton}
+                onPress={onNewConversation}
+              >
+                <Icon name="plus" size={14} color={colors.white} />
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.closeButton}
+                onPress={handleCloseModal}
+              >
+                <Icon name="times" size={20} color={colors.gray600} />
+              </TouchableOpacity>
+            </View>
+          </View>
 
-              {conversations.length === 0 ? (
-                renderEmptyState()
-              ) : (
-                <FlatList
-                  data={conversations}
-                  renderItem={renderConversationItem}
-                  keyExtractor={(item) => item.id}
-                  style={styles.conversationsList}
-                  showsVerticalScrollIndicator={false}
-                />
-              )}
-            </>
+          {conversations.length === 0 ? (
+            renderEmptyState()
           ) : (
-            // Individual Conversation View
-            <>
-              <View style={styles.conversationViewHeader}>
-                <TouchableOpacity
-                  style={styles.backButton}
-                  onPress={() => setSelectedConversation(null)}
-                >
-                  <Icon name="chevron-left" size={20} color={colors.white} />
-                </TouchableOpacity>
-                <View style={styles.conversationInfo}>
-                  <Text style={styles.conversationTitle}>
-                    {selectedConversation.participantName}
-                  </Text>
-                </View>
-                <TouchableOpacity
-                  style={styles.closeButton}
-                  onPress={() => {
-                    setModalVisible(false);
-                    setSelectedConversation(null);
-                  }}
-                >
-                  <Icon name="times" size={20} color={colors.gray600} />
-                </TouchableOpacity>
-              </View>
-
-              <FlatList
-                data={selectedConversation.messages}
-                renderItem={renderMessageItem}
-                keyExtractor={(item) => item.id}
-                style={styles.messagesList}
-                contentContainerStyle={styles.messagesContent}
-                showsVerticalScrollIndicator={false}
-                inverted
-              />
-
-              <View style={styles.messageInputContainer}>
-                <TextInput
-                  style={styles.messageInput}
-                  placeholder="Type a message..."
-                  value={messageText}
-                  onChangeText={setMessageText}
-                  multiline
-                  maxLength={500}
-                  placeholderTextColor={colors.gray400}
-                />
-                <TouchableOpacity
-                  style={[
-                    styles.sendButton,
-                    messageText.trim() ? styles.sendButtonActive : styles.sendButtonInactive
-                  ]}
-                  onPress={handleSendMessage}
-                  disabled={!messageText.trim()}
-                >
-                  <Icon
-                    name="paper-plane"
-                    size={16}
-                    color={messageText.trim() ? colors.white : colors.gray400}
-                  />
-                </TouchableOpacity>
-              </View>
-            </>
+            <FlatList
+              data={conversations}
+              renderItem={renderConversationItem}
+              keyExtractor={(item) => item.conversation_id}
+              style={styles.conversationsList}
+              showsVerticalScrollIndicator={false}
+            />
           )}
         </View>
       </Modal>
+
+      {/* Chat Modal */}
+      {selectedConversation && (
+        <ChatModal
+          visible={chatModalVisible}
+          onClose={handleCloseChatModal}
+          participant={{
+            id: selectedConversation.other_user_id,
+            name: selectedConversation.other_user_name,
+            type: selectedConversation.other_user_type,
+            isOnline: false,
+          }}
+          messages={messages.map((msg): ChatMessage => ({
+            id: msg.id,
+            senderId: msg.sender_id,
+            senderName: `${msg.sender_profile?.first_name || ''} ${msg.sender_profile?.last_name || ''}`.trim() || 'User',
+            senderType: msg.sender_profile?.user_type || 'buyer',
+            content: msg.content,
+            timestamp: msg.created_at,
+            read: msg.is_read,
+          }))}
+          onSendMessage={async (content: string) => {
+            try {
+              const newMessage = await messageService.sendMessage({
+                receiverId: selectedConversation.other_user_id,
+                content: content.trim(),
+              });
+              if (newMessage) {
+                setMessages(prev => [...prev, newMessage]);
+              }
+            } catch (error) {
+              console.error('Error sending message:', error);
+            }
+          }}
+          currentUserId={currentUserId}
+          loading={loading}
+        />
+      )}
     </View>
   );
 }
@@ -534,26 +652,32 @@ const styles = StyleSheet.create({
   },
 
   // Desktop Dropdown Styles (Facebook-like)
+  dropdownContainer: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    zIndex: 9998,
+  },
+
   dropdownBackdrop: {
-    position: 'fixed',
+    position: 'absolute',
     top: 0,
     left: 0,
     right: 0,
     bottom: 0,
     backgroundColor: 'transparent',
-    zIndex: 9999,
-    ...Platform.select({
-      web: {},
-      default: {
-        position: 'absolute',
-      },
-    }),
   },
 
-  desktopDropdownContainer: {
+  dropdownContentWrapper: {
     position: 'absolute',
     top: 45,
     right: 0,
+    zIndex: 9999,
+  },
+
+  desktopDropdownContainer: {
     width: 360,
     maxHeight: 500,
     backgroundColor: colors.white,
@@ -588,12 +712,34 @@ const styles = StyleSheet.create({
     fontSize: 24,
     fontWeight: 'bold',
     color: colors.text,
+    flex: 1,
+  },
+
+  desktopHeaderActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
   },
 
   desktopNewMessageButton: {
     width: 36,
     height: 36,
     borderRadius: 18,
+    backgroundColor: colors.gray100,
+    alignItems: 'center',
+    justifyContent: 'center',
+    ...Platform.select({
+      web: {
+        cursor: 'pointer',
+        transition: 'background-color 0.2s ease',
+      },
+    }),
+  },
+
+  desktopCloseButton: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
     backgroundColor: colors.gray100,
     alignItems: 'center',
     justifyContent: 'center',

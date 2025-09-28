@@ -438,14 +438,16 @@ export default function NotificationComponent({
 
       {/* Desktop Dropdown */}
       {isDesktop && dropdownVisible && (
-        <>
+        <View style={styles.dropdownContainer}>
           <TouchableOpacity
             style={styles.dropdownBackdrop}
             activeOpacity={1}
             onPress={() => setDropdownVisible(false)}
           />
-          {renderDesktopDropdownContent()}
-        </>
+          <View style={styles.dropdownContentWrapper}>
+            {renderDesktopDropdownContent()}
+          </View>
+        </View>
       )}
 
       {/* Mobile/Tablet Modal */}
@@ -552,26 +554,32 @@ const styles = StyleSheet.create({
   },
 
   // Desktop Dropdown Styles (Facebook-like)
+  dropdownContainer: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    zIndex: 9999,
+  },
+
   dropdownBackdrop: {
-    position: 'fixed',
+    position: 'absolute',
     top: 0,
     left: 0,
     right: 0,
     bottom: 0,
     backgroundColor: 'transparent',
-    zIndex: 9999,
-    ...Platform.select({
-      web: {},
-      default: {
-        position: 'absolute',
-      },
-    }),
   },
 
-  desktopDropdownContainer: {
+  dropdownContentWrapper: {
     position: 'absolute',
     top: 45,
     right: 0,
+    zIndex: 10000,
+  },
+
+  desktopDropdownContainer: {
     width: 380,
     maxHeight: 500,
     backgroundColor: colors.white,
