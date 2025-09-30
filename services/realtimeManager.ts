@@ -19,7 +19,7 @@ class RealtimeManager {
 
     // Use auth state change to monitor connection
     supabase.auth.onAuthStateChange((event, session) => {
-      console.log('📡 Auth state changed:', event);
+      // Silently monitor connection state
       if (session) {
         this.setConnectionState('CONNECTED');
       } else if (event === 'SIGNED_OUT') {

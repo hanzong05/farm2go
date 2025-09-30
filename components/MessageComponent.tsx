@@ -8,9 +8,11 @@ import {
     Text,
     TextInput,
     TouchableOpacity,
-    View
+    View,
+    Alert
 } from 'react-native';
 import Icon from 'react-native-vector-icons/FontAwesome5';
+import { supabase } from '../lib/supabase';
 import { messageService, Conversation as DBConversation, Message as DBMessage } from '../services/messageService';
 import ChatModal, { ChatMessage, ChatParticipant } from './ChatModal';
 
@@ -83,6 +85,29 @@ export default function MessageComponent({
   currentUserId = 'current-user',
   visible = true,
 }: MessageComponentProps) {
+  // Create stable unique keys for this user's state to prevent conflicts
+  const userStateKey = `user_${currentUserId}`;
+  const componentInstanceIdRef = useRef(`msg_comp_${currentUserId}_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`);
+  const componentInstanceId = componentInstanceIdRef.current;
+
+  // Reset sending state when user changes to prevent cross-user blocking
+  useEffect(() => {
+    sendingStateRef.current = false;
+    lastSendTimeRef.current = 0;
+    console.log('🔄 TWO-USER DEBUG: Reset sending state for user change:', currentUserId);
+  }, [currentUserId]);
+
+  // Cleanup all state when component unmounts
+  useEffect(() => {
+    return () => {
+      sendingStateRef.current = false;
+      lastSendTimeRef.current = 0;
+      setActiveSubscriptions(new Set());
+      console.log('🧹 TWO-USER DEBUG: Component cleanup for user:', currentUserId);
+    };
+  }, []);
+
+  // User-isolated state with unique keys to prevent cross-user conflicts
   const [modalVisible, setModalVisible] = useState(false);
   const [dropdownVisible, setDropdownVisible] = useState(false);
   const [chatModalVisible, setChatModalVisible] = useState(false);
@@ -91,16 +116,20 @@ export default function MessageComponent({
   const [messages, setMessages] = useState<DBMessage[]>([]);
   const [messageText, setMessageText] = useState('');
   const [loading, setLoading] = useState(false);
+
+  // Per-user isolated sending state using refs to prevent cross-user interference
+  const sendingStateRef = useRef<boolean>(false);
+  const lastSendTimeRef = useRef<number>(0);
+  const [activeSubscriptions, setActiveSubscriptions] = useState<Set<string>>(new Set());
   const buttonRef = useRef<View>(null);
+
 
   // Load conversations on component mount
   useEffect(() => {
     const loadConversations = async () => {
       try {
         setLoading(true);
-        console.log('📨 Loading conversations...');
         const userConversations = await messageService.getUserConversations();
-        console.log('📨 Loaded conversations:', userConversations.length, userConversations);
         setConversations(userConversations);
       } catch (error) {
         console.error('❌ Error loading conversations:', error);
@@ -134,109 +163,228 @@ export default function MessageComponent({
     loadMessages();
   }, [selectedConversation]);
 
-  // Subscribe to real-time message changes
+  // WORKFLOW: Subscribe to real-time updates following the exact workflow diagram
+  useEffect(() => {
+    if (!currentUserId || !selectedConversation) return;
+
+    const subscriptionKey = `conv_${selectedConversation.other_user_id}_${componentInstanceId}`;
+
+    const setupWorkflowSubscription = async () => {
+      try {
+        const conversationId = await messageService.getOrCreateConversationId(
+          currentUserId,
+          selectedConversation.other_user_id
+        );
+
+        if (!conversationId) {
+          return;
+        }
+
+        // Check if this subscription is already active to prevent duplicates
+        if (activeSubscriptions.has(subscriptionKey)) {
+          return;
+        }
+
+        const subscription = messageService.subscribeToConversationChanges(
+          conversationId,
+          (message: DBMessage, type: 'INSERT' | 'UPDATE') => {
+            // Add user validation to prevent cross-user message processing
+            const isRelevantForThisUser = message.sender_id === currentUserId || message.receiver_id === currentUserId;
+            if (!isRelevantForThisUser) {
+              return;
+            }
+
+            if (type === 'INSERT') {
+
+              // Update conversations list with new message (instant update)
+              setConversations(prev => {
+                const updated = [...prev];
+                const otherUserId = message.sender_id === currentUserId
+                  ? message.receiver_id
+                  : message.sender_id;
+
+                const convIndex = updated.findIndex(c => c.other_user_id === otherUserId);
+
+                if (convIndex >= 0) {
+                  updated[convIndex] = {
+                    ...updated[convIndex],
+                    last_message: message.content,
+                    last_message_at: message.created_at,
+                    last_message_sender_id: message.sender_id,
+                    unread_count: message.receiver_id === currentUserId
+                      ? updated[convIndex].unread_count + 1
+                      : updated[convIndex].unread_count
+                  };
+                  const [conversation] = updated.splice(convIndex, 1);
+                  updated.unshift(conversation);
+                }
+
+                return updated;
+              });
+
+              // Update messages list (instant update)
+              setMessages(prev => {
+                const exists = prev.find(m => m.id === message.id);
+                if (exists) return prev;
+                return [...prev, message];
+              });
+
+              // Mark as read if user received it and chat is open
+              if (message.receiver_id === currentUserId && chatModalVisible) {
+                setTimeout(() => messageService.markMessageAsRead(message.id), 100);
+              }
+            } else if (type === 'UPDATE') {
+              // Handle message updates (like read status)
+              setMessages(prev =>
+                prev.map(m => m.id === message.id ? message : m)
+              );
+
+              // Update unread counts
+              if (message.is_read && message.receiver_id === currentUserId) {
+                setConversations(prev =>
+                  prev.map(conv => {
+                    if (conv.other_user_id === message.sender_id) {
+                      return { ...conv, unread_count: Math.max(0, conv.unread_count - 1) };
+                    }
+                    return conv;
+                  })
+                );
+              }
+            }
+          }
+        );
+
+        // Track this subscription
+        setActiveSubscriptions(prev => new Set([...prev, subscriptionKey]));
+
+        return subscription;
+      } catch (error) {
+        console.error('❌ WORKFLOW: Error setting up conversation subscription:', error);
+      }
+    };
+
+    const subscriptionPromise = setupWorkflowSubscription();
+
+    return () => {
+      subscriptionPromise.then(subscription => {
+        subscription?.unsubscribe();
+        setActiveSubscriptions(prev => {
+          const newSet = new Set(prev);
+          newSet.delete(subscriptionKey);
+          return newSet;
+        });
+      });
+    };
+  }, [currentUserId, selectedConversation?.other_user_id, chatModalVisible, componentInstanceId]);
+
+  // Subscribe to general message changes for conversation list updates (USER-ISOLATED)
   useEffect(() => {
     if (!currentUserId) return;
 
-    console.log('Setting up real-time subscription for MessageComponent:', currentUserId);
+    const generalSubscriptionKey = `general_${currentUserId}_${componentInstanceId}`;
 
-    const subscription = messageService.subscribeToAllMessageChanges(
-      (message: DBMessage, type: 'INSERT' | 'UPDATE') => {
-        console.log(`Real-time message ${type} in MessageComponent:`, message);
+    console.log('🎯 SETUP: Setting up general subscription for user:', currentUserId);
+    console.log('🎯 SETUP: Subscription key:', generalSubscriptionKey);
+    console.log('🎯 SETUP: Active subscriptions:', Array.from(activeSubscriptions));
 
-        if (type === 'INSERT') {
-          // Update conversations list with new message
-          setConversations(prev => {
-            const updated = [...prev];
-            const otherUserId = message.sender_id === currentUserId
-              ? message.receiver_id
-              : message.sender_id;
+    // Check for duplicate subscription
+    if (activeSubscriptions.has(generalSubscriptionKey)) {
+      console.log('⚠️ SETUP: Subscription already exists, skipping');
+      return;
+    }
 
-            const convIndex = updated.findIndex(c => c.other_user_id === otherUserId);
+    console.log('✅ SETUP: Creating new subscription');
+    const subscription = messageService.subscribeToMessages(
+      (message: DBMessage) => {
+        console.log('🔥 CONVERSATION LIST CALLBACK: Message received in MessageComponent:', {
+          messageId: message.id,
+          senderId: message.sender_id,
+          receiverId: message.receiver_id,
+          currentUserId,
+          content: message.content?.substring(0, 30)
+        });
 
-            if (convIndex >= 0) {
-              // Update existing conversation
-              updated[convIndex] = {
-                ...updated[convIndex],
-                last_message: message.content,
-                last_message_at: message.created_at,
-                unread_count: message.receiver_id === currentUserId
-                  ? updated[convIndex].unread_count + 1
-                  : updated[convIndex].unread_count
-              };
-              // Move to top
-              const [conversation] = updated.splice(convIndex, 1);
-              updated.unshift(conversation);
-            } else if (message.receiver_id === currentUserId || message.sender_id === currentUserId) {
-              // Create new conversation
-              const otherUserProfile = message.sender_id === currentUserId
-                ? message.receiver_profile
-                : message.sender_profile;
+        // STRICT user validation - only process messages relevant to THIS user
+        const isForThisUser = message.sender_id === currentUserId || message.receiver_id === currentUserId;
+        console.log('🔥 CONVERSATION LIST CALLBACK: Is for this user?', isForThisUser);
 
-              const newConversation = {
-                conversation_id: [currentUserId, otherUserId].sort().join('-'),
-                other_user_id: otherUserId,
-                other_user_name: `${otherUserProfile?.first_name || ''} ${otherUserProfile?.last_name || ''}`.trim() || 'Unknown User',
-                other_user_type: otherUserProfile?.user_type || 'buyer',
-                last_message: message.content,
-                last_message_at: message.created_at,
-                unread_count: message.receiver_id === currentUserId ? 1 : 0,
-              };
-              updated.unshift(newConversation);
-            }
-
-            return updated;
-          });
-
-          // Update messages if viewing this conversation
-          if (selectedConversation && (
-            (message.sender_id === selectedConversation.other_user_id && message.receiver_id === currentUserId) ||
-            (message.sender_id === currentUserId && message.receiver_id === selectedConversation.other_user_id)
-          )) {
-            setMessages(prev => {
-              // Check for duplicates
-              const exists = prev.find(m => m.id === message.id);
-              if (exists) return prev;
-              return [...prev, message];
-            });
-
-            // Mark as read if user received it and modal is open
-            if (message.receiver_id === currentUserId && modalVisible) {
-              messageService.markMessageAsRead(message.id);
-            }
-          }
-        } else if (type === 'UPDATE') {
-          // Update message in current conversation if visible
-          if (selectedConversation && (
-            (message.sender_id === selectedConversation.other_user_id && message.receiver_id === currentUserId) ||
-            (message.sender_id === currentUserId && message.receiver_id === selectedConversation.other_user_id)
-          )) {
-            setMessages(prev =>
-              prev.map(m => m.id === message.id ? message : m)
-            );
-          }
-
-          // Update unread counts in conversations list
-          if (message.is_read && message.receiver_id === currentUserId) {
-            setConversations(prev =>
-              prev.map(conv => {
-                if (conv.other_user_id === message.sender_id) {
-                  return { ...conv, unread_count: Math.max(0, conv.unread_count - 1) };
-                }
-                return conv;
-              })
-            );
-          }
+        if (!isForThisUser) {
+          console.log('❌ CONVERSATION LIST CALLBACK: Message not for this user, ignoring');
+          return;
         }
+
+        // Only update conversations list, not individual messages
+        const otherUserId = message.sender_id === currentUserId
+          ? message.receiver_id
+          : message.sender_id;
+
+        console.log('🔥 CONVERSATION LIST CALLBACK: Updating conversations for otherUserId:', otherUserId);
+
+        setConversations(prev => {
+          console.log('🔥 CONVERSATION LIST CALLBACK: Current conversations count:', prev.length);
+          const updated = [...prev];
+          const convIndex = updated.findIndex(c => c.other_user_id === otherUserId);
+          console.log('🔥 CONVERSATION LIST CALLBACK: Found conversation at index:', convIndex);
+
+          if (convIndex >= 0) {
+            // Update existing conversation
+            console.log('🔥 CONVERSATION LIST CALLBACK: Updating existing conversation');
+            updated[convIndex] = {
+              ...updated[convIndex],
+              last_message: message.content,
+              last_message_at: message.created_at,
+              last_message_sender_id: message.sender_id,
+              unread_count: message.receiver_id === currentUserId
+                ? updated[convIndex].unread_count + 1
+                : updated[convIndex].unread_count
+            };
+            const [conversation] = updated.splice(convIndex, 1);
+            updated.unshift(conversation);
+            console.log('🔥 CONVERSATION LIST CALLBACK: Updated conversations count:', updated.length);
+          } else if (message.receiver_id === currentUserId || message.sender_id === currentUserId) {
+            // Create new conversation
+            const otherUserProfile = message.sender_id === currentUserId
+              ? message.receiver_profile
+              : message.sender_profile;
+
+            const newConversation = {
+              conversation_id: [currentUserId, otherUserId].sort().join('-'),
+              other_user_id: otherUserId,
+              other_user_name: `${otherUserProfile?.first_name || ''} ${otherUserProfile?.last_name || ''}`.trim() || 'Unknown User',
+              other_user_type: otherUserProfile?.user_type || 'buyer',
+              last_message: message.content,
+              last_message_at: message.created_at,
+              last_message_sender_id: message.sender_id,
+              unread_count: message.receiver_id === currentUserId ? 1 : 0,
+            };
+            updated.unshift(newConversation);
+          }
+
+          return updated;
+        });
       },
       currentUserId
     );
 
+    console.log('✅ SETUP: Subscription created:', subscription);
+
+    // Track this subscription
+    setActiveSubscriptions(prev => {
+      const newSet = new Set([...prev, generalSubscriptionKey]);
+      console.log('✅ SETUP: Updated active subscriptions:', Array.from(newSet));
+      return newSet;
+    });
+
     return () => {
-      console.log('Cleaning up MessageComponent real-time subscription');
+      console.log('🧹 CLEANUP: Unsubscribing from:', generalSubscriptionKey);
       subscription?.unsubscribe();
+      setActiveSubscriptions(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(generalSubscriptionKey);
+        return newSet;
+      });
     };
-  }, [currentUserId, selectedConversation?.other_user_id, modalVisible]);
+  }, [currentUserId, componentInstanceId]);
 
   const formatTimestamp = (timestamp: string) => {
     const date = new Date(timestamp);
@@ -280,19 +428,46 @@ export default function MessageComponent({
     }
   };
 
-  const handleConversationPress = (conversation: DBConversation) => {
-    setSelectedConversation(conversation);
-    if (conversation.unread_count > 0) {
-      messageService.markConversationAsRead(conversation.other_user_id);
-    }
+  const handleConversationPress = async (conversation: DBConversation) => {
+    try {
+      // Get the REAL UUID conversation ID from database
+      const realConversationId = await messageService.getOrCreateConversationId(currentUserId, conversation.other_user_id);
 
-    // Close dropdown/modal and open chat modal
-    setDropdownVisible(false);
-    setModalVisible(false);
-    setChatModalVisible(true);
+      // Update conversation object with real UUID
+      const updatedConversation = {
+        ...conversation,
+        conversation_id: realConversationId || conversation.conversation_id
+      };
 
-    if (onConversationPress) {
-      onConversationPress(conversation);
+      setSelectedConversation(updatedConversation);
+
+      // Check if conversation exists and load accordingly
+      const chatData = await messageService.initializeChat(currentUserId, conversation.other_user_id);
+
+      if (chatData.exists) {
+        // Load messages for existing conversation
+        setMessages(chatData.messages);
+
+        // Mark as read since user is opening the chat
+        if (conversation.unread_count > 0) {
+          messageService.markConversationAsRead(conversation.other_user_id);
+        }
+      } else {
+        // No existing conversation - will be created when first message is sent
+        setMessages([]);
+      }
+
+      // Close dropdown/modal and open chat modal
+      setDropdownVisible(false);
+      setModalVisible(false);
+      setChatModalVisible(true);
+
+      if (onConversationPress) {
+        onConversationPress(conversation);
+      }
+
+    } catch (error) {
+      console.error('Error opening chat:', error);
     }
   };
 
@@ -360,7 +535,17 @@ export default function MessageComponent({
           </Text>
         </View>
         <Text style={styles.lastMessage} numberOfLines={1}>
-          {item.last_message}
+          {item.last_message_sender_id === currentUserId ? (
+            <>
+              <Text style={styles.lastMessagePrefix}>You: </Text>
+              {item.last_message}
+            </>
+          ) : (
+            <>
+              <Text style={styles.lastMessagePrefix}>{item.other_user_name}: </Text>
+              {item.last_message}
+            </>
+          )}
         </Text>
       </View>
     </TouchableOpacity>
@@ -368,7 +553,6 @@ export default function MessageComponent({
 
 
   const renderEmptyState = () => {
-    console.log('📨 Rendering empty state, conversations length:', conversations.length);
     return (
       <View style={[styles.emptyContainer, isDesktop && styles.dropdownEmptyContainer]}>
         <Icon name="comments" size={isDesktop ? 40 : 48} color={colors.gray400} />
@@ -390,7 +574,6 @@ export default function MessageComponent({
   };
 
   const renderDesktopDropdownContent = () => {
-    console.log('📨 Rendering desktop dropdown, conversations:', conversations.length);
     return (
       <View style={styles.desktopDropdownContainer}>
         <View style={styles.desktopDropdownHeader}>
@@ -457,7 +640,17 @@ export default function MessageComponent({
                       styles.desktopLastMessage,
                       item.unread_count > 0 && styles.desktopLastMessageUnread
                     ]} numberOfLines={1}>
-                      {item.last_message}
+                      {item.last_message_sender_id === currentUserId ? (
+                        <>
+                          <Text style={styles.desktopLastMessagePrefix}>You: </Text>
+                          {item.last_message}
+                        </>
+                      ) : (
+                        <>
+                          <Text style={styles.desktopLastMessagePrefix}>{item.other_user_name}: </Text>
+                          {item.last_message}
+                        </>
+                      )}
                     </Text>
                     <Text style={styles.desktopTimestamp}>
                       · {formatTimestamp(item.last_message_at)}
@@ -593,21 +786,67 @@ export default function MessageComponent({
             timestamp: msg.created_at,
             read: msg.is_read,
           }))}
+          conversationId={selectedConversation.conversation_id}
           onSendMessage={async (content: string) => {
-            try {
-              const newMessage = await messageService.sendMessage({
-                receiverId: selectedConversation.other_user_id,
-                content: content.trim(),
-              });
-              if (newMessage) {
-                setMessages(prev => [...prev, newMessage]);
+            const now = Date.now();
+            const timeSinceLastSend = now - lastSendTimeRef.current;
+            const minSendInterval = 1000; // 1 second minimum between sends
+
+            console.log('🚀 TWO-USER DEBUG: Send attempt by user:', currentUserId, {
+              sendingMessage: sendingStateRef.current,
+              timeSinceLastSend,
+              minSendInterval,
+              componentInstanceId: componentInstanceId.substring(0, 15) + '...'
+            });
+
+            if (sendingStateRef.current) {
+              console.log('⏳ TWO-USER DEBUG: Blocked - already sending message for user:', currentUserId);
+              return;
+            }
+
+            if (timeSinceLastSend < minSendInterval) {
+              console.log('⏳ TWO-USER DEBUG: Blocked - rate limit for user:', currentUserId, 'wait:', minSendInterval - timeSinceLastSend, 'ms');
+              // Allow bypass if it's been too long (prevents permanent blocking)
+              if (timeSinceLastSend > 5000) {
+                console.log('🔄 TWO-USER DEBUG: Bypassing old rate limit for user:', currentUserId);
+                lastSendTimeRef.current = 0;
+              } else {
+                return;
               }
+            }
+
+            try {
+              sendingStateRef.current = true;
+              lastSendTimeRef.current = now;
+
+              let newMessage;
+              try {
+                newMessage = await messageService.sendMessage({
+                  receiverId: selectedConversation.other_user_id,
+                  content: content.trim(),
+                });
+
+              } catch (serviceError) {
+                console.error('Error sending message:', serviceError);
+                throw serviceError;
+              }
+
+              if (!newMessage) {
+                Alert.alert('Error', 'Failed to send message. Please try again.');
+                return;
+              }
+
             } catch (error) {
               console.error('Error sending message:', error);
+              Alert.alert('Error', 'Failed to send message. Please check your connection.');
+            } finally {
+              // Always clear sending state to prevent blocking
+              sendingStateRef.current = false;
+              console.log('✅ TWO-USER DEBUG: Cleared sending state for user:', currentUserId);
             }
           }}
           currentUserId={currentUserId}
-          loading={loading}
+          loading={loading || sendingStateRef.current}
         />
       )}
     </View>
@@ -832,6 +1071,10 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
 
+  desktopLastMessagePrefix: {
+    fontWeight: '600',
+  },
+
   desktopTimestamp: {
     fontSize: 13,
     color: colors.gray500,
@@ -1020,6 +1263,11 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: colors.textSecondary,
     lineHeight: 20,
+  },
+
+  lastMessagePrefix: {
+    fontWeight: '600',
+    color: colors.gray700,
   },
 
   conversationViewHeader: {

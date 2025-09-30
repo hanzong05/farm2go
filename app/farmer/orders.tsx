@@ -19,7 +19,9 @@ import HeaderComponent from '../../components/HeaderComponent';
 import { supabase } from '../../lib/supabase';
 import { getUserWithProfile } from '../../services/auth';
 import { notifyOrderStatusChange } from '../../services/notifications';
+import { subscribeToUserOrders } from '../../services/orders';
 import { Database } from '../../types/database';
+import { Order } from '../../types/orders';
 import { applyFilters } from '../../utils/filterConfigs';
 
 const { width } = Dimensions.get('window');
@@ -160,6 +162,59 @@ export default function FarmerOrdersScreen() {
 
   useEffect(() => {
     loadData();
+
+    // Set up real-time order subscription
+    let subscription: any = null;
+
+    const setupRealtimeSubscription = async () => {
+      try {
+        const userData = await getUserWithProfile();
+        if (userData?.user?.id) {
+          console.log('🔄 Setting up real-time order subscription for farmer:', userData.user.id);
+
+          subscription = subscribeToUserOrders(
+            userData.user.id,
+            'farmer',
+            (updatedOrder: Order, eventType: 'INSERT' | 'UPDATE' | 'DELETE') => {
+              console.log(`🔄 Farmer order ${eventType}:`, updatedOrder);
+
+              // Update the orders state based on the event type
+              if (eventType === 'INSERT') {
+                // New order created, reload data to get full details
+                loadData();
+              } else if (eventType === 'UPDATE') {
+                // Order updated, update the specific order in state
+                setOrders(prevOrders =>
+                  prevOrders.map(order =>
+                    order.id === updatedOrder.id
+                      ? { ...order, status: updatedOrder.status }
+                      : order
+                  )
+                );
+                console.log('✅ Farmer order updated in real-time:', updatedOrder);
+              } else if (eventType === 'DELETE') {
+                // Order deleted, remove from state
+                setOrders(prevOrders =>
+                  prevOrders.filter(order => order.id !== updatedOrder.id)
+                );
+              }
+            }
+          );
+        }
+      } catch (error) {
+        console.error('❌ Failed to setup real-time subscription:', error);
+      }
+    };
+
+    setupRealtimeSubscription();
+
+    // Cleanup function
+    return () => {
+      if (subscription) {
+        console.log('🛑 Cleaning up farmer order subscription');
+        subscription.unsubscribe();
+      }
+    };
   }, []);
 
   useEffect(() => {
@@ -227,6 +282,7 @@ export default function FarmerOrdersScreen() {
       const ordersWithItems: Order[] = (ordersData as DatabaseOrder[]).map(order => ({
         id: order.id,
         buyer_id: order.buyer_id,
+        farmer_id: order.farmer_id, // Add the missing farmer_id field
         total_amount: order.total_price,
         status: order.status as Order['status'],
         created_at: order.created_at,
@@ -429,9 +485,9 @@ export default function FarmerOrdersScreen() {
       message: `Are you sure you want to ${action} from ${buyerName}? This will notify the customer of the status change.`,
       isDestructive,
       confirmText: `Yes, ${label}`,
-      onConfirm: () => {
-        updateOrderStatus(order.id, newStatus);
+      onConfirm: async () => {
         setConfirmModal(prev => ({ ...prev, visible: false }));
+        await updateOrderStatus(order.id, newStatus);
       }
     });
   };
@@ -457,19 +513,31 @@ export default function FarmerOrdersScreen() {
 
       // Send notifications about order status change
       try {
-        await notifyOrderStatusChange(
+        console.log('🔍 Order data for notification:', {
           orderId,
-          newStatus,
-          currentOrder.buyer_id,
-          currentOrder.farmer_id,
-          {
-            totalAmount: currentOrder.total_amount,
-            itemCount: currentOrder.items?.length || 0,
-            farmerName: `${profile?.first_name} ${profile?.last_name}`,
-            buyerName: currentOrder.buyer_profile ? `${currentOrder.buyer_profile.first_name} ${currentOrder.buyer_profile.last_name}` : undefined
-          },
-          profile?.id || ''
-        );
+          buyerId: currentOrder.buyer_id,
+          farmerId: currentOrder.farmer_id,
+          hasOrder: !!currentOrder
+        });
+
+        // Only send notification if we have a valid profile ID
+        if (profile?.id) {
+          await notifyOrderStatusChange(
+            orderId,
+            newStatus,
+            currentOrder.buyer_id,
+            currentOrder.farmer_id,
+            {
+              totalAmount: currentOrder.total_amount,
+              itemCount: currentOrder.order_items?.length || 0,
+              farmerName: `${profile?.first_name} ${profile?.last_name}`,
+              buyerName: currentOrder.buyer_profile ? `${currentOrder.buyer_profile.first_name} ${currentOrder.buyer_profile.last_name}` : undefined
+            },
+            profile.id
+          );
+        } else {
+          console.warn('⚠️ Skipping notification: profile.id is not available');
+        }
 
         console.log('✅ Order status change notification sent');
       } catch (notifError) {
@@ -657,7 +725,7 @@ export default function FarmerOrdersScreen() {
                 styles.buyerName,
                 isCompact && styles.buyerNameCompact
               ]}>
-                {`${order.buyer_profile?.first_name || ''} ${order.buyer_profile?.last_name || ''}`.trim() ||
+{`${order.buyer_profile?.first_name || ''} ${order.buyer_profile?.last_name || ''}`.trim() ||
                  'Unknown Buyer'}
               </Text>
               {order.buyer_profile?.phone && (
@@ -680,7 +748,7 @@ export default function FarmerOrdersScreen() {
                 styles.buyerName,
                 isCompact && styles.buyerNameCompact
               ]}>
-                {order.farmer_profile?.farm_name ||
+{order.farmer_profile?.farm_name ||
                  `${order.farmer_profile?.first_name || ''} ${order.farmer_profile?.last_name || ''}`.trim() ||
                  'Unknown Farmer'}
               </Text>
@@ -759,9 +827,9 @@ export default function FarmerOrdersScreen() {
                   activeOpacity={0.8}
                 >
                   <View style={styles.actionButtonContent}>
-                  <Icon name="check" size={14} color="#ffffff" style={{marginRight: 6}} />
-                  <Text style={styles.actionButtonText}>Accept</Text>
-                </View>
+                    <Icon name="check" size={14} color="#ffffff" style={{marginRight: 6}} />
+                    <Text style={styles.actionButtonText}>Accept</Text>
+                  </View>
                 </TouchableOpacity>
                 <TouchableOpacity
                   style={[styles.actionButton, styles.cancelButton]}
@@ -858,7 +926,7 @@ export default function FarmerOrdersScreen() {
 
       <Text style={styles.emptyTitle}>No Orders Found</Text>
       <Text style={styles.emptyDescription}>
-        {activeTab === 'received' ? (
+{activeTab === 'received' ? (
           selectedStatus === 'all'
             ? 'You haven\'t received any orders yet. Keep your products updated to attract buyers!'
             : `No ${selectedStatus} orders received at the moment.`

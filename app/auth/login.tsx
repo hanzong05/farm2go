@@ -225,11 +225,11 @@ export default function LoginScreen() {
   // Listen for auth state changes to handle successful OAuth
   useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      console.log('🔄 Login page auth state change:', event, session?.user?.id);
+      // Silently handle auth state changes
 
       // Handle SIGNED_OUT events
       if (event === 'SIGNED_OUT') {
-        console.log('🔄 User signed out, resetting loading state');
+        // User signed out, resetting loading state
         setIsLoading(false);
       }
 

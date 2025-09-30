@@ -142,14 +142,12 @@ export default function RegisterScreen() {
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       try {
-        console.log('🔄 Auth state change EVENT:', event);
-        console.log('🔄 Auth state change SESSION:', !!session);
-        console.log('🔄 Auth state change USER:', !!session?.user);
+        // Silently handle auth state changes
 
         if (event === 'SIGNED_IN' && session?.user) {
-          console.log('✅ User signed in via OAuth:', session.user.email);
+          // User signed in via OAuth
           let storedUserType = await AsyncStorage.getItem('oauth_user_type');
-          console.log('🔍 Stored user type:', storedUserType);
+          // Check stored user type
 
           if (!storedUserType && session.user.email) {
             console.log('🔍 No stored user type, checking database for existing profile...');

@@ -121,13 +121,53 @@ export default function AuthCallback() {
             const { data: sessionData, error: exchangeError } = await supabase.auth.exchangeCodeForSession(authorizationCode);
             if (exchangeError) {
               console.error('❌ Code exchange error:', exchangeError);
+              // Handle specific auth code errors
+              if (exchangeError.message?.includes('invalid request') || exchangeError.message?.includes('code verifier')) {
+                console.log('🔄 Auth code exchange failed, checking for existing session...');
+                const { data: { session } } = await supabase.auth.getSession();
+                if (session?.user) {
+                  console.log('✅ Found existing valid session, proceeding...');
+                } else {
+                  console.log('❌ No valid session found, redirecting to login');
+                  safeNavigate('/auth/login?error=auth_expired');
+                  return;
+                }
+              }
             } else {
               console.log('✅ Code exchange successful');
             }
           } catch (exchangeError) {
             console.error('❌ Code exchange exception:', exchangeError);
+            // Check for existing session on exception
+            try {
+              const { data: { session } } = await supabase.auth.getSession();
+              if (!session?.user) {
+                safeNavigate('/auth/login?error=auth_failed');
+                return;
+              }
+            } catch (sessionError) {
+              console.error('❌ Session check failed:', sessionError);
+              safeNavigate('/auth/login?error=auth_failed');
+              return;
+            }
           }
-          // Code exchange completed
+        } else {
+          // No auth code - check for existing session
+          console.log('🔍 No auth code found, checking existing session...');
+          try {
+            const { data: { session } } = await supabase.auth.getSession();
+            if (!session?.user) {
+              console.log('❌ No valid session found');
+              safeNavigate('/auth/login?error=no_session');
+              return;
+            } else {
+              console.log('✅ Valid session found, proceeding...');
+            }
+          } catch (sessionError) {
+            console.error('❌ Session check failed:', sessionError);
+            safeNavigate('/auth/login?error=session_check_failed');
+            return;
+          }
         }
 
         // OAuth processing complete - navigate directly to marketplace

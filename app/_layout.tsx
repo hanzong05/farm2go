@@ -222,7 +222,7 @@ export default function RootLayout() {
 
   useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      console.log('🔄 Layout auth state change:', event, session?.user?.email);
+      // Silently handle auth state changes
 
       if (event === 'SIGNED_OUT') {
         const currentPath = Platform.OS === 'web' && typeof window !== 'undefined'
@@ -258,9 +258,27 @@ export default function RootLayout() {
     const handleDeepLink = (url: string) => {
       console.log('🛒 Deep link handler:', url);
 
-      // Handle OAuth callback - just redirect to callback page
+      // Handle OAuth callback - extract code and redirect to callback page
       if (url.includes('access_token=') || url.includes('refresh_token=') || url.includes('code=')) {
-        console.log('🔗 OAuth callback detected, redirecting to callback page...');
+        console.log('🔗 OAuth callback detected, extracting and storing code...');
+
+        // Extract the authorization code from the URL
+        try {
+          const urlObj = new URL(url);
+          const code = urlObj.searchParams.get('code');
+
+          if (code) {
+            console.log('💾 Storing authorization code for callback processing:', code.substring(0, 10) + '...');
+
+            // Store the code for the callback handler to use
+            import('@react-native-async-storage/async-storage').then(async ({ default: AsyncStorage }) => {
+              await AsyncStorage.setItem('oauth_authorization_code', code);
+              console.log('✅ Code stored successfully');
+            });
+          }
+        } catch (error) {
+          console.error('❌ Error extracting OAuth code:', error);
+        }
 
         if (isRouterReady) {
           router.replace('/auth/callback');

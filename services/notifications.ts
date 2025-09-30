@@ -26,6 +26,25 @@ export const createNotification = async (params: CreateNotificationParams) => {
   try {
     console.log('📧 Creating notification:', params);
 
+    // Validate required parameters FIRST
+    if (!params.recipientId) {
+      console.error('❌ Cannot create notification: recipientId is null/undefined');
+      console.error('❌ Full params object:', params);
+      return null; // Return null instead of throwing
+    }
+    if (!params.type) {
+      console.error('❌ Cannot create notification: type is null/undefined');
+      return null;
+    }
+    if (!params.title) {
+      console.error('❌ Cannot create notification: title is null/undefined');
+      return null;
+    }
+    if (!params.message) {
+      console.error('❌ Cannot create notification: message is null/undefined');
+      return null;
+    }
+
     // Check if we should skip database insertion for testing
     if (process.env.SKIP_NOTIFICATIONS === 'true') {
       console.log('⚠️ Notifications disabled via SKIP_NOTIFICATIONS env var');
@@ -65,6 +84,12 @@ export const createNotification = async (params: CreateNotificationParams) => {
 
     console.log('📝 Inserting notification data:', notificationData);
 
+    // Final safety check before database call
+    if (!notificationData.recipient_id || notificationData.recipient_id === 'null' || notificationData.recipient_id === null) {
+      console.error('❌ BLOCKING DATABASE CALL: recipient_id is invalid:', notificationData.recipient_id);
+      return null;
+    }
+
     const { data, error } = await supabase
       .from('notifications')
       .insert(notificationData)
@@ -77,6 +102,13 @@ export const createNotification = async (params: CreateNotificationParams) => {
       console.error('❌ Error message:', error.message);
       console.error('❌ Error details:', error.details);
       console.error('❌ Error hint:', error.hint);
+
+      // Check if it's a null constraint violation - return null instead of throwing
+      if (error.code === '23502' && error.message?.includes('recipient_id')) {
+        console.error('❌ NULL RECIPIENT_ID ERROR - This should have been caught by validation!');
+        console.error('❌ Params that caused this:', params);
+        return null; // Return null instead of throwing
+      }
 
       // Check if it's a constraint violation
       if (error.code === '23514' && error.message?.includes('notifications_type_check')) {
@@ -93,12 +125,14 @@ export const createNotification = async (params: CreateNotificationParams) => {
         console.error('🚨 RLS policy is preventing notification creation');
       }
 
-      throw error;
+      // For other errors, return null instead of throwing
+      console.error('❌ Returning null instead of throwing error to prevent crash');
+      return null;
     }
 
     if (!data) {
       console.error('❌ No data returned from notification insert');
-      throw new Error('No data returned from notification insert');
+      return null; // Return null instead of throwing
     }
 
     console.log('✅ Notification created successfully:', data.id);
@@ -113,10 +147,19 @@ export const createNotification = async (params: CreateNotificationParams) => {
     }
 
     return data;
-  } catch (error) {
+  } catch (error: any) {
     console.error('❌ Failed to create notification:', error);
     console.error('❌ Full error object:', JSON.stringify(error, null, 2));
-    throw error;
+
+    // Check if it's the specific null constraint error
+    if (error?.code === '23502' && error?.message?.includes('recipient_id')) {
+      console.error('🚨 CRITICAL: NULL recipient_id made it past all validation checks!');
+      console.error('🚨 This indicates a serious bug in the validation logic');
+    }
+
+    // Return null instead of throwing to prevent crashes
+    console.error('❌ Returning null to prevent app crash');
+    return null;
   }
 };
 
@@ -391,7 +434,8 @@ export const subscribeToNotifications = (
 ) => {
   console.log('🔔 Setting up enhanced real-time notification subscription for user:', userId);
 
-  const channelName = `notifications_${userId}_${Date.now()}`;
+  // Use consistent channel naming with broadcast
+  const channelName = `notifications_${userId}`;
 
   const subscription = supabase
     .channel(channelName, {
@@ -454,8 +498,14 @@ export const broadcastNotification = async (
 
     const channelName = `notifications_${recipientId}`;
 
+    // Create a temporary channel just for broadcasting
     const broadcastResult = await supabase
-      .channel(channelName)
+      .channel(channelName, {
+        config: {
+          broadcast: { self: false },
+          private: false
+        }
+      })
       .send({
         type: 'broadcast',
         event: 'notification',
@@ -466,6 +516,7 @@ export const broadcastNotification = async (
     return broadcastResult;
   } catch (error) {
     console.error('❌ Failed to broadcast notification:', error);
+    return null;
   }
 };
 
@@ -648,6 +699,20 @@ export const notifyOrderStatusChange = async (
   try {
     console.log('📋 Notifying about order status change:', { orderId, newStatus });
 
+    // Validate required parameters
+    if (!buyerId || buyerId.trim() === '') {
+      console.error('❌ Cannot send notification: buyerId is null/undefined/empty:', buyerId);
+      return;
+    }
+    if (!farmerId || farmerId.trim() === '') {
+      console.error('❌ Cannot send notification: farmerId is null/undefined/empty:', farmerId);
+      return;
+    }
+    if (!updatedBy || updatedBy.trim() === '') {
+      console.error('❌ Cannot send notification: updatedBy is null/undefined/empty:', updatedBy);
+      return;
+    }
+
     const statusMessages = {
       'confirmed': {
         buyer: '✅ Order Confirmed',
@@ -673,6 +738,12 @@ export const notifyOrderStatusChange = async (
         buyerMsg: `Your order has been completed. Thank you for supporting local farmers!`,
         farmerMsg: `Order from ${orderDetails.buyerName || 'the buyer'} has been completed.`
       },
+      'delivered': {
+        buyer: '✅ Order Delivered',
+        farmer: '✅ Order Delivered',
+        buyerMsg: `Your order has been delivered! Thank you for supporting local farmers!`,
+        farmerMsg: `You successfully delivered the order to ${orderDetails.buyerName || 'the buyer'}.`
+      },
       'cancelled': {
         buyer: '❌ Order Cancelled',
         farmer: '❌ Order Cancelled',
@@ -691,7 +762,7 @@ export const notifyOrderStatusChange = async (
     if (!messages) return;
 
     // Notify buyer
-    await createNotification({
+    const buyerNotification = await createNotification({
       recipientId: buyerId,
       type: 'order_status_changed',
       title: messages.buyer,
@@ -705,9 +776,13 @@ export const notifyOrderStatusChange = async (
       }
     });
 
+    if (!buyerNotification) {
+      console.log('⚠️ Skipped buyer notification due to validation failure');
+    }
+
     // Notify farmer (only if not the one who made the change)
     if (updatedBy !== farmerId) {
-      await createNotification({
+      const farmerNotification = await createNotification({
         recipientId: farmerId,
         type: 'order_status_changed',
         title: messages.farmer,
@@ -720,6 +795,10 @@ export const notifyOrderStatusChange = async (
           action: 'order_status_changed'
         }
       });
+
+      if (!farmerNotification) {
+        console.log('⚠️ Skipped farmer notification due to validation failure');
+      }
     }
   } catch (error) {
     console.error('❌ Failed to notify about order status change:', error);

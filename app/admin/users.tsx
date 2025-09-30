@@ -230,7 +230,7 @@ export default function AdminUsers() {
 
     // Listen for auth state changes (handles refresh scenarios)
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      console.log('🔐 Auth state change:', event, session?.user?.id);
+      // Silently handle auth state changes
 
       if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
         // Re-check user profile when auth is restored

@@ -1,17 +1,18 @@
-import React, { useRef, useState, useEffect } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
-    Dimensions,
-    Modal,
-    Platform,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View,
-    FlatList,
-    KeyboardAvoidingView,
+  Dimensions,
+  FlatList,
+  KeyboardAvoidingView,
+  Modal,
+  Platform,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/FontAwesome5';
+import { messageService } from '../services/messageService';
 
 const { width } = Dimensions.get('window');
 const isDesktop = width >= 1024;
@@ -41,6 +42,7 @@ interface ChatModalProps {
   onSendMessage?: (content: string) => void;
   currentUserId?: string;
   loading?: boolean;
+  conversationId?: string;
 }
 
 const colors = {
@@ -83,18 +85,236 @@ export default function ChatModal({
   onSendMessage,
   currentUserId = 'current-user',
   loading = false,
+  conversationId,
 }: ChatModalProps) {
+  // Debug conversation setup
+  console.log('🚨 CHATMODAL DEBUG: Component props:', {
+    visible,
+    currentUserId,
+    participantId: participant.id,
+    participantName: participant.name,
+    conversationId,
+    messagesCount: messages.length
+  });
   const [messageText, setMessageText] = useState('');
+  const [workflowStatus, setWorkflowStatus] = useState('initializing');
+  const [conversationExists, setConversationExists] = useState(false);
+  const [localMessages, setLocalMessages] = useState<ChatMessage[]>(messages);
   const flatListRef = useRef<FlatList>(null);
+
+  // Update local messages when props change - merge intelligently to preserve all messages
+  useEffect(() => {
+    setLocalMessages(prev => {
+      // If there are no previous messages, just use the new ones
+      if (prev.length === 0) {
+        return messages;
+      }
+
+      // Create a map of all messages by ID
+      const messageMap = new Map();
+
+      // First, add all existing messages (including real-time ones we just received)
+      prev.forEach(m => messageMap.set(m.id, m));
+
+      // Then add/update with messages from props
+      messages.forEach(m => {
+        // Only update if this message is not a temp message we're waiting to replace
+        const existing = messageMap.get(m.id);
+        if (!existing || !existing.id.startsWith('temp_')) {
+          messageMap.set(m.id, m);
+        }
+      });
+
+      // Remove temp messages that now have real counterparts with same content
+      const finalMessages = Array.from(messageMap.values()).filter(m => {
+        if (!m.id.startsWith('temp_')) return true;
+        // Keep temp message only if no real message with same content exists
+        return !Array.from(messageMap.values()).some(
+          other => !other.id.startsWith('temp_') && other.content === m.content
+        );
+      });
+
+      // Sort by timestamp
+      const sorted = finalMessages.sort((a, b) =>
+        new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
+      );
+
+      return sorted;
+    });
+  }, [messages]);
 
   // Auto-scroll to bottom when new messages arrive
   useEffect(() => {
-    if (messages.length > 0) {
+    if (localMessages.length > 0) {
       setTimeout(() => {
         flatListRef.current?.scrollToEnd({ animated: true });
       }, 100);
     }
-  }, [messages.length]);
+  }, [localMessages.length]);
+
+  // WORKFLOW: When chat modal opens, implement the exact workflow diagram
+  useEffect(() => {
+    if (visible && participant.id) {
+      initializeWorkflowChat();
+    }
+  }, [visible, participant.id, currentUserId]);
+
+  // Direct real-time subscription for instant message updates
+  useEffect(() => {
+    if (!visible || !conversationId) {
+      console.log('❌ REALTIME: Cannot set up subscription - missing requirements:', {
+        visible,
+        conversationId,
+        currentUserId,
+        participantId: participant.id
+      });
+      return;
+    }
+
+    console.log('🔥 ChatModal: Setting up SIMPLIFIED real-time subscription for:', {
+      conversationId,
+      currentUserId,
+      participantId: participant.id
+    });
+
+    const { supabase } = require('../lib/supabase');
+
+    // First check if supabase is properly connected
+    console.log('🔍 REALTIME: Checking Supabase connection...');
+
+    // Use a consistent channel name (no timestamp to avoid conflicts)
+    const channelName = `chat_realtime_${conversationId}`;
+    console.log('📡 REALTIME: Creating channel:', channelName);
+
+    const channel = supabase
+      .channel(channelName)
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'messages',
+          filter: `conversation_id=eq.${conversationId}`,
+        },
+        (payload: any) => {
+          console.log('🚨 DIRECT REALTIME: New message detected in conversation:', conversationId);
+          console.log('🚨 DIRECT REALTIME: Message details:', {
+            messageId: payload.new?.id,
+            content: payload.new?.content,
+            senderId: payload.new?.sender_id,
+            receiverId: payload.new?.receiver_id,
+            currentUserId,
+            participantId: participant.id
+          });
+
+          const newMessage = payload.new;
+
+          // Check if this message is relevant to this chat
+          const isForThisChat = newMessage.sender_id === currentUserId ||
+                               newMessage.receiver_id === currentUserId ||
+                               newMessage.sender_id === participant.id ||
+                               newMessage.receiver_id === participant.id;
+
+          console.log('🚨 DIRECT REALTIME: Is message for this chat?', isForThisChat);
+
+          if (!isForThisChat) {
+            console.log('🚫 REALTIME: Message not for this chat, ignoring');
+            return;
+          }
+
+          // Convert to ChatMessage format immediately
+          const chatMessage: ChatMessage = {
+            id: newMessage.id,
+            senderId: newMessage.sender_id,
+            senderName: newMessage.sender_id === currentUserId ? 'You' : participant.name,
+            senderType: newMessage.sender_id === currentUserId ? 'farmer' : participant.type,
+            content: newMessage.content,
+            timestamp: newMessage.created_at,
+            read: newMessage.is_read || false,
+          };
+
+          console.log('🚨 DIRECT REALTIME: Adding message to UI immediately for user:', currentUserId);
+
+          // Force immediate UI update
+          setLocalMessages(prev => {
+            console.log('🚨 DIRECT REALTIME: Current messages before update:', prev.length);
+
+            const exists = prev.find(m => m.id === chatMessage.id);
+            if (exists) {
+              console.log('🚨 DIRECT REALTIME: Message already exists, skipping');
+              return prev;
+            }
+
+            // Remove temp messages with same content
+            const filtered = prev.filter(m =>
+              !(m.id.startsWith('temp_') && m.content === chatMessage.content)
+            );
+
+            const updated = [...filtered, chatMessage];
+            console.log('🚨 DIRECT REALTIME: Messages after update:', updated.length);
+            return updated;
+          });
+        }
+      )
+      .subscribe((status) => {
+        console.log('🚨 DIRECT REALTIME: Subscription status for', conversationId, ':', status);
+      });
+
+    return () => {
+      console.log('🔌 ChatModal: Cleaning up direct subscription for:', conversationId);
+      channel.unsubscribe();
+    };
+  }, [visible, conversationId, currentUserId, participant.id, participant.name, participant.type]);
+
+  const initializeWorkflowChat = async () => {
+    try {
+      console.log('┌─────────────────────┐');
+      console.log('│ User opens a chat   │');
+      console.log('└──────────┬──────────┘');
+      setWorkflowStatus('User opened chat');
+
+      console.log('            │');
+      console.log('            ▼');
+      console.log(' ┌─────────────────────────────┐');
+      console.log(' │ Does conversation exist?    │');
+      console.log(' └──────────┬──────────┬───────┘');
+      setWorkflowStatus('Checking if conversation exists...');
+
+      // Check if conversation exists
+      const chatData = await messageService.initializeChat(currentUserId, participant.id);
+
+      if (chatData.exists && chatData.conversationId) {
+        console.log('            │ Yes');
+        console.log('            ▼');
+        console.log(' ┌─────────────────┐');
+        console.log(' │ Load existing   │');
+        console.log(' │ conversation    │');
+        console.log(' └──────────┬──────┘');
+        setWorkflowStatus('Loading existing conversation');
+        setConversationExists(true);
+      } else {
+        console.log('                       │ No');
+        console.log('                       ▼');
+        console.log(' ┌────────────────────────┐');
+        console.log(' │ Create conversation    │');
+        console.log(' │ automatically (trigger)│');
+        console.log(' └──────────┬─────────────┘');
+        setWorkflowStatus('Will create conversation automatically');
+        setConversationExists(false);
+      }
+
+      console.log('            │');
+      console.log('            ▼');
+      console.log('     ┌────────────────────────────────┐');
+      console.log('     │ Ready for user to send message │');
+      console.log('     └────────────────────────────────┘');
+      setWorkflowStatus('Ready to send messages');
+
+    } catch (error) {
+      console.error('❌ Error in workflow initialization:', error);
+      setWorkflowStatus('Error initializing chat');
+    }
+  };
 
   const formatTimestamp = (timestamp: string) => {
     const date = new Date(timestamp);
@@ -117,10 +337,77 @@ export default function ChatModal({
     }
   };
 
-  const handleSendMessage = () => {
-    if (messageText.trim() && onSendMessage) {
-      onSendMessage(messageText.trim());
+  const handleSendMessage = async () => {
+    console.log('🔥 WORKFLOW: ChatModal handleSendMessage called');
+
+    if (messageText.trim()) {
+      const textToSend = messageText.trim();
+
+      // WORKFLOW Step: User sends a message
+      console.log('     ┌────────────────────────────────┐');
+      console.log('     │ User sends a message           │');
+      console.log('     └──────────┬─────────────────────┘');
+      setWorkflowStatus('User sending message...');
+
+      // Clear input immediately to prevent double-sending
       setMessageText('');
+
+      if (onSendMessage) {
+        try {
+          // Add message instantly to sender's view
+          const tempMessage: ChatMessage = {
+            id: `temp_${Date.now()}`,
+            senderId: currentUserId,
+            senderName: 'You',
+            senderType: 'farmer', // This will be updated by real-time
+            content: textToSend,
+            timestamp: new Date().toISOString(),
+            read: false,
+          };
+
+          setLocalMessages(prev => [...prev, tempMessage]);
+
+          await onSendMessage(textToSend);
+
+          // WORKFLOW Step: Message stored in database
+          console.log('                │');
+          console.log('                ▼');
+          console.log('     ┌────────────────────────────────┐');
+          console.log('     │ Message stored in database      │');
+          console.log('     │ (with conversation ID, sender, │');
+          console.log('     │ receiver, content, timestamp)  │');
+          console.log('     └──────────┬─────────────────────┘');
+          setWorkflowStatus('Message stored in database');
+
+          // WORKFLOW Step: Database broadcasts to users
+          console.log('                │');
+          console.log('                ▼');
+          console.log('     ┌───────────────────────────────┐');
+          console.log('     │ Database broadcasts new       │');
+          console.log('     │ message to conversation users │');
+          console.log('     └──────────┬────────────────────┘');
+          setWorkflowStatus('Broadcasting to users...');
+
+          // Update conversation status if this was the first message
+          if (!conversationExists) {
+            setConversationExists(true);
+            setWorkflowStatus('Conversation created automatically');
+          } else {
+            setWorkflowStatus('Ready to send messages');
+          }
+
+          console.log('✅ WORKFLOW: Message sent successfully');
+        } catch (error) {
+          console.error('❌ WORKFLOW: Message sending failed:', error);
+          setWorkflowStatus('Error sending message');
+          // Restore message text on error so user can retry
+          setMessageText(textToSend);
+        }
+      } else {
+        console.log('❌ WORKFLOW: No onSendMessage callback provided');
+        setWorkflowStatus('Error: No send callback');
+        setMessageText(textToSend);
+      }
     }
   };
 
@@ -152,10 +439,10 @@ export default function ChatModal({
 
   const renderMessageItem = ({ item, index }: { item: ChatMessage; index: number }) => {
     const isOwn = item.senderId === currentUserId;
-    const nextMessage = messages[index + 1];
+    const nextMessage = localMessages[index + 1];
     const showAvatar = !nextMessage || nextMessage.senderId !== item.senderId;
     const showTimestamp = index === 0 ||
-      new Date(item.timestamp).getTime() - new Date(messages[index - 1]?.timestamp || 0).getTime() > 300000; // 5 minutes
+      new Date(item.timestamp).getTime() - new Date(localMessages[index - 1]?.timestamp || 0).getTime() > 300000; // 5 minutes
 
     return (
       <View style={styles.messageWrapper}>
@@ -287,6 +574,7 @@ export default function ChatModal({
       visible={visible}
       animationType="slide"
       presentationStyle={isDesktop ? "overFullScreen" : "pageSheet"}
+      transparent={isDesktop}
       onRequestClose={onClose}
     >
       <KeyboardAvoidingView
@@ -331,27 +619,22 @@ export default function ChatModal({
                       `${participant.type.charAt(0).toUpperCase() + participant.type.slice(1)}`
                     )}
                   </Text>
+                  <Text style={styles.workflowStatusText}>
+                    {workflowStatus}
+                  </Text>
                 </View>
               </View>
 
-              <View style={styles.headerActions}>
-                <TouchableOpacity style={styles.headerActionButton}>
-                  <Icon name="phone" size={16} color={colors.white} />
-                </TouchableOpacity>
-                <TouchableOpacity style={styles.headerActionButton}>
-                  <Icon name="info-circle" size={16} color={colors.white} />
-                </TouchableOpacity>
-              </View>
             </View>
 
             {/* Messages Area */}
             <View style={styles.messagesContainer}>
-              {messages.length === 0 ? (
+              {localMessages.length === 0 ? (
                 renderEmptyState()
               ) : (
                 <FlatList
                   ref={flatListRef}
-                  data={messages}
+                  data={localMessages}
                   renderItem={renderMessageItem}
                   keyExtractor={(item) => item.id}
                   style={styles.messagesList}
@@ -388,16 +671,16 @@ export default function ChatModal({
                 <TouchableOpacity
                   style={[
                     styles.sendButton,
-                    messageText.trim() ? styles.sendButtonActive : styles.sendButtonInactive
+                    messageText.trim() && !loading ? styles.sendButtonActive : styles.sendButtonInactive
                   ]}
                   onPress={handleSendMessage}
-                  disabled={!messageText.trim()}
+                  disabled={!messageText.trim() || loading}
                   activeOpacity={0.7}
                 >
                   <Icon
-                    name="paper-plane"
+                    name={loading ? "spinner" : "paper-plane"}
                     size={16}
-                    color={messageText.trim() ? colors.white : colors.gray400}
+                    color={messageText.trim() && !loading ? colors.white : colors.gray400}
                   />
                 </TouchableOpacity>
               </View>
@@ -416,33 +699,41 @@ const styles = StyleSheet.create({
 
   modalOverlay: {
     flex: 1,
-    backgroundColor: isDesktop ? 'rgba(0,0,0,0.5)' : colors.white,
-    justifyContent: isDesktop ? 'center' : 'flex-start',
-    alignItems: isDesktop ? 'center' : 'stretch',
+    backgroundColor: isDesktop ? 'transparent' : colors.white,
+    justifyContent: isDesktop ? 'flex-end' : 'flex-start',
+    alignItems: isDesktop ? 'flex-end' : 'stretch',
+    paddingRight: isDesktop ? 20 : 0,
+    paddingBottom: isDesktop ? 20 : 0,
+    pointerEvents: isDesktop ? 'box-none' : 'auto',
   },
 
   modalContainer: {
-    flex: 1,
+    flex: isDesktop ? 0 : 1,
     backgroundColor: colors.white,
-    width: '100%',
-    height: '100%',
+    width: isDesktop ? 350 : '100%',
+    height: isDesktop ? 500 : '100%',
+    minWidth: isDesktop ? 350 : undefined,
+    minHeight: isDesktop ? 500 : undefined,
   },
 
   modalContainerDesktop: {
-    width: 480,
-    height: 640,
-    borderRadius: 12,
+    width: 350,
+    height: 500,
+    minWidth: 350,
+    minHeight: 500,
+    borderRadius: 8,
     overflow: 'hidden',
     ...Platform.select({
       web: {
-        boxShadow: '0 24px 48px rgba(0,0,0,0.25)',
+        boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+        border: '1px solid #e1e5e9',
       },
       default: {
-        elevation: 24,
+        elevation: 8,
         shadowColor: colors.shadow,
-        shadowOffset: { width: 0, height: 12 },
-        shadowOpacity: 0.25,
-        shadowRadius: 24,
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.15,
+        shadowRadius: 8,
       },
     }),
   },
@@ -514,6 +805,13 @@ const styles = StyleSheet.create({
   onlineText: {
     fontSize: 12,
     color: 'rgba(255,255,255,0.8)',
+  },
+
+  workflowStatusText: {
+    fontSize: 10,
+    color: 'rgba(255,255,255,0.6)',
+    fontStyle: 'italic',
+    marginTop: 2,
   },
 
   headerActions: {

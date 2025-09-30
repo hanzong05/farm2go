@@ -42,13 +42,22 @@ const ConfirmationModal: React.FC<ConfirmationModalProps> = ({
         title,
         message,
         [
-          { text: cancelText, style: 'cancel', onPress: onCancel },
+          {
+            text: cancelText,
+            style: 'cancel',
+            onPress: () => {
+              onCancel();
+            }
+          },
           {
             text: confirmText,
             style: isDestructive ? 'destructive' : 'default',
-            onPress: onConfirm
+            onPress: () => {
+              onConfirm();
+            }
           }
-        ]
+        ],
+        { cancelable: true, onDismiss: onCancel }
       );
     }
   }, [visible, title, message, confirmText, cancelText, isDestructive, onConfirm, onCancel]);

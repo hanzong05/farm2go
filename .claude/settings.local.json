@@ -25,7 +25,9 @@
       "Bash(./gradlew:*)",
       "mcp__ide__getDiagnostics",
       "WebSearch",
-      "WebFetch(domain:shopee.ph)"
+      "WebFetch(domain:shopee.ph)",
+      "Bash(find:*)",
+      "Bash(timeout:*)"
     ],
     "deny": [],
     "ask": []

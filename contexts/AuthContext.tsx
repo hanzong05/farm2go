@@ -66,7 +66,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         };
       }
 
-      console.log('🔍 Fetching profile for user ID:', userId);
+      // Silently fetch profile
 
       const { data, error } = await supabase
         .from('profiles')
@@ -74,7 +74,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         .eq('id', userId)
         .single();
 
-      console.log('📊 Profile fetch result:', { data, error });
+      // Profile fetch completed
 
       if (error) {
         console.error('❌ Error fetching profile:', error);
@@ -138,7 +138,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
           return;
         }
 
-        console.log('🔄 AuthContext: Getting initial session...');
+        // Getting initial session
 
         // Use a more lenient approach during OAuth flows
         let session = null;
@@ -157,14 +157,14 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         if (error) {
           console.error('Error getting session:', error);
         } else if (isMounted) {
-          console.log('📦 AuthContext: Session found:', !!session);
+          // Session found
           setSession(session);
           setUser(session?.user ?? null);
 
           if (session?.user) {
-            console.log('👤 AuthContext: Fetching profile for user:', session.user.id);
+            // Fetching profile for user
             const profileData = await fetchProfile(session.user.id);
-            console.log('📊 AuthContext: Profile result:', !!profileData);
+            // Profile loaded
             if (isMounted) setProfile(profileData);
           }
         }
@@ -173,7 +173,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         // Don't let errors prevent app from loading
       } finally {
         if (isMounted) {
-          console.log('✅ AuthContext: Setting loading to false');
+          // Loading complete
           setLoading(false);
         }
       }
@@ -187,9 +187,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         async (event, session) => {
           if (!isMounted) return;
 
-          console.log('Auth state changed:', event, session?.user?.id);
-
-          // Prevent unnecessary loading states on token refresh
+          // Silently handle ALL auth state changes
           if (event === 'TOKEN_REFRESHED') {
             setSession(session);
             setUser(session?.user ?? null);
@@ -209,7 +207,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
               const profileData = await fetchProfile(session.user.id);
               if (isMounted) setProfile(profileData);
             } catch (profileError) {
-              console.log('⚠️ Profile fetch failed during auth state change:', profileError);
+              // Profile fetch failed
               // Don't block the auth flow if profile fetch fails
               if (isMounted) setProfile(null);
             }

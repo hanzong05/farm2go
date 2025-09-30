@@ -19,7 +19,7 @@ if (Platform.OS !== 'web') {
 
 export const supabase = createClient<Database>(supabaseUrl, supabaseAnonKey, {
   auth: {
-    detectSessionInUrl: true,
+    detectSessionInUrl: Platform.OS === 'web',
     persistSession: true,
     autoRefreshToken: true,
     flowType: 'pkce',
@@ -27,6 +27,13 @@ export const supabase = createClient<Database>(supabaseUrl, supabaseAnonKey, {
     ...(Platform.OS !== 'web' && {
       scheme: 'farm2go',
     }),
+  },
+  realtime: {
+    params: {
+      eventsPerSecond: 10,
+    },
+    timeout: 30000,
+    heartbeatIntervalMs: 30000,
   },
 });
 
@@ -91,7 +98,15 @@ export const signInWithGoogleOAuth = async (userType: string, intent: string = '
 
       if (error) {
         console.error('❌ OAuth URL generation error:', error);
-        throw error;
+        console.error('❌ OAuth error details:', JSON.stringify(error, null, 2));
+
+        // Return error details instead of throwing to help debug
+        return {
+          success: false,
+          error: `OAuth setup failed: ${error.message}`,
+          errorDetails: error,
+          sessionData: null
+        };
       }
 
       console.log('✅ OAuth URL received:', data.url);
@@ -138,8 +153,36 @@ export const signInWithGoogleOAuth = async (userType: string, intent: string = '
         if (result && result.type === 'dismiss') {
           console.log('ℹ️ WebBrowser was dismissed - checking if OAuth completed anyway');
 
-          // Wait a moment for potential deep link processing
-          await new Promise(resolve => setTimeout(resolve, 1000));
+          // Wait longer for deep link processing and callback handling
+          await new Promise(resolve => setTimeout(resolve, 2000));
+
+          // Check for authorization code that might have been stored by deep link handler
+          const AsyncStorage = await import('@react-native-async-storage/async-storage');
+          const storedCode = await AsyncStorage.default.getItem('oauth_authorization_code');
+
+          if (storedCode) {
+            try {
+              // Exchange the code for session
+              const { data: sessionData, error: exchangeError } = await supabase.auth.exchangeCodeForSession(storedCode);
+
+              // Clean up the stored code
+              await AsyncStorage.default.removeItem('oauth_authorization_code');
+
+              if (exchangeError) {
+                return {
+                  ...data,
+                  success: false,
+                  error: 'OAuth code exchange failed',
+                  sessionData: null
+                };
+              }
+
+              return { ...data, sessionData, success: true };
+
+            } catch (error) {
+              // Fall through to session check
+            }
+          }
 
           // Check if we have a session despite dismissal (OAuth might have completed)
           const { data: { session }, error: sessionError } = await supabase.auth.getSession();

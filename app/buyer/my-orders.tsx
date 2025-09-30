@@ -20,9 +20,9 @@ import OrderQRCodeModal from '../../components/OrderQRCodeModal';
 import { supabase } from '../../lib/supabase';
 import { getUserWithProfile } from '../../services/auth';
 import { notifyBarangayAdmins, notifyOrderStatusChange } from '../../services/notifications';
-import { getBuyerOrders } from '../../services/orders';
+import { getBuyerOrders, subscribeToUserOrders } from '../../services/orders';
 import { Database } from '../../types/database';
-import { ORDER_STATUS_CONFIG, OrderWithDetails } from '../../types/orders';
+import { ORDER_STATUS_CONFIG, OrderWithDetails, Order } from '../../types/orders';
 
 const { width } = Dimensions.get('window');
 
@@ -104,13 +104,66 @@ export default function BuyerMyOrdersScreen() {
 
   useEffect(() => {
     loadData();
-    
+
     // Fade in animationKeyframes
     Animated.timing(fadeAnim, {
       toValue: 1,
       duration: 600,
       useNativeDriver: true,
     }).start();
+
+    // Set up real-time order subscription
+    let subscription: any = null;
+
+    const setupRealtimeSubscription = async () => {
+      try {
+        const userData = await getUserWithProfile();
+        if (userData?.user?.id) {
+          console.log('🔄 Setting up real-time order subscription for buyer:', userData.user.id);
+
+          subscription = subscribeToUserOrders(
+            userData.user.id,
+            'buyer',
+            (updatedOrder: Order, eventType: 'INSERT' | 'UPDATE' | 'DELETE') => {
+              console.log(`🔄 Buyer order ${eventType}:`, updatedOrder);
+
+              // Update the orders state based on the event type
+              if (eventType === 'INSERT') {
+                // New order created, reload data to get full details
+                loadData();
+              } else if (eventType === 'UPDATE') {
+                // Order updated, update the specific order in state
+                setOrders(prevOrders =>
+                  prevOrders.map(order =>
+                    order.id === updatedOrder.id
+                      ? { ...order, ...updatedOrder }
+                      : order
+                  )
+                );
+                console.log('✅ Buyer order updated in real-time:', updatedOrder);
+              } else if (eventType === 'DELETE') {
+                // Order deleted, remove from state
+                setOrders(prevOrders =>
+                  prevOrders.filter(order => order.id !== updatedOrder.id)
+                );
+              }
+            }
+          );
+        }
+      } catch (error) {
+        console.error('❌ Failed to setup real-time subscription:', error);
+      }
+    };
+
+    setupRealtimeSubscription();
+
+    // Cleanup function
+    return () => {
+      if (subscription) {
+        console.log('🛑 Cleaning up buyer order subscription');
+        subscription.unsubscribe();
+      }
+    };
   }, []);
 
   useEffect(() => {

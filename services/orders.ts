@@ -443,3 +443,89 @@ export const cancelOrder = async (orderId: string, reason?: string): Promise<Ord
     throw error;
   }
 };
+
+// Real-time subscriptions for orders
+
+// Subscribe to order updates for a specific user (buyer or farmer)
+export const subscribeToUserOrders = (
+  userId: string,
+  userType: 'buyer' | 'farmer',
+  callback: (order: Order, eventType: 'INSERT' | 'UPDATE' | 'DELETE') => void
+) => {
+  const filter = userType === 'buyer' ? `buyer_id.eq.${userId}` : `farmer_id.eq.${userId}`;
+
+  const channel = supabase.channel(`orders_${userType}_${userId}`);
+
+  ['INSERT', 'UPDATE', 'DELETE'].forEach(event => {
+    channel.on(
+      'postgres_changes',
+      {
+        event: event as any,
+        schema: 'public',
+        table: 'orders',
+        filter
+      },
+      (payload) => {
+        console.log(`📋 Order ${event.toLowerCase()} received:`, payload);
+        callback(payload.new as Order, event as any);
+      }
+    );
+  });
+
+  return channel.subscribe((status) => {
+    console.log(`📋 Orders subscription status for ${userType} ${userId}:`, status);
+  });
+};
+
+// Subscribe to transaction updates for orders
+export const subscribeToTransactionUpdates = (
+  callback: (transaction: Transaction, eventType: 'INSERT' | 'UPDATE') => void,
+  orderId?: string
+) => {
+  const channel = supabase.channel(`transactions_${orderId || 'all'}`);
+
+  ['INSERT', 'UPDATE'].forEach(event => {
+    channel.on(
+      'postgres_changes',
+      {
+        event: event as any,
+        schema: 'public',
+        table: 'transactions',
+        filter: orderId ? `order_id.eq.${orderId}` : undefined
+      },
+      (payload) => {
+        console.log(`💳 Transaction ${event.toLowerCase()} received:`, payload);
+        callback(payload.new as Transaction, event as any);
+      }
+    );
+  });
+
+  return channel.subscribe((status) => {
+    console.log('💳 Transactions subscription status:', status);
+  });
+};
+
+// Subscribe to specific order updates
+export const subscribeToOrder = (
+  orderId: string,
+  callback: (order: Order, eventType: 'UPDATE') => void
+) => {
+  return supabase
+    .channel(`order_${orderId}`)
+    .on(
+      'postgres_changes',
+      {
+        event: 'UPDATE',
+        schema: 'public',
+        table: 'orders',
+        filter: `id.eq.${orderId}`
+      },
+      (payload) => {
+        console.log(`📋 Specific order ${orderId} updated:`, payload);
+        callback(payload.new as Order, 'UPDATE');
+      }
+    )
+    .subscribe((status) => {
+      console.log(`📋 Order ${orderId} subscription status:`, status);
+    });
+};

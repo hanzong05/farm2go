@@ -20,6 +20,7 @@ import HeaderComponent from '../../../../components/HeaderComponent';
 import VerificationGuard from '../../../../components/VerificationGuard';
 import { supabase } from '../../../../lib/supabase';
 import { getUserWithProfile } from '../../../../services/auth';
+import { notifyAllAdmins } from '../../../../services/notifications';
 import { Database } from '../../../../types/database';
 
 type Profile = Database['public']['Tables']['profiles']['Row'];
@@ -363,6 +364,28 @@ export default function EditProductScreen() {
         .eq('farmer_id', profile.id);
 
       if (error) throw error;
+
+      // Send notifications to admins about product update
+      try {
+        await notifyAllAdmins(
+          'Product Updated',
+          `${profile.first_name} ${profile.last_name} updated their product "${formData.name}"${product.status === 'rejected' ? ' (resubmitted for review)' : ''}`,
+          profile.id,
+          {
+            action: 'product_updated',
+            productId: id,
+            productName: formData.name,
+            farmerId: profile.id,
+            farmerName: `${profile.first_name} ${profile.last_name}`,
+            wasRejected: product.status === 'rejected',
+            newStatus: product.status === 'rejected' ? 'pending' : product.status
+          }
+        );
+        console.log('✅ Product update notification sent to admins');
+      } catch (notifError) {
+        console.error('⚠️ Failed to send product update notification:', notifError);
+        // Don't fail the update if notifications fail
+      }
 
       Alert.alert(
         'Success',

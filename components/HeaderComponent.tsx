@@ -863,6 +863,7 @@ export default function HeaderComponent({
           {showMessages && (
             <View style={styles.notificationContainer}>
               <MessageComponent
+                key={`messages-${profile?.id}`}
                 currentUserId={profile?.id}
                 onConversationPress={onConversationPress}
                 onNewConversation={onNewConversation}
@@ -874,6 +875,7 @@ export default function HeaderComponent({
           {showNotifications && (
             <View style={styles.notificationContainer}>
               <NotificationComponent
+                key={`notifications-${profile?.id}`}
                 notifications={convertedNotifications}
                 onMarkAsRead={(notificationId) => {
                   markAsRead(notificationId);
