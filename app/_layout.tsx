@@ -4,6 +4,7 @@ import { StatusBar } from 'expo-status-bar';
 import { useEffect, useRef, useState } from 'react';
 import { AppState, Linking, Platform } from 'react-native';
 import 'react-native-reanimated';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import ErrorBoundary from '../components/ErrorBoundary';
@@ -255,7 +256,7 @@ export default function RootLayout() {
 
   // Enhanced deep linking for OAuth and marketplace navigation
   useEffect(() => {
-    const handleDeepLink = (url: string) => {
+    const handleDeepLink = async (url: string) => {
       console.log('🛒 Deep link handler:', url);
 
       // Handle OAuth callback - extract code and redirect to callback page
@@ -271,10 +272,8 @@ export default function RootLayout() {
             console.log('💾 Storing authorization code for callback processing:', code.substring(0, 10) + '...');
 
             // Store the code for the callback handler to use
-            import('@react-native-async-storage/async-storage').then(async ({ default: AsyncStorage }) => {
-              await AsyncStorage.setItem('oauth_authorization_code', code);
-              console.log('✅ Code stored successfully');
-            });
+            await AsyncStorage.setItem('oauth_authorization_code', code);
+            console.log('✅ Code stored successfully');
           }
         } catch (error) {
           console.error('❌ Error extracting OAuth code:', error);

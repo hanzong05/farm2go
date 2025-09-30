@@ -1,12 +1,15 @@
 import { router } from 'expo-router';
 import React, { useEffect, useState } from 'react';
-import { ActivityIndicator, Alert, Dimensions, FlatList, Image, RefreshControl, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Alert, Dimensions, FlatList, Image, RefreshControl, ScrollView, StyleSheet, Text, TouchableOpacity, View, Modal } from 'react-native';
+import * as ImagePicker from 'expo-image-picker';
+import Icon from 'react-native-vector-icons/FontAwesome5';
 import FilterSidebar from '../components/FilterSidebar';
 import HeaderComponent from '../components/HeaderComponent';
 import { supabase } from '../lib/supabase';
 import { getUserWithProfile } from '../services/auth';
 import { Database } from '../types/database';
 import { applyFilters, getMarketplaceFilters } from '../utils/filterConfigs';
+import { visualSearchService } from '../services/visualSearch';
 
 const { width } = Dimensions.get('window');
 
@@ -62,6 +65,12 @@ export default function MarketplaceScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [showSidebar, setShowSidebar] = useState(false);
+
+  // Visual search state
+  const [showVisualSearchModal, setShowVisualSearchModal] = useState(false);
+  const [visualSearchImage, setVisualSearchImage] = useState<string | null>(null);
+  const [visualSearching, setVisualSearching] = useState(false);
+  const [visualSearchResults, setVisualSearchResults] = useState<any>(null);
 
   // Filter state
   const [filterState, setFilterState] = useState({
@@ -202,6 +211,171 @@ export default function MarketplaceScreen() {
     }
     // User is logged in, proceed with navigation
     router.push(route as any);
+  };
+
+  // Visual Search Functions
+  const handleVisualSearch = async () => {
+    try {
+      // Show instruction before opening gallery
+      Alert.alert(
+        'Visual Search Tips',
+        'For best results:\n• Take a clear, well-lit photo\n• Focus on one main product\n• Avoid blurry or dark images',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          {
+            text: 'Continue',
+            onPress: async () => {
+              // Request permissions
+              const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+              if (status !== 'granted') {
+                Alert.alert('Permission Required', 'Please grant camera roll permissions to use visual search.');
+                return;
+              }
+
+              // Launch image picker
+              const result = await ImagePicker.launchImageLibraryAsync({
+                mediaTypes: ImagePicker.MediaTypeOptions.Images,
+                allowsEditing: true,
+                aspect: [1, 1],
+                quality: 0.8,
+                base64: true,
+              });
+
+              if (!result.canceled && result.assets[0].base64) {
+                setVisualSearchImage(result.assets[0].uri);
+                setShowVisualSearchModal(true);
+                await performVisualSearch(result.assets[0].base64);
+              }
+            }
+          }
+        ]
+      );
+    } catch (error) {
+      console.error('Error picking image:', error);
+      Alert.alert('Error', 'Failed to pick image');
+    }
+  };
+
+  const handleTakePhoto = async () => {
+    try {
+      // Show instruction before opening camera
+      Alert.alert(
+        'Visual Search Tips',
+        'For best results:\n• Take a clear, well-lit photo\n• Focus on one main product\n• Avoid blurry or dark images',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          {
+            text: 'Continue',
+            onPress: async () => {
+              // Request camera permissions
+              const { status } = await ImagePicker.requestCameraPermissionsAsync();
+              if (status !== 'granted') {
+                Alert.alert('Permission Required', 'Please grant camera permissions to use visual search.');
+                return;
+              }
+
+              // Launch camera
+              const result = await ImagePicker.launchCameraAsync({
+                allowsEditing: true,
+                aspect: [1, 1],
+                quality: 0.8,
+                base64: true,
+              });
+
+              if (!result.canceled && result.assets[0].base64) {
+                setVisualSearchImage(result.assets[0].uri);
+                setShowVisualSearchModal(true);
+                await performVisualSearch(result.assets[0].base64);
+              }
+            }
+          }
+        ]
+      );
+    } catch (error) {
+      console.error('Error taking photo:', error);
+      Alert.alert('Error', 'Failed to take photo');
+    }
+  };
+
+  const performVisualSearch = async (imageBase64: string) => {
+    try {
+      setVisualSearching(true);
+
+      // Analyze image with Clarifai API
+      const results = await visualSearchService.analyzeImage(imageBase64);
+      setVisualSearchResults(results);
+
+      // Close modal immediately after analysis - show scanning animation on main screen
+      setShowVisualSearchModal(false);
+
+      // Only allow specific farm categories (strict filtering - no chocolate!)
+      const allowedCategories = ['vegetables', 'fruits', 'grains', 'herbs', 'dairy', 'meat'];
+      const hasFarmCategory = results.categories.some(cat => allowedCategories.includes(cat));
+
+      // Also check for specific farm product keywords in labels
+      const farmProductKeywords = ['tomato', 'carrot', 'lettuce', 'cabbage', 'pepper', 'onion',
+                                   'potato', 'cucumber', 'eggplant', 'broccoli', 'spinach',
+                                   'apple', 'banana', 'orange', 'mango', 'grape', 'strawberry',
+                                   'rice', 'corn', 'wheat', 'oat', 'grain',
+                                   'basil', 'mint', 'parsley', 'ginger', 'garlic',
+                                   'milk', 'egg', 'cheese', 'chicken', 'fish', 'meat'];
+
+      const hasFarmProduct = results.labels.some(label =>
+        farmProductKeywords.some(keyword => label.includes(keyword))
+      );
+
+      if (!hasFarmCategory && !hasFarmProduct) {
+        Alert.alert(
+          'No Products Found',
+          'Please try again with a clearer image.'
+        );
+        setVisualSearching(false);
+        return;
+      }
+
+      // Filter products based on visual search results
+      const scoredProducts = products
+        .map(product => ({
+          ...product,
+          similarityScore: visualSearchService.calculateSimilarityScore(results, {
+            name: product.name,
+            description: product.description,
+            category: product.category,
+          }),
+        }))
+        .filter(p => p.similarityScore > 5) // Lower threshold to find more matching products
+        .sort((a, b) => b.similarityScore - a.similarityScore);
+
+      setFilteredProducts(scoredProducts);
+
+      // Also update search query with detected labels
+      if (results.labels.length > 0) {
+        setSearchQuery(results.labels[0]);
+      }
+
+      // Update category filter if detected
+      if (results.categories.length > 0) {
+        setFilterState(prev => ({
+          ...prev,
+          category: results.categories[0],
+        }));
+      }
+
+    } catch (error) {
+      console.error('Visual search error:', error);
+      Alert.alert(
+        'Visual Search Error',
+        'Failed to analyze image. Please try again.'
+      );
+    } finally {
+      setVisualSearching(false);
+    }
+  };
+
+  const closeVisualSearchModal = () => {
+    setShowVisualSearchModal(false);
+    setVisualSearchImage(null);
+    setVisualSearchResults(null);
   };
 
 
@@ -486,6 +660,126 @@ export default function MarketplaceScreen() {
           </View>
         </ScrollView>
       )}
+
+      {/* Floating Visual Search Button */}
+      <TouchableOpacity
+        style={styles.visualSearchFab}
+        onPress={handleVisualSearch}
+        activeOpacity={0.8}
+      >
+        <Icon name="camera" size={24} color="#fff" />
+      </TouchableOpacity>
+
+      {/* Visual Search Modal */}
+      <Modal
+        visible={showVisualSearchModal}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={closeVisualSearchModal}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Visual Search</Text>
+              <TouchableOpacity onPress={closeVisualSearchModal}>
+                <Icon name="times" size={24} color="#64748b" />
+              </TouchableOpacity>
+            </View>
+
+            {visualSearchImage && (
+              <View style={styles.searchImageContainer}>
+                <Image
+                  source={{ uri: visualSearchImage }}
+                  style={styles.searchImage}
+                  resizeMode="cover"
+                />
+                {visualSearching && (
+                  <View style={styles.searchingOverlay}>
+                    <ActivityIndicator size="large" color="#10b981" />
+                    <Text style={styles.searchingText}>Analyzing image...</Text>
+                  </View>
+                )}
+              </View>
+            )}
+
+            {visualSearchResults && !visualSearching && (
+              <View style={styles.resultsContainer}>
+                <Text style={styles.resultsTitle}>Detected:</Text>
+                <View style={styles.labelsContainer}>
+                  {visualSearchResults.labels.slice(0, 5).map((label: string, index: number) => (
+                    <View key={index} style={styles.labelBadge}>
+                      <Text style={styles.labelText}>{label}</Text>
+                    </View>
+                  ))}
+                </View>
+
+                {visualSearchResults.categories.length > 0 && (
+                  <>
+                    <Text style={styles.resultsTitle}>Categories:</Text>
+                    <View style={styles.labelsContainer}>
+                      {visualSearchResults.categories.map((category: string, index: number) => (
+                        <View key={index} style={styles.categoryBadge}>
+                          <Text style={styles.categoryBadgeText}>{category}</Text>
+                        </View>
+                      ))}
+                    </View>
+                  </>
+                )}
+
+                <Text style={styles.resultsInfo}>
+                  Found {filteredProducts.length} similar products
+                </Text>
+
+                <View style={styles.modalButtons}>
+                  <TouchableOpacity
+                    style={styles.retryButton}
+                    onPress={() => {
+                      closeVisualSearchModal();
+                      handleVisualSearch();
+                    }}
+                  >
+                    <Icon name="redo" size={16} color="#10b981" />
+                    <Text style={styles.retryButtonText}>Try Another</Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={styles.viewResultsButton}
+                    onPress={closeVisualSearchModal}
+                  >
+                    <Text style={styles.viewResultsButtonText}>View Results</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            )}
+
+            {!visualSearchImage && (
+              <View style={styles.uploadOptions}>
+                <TouchableOpacity
+                  style={styles.uploadButton}
+                  onPress={() => {
+                    closeVisualSearchModal();
+                    handleVisualSearch();
+                  }}
+                >
+                  <Icon name="image" size={32} color="#10b981" />
+                  <Text style={styles.uploadButtonText}>Choose from Gallery</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={styles.uploadButton}
+                  onPress={() => {
+                    closeVisualSearchModal();
+                    handleTakePhoto();
+                  }}
+                >
+                  <Icon name="camera" size={32} color="#10b981" />
+                  <Text style={styles.uploadButtonText}>Take Photo</Text>
+                </TouchableOpacity>
+              </View>
+            )}
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -1118,5 +1412,196 @@ const styles = StyleSheet.create({
     color: '#9ca3af',
   },
 
+  // Visual Search Styles
+  visualSearchFab: {
+    position: 'absolute',
+    bottom: 24,
+    right: 24,
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: '#10b981',
+    alignItems: 'center',
+    justifyContent: 'center',
+    elevation: 8,
+    shadowColor: '#10b981',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+  },
 
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+
+  modalContent: {
+    width: width > 768 ? 500 : width - 40,
+    maxHeight: '80%',
+    backgroundColor: '#ffffff',
+    borderRadius: 16,
+    padding: 20,
+    elevation: 10,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+  },
+
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+
+  modalTitle: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#0f172a',
+  },
+
+  searchImageContainer: {
+    width: '100%',
+    height: 300,
+    borderRadius: 12,
+    overflow: 'hidden',
+    marginBottom: 20,
+    backgroundColor: '#f1f5f9',
+  },
+
+  searchImage: {
+    width: '100%',
+    height: '100%',
+  },
+
+  searchingOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(255, 255, 255, 0.9)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  searchingText: {
+    marginTop: 12,
+    fontSize: 16,
+    color: '#64748b',
+    fontWeight: '500',
+  },
+
+  resultsContainer: {
+    marginBottom: 20,
+  },
+
+  resultsTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#0f172a',
+    marginBottom: 12,
+  },
+
+  labelsContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginBottom: 16,
+  },
+
+  labelBadge: {
+    backgroundColor: '#ecfdf5',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#bbf7d0',
+  },
+
+  labelText: {
+    fontSize: 14,
+    color: '#059669',
+    fontWeight: '500',
+  },
+
+  categoryBadge: {
+    backgroundColor: '#10b981',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+  },
+
+  categoryBadgeText: {
+    fontSize: 14,
+    color: '#ffffff',
+    fontWeight: '600',
+  },
+
+  resultsInfo: {
+    fontSize: 14,
+    color: '#64748b',
+    textAlign: 'center',
+    marginVertical: 16,
+  },
+
+  modalButtons: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+
+  retryButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#ffffff',
+    borderWidth: 2,
+    borderColor: '#10b981',
+    paddingVertical: 12,
+    borderRadius: 8,
+    gap: 8,
+  },
+
+  retryButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#10b981',
+  },
+
+  viewResultsButton: {
+    flex: 1,
+    backgroundColor: '#10b981',
+    paddingVertical: 12,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  viewResultsButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#ffffff',
+  },
+
+  uploadOptions: {
+    gap: 16,
+    paddingVertical: 20,
+  },
+
+  uploadButton: {
+    backgroundColor: '#f8fafc',
+    borderWidth: 2,
+    borderColor: '#10b981',
+    borderRadius: 12,
+    paddingVertical: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 12,
+  },
+
+  uploadButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#10b981',
+  },
 });
