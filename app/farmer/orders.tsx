@@ -14,6 +14,7 @@ import {
 } from 'react-native';
 import Icon from 'react-native-vector-icons/FontAwesome5';
 import ConfirmationModal from '../../components/ConfirmationModal';
+import MapDirectionsModal from '../../components/MapDirectionsModal';
 import FilterSidebar from '../../components/FilterSidebar';
 import HeaderComponent from '../../components/HeaderComponent';
 import { supabase } from '../../lib/supabase';
@@ -151,12 +152,14 @@ export default function FarmerOrdersScreen() {
   });
 
   const [selectedStatus, setSelectedStatus] = useState('all');
+  const [showMapModal, setShowMapModal] = useState(false);
+  const [mapOrder, setMapOrder] = useState<Order | null>(null);
 
   // Filter state
   const [filterState, setFilterState] = useState({
     category: 'all',
     amountRange: 'all',
-    dateRange: 'month',
+    dateRange: 'all',
     sortBy: 'newest'
   });
 
@@ -570,6 +573,20 @@ export default function FarmerOrdersScreen() {
     setShowActionModal(false);
   };
 
+  const handleShowDirections = (order: Order) => {
+    if (!order.delivery_address) {
+      Alert.alert('No Address', 'This order does not have a delivery address.');
+      return;
+    }
+    setMapOrder(order);
+    setShowMapModal(true);
+  };
+
+  const handleCloseMapModal = () => {
+    setShowMapModal(false);
+    setMapOrder(null);
+  };
+
   const handleOrderAction = async (action: 'confirm' | 'cancel' | 'ready') => {
     if (!selectedOrder) return;
 
@@ -895,6 +912,14 @@ export default function FarmerOrdersScreen() {
                 <Text style={styles.infoText}>{order.delivery_address}</Text>
               </View>
             </View>
+            <TouchableOpacity
+              style={styles.directionsButton}
+              onPress={() => handleShowDirections(order)}
+              activeOpacity={0.8}
+            >
+              <Icon name="directions" size={14} color="#ffffff" style={{marginRight: 6}} />
+              <Text style={styles.directionsButtonText}>Get Directions</Text>
+            </TouchableOpacity>
           </View>
         )}
 
@@ -1149,6 +1174,19 @@ export default function FarmerOrdersScreen() {
       </View>
 
       {renderActionModal()}
+
+      {/* Map Directions Modal */}
+      {mapOrder && (
+        <MapDirectionsModal
+          visible={showMapModal}
+          onClose={handleCloseMapModal}
+          deliveryAddress={mapOrder.delivery_address || ''}
+          orderInfo={{
+            orderId: mapOrder.id,
+            buyerName: `${mapOrder.buyer_profile?.first_name || ''} ${mapOrder.buyer_profile?.last_name || ''}`.trim(),
+          }}
+        />
+      )}
 
       {/* Mobile Sidebar Modal */}
       {!isDesktop && (
@@ -1823,6 +1861,29 @@ const styles = StyleSheet.create({
   modalCloseButtonText: {
     fontSize: 16,
     color: '#374151',
+    fontWeight: '600',
+  },
+
+  // Directions Button
+  directionsButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#3b82f6',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 10,
+    marginTop: 12,
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+  },
+
+  directionsButtonText: {
+    fontSize: 14,
+    color: '#ffffff',
     fontWeight: '600',
   },
 });

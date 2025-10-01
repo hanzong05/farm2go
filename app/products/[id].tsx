@@ -464,29 +464,8 @@ export default function ProductDetailScreen() {
               </View>
             )}
 
-            {/* Buyer viewing their own product - show management options */}
-            {isBuyer && isLoggedIn && isOwner && (
-              <View style={styles.managementSection}>
-                <Text style={styles.sectionTitle}>YOUR PRODUCT</Text>
-                <View style={styles.managementButtons}>
-                  <TouchableOpacity style={styles.editButton} onPress={handleEdit} disabled={processing}>
-                    <Icon name="edit" size={16} color={colors.primary} />
-                    <Text style={styles.editButtonText}>Edit Product</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity style={styles.deleteButton} onPress={handleDelete} disabled={processing}>
-                    {processing ? (
-                      <ActivityIndicator size="small" color={colors.danger} />
-                    ) : (
-                      <Icon name="trash" size={16} color={colors.danger} />
-                    )}
-                    <Text style={styles.deleteButtonText}>Delete Product</Text>
-                  </TouchableOpacity>
-                </View>
-              </View>
-            )}
-
-            {/* Buyer Order Section - only show if buyer is not the product seller */}
-            {isBuyer && product.status === 'approved' && isLoggedIn && !isOwner && (
+            {/* Buyer Order Section - buyers can only order products, not edit them */}
+            {isBuyer && product.status === 'approved' && isLoggedIn && (
               <View style={styles.orderSection}>
                 <Text style={styles.sectionTitle}>PLACE ORDER</Text>
                 <View style={styles.quantityContainer}>

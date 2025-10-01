@@ -3,17 +3,20 @@ import { FilterSection } from '../components/FilterSidebar';
 // Common filter configurations for different pages
 
 // Marketplace filters
-export const getMarketplaceFilters = (products: any[]): FilterSection[] => [
+export const getMarketplaceFilters = (
+  products: any[],
+  categoryCounts?: { all: number; vegetables: number; fruits: number; grains: number; herbs: number }
+): FilterSection[] => [
   {
     key: 'category',
     title: 'Categories',
     type: 'category',
     options: [
-      { key: 'all', label: 'All', count: products.length },
-      { key: 'vegetables', label: 'Vegetables', count: products.filter(p => p.category?.toLowerCase() === 'vegetables').length },
-      { key: 'fruits', label: 'Fruits', count: products.filter(p => p.category?.toLowerCase() === 'fruits').length },
-      { key: 'grains', label: 'Grains', count: products.filter(p => p.category?.toLowerCase() === 'grains').length },
-      { key: 'herbs', label: 'Herbs', count: products.filter(p => p.category?.toLowerCase() === 'herbs').length },
+      { key: 'all', label: 'All', count: categoryCounts?.all ?? products.length },
+      { key: 'vegetables', label: 'Vegetables', count: categoryCounts?.vegetables ?? products.filter(p => p.category?.toLowerCase() === 'vegetables').length },
+      { key: 'fruits', label: 'Fruits', count: categoryCounts?.fruits ?? products.filter(p => p.category?.toLowerCase() === 'fruits').length },
+      { key: 'grains', label: 'Grains', count: categoryCounts?.grains ?? products.filter(p => p.category?.toLowerCase() === 'grains').length },
+      { key: 'herbs', label: 'Herbs', count: categoryCounts?.herbs ?? products.filter(p => p.category?.toLowerCase() === 'herbs').length },
     ],
   },
   {
@@ -306,19 +309,33 @@ export const applyFilters = (
     customFilters?: { [key: string]: (item: any, value: any) => boolean };
   }
 ) => {
+  console.log('📊 applyFilters - Starting with', data.length, 'items');
+  console.log('📊 applyFilters - Filter state:', filterState);
+  console.log('📊 applyFilters - Filter config:', filterConfig);
   let filtered = [...data];
 
   // Apply each filter
   Object.keys(filterState).forEach(key => {
     const value = filterState[key];
-    if (!value || value === 'all') return;
+    console.log(`📊 applyFilters - Processing filter: ${key} = ${value}`);
+    if (!value || value === 'all') {
+      console.log(`📊 applyFilters - Skipping ${key} (value is empty or 'all')`);
+      return;
+    }
 
     switch (key) {
       case 'category':
         if (filterConfig.categoryKey && value !== 'all') {
-          filtered = filtered.filter(item =>
-            item[filterConfig.categoryKey!]?.toLowerCase() === value.toLowerCase()
-          );
+          filtered = filtered.filter(item => {
+            // Handle nested keys like 'product.category'
+            const keys = filterConfig.categoryKey!.split('.');
+            let val = item;
+            for (const k of keys) {
+              val = val?.[k];
+              if (val === undefined) break;
+            }
+            return val?.toLowerCase() === value.toLowerCase();
+          });
         }
         break;
 
@@ -337,7 +354,13 @@ export const applyFilters = (
           const range = ranges[value as keyof typeof ranges];
           if (range) {
             filtered = filtered.filter(item => {
-              const price = item[filterConfig.priceKey!];
+              // Handle nested keys like 'product.price'
+              const keys = filterConfig.priceKey!.split('.');
+              let price = item;
+              for (const k of keys) {
+                price = price?.[k];
+                if (price === undefined) break;
+              }
               return price >= range.min && price <= range.max;
             });
           }
@@ -372,9 +395,16 @@ export const applyFilters = (
           }
 
           if (value !== 'all') {
-            filtered = filtered.filter(item =>
-              new Date(item[filterConfig.dateKey!]) >= startDate
-            );
+            filtered = filtered.filter(item => {
+              // Handle nested keys like 'product.created_at'
+              const keys = filterConfig.dateKey!.split('.');
+              let dateVal = item;
+              for (const k of keys) {
+                dateVal = dateVal?.[k];
+                if (dateVal === undefined) break;
+              }
+              return dateVal ? new Date(dateVal) >= startDate : false;
+            });
           }
         }
         break;
@@ -391,6 +421,7 @@ export const applyFilters = (
   // Apply sorting
   if (filterState.sortBy) {
     const sortBy = filterState.sortBy;
+    console.log(`📊 applyFilters - Applying sort: ${sortBy}`);
     switch (sortBy) {
       case 'newest':
         filtered = filtered.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
@@ -414,5 +445,6 @@ export const applyFilters = (
     }
   }
 
+  console.log('📊 applyFilters - Returning', filtered.length, 'items after all filters');
   return filtered;
 };

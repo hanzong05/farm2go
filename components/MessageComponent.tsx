@@ -4,6 +4,7 @@ import {
     FlatList,
     Modal,
     Platform,
+    ScrollView,
     StyleSheet,
     Text,
     TextInput,
@@ -597,93 +598,82 @@ export default function MessageComponent({
           </View>
         </View>
 
-        {conversations.length === 0 ? (
-          renderEmptyState()
-        ) : (
-        <>
-          <View style={styles.desktopConversationsList}>
-            {conversations.slice(0, 6).map((item) => (
-              <TouchableOpacity
-                key={item.conversation_id}
-                style={[
-                  styles.desktopConversationItem,
-                  item.unread_count > 0 && styles.desktopConversationItemUnread
-                ]}
-                onPress={() => handleConversationPress(item)}
-                activeOpacity={0.9}
-              >
-                <View style={styles.desktopAvatarContainer}>
-                  <View style={[
-                    styles.desktopAvatar,
-                    { backgroundColor: getUserIconColor(item.other_user_type) + '20' }
-                  ]}>
-                    <Icon
-                      name={getUserIcon(item.other_user_type)}
-                      size={20}
-                      color={getUserIconColor(item.other_user_type)}
-                    />
+        <ScrollView
+          style={styles.desktopDropdownScrollContainer}
+          showsVerticalScrollIndicator={true}
+        >
+          {conversations.length === 0 ? (
+            renderEmptyState()
+          ) : (
+            <View style={styles.desktopConversationsList}>
+              {conversations.map((item) => (
+                <TouchableOpacity
+                  key={item.conversation_id}
+                  style={[
+                    styles.desktopConversationItem,
+                    item.unread_count > 0 && styles.desktopConversationItemUnread
+                  ]}
+                  onPress={() => handleConversationPress(item)}
+                  activeOpacity={0.9}
+                >
+                  <View style={styles.desktopAvatarContainer}>
+                    <View style={[
+                      styles.desktopAvatar,
+                      { backgroundColor: getUserIconColor(item.other_user_type) + '20' }
+                    ]}>
+                      <Icon
+                        name={getUserIcon(item.other_user_type)}
+                        size={20}
+                        color={getUserIconColor(item.other_user_type)}
+                      />
+                    </View>
+                    {item.unread_count > 0 && (
+                      <View style={styles.desktopUnreadIndicator} />
+                    )}
                   </View>
-                  {item.unread_count > 0 && (
-                    <View style={styles.desktopUnreadIndicator} />
-                  )}
-                </View>
 
-                <View style={styles.desktopConversationContent}>
-                  <Text style={[
-                    styles.desktopParticipantName,
-                    item.unread_count > 0 && styles.desktopParticipantNameUnread
-                  ]} numberOfLines={1}>
-                    {item.other_user_name}
-                  </Text>
-                  <View style={styles.desktopLastMessageContainer}>
+                  <View style={styles.desktopConversationContent}>
                     <Text style={[
-                      styles.desktopLastMessage,
-                      item.unread_count > 0 && styles.desktopLastMessageUnread
+                      styles.desktopParticipantName,
+                      item.unread_count > 0 && styles.desktopParticipantNameUnread
                     ]} numberOfLines={1}>
-                      {item.last_message_sender_id === currentUserId ? (
-                        <>
-                          <Text style={styles.desktopLastMessagePrefix}>You: </Text>
-                          {item.last_message}
-                        </>
-                      ) : (
-                        <>
-                          <Text style={styles.desktopLastMessagePrefix}>{item.other_user_name}: </Text>
-                          {item.last_message}
-                        </>
-                      )}
+                      {item.other_user_name}
                     </Text>
-                    <Text style={styles.desktopTimestamp}>
-                      · {formatTimestamp(item.last_message_at)}
-                    </Text>
+                    <View style={styles.desktopLastMessageContainer}>
+                      <Text style={[
+                        styles.desktopLastMessage,
+                        item.unread_count > 0 && styles.desktopLastMessageUnread
+                      ]} numberOfLines={1}>
+                        {item.last_message_sender_id === currentUserId ? (
+                          <>
+                            <Text style={styles.desktopLastMessagePrefix}>You: </Text>
+                            {item.last_message}
+                          </>
+                        ) : (
+                          <>
+                            <Text style={styles.desktopLastMessagePrefix}>{item.other_user_name}: </Text>
+                            {item.last_message}
+                          </>
+                        )}
+                      </Text>
+                      <Text style={styles.desktopTimestamp}>
+                        · {formatTimestamp(item.last_message_at)}
+                      </Text>
+                    </View>
                   </View>
-                </View>
 
-                {item.unread_count > 0 && (
-                  <View style={styles.desktopUnreadBadge}>
-                    <Text style={styles.desktopUnreadBadgeText}>
-                      {item.unread_count}
-                    </Text>
-                  </View>
-                )}
-              </TouchableOpacity>
-            ))}
-          </View>
-
-          {conversations.length > 6 && (
-            <View style={styles.desktopDropdownFooter}>
-              <TouchableOpacity
-                style={styles.desktopViewAllButton}
-                onPress={() => {
-                  setDropdownVisible(false);
-                  setModalVisible(true);
-                }}
-              >
-                <Text style={styles.desktopViewAllText}>See all in Messenger</Text>
-              </TouchableOpacity>
+                  {item.unread_count > 0 && (
+                    <View style={styles.desktopUnreadBadge}>
+                      <Text style={styles.desktopUnreadBadgeText}>
+                        {item.unread_count}
+                      </Text>
+                    </View>
+                  )}
+                </TouchableOpacity>
+              ))}
             </View>
           )}
-        </>
-        )}
+        </ScrollView>
       </View>
     );
   };
@@ -935,6 +925,11 @@ const styles = StyleSheet.create({
     }),
     borderWidth: 1,
     borderColor: colors.gray200,
+  },
+
+  desktopDropdownScrollContainer: {
+    maxHeight: 420,
+    minHeight: 200,
   },
 
   desktopDropdownHeader: {

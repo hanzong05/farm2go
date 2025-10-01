@@ -45,12 +45,12 @@ interface NavItem {
 }
 
 const NAV_ITEMS: NavItem[] = [
-  // Marketplace - accessible only to farmers and buyers
+  // Marketplace - accessible only to farmers and buyers (app/index.tsx)
   {
     id: 'marketplace',
     title: 'Marketplace',
     icon: 'store',
-    route: '/products',
+    route: '/',
     userTypes: ['farmer', 'buyer'],
   },
 
@@ -59,7 +59,7 @@ const NAV_ITEMS: NavItem[] = [
     id: 'farmer-products',
     title: 'My Products',
     icon: 'seedling',
-    route: '/farmer/products',
+    route: '/farmer/my-products',
     userTypes: ['farmer'],
   },
   {
@@ -73,7 +73,7 @@ const NAV_ITEMS: NavItem[] = [
     id: 'farmer-orders',
     title: 'Orders',
     icon: 'box',
-    route: '/order',
+    route: '/farmer/orders',
     userTypes: ['farmer'],
   },
   {
@@ -103,7 +103,7 @@ const NAV_ITEMS: NavItem[] = [
     id: 'buyer-orders',
     title: 'My Orders',
     icon: 'shopping-bag',
-    route: '/order',
+    route: '/buyer/my-orders',
     userTypes: ['buyer'],
   },
   {

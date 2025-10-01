@@ -1,6 +1,7 @@
 import React from 'react';
 import {
     Dimensions,
+    Image,
     Modal,
     ScrollView,
     StyleSheet,
@@ -31,6 +32,7 @@ interface OrderDetailsModalProps {
       product: {
         name: string;
         unit: string;
+        image_url?: string | null;
       };
       quantity: number;
       unit_price: number;
@@ -89,8 +91,10 @@ export default function OrderDetailsModal({
     switch (order.status) {
       case 'pending': return 0;
       case 'confirmed': return 1;
-      case 'preparing': return 2;
+      case 'processing':
+      case 'shipped': return 2;
       case 'ready': return 3;
+      case 'delivered':
       case 'completed': return 4;
       default: return 0;
     }
@@ -180,8 +184,16 @@ export default function OrderDetailsModal({
               <View style={styles.productCard}>
                 {order.order_items?.map((item, index) => (
                   <View key={index} style={styles.productItem}>
-                    <View style={styles.productIcon}>
-                      <Text style={styles.productIconText}>🌾</Text>
+                    <View style={styles.productImageContainer}>
+                      {item.product.image_url ? (
+                        <Image
+                          source={{ uri: item.product.image_url }}
+                          style={styles.productImage}
+                          resizeMode="cover"
+                        />
+                      ) : (
+                        <Text style={styles.productIconText}>🌾</Text>
+                      )}
                     </View>
                     <View style={styles.productInfo}>
                       <Text style={styles.productName}>{item.product.name}</Text>
@@ -406,6 +418,22 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: '#f1f5f9',
   },
+  productImageContainer: {
+    width: 60,
+    height: 60,
+    borderRadius: 8,
+    backgroundColor: '#ecfdf5',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: '#d1fae5',
+  },
+  productImage: {
+    width: '100%',
+    height: '100%',
+  },
   productIcon: {
     width: 48,
     height: 48,
@@ -416,7 +444,7 @@ const styles = StyleSheet.create({
     marginRight: 12,
   },
   productIconText: {
-    fontSize: 20,
+    fontSize: 24,
   },
   productInfo: {
     flex: 1,

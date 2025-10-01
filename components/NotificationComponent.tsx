@@ -6,6 +6,7 @@ import {
   Modal,
   Platform,
   RefreshControl,
+  ScrollView,
   StyleSheet,
   Text,
   TouchableOpacity,
@@ -345,76 +346,69 @@ export default function NotificationComponent({
         </TouchableOpacity>
       </View>
 
-      {notifications.length === 0 ? (
-        renderEmptyState()
-      ) : (
-        <>
-          {/* New Section */}
-          {recentNotifications.length > 0 && (
-            <View style={styles.desktopNotificationSection}>
-              <View style={styles.desktopSectionHeader}>
-                <Text style={styles.desktopSectionTitle}>New</Text>
-              </View>
-              <View style={styles.desktopNotificationsList}>
-                {recentNotifications.slice(0, 4).map((item) => (
-                  <TouchableOpacity
-                    key={item.id}
-                    style={[
-                      styles.desktopNotificationItem,
-                      !item.read && styles.desktopNotificationItemUnread
-                    ]}
-                    onPress={() => {
-                      // Close dropdown first, then navigate
-                      setDropdownVisible(false);
-                      // Add small delay to ensure dropdown closes before navigation
-                      setTimeout(() => {
-                        handleNotificationPress(item);
-                      }, 50);
-                    }}
-                    activeOpacity={0.9}
-                  >
-                    <View style={styles.desktopNotificationIconContainer}>
-                      <View style={[
-                        styles.desktopNotificationIcon,
-                        { backgroundColor: getTypeColor(item.type) + '20' }
-                      ]}>
-                        <Icon
-                          name={getTypeIcon(item.type)}
-                          size={20}
-                          color={getTypeColor(item.type)}
-                        />
-                      </View>
-                      {!item.read && (
-                        <View style={styles.desktopUnreadIndicator} />
-                      )}
-                    </View>
+      <ScrollView
+        style={styles.desktopDropdownScrollContainer}
+        showsVerticalScrollIndicator={true}
+      >
+        {notifications.length === 0 ? (
+          renderEmptyState()
+        ) : (
+          <View style={styles.desktopNotificationsList}>
+            {notifications.map((item) => (
+              <TouchableOpacity
+                key={item.id}
+                style={[
+                  styles.desktopNotificationItem,
+                  !item.read && styles.desktopNotificationItemUnread
+                ]}
+                onPress={() => {
+                  // Close dropdown first, then navigate
+                  setDropdownVisible(false);
+                  // Add small delay to ensure dropdown closes before navigation
+                  setTimeout(() => {
+                    handleNotificationPress(item);
+                  }, 50);
+                }}
+                activeOpacity={0.9}
+              >
+                <View style={styles.desktopNotificationIconContainer}>
+                  <View style={[
+                    styles.desktopNotificationIcon,
+                    { backgroundColor: getTypeColor(item.type) + '20' }
+                  ]}>
+                    <Icon
+                      name={getTypeIcon(item.type)}
+                      size={20}
+                      color={getTypeColor(item.type)}
+                    />
+                  </View>
+                  {!item.read && (
+                    <View style={styles.desktopUnreadIndicator} />
+                  )}
+                </View>
 
-                    <View style={styles.desktopNotificationContent}>
-                      <Text style={[
-                        styles.desktopNotificationTitle,
-                        !item.read && styles.desktopNotificationTitleUnread
-                      ]}>
-                        {item.title}
-                      </Text>
-                      <Text style={[
-                        styles.desktopNotificationMessage,
-                        !item.read && styles.desktopNotificationMessageUnread
-                      ]} numberOfLines={2}>
-                        {item.message}
-                      </Text>
-                      <Text style={styles.desktopTimestamp}>
-                        {formatTimestamp(item.timestamp)}
-                      </Text>
-                    </View>
-                  </TouchableOpacity>
-                ))}
-              </View>
-            </View>
-          )}
-
-
-        </>
-      )}
+                <View style={styles.desktopNotificationContent}>
+                  <Text style={[
+                    styles.desktopNotificationTitle,
+                    !item.read && styles.desktopNotificationTitleUnread
+                  ]}>
+                    {item.title}
+                  </Text>
+                  <Text style={[
+                    styles.desktopNotificationMessage,
+                    !item.read && styles.desktopNotificationMessageUnread
+                  ]} numberOfLines={2}>
+                    {item.message}
+                  </Text>
+                  <Text style={styles.desktopTimestamp}>
+                    {formatTimestamp(item.timestamp)}
+                  </Text>
+                </View>
+              </TouchableOpacity>
+            ))}
+          </View>
+        )}
+      </ScrollView>
     </View>
   );
 
@@ -598,6 +592,11 @@ const styles = StyleSheet.create({
     }),
     borderWidth: 1,
     borderColor: colors.gray200,
+  },
+
+  desktopDropdownScrollContainer: {
+    maxHeight: 420,
+    minHeight: 200,
   },
 
   desktopDropdownHeader: {

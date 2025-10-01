@@ -14,7 +14,11 @@
       "bundleIdentifier": "com.hanzpillerva.farm2go",
       "infoPlist": {
         "NSCameraUsageDescription": "This app uses the camera to take photos for identity verification.",
-        "NSPhotoLibraryUsageDescription": "This app accesses the photo library to select images for identity verification."
+        "NSPhotoLibraryUsageDescription": "This app accesses the photo library to select images for identity verification.",
+        "NSLocationWhenInUseUsageDescription": "This app uses your location to show directions to delivery addresses."
+      },
+      "config": {
+        "googleMapsApiKey": ""
       }
     },
     "android": {
@@ -32,8 +36,15 @@
         "CAMERA",
         "READ_EXTERNAL_STORAGE",
         "WRITE_EXTERNAL_STORAGE",
-        "RECORD_AUDIO"
-      ]
+        "RECORD_AUDIO",
+        "ACCESS_COARSE_LOCATION",
+        "ACCESS_FINE_LOCATION"
+      ],
+      "config": {
+        "googleMaps": {
+          "apiKey": ""
+        }
+      }
     },
     "web": {
       "output": "static",

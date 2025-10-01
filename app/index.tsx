@@ -1,6 +1,6 @@
 import { router } from 'expo-router';
 import React, { useEffect, useState } from 'react';
-import { ActivityIndicator, Alert, Dimensions, FlatList, Image, RefreshControl, ScrollView, StyleSheet, Text, TouchableOpacity, View, Modal } from 'react-native';
+import { ActivityIndicator, Alert, Dimensions, FlatList, Image, RefreshControl, ScrollView, StyleSheet, Text, TouchableOpacity, View, Modal, Platform } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import Icon from 'react-native-vector-icons/FontAwesome5';
 import FilterSidebar from '../components/FilterSidebar';
@@ -66,6 +66,20 @@ export default function MarketplaceScreen() {
   const [searchQuery, setSearchQuery] = useState('');
   const [showSidebar, setShowSidebar] = useState(false);
 
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(0);
+  const [hasMore, setHasMore] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+
+  // Category counts from database
+  const [categoryCounts, setCategoryCounts] = useState({
+    all: 0,
+    vegetables: 0,
+    fruits: 0,
+    grains: 0,
+    herbs: 0,
+  });
+
   // Visual search state
   const [showVisualSearchModal, setShowVisualSearchModal] = useState(false);
   const [visualSearchImage, setVisualSearchImage] = useState<string | null>(null);
@@ -96,7 +110,40 @@ export default function MarketplaceScreen() {
     filterProducts();
   }, [products, searchQuery, filterState]);
 
-  const loadData = async (page = 0, pageSize = 50) => {
+  const fetchCategoryCounts = async () => {
+    try {
+      // Fetch count for each category
+      const categories = ['vegetables', 'fruits', 'grains', 'herbs'];
+      const counts: any = {};
+
+      // Get total count
+      const { count: totalCount } = await supabase
+        .from('products')
+        .select('*', { count: 'exact', head: true })
+        .eq('status', 'approved')
+        .gt('quantity_available', 0);
+
+      counts.all = totalCount || 0;
+
+      // Get count for each category
+      for (const category of categories) {
+        const { count } = await supabase
+          .from('products')
+          .select('*', { count: 'exact', head: true })
+          .eq('status', 'approved')
+          .eq('category', category)
+          .gt('quantity_available', 0);
+
+        counts[category] = count || 0;
+      }
+
+      setCategoryCounts(counts);
+    } catch (error) {
+      console.error('Error fetching category counts:', error);
+    }
+  };
+
+  const loadData = async (page = 0, pageSize = 20, append = false) => {
     try {
       // Get user profile and check permissions
       if (!profile) {
@@ -127,6 +174,11 @@ export default function MarketplaceScreen() {
         return;
       }
 
+      // Fetch category counts only on initial load (not when loading more)
+      if (!append) {
+        await fetchCategoryCounts();
+      }
+
       // Load approved products with farmer info using pagination
       const { data: productsData, error } = await supabase
         .from('products')
@@ -146,40 +198,119 @@ export default function MarketplaceScreen() {
         .limit(pageSize);
 
       if (error) throw error;
-      setProducts(productsData || []);
+
+      // Update products list
+      if (append) {
+        setProducts(prev => [...prev, ...(productsData || [])]);
+      } else {
+        setProducts(productsData || []);
+      }
+
+      // Check if there are more products
+      setHasMore((productsData || []).length === pageSize);
+
     } catch (error) {
       console.error('Error loading data:', error);
       Alert.alert('Error', 'Failed to load marketplace data');
     } finally {
       setLoading(false);
+      setLoadingMore(false);
     }
   };
 
-  const filterProducts = () => {
-    let filtered = products;
+  const loadMoreProducts = async () => {
+    if (loadingMore || !hasMore || searchQuery.trim()) return;
 
-    // Filter by search query first
+    setLoadingMore(true);
+    const nextPage = currentPage + 1;
+    setCurrentPage(nextPage);
+    await loadData(nextPage, 20, true);
+  };
+
+  const filterProducts = async () => {
+    // If there's a search query, search from database
     if (searchQuery.trim()) {
-      const query = searchQuery.toLowerCase();
-      filtered = filtered.filter(product =>
-        product.name.toLowerCase().includes(query) ||
-        product.description.toLowerCase().includes(query) ||
-        product.category.toLowerCase().includes(query) ||
-        product.profiles?.farm_name?.toLowerCase().includes(query)
-      );
-    }
+      try {
+        const query = searchQuery.toLowerCase();
 
-    // Apply filters using the utility function
-    filtered = applyFilters(filtered, filterState, {
-      categoryKey: 'category',
-      priceKey: 'price',
-      dateKey: 'created_at',
-      customFilters: {
-        availability: (product, value) => value ? product.quantity_available > 0 : true,
+        // Search from database with all matching products
+        const { data: searchResults, error } = await supabase
+          .from('products')
+          .select(`
+            id, name, description, price, unit, quantity_available, category, image_url, farmer_id,
+            profiles:farmer_id (
+              first_name,
+              last_name,
+              farm_name,
+              barangay
+            )
+          `)
+          .eq('status', 'approved')
+          .gt('quantity_available', 0)
+          .or(`name.ilike.%${query}%,description.ilike.%${query}%,category.ilike.%${query}%`)
+          .order('created_at', { ascending: false })
+          .limit(100);
+
+        if (error) throw error;
+
+        let filtered: Product[] = searchResults || [];
+
+        // Also filter by farm name locally (since it's in joined table)
+        filtered = filtered.filter(product =>
+          product.name.toLowerCase().includes(query) ||
+          product.description.toLowerCase().includes(query) ||
+          product.category.toLowerCase().includes(query) ||
+          product.profiles?.farm_name?.toLowerCase().includes(query)
+        );
+
+        // Apply other filters
+        filtered = applyFilters(filtered, filterState, {
+          categoryKey: 'category',
+          priceKey: 'price',
+          dateKey: 'created_at',
+          customFilters: {
+            availability: (product, value) => value ? product.quantity_available > 0 : true,
+          }
+        });
+
+        setFilteredProducts(filtered);
+      } catch (error) {
+        console.error('Search error:', error);
+        // Fallback to local filtering
+        let filtered = products.filter(product =>
+          product.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+          product.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
+          product.category.toLowerCase().includes(searchQuery.toLowerCase()) ||
+          product.profiles?.farm_name?.toLowerCase().includes(searchQuery.toLowerCase())
+        );
+
+        filtered = applyFilters(filtered, filterState, {
+          categoryKey: 'category',
+          priceKey: 'price',
+          dateKey: 'created_at',
+          customFilters: {
+            availability: (product, value) => value ? product.quantity_available > 0 : true,
+          }
+        });
+
+        setFilteredProducts(filtered);
       }
-    });
+    } else {
+      // No search query - filter from loaded products
+      let filtered = products;
 
-    setFilteredProducts(filtered);
+      // Apply filters using the utility function
+      filtered = applyFilters(filtered, filterState, {
+        categoryKey: 'category',
+        priceKey: 'price',
+        dateKey: 'created_at',
+        customFilters: {
+          availability: (product, value) => value ? product.quantity_available > 0 : true,
+        }
+      });
+
+      setFilteredProducts(filtered);
+    }
   };
 
   // Handle filter changes
@@ -476,8 +607,8 @@ export default function MarketplaceScreen() {
     </TouchableOpacity>
   );
 
-  // Get filter configuration
-  const filterSections = getMarketplaceFilters(products);
+  // Get filter configuration with database category counts
+  const filterSections = getMarketplaceFilters(products, categoryCounts);
 
   const renderEmptyState = () => (
     <View style={styles.emptyContainer}>
@@ -584,6 +715,14 @@ export default function MarketplaceScreen() {
               />
             }
             showsVerticalScrollIndicator={false}
+            onScroll={({ nativeEvent }) => {
+              const { layoutMeasurement, contentOffset, contentSize } = nativeEvent;
+              const isCloseToBottom = layoutMeasurement.height + contentOffset.y >= contentSize.height - 20;
+              if (isCloseToBottom && !loadingMore && hasMore && !searchQuery.trim()) {
+                loadMoreProducts();
+              }
+            }}
+            scrollEventThrottle={400}
           >
             {/* Products Header */}
             <View style={styles.productsHeader}>
@@ -599,9 +738,19 @@ export default function MarketplaceScreen() {
             {filteredProducts.length === 0 ? (
               renderEmptyState()
             ) : (
-              <View style={styles.productsGrid}>
-                {filteredProducts.map((product) => renderCompactProduct(product))}
-              </View>
+              <>
+                <View style={styles.productsGrid}>
+                  {filteredProducts.map((product) => renderCompactProduct(product))}
+                </View>
+
+                {/* Load More Indicator */}
+                {loadingMore && (
+                  <View style={styles.loadMoreContainer}>
+                    <ActivityIndicator size="small" color="#10b981" />
+                    <Text style={styles.loadMoreText}>Loading more products...</Text>
+                  </View>
+                )}
+              </>
             )}
           </ScrollView>
         </View>
@@ -619,6 +768,14 @@ export default function MarketplaceScreen() {
             />
           }
           showsVerticalScrollIndicator={false}
+          onScroll={({ nativeEvent }) => {
+            const { layoutMeasurement, contentOffset, contentSize } = nativeEvent;
+            const isCloseToBottom = layoutMeasurement.height + contentOffset.y >= contentSize.height - 20;
+            if (isCloseToBottom && !loadingMore && hasMore && !searchQuery.trim()) {
+              loadMoreProducts();
+            }
+          }}
+          scrollEventThrottle={400}
         >
           {/* Mobile Filter Sidebar */}
           <FilterSidebar
@@ -646,16 +803,26 @@ export default function MarketplaceScreen() {
             {filteredProducts.length === 0 ? (
               renderEmptyState()
             ) : (
-              <FlatList
-                data={filteredProducts}
-                renderItem={({ item }) => renderGridProduct(item)}
-                keyExtractor={(item) => item.id}
-                numColumns={getNumColumns()}
-                columnWrapperStyle={getNumColumns() > 1 ? styles.gridRow : undefined}
-                showsVerticalScrollIndicator={false}
-                scrollEnabled={false}
-                key={getNumColumns()} // Force re-render when columns change
-              />
+              <>
+                <FlatList
+                  data={filteredProducts}
+                  renderItem={({ item }) => renderGridProduct(item)}
+                  keyExtractor={(item) => item.id}
+                  numColumns={getNumColumns()}
+                  columnWrapperStyle={getNumColumns() > 1 ? styles.gridRow : undefined}
+                  showsVerticalScrollIndicator={false}
+                  scrollEnabled={false}
+                  key={getNumColumns()} // Force re-render when columns change
+                />
+
+                {/* Load More Indicator */}
+                {loadingMore && (
+                  <View style={styles.loadMoreContainer}>
+                    <ActivityIndicator size="small" color="#10b981" />
+                    <Text style={styles.loadMoreText}>Loading more products...</Text>
+                  </View>
+                )}
+              </>
             )}
           </View>
         </ScrollView>
@@ -1435,6 +1602,16 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
     justifyContent: 'center',
     alignItems: 'center',
+    ...Platform.select({
+      web: {
+        position: 'fixed' as any,
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        zIndex: 9999,
+      },
+    }),
   },
 
   modalContent: {
@@ -1443,11 +1620,20 @@ const styles = StyleSheet.create({
     backgroundColor: '#ffffff',
     borderRadius: 16,
     padding: 20,
-    elevation: 10,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
+    ...Platform.select({
+      web: {
+        boxShadow: '0 20px 60px rgba(0, 0, 0, 0.3)',
+        position: 'relative' as any,
+        zIndex: 10000,
+      },
+      default: {
+        elevation: 10,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.3,
+        shadowRadius: 8,
+      },
+    }),
   },
 
   modalHeader: {
@@ -1603,5 +1789,20 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
     color: '#10b981',
+  },
+
+  // Load More Indicator
+  loadMoreContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 20,
+    gap: 10,
+  },
+
+  loadMoreText: {
+    fontSize: 14,
+    color: '#64748b',
+    fontWeight: '500',
   },
 });

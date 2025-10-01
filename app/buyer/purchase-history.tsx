@@ -89,7 +89,7 @@ export default function BuyerPurchaseHistoryScreen() {
   const [filterState, setFilterState] = useState({
     category: 'all',
     amountRange: 'all',
-    dateRange: 'month',
+    dateRange: 'all',
     sortBy: 'newest'
   });
   const [profile, setProfile] = useState<Profile | null>(null);
@@ -353,9 +353,6 @@ export default function BuyerPurchaseHistoryScreen() {
         </TouchableOpacity>
         <TouchableOpacity style={styles.primaryActionButton}>
           <Text style={styles.primaryButtonText}>Buy Again</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.ratingButton}>
-          <Text style={styles.ratingButtonText}>⭐ Rate</Text>
         </TouchableOpacity>
       </View>
     </View>
@@ -835,16 +832,6 @@ const styles = StyleSheet.create({
     backgroundColor: '#ee4d2d',
     alignItems: 'center',
   },
-  ratingButton: {
-    flex: 1,
-    paddingVertical: 10,
-    paddingHorizontal: 12,
-    borderRadius: 4,
-    borderWidth: 1,
-    borderColor: '#fbbf24',
-    backgroundColor: '#fffbeb',
-    alignItems: 'center',
-  },
   secondaryButtonText: {
     fontSize: 12,
     color: '#666',
@@ -853,11 +840,6 @@ const styles = StyleSheet.create({
   primaryButtonText: {
     fontSize: 12,
     color: '#ffffff',
-    fontWeight: '600',
-  },
-  ratingButtonText: {
-    fontSize: 12,
-    color: '#f59e0b',
     fontWeight: '600',
   },
 

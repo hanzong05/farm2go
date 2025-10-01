@@ -95,6 +95,17 @@ export default function ContactWidget({
   const buttonRef = useRef<View>(null);
   const flatListRef = useRef<FlatList>(null);
 
+  // Sync internal state with visible prop
+  useEffect(() => {
+    if (visible) {
+      if (isDesktop) {
+        setDropdownVisible(true);
+      } else {
+        setModalVisible(true);
+      }
+    }
+  }, [visible]);
+
   // Load conversation messages when contact person changes
   useEffect(() => {
     const loadMessages = async () => {

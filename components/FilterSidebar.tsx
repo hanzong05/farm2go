@@ -247,7 +247,7 @@ const FilterSidebar: React.FC<FilterSidebarProps> = ({
   if (showMobile) {
     return (
       <Modal
-        animationKeyframesType="slide"
+        animationType="slide"
         transparent={true}
         visible={showMobile}
         onRequestClose={onCloseMobile}

@@ -234,8 +234,6 @@ export default function RegisterScreen() {
     farmName: '',
     farmSize: '',
     cropTypes: '',
-    companyName: '',
-    businessType: '',
   });
 
   const handleInputChange = (field: string, value: string) => {
@@ -290,15 +288,6 @@ export default function RegisterScreen() {
       }
     }
 
-    if (userType === 'buyer') {
-      if (!formData.companyName) {
-        setErrorTitle('Required Fields');
-        setErrorMessage('Please fill in all required business information');
-        setShowErrorModal(true);
-        return;
-      }
-    }
-
     setIsRegistering(true);
 
     try {
@@ -314,8 +303,6 @@ export default function RegisterScreen() {
         farmName: formData.farmName,
         farmSize: formData.farmSize,
         cropTypes: formData.cropTypes,
-        companyName: formData.companyName,
-        businessType: formData.businessType,
       };
 
       await registerUser(registrationData);
@@ -792,13 +779,6 @@ export default function RegisterScreen() {
             </View>
           )}
 
-          {userType === 'buyer' && (
-            <View style={styles.formSection}>
-              <Text style={styles.sectionTitle}>Business Information</Text>
-              {renderFormInput('companyName', 'Company Name', 'Enter company name', 'building', { required: true })}
-              {renderFormInput('businessType', 'Business Type', 'e.g., Restaurant, Grocery Store, Distributor', 'briefcase')}
-            </View>
-          )}
 
           {/* Submit Button */}
           <TouchableOpacity

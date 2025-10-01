@@ -5,6 +5,7 @@ import {
   Alert,
   Animated,
   Dimensions,
+  Image,
   RefreshControl,
   ScrollView,
   StyleSheet,
@@ -15,6 +16,7 @@ import {
 import ConfirmationModal from '../../components/ConfirmationModal';
 import FilterSidebar from '../../components/FilterSidebar';
 import HeaderComponent from '../../components/HeaderComponent';
+import MapDirectionsModal from '../../components/MapDirectionsModal';
 import OrderDetailsModal from '../../components/OrderDetailsModal';
 import OrderQRCodeModal from '../../components/OrderQRCodeModal';
 import { supabase } from '../../lib/supabase';
@@ -76,6 +78,7 @@ export default function BuyerMyOrdersScreen() {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [showQRModal, setShowQRModal] = useState(false);
   const [showDetailsModal, setShowDetailsModal] = useState(false);
+  const [showMapModal, setShowMapModal] = useState(false);
   const [selectedOrder, setSelectedOrder] = useState<OrderWithDetails | null>(null);
   const fadeAnim = new Animated.Value(0);
   const [confirmModal, setConfirmModal] = useState<{
@@ -98,7 +101,7 @@ export default function BuyerMyOrdersScreen() {
   const [filterState, setFilterState] = useState({
     category: 'all',
     amountRange: 'all',
-    dateRange: 'month',
+    dateRange: 'all',
     sortBy: 'newest'
   });
 
@@ -207,32 +210,64 @@ export default function BuyerMyOrdersScreen() {
 
   const loadOrders = async (buyerId: string) => {
     try {
-      console.log('Loading orders for buyer:', buyerId);
+      console.log('📦 Loading orders for buyer:', buyerId);
       const ordersData = await getBuyerOrders(buyerId);
-      console.log('Orders loaded:', ordersData.length);
+      console.log('📦 Orders loaded:', ordersData.length);
+      console.log('📦 Orders data:', JSON.stringify(ordersData, null, 2));
+
+      if (ordersData.length === 0) {
+        console.warn('⚠️ No orders found for buyer:', buyerId);
+      }
+
       setOrders(ordersData);
     } catch (error) {
-      console.error('Error loading orders:', error);
+      console.error('❌ Error loading orders:', error);
+      Alert.alert('Error', `Failed to load orders: ${error.message || 'Unknown error'}`);
       throw error;
     }
   };
 
   const filterOrders = () => {
+    console.log('🔍 Starting filter with', orders.length, 'orders');
+    console.log('🔍 Selected status:', selectedStatus);
+    console.log('🔍 Filter state:', JSON.stringify(filterState));
+    console.log('🔍 Sample order:', orders[0]);
+
     let filtered = orders;
 
     // Filter by status
     if (selectedStatus !== 'all') {
-      filtered = filtered.filter(order => order.status === selectedStatus);
+      console.log('🔍 Filtering by status:', selectedStatus);
+      filtered = filtered.filter(order => {
+        const match = order.status === selectedStatus;
+        console.log(`  Order ${order.id} status: ${order.status}, match: ${match}`);
+        return match;
+      });
+      console.log('🔍 After status filter:', filtered.length, 'orders');
     }
 
     // Apply other filters using the utility function
-    const { applyFilters } = require('../../utils/filterConfigs');
-    filtered = applyFilters(filtered, filterState, {
-      categoryKey: 'product.category',
-      priceKey: 'total_price',
-      dateKey: 'created_at',
-    });
+    try {
+      const { applyFilters } = require('../../utils/filterConfigs');
+      console.log('🔍 Applying utility filters with config:', {
+        categoryKey: 'product.category',
+        priceKey: 'total_price',
+        dateKey: 'created_at',
+      });
+      filtered = applyFilters(filtered, filterState, {
+        categoryKey: 'product.category',
+        priceKey: 'total_price',
+        dateKey: 'created_at',
+      });
+      console.log('🔍 After additional filters:', filtered.length, 'orders');
+    } catch (error) {
+      console.error('❌ Error applying filters:', error);
+      console.error('❌ Error details:', error.message);
+      console.error('❌ Error stack:', error.stack);
+    }
 
+    console.log('🔍 Final filtered count:', filtered.length);
+    console.log('🔍 Final filtered orders:', filtered);
     setFilteredOrders(filtered);
   };
 
@@ -494,6 +529,20 @@ export default function BuyerMyOrdersScreen() {
     setSelectedOrder(null);
   };
 
+  const handleShowDirections = (order: OrderWithDetails) => {
+    if (!order.delivery_address) {
+      Alert.alert('No Address', 'This order does not have a delivery address.');
+      return;
+    }
+    setSelectedOrder(order);
+    setShowMapModal(true);
+  };
+
+  const handleCloseMapModal = () => {
+    setShowMapModal(false);
+    setSelectedOrder(null);
+  };
+
   const renderOrderTracker = (currentStatus: string) => {
     const steps = [
       { key: 'pending', label: 'Order Placed', icon: '📋' },
@@ -615,10 +664,23 @@ export default function BuyerMyOrdersScreen() {
         {/* Product Info */}
         <View style={styles.productSection}>
           {order.product && (
-            <View key={order.id} style={styles.orderItem}>
-              <Text style={styles.productName}>{order.product.name}</Text>
-              <Text style={styles.productDetails}>Qty: {order.quantity} {order.product.unit}</Text>
-              <Text style={styles.productPrice}>{formatPrice(order.product.price)}</Text>
+            <View key={order.id} style={styles.productRow}>
+              <View style={styles.productImageContainer}>
+                {order.product.image_url ? (
+                  <Image
+                    source={{ uri: order.product.image_url }}
+                    style={styles.productImageStyle}
+                    resizeMode="cover"
+                  />
+                ) : (
+                  <Text style={styles.productIcon}>🥬</Text>
+                )}
+              </View>
+              <View style={styles.productInfo}>
+                <Text style={styles.productName}>{order.product.name}</Text>
+                <Text style={styles.productDetails}>Qty: {order.quantity} {order.product.unit}</Text>
+                <Text style={styles.productPrice}>{formatPrice(order.product.price)}</Text>
+              </View>
             </View>
           )}
         </View>
@@ -655,7 +717,20 @@ export default function BuyerMyOrdersScreen() {
             <Text style={styles.trackButtonText}>Show QR Code</Text>
           </TouchableOpacity>
 
-          {order.status !== 'cancelled' && order.status !== 'delivered' && order.status !== 'cancellation_requested' && !order.notes?.includes('CANCELLATION REQUESTED') && (
+          {order.delivery_address && (
+            <TouchableOpacity
+              style={[styles.directionsButton]}
+              onPress={() => handleShowDirections(order)}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.directionsButtonText}>📍 Directions</Text>
+            </TouchableOpacity>
+          )}
+        </View>
+
+        {/* Cancellation Button Row */}
+        {order.status !== 'cancelled' && order.status !== 'delivered' && order.status !== 'cancellation_requested' && !order.notes?.includes('CANCELLATION REQUESTED') && (
+          <View style={styles.cancelButtonRow}>
             <TouchableOpacity
               style={styles.cancelButton}
               activeOpacity={0.8}
@@ -663,13 +738,15 @@ export default function BuyerMyOrdersScreen() {
             >
               <Text style={styles.cancelButtonText}>Request cancellation</Text>
             </TouchableOpacity>
-          )}
-          {(order.status === 'cancellation_requested' || order.notes?.includes('CANCELLATION REQUESTED')) && (
+          </View>
+        )}
+        {(order.status === 'cancellation_requested' || order.notes?.includes('CANCELLATION REQUESTED')) && (
+          <View style={styles.cancelButtonRow}>
             <View style={styles.cancelRequestedBadge}>
               <Text style={styles.cancelRequestedText}>Cancellation Requested</Text>
             </View>
-          )}
-        </View>
+          </View>
+        )}
       </View>
     );
   };
@@ -711,6 +788,11 @@ export default function BuyerMyOrdersScreen() {
       </View>
     );
   }
+
+  console.log('🎨 RENDERING - Orders count:', orders.length);
+  console.log('🎨 RENDERING - Filtered orders count:', filteredOrders.length);
+  console.log('🎨 RENDERING - Loading:', loading);
+  console.log('🎨 RENDERING - Selected status:', selectedStatus);
 
   return (
     <View style={styles.container}>
@@ -773,15 +855,26 @@ export default function BuyerMyOrdersScreen() {
             showsVerticalScrollIndicator={false}
           >
             {filteredOrders.length === 0 ? (
-              renderEmptyState()
+              (() => {
+                console.log('🎨 RENDERING - Showing empty state because filteredOrders.length is 0');
+                return renderEmptyState();
+              })()
             ) : (
-              <View style={styles.ordersList}>
-                {filteredOrders.map((order) => (
-                  <View key={order.id}>
-                    {renderOrderCard({ item: order })}
+              (() => {
+                console.log('🎨 RENDERING - Showing', filteredOrders.length, 'order cards');
+                return (
+                  <View style={styles.ordersList}>
+                    {filteredOrders.map((order, index) => {
+                      console.log(`🎨 RENDERING - Order ${index + 1}:`, order.id, order.status);
+                      return (
+                        <View key={order.id}>
+                          {renderOrderCard({ item: order })}
+                        </View>
+                      );
+                    })}
                   </View>
-                ))}
-              </View>
+                );
+              })()
             )}
           </ScrollView>
         </View>
@@ -802,6 +895,20 @@ export default function BuyerMyOrdersScreen() {
           visible={showDetailsModal}
           onClose={handleCloseDetailsModal}
           order={selectedOrder as any}
+        />
+      )}
+
+      {/* Map Directions Modal */}
+      {selectedOrder && (
+        <MapDirectionsModal
+          visible={showMapModal}
+          onClose={handleCloseMapModal}
+          deliveryAddress={selectedOrder.delivery_address || ''}
+          orderInfo={{
+            orderId: selectedOrder.id,
+            productName: selectedOrder.product?.name || 'Unknown Product',
+            status: selectedOrder.status,
+          }}
         />
       )}
 
@@ -976,6 +1083,22 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
     marginBottom: 8,
   },
+  productImageContainer: {
+    width: 60,
+    height: 60,
+    borderRadius: 8,
+    backgroundColor: '#f3f4f6',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+  },
+  productImageStyle: {
+    width: '100%',
+    height: '100%',
+  },
   productIconContainer: {
     width: 40,
     height: 40,
@@ -986,7 +1109,7 @@ const styles = StyleSheet.create({
     marginRight: 12,
   },
   productIcon: {
-    fontSize: 18,
+    fontSize: 24,
   },
   productInfo: {
     flex: 1,
@@ -1225,7 +1348,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: 12,
     paddingHorizontal: 16,
-    paddingVertical: 12,
+    paddingTop: 12,
+    paddingBottom: 6,
   },
   trackButton: {
     flex: 1,
@@ -1240,7 +1364,27 @@ const styles = StyleSheet.create({
     color: '#ffffff',
     fontWeight: '600',
   },
+  directionsButton: {
+    flex: 1,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 6,
+    backgroundColor: '#3b82f6',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  directionsButtonText: {
+    fontSize: 14,
+    color: '#ffffff',
+    fontWeight: '600',
+  },
+  cancelButtonRow: {
+    paddingHorizontal: 16,
+    paddingTop: 6,
+    paddingBottom: 12,
+  },
   cancelButton: {
+    width: '100%',
     paddingVertical: 12,
     paddingHorizontal: 16,
     borderRadius: 6,

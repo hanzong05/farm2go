@@ -131,6 +131,8 @@ const createOrderManually = async (
 // Get orders for buyer with full details
 export const getBuyerOrders = async (buyerId: string): Promise<OrderWithDetails[]> => {
   try {
+    console.log('🔍 Fetching orders for buyer:', buyerId);
+
     const { data, error } = await supabase
       .from('orders')
       .select(`
@@ -165,17 +167,30 @@ export const getBuyerOrders = async (buyerId: string): Promise<OrderWithDetails[
       .order('created_at', { ascending: false });
 
     if (error) {
+      console.error('❌ Database error:', error);
       throw error;
     }
 
-    return (data || []).map((order: any) => ({
+    console.log('✅ Raw data from database:', data);
+    console.log('✅ Number of orders returned:', data?.length || 0);
+
+    if (data && data.length > 0) {
+      console.log('✅ Sample order structure:', JSON.stringify(data[0], null, 2));
+    }
+
+    const mappedOrders = (data || []).map((order: any) => ({
       ...order,
       product: order.products,
       farmer_profile: order.profiles,
       transaction: order.transactions?.[0] // Get the first/main transaction
-    })) as OrderWithDetails[];
+    }));
+
+    console.log('✅ Mapped orders:', mappedOrders);
+    console.log('✅ Sample mapped order:', JSON.stringify(mappedOrders[0], null, 2));
+
+    return mappedOrders as OrderWithDetails[];
   } catch (error) {
-    console.error('Error fetching buyer orders:', error);
+    console.error('❌ Error fetching buyer orders:', error);
     throw error;
   }
 };
