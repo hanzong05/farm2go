@@ -27,7 +27,8 @@
       "WebSearch",
       "WebFetch(domain:shopee.ph)",
       "Bash(find:*)",
-      "Bash(timeout:*)"
+      "Bash(timeout:*)",
+      "Bash(where:*)"
     ],
     "deny": [],
     "ask": []

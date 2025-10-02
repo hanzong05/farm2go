@@ -8,10 +8,8 @@ import {
   Alert,
   Animated,
   Dimensions,
-  FlatList,
   Modal,
   Platform,
-  RefreshControl,
   StatusBar,
   StyleSheet,
   Text,
@@ -20,6 +18,7 @@ import {
   View
 } from 'react-native';
 import Icon from 'react-native-vector-icons/FontAwesome5';
+import AdminTable from '../../components/AdminTable';
 import HeaderComponent from '../../components/HeaderComponent';
 import LocationPicker from '../../components/LocationPicker';
 import { supabase } from '../../lib/supabase';
@@ -86,7 +85,7 @@ export default function SuperAdminUsers() {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
+  const [tableKey, setTableKey] = useState(0);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [focusedInput, setFocusedInput] = useState<string | null>(null);
@@ -213,8 +212,9 @@ export default function SuperAdminUsers() {
           },
         })) || [];
 
-      console.log('👥 Processed users data:', usersData);
-      setUsers(usersData);
+     console.log('👥 Processed users data:', usersData);
+setUsers(usersData);
+setTableKey(prev => prev + 1);
     } catch (error) {
       console.error('Error loading users:', error);
       Alert.alert('Error', 'Failed to load users');
@@ -425,14 +425,15 @@ export default function SuperAdminUsers() {
     const userTypeColors = getUserTypeColor(item.profiles?.user_type || '');
 
     return (
-      <Animated.View
-        style={[
-          styles.userCard,
-          {
-            opacity: animatedValue,
-            transform: [{ translateY }],
-          },
-        ]}
+      <Animated.ScrollView
+  style={[
+    styles.content,
+    {
+      opacity: fadeAnim,
+    },
+  ]}
+  contentContainerStyle={{ flexGrow: 1 }}
+  showsVerticalScrollIndicator={false}
       >
         <LinearGradient
           colors={[colors.white, colors.gray50]}
@@ -534,7 +535,7 @@ export default function SuperAdminUsers() {
             </TouchableOpacity>
           </View>
         </LinearGradient>
-      </Animated.View>
+      </Animated.ScrollView>
     );
   };
 
@@ -665,37 +666,87 @@ export default function SuperAdminUsers() {
           </LinearGradient>
         </View>
 
-        {/* Enhanced Users List */}
-        <FlatList
-          data={filteredUsers}
-          renderItem={renderUser}
-          keyExtractor={(item) => item.id}
-          contentContainerStyle={styles.listContainer}
-          showsVerticalScrollIndicator={false}
-          refreshControl={
-            <RefreshControl
-              refreshing={refreshing}
-              onRefresh={onRefresh}
-              tintColor={colors.primary}
-              colors={[colors.primary]}
-              progressBackgroundColor={colors.white}
-            />
-          }
-          ListEmptyComponent={
-            <View style={styles.emptyContainer}>
-              <LinearGradient
-                colors={[colors.gray100, colors.gray50]}
-                style={styles.emptyIcon}
-              >
-                <Icon name="users" size={40} color={colors.textLight} />
-              </LinearGradient>
-              <Text style={styles.emptyTitle}>No admins found</Text>
-              <Text style={styles.emptyText}>
-                {searchQuery ? 'Try adjusting your search terms' : 'Create your first admin user'}
-              </Text>
-            </View>
-          }
-        />
+        {/* Admin Users Table */}
+        <View style={styles.tableContainer}>
+           <AdminTable
+    key={tableKey} // ← This was added
+    columns={[
+              {
+                key: 'name',
+                title: 'Name',
+                width: 180,
+                render: (value, row) => (
+                  <Text style={styles.cellText}>
+                    {row.profiles?.first_name} {row.profiles?.last_name}
+                  </Text>
+                )
+              },
+              {
+                key: 'email',
+                title: 'Email',
+                width: 200,
+                render: (value) => <Text style={styles.cellText}>{value}</Text>
+              },
+              {
+                key: 'phone',
+                title: 'Phone',
+                width: 140,
+                render: (value, row) => <Text style={styles.cellText}>{row.profiles?.phone || '-'}</Text>
+              },
+              {
+                key: 'barangay',
+                title: 'Barangay',
+                width: 140,
+                render: (value, row) => <Text style={styles.cellText}>{row.profiles?.barangay || '-'}</Text>
+              },
+              {
+                key: 'user_type',
+                title: 'Role',
+                width: 120,
+                render: (value, row) => (
+                  <View style={[styles.statusBadge, { backgroundColor: colors.primary + '20' }]}>
+                    <Text style={{
+                      color: colors.primary,
+                      fontSize: 12,
+                      fontWeight: '600'
+                    }}>{row.profiles?.user_type?.toUpperCase()}</Text>
+                  </View>
+                )
+              },
+              {
+                key: 'created_at',
+                title: 'Created',
+                width: 140,
+                render: (value) => (
+                  <Text style={styles.cellText}>
+                    {new Date(value).toLocaleDateString()}
+                  </Text>
+                )
+              },
+            ]}
+            data={filteredUsers}
+            onAddPress={() => setShowCreateModal(true)}
+            addButtonText="+ Add Admin"
+            emptyMessage={searchQuery ? 'No admins found matching your search' : 'No admin users yet'}
+            actions={[
+              {
+                icon: 'edit',
+                label: 'Edit',
+                color: colors.primary,
+                onPress: (user) => {
+                  setSelectedUser(user);
+                  setShowEditModal(true);
+                }
+              },
+              {
+                icon: 'trash-alt',
+                label: 'Delete',
+                color: colors.danger,
+                onPress: (user) => deleteUser(user.id)
+              },
+            ]}
+          />
+        </View>
       </Animated.View>
 
       {/* Enhanced Create User Modal */}
@@ -1339,5 +1390,22 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: colors.white,
     fontWeight: '600',
+  },
+   tableContainer: {
+  flex: 1,
+  minHeight: 400,
+  marginTop: 20,
+  marginHorizontal: 20,
+  marginBottom: 20,
+  },
+  cellText: {
+    fontSize: 14,
+    color: colors.text,
+  },
+  statusBadge: {
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 12,
+    alignSelf: 'flex-start',
   },
 });

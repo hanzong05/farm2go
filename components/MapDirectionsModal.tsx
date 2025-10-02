@@ -34,33 +34,8 @@ interface RouteStep {
   maneuver?: string;
 }
 
-// Conditionally import MapView only for native platforms
-let MapView: any = null;
-let Marker: any = null;
-let Polyline: any = null;
-let PROVIDER_GOOGLE: any = null;
-
-if (Platform.OS !== 'web') {
-  try {
-    console.log('🗺️ Attempting to load react-native-maps...');
-    const maps = require('react-native-maps');
-    console.log('🗺️ Maps module loaded:', maps);
-    MapView = maps.default || maps.MapView;
-    Marker = maps.Marker;
-    Polyline = maps.Polyline;
-    PROVIDER_GOOGLE = maps.PROVIDER_GOOGLE;
-    console.log('✅ react-native-maps loaded successfully', {
-      MapView: !!MapView,
-      Marker: !!Marker,
-      Polyline: !!Polyline,
-      PROVIDER_GOOGLE: !!PROVIDER_GOOGLE
-    });
-  } catch (e) {
-    console.error('❌ react-native-maps not available:', e);
-  }
-} else {
-  console.log('🌐 Web platform detected, skipping native maps');
-}
+// Import MapView for native platforms
+import MapView, { Marker, Polyline, PROVIDER_DEFAULT } from 'react-native-maps';
 
 export default function MapDirectionsModal({
   visible,
@@ -674,14 +649,7 @@ export default function MapDirectionsModal({
   };
 
   const renderNativeMap = () => {
-    console.log('🗺️ renderNativeMap called');
-    console.log('📍 MapView available:', !!MapView);
-    console.log('📍 currentLocation:', currentLocation);
-    console.log('📍 destinationLocation:', destinationLocation);
-    console.log('🛣️ routeCoordinates:', routeCoordinates.length, 'points');
-
-    if (!MapView || !currentLocation || !destinationLocation) {
-      console.warn('⚠️ Cannot render native map: MapView:', !!MapView, 'currentLocation:', !!currentLocation, 'destinationLocation:', !!destinationLocation);
+    if (!currentLocation || !destinationLocation) {
       return null;
     }
 
@@ -703,7 +671,7 @@ export default function MapDirectionsModal({
     return (
       <>
         <MapView
-          provider={PROVIDER_GOOGLE}
+          provider={PROVIDER_DEFAULT}
           style={styles.map}
           initialRegion={{
             latitude: centerLat,
@@ -715,7 +683,6 @@ export default function MapDirectionsModal({
           showsMyLocationButton={true}
           showsTraffic={false}
           showsCompass={true}
-          followsUserLocation={true}
           loadingEnabled={true}
         >
           {/* Draw route polyline first (behind markers) */}
@@ -724,8 +691,6 @@ export default function MapDirectionsModal({
               coordinates={routeCoordinates}
               strokeColor="#3b82f6"
               strokeWidth={5}
-              lineJoin="round"
-              lineCap="round"
             />
           )}
 
@@ -734,7 +699,6 @@ export default function MapDirectionsModal({
             coordinate={currentLocation}
             title="Your Location"
             description="Starting point"
-            pinColor="blue"
           />
 
           {/* End marker */}
@@ -742,7 +706,6 @@ export default function MapDirectionsModal({
             coordinate={destinationLocation}
             title="Delivery Address"
             description={deliveryAddress}
-            pinColor="red"
           />
         </MapView>
 

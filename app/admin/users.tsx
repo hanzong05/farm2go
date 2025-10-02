@@ -22,6 +22,7 @@ import AddProductForm from '../../components/AddProductForm';
 import AdminInventoryCard from '../../components/AdminInventoryCard';
 import AdminOrderCard from '../../components/AdminOrderCard';
 import AdminProductCard from '../../components/AdminProductCard';
+import AdminTable, { TableColumn, TableAction } from '../../components/AdminTable';
 import HeaderComponent from '../../components/HeaderComponent';
 import OrderQRScanner from '../../components/OrderQRScanner';
 import OrderVerificationModal from '../../components/OrderVerificationModal';
@@ -1279,6 +1280,162 @@ export default function AdminUsers() {
     }));
   };
 
+  // Handle product status update
+  const handleProductStatusUpdate = async (productId: string, newStatus: 'approved' | 'rejected') => {
+    const actionText = newStatus === 'approved' ? 'approve' : 'reject';
+    const confirmed = await showConfirmation(
+      `${actionText.charAt(0).toUpperCase() + actionText.slice(1)} Product`,
+      `Are you sure you want to ${actionText} this product?`
+    );
+
+    if (!confirmed) return;
+
+    try {
+      // Get product details for notification
+      const { data: productData, error: fetchError } = await supabase
+        .from('products')
+        .select('name, farmer_id')
+        .eq('id', productId)
+        .single();
+
+      if (fetchError) throw fetchError;
+
+      const { error } = await supabase
+        .from('products')
+        .update({ status: newStatus })
+        .eq('id', productId);
+
+      if (error) throw error;
+
+      // Send notification to farmer
+      try {
+        await notifyUserAction(
+          productData.farmer_id,
+          newStatus === 'approved' ? 'approved' : 'rejected',
+          'product',
+          productData.name,
+          profile?.id || '',
+          `Your product "${productData.name}" has been ${newStatus} by an administrator`
+        );
+
+        // Notify all admins
+        await notifyAllAdmins(
+          `Product ${newStatus === 'approved' ? 'Approved' : 'Rejected'}`,
+          `Admin ${profile?.first_name} ${profile?.last_name} ${newStatus} the product "${productData.name}"`,
+          profile?.id || '',
+          {
+            action: `product_${newStatus}`,
+            productId: productId,
+            productName: productData.name,
+            farmerId: productData.farmer_id
+          }
+        );
+      } catch (notifError) {
+        console.error('Failed to send notifications:', notifError);
+      }
+
+      // Show success message
+      Alert.alert('Success', `Product ${newStatus} successfully!`);
+
+      // Refresh farmer data
+      if (selectedFarmer) {
+        await loadFarmerData(selectedFarmer.id);
+      }
+    } catch (error) {
+      console.error('Error updating product status:', error);
+      Alert.alert('Error', 'Failed to update product status');
+    }
+  };
+
+  // Handle order status update
+  const handleOrderStatusUpdate = async (orderId: string, newStatus: string) => {
+    const actionMap: { [key: string]: string } = {
+      confirmed: 'confirm',
+      cancelled: 'cancel',
+      delivered: 'mark as delivered',
+      ready: 'mark as ready'
+    };
+
+    const actionText = actionMap[newStatus] || newStatus;
+    const confirmed = await showConfirmation(
+      `${actionText.charAt(0).toUpperCase() + actionText.slice(1)} Order`,
+      `Are you sure you want to ${actionText} this order?`
+    );
+
+    if (!confirmed) return;
+
+    try {
+      // Get order details for notification
+      const { data: orderData, error: fetchError } = await supabase
+        .from('orders')
+        .select(`
+          id,
+          buyer_id,
+          farmer_id,
+          products (name)
+        `)
+        .eq('id', orderId)
+        .single();
+
+      if (fetchError) throw fetchError;
+
+      const { error } = await supabase
+        .from('orders')
+        .update({ status: newStatus } as any)
+        .eq('id', orderId);
+
+      if (error) throw error;
+
+      // Send notifications
+      try {
+        const productName = orderData.products?.name || 'Product';
+
+        // Notify buyer about order status change
+        await notifyOrderStatusChange(
+          orderId,
+          orderData.buyer_id,
+          newStatus,
+          `Your order for ${productName} has been ${newStatus}`
+        );
+
+        // Notify farmer about order status change
+        await notifyOrderStatusChange(
+          orderId,
+          orderData.farmer_id,
+          newStatus,
+          `Order for ${productName} has been ${newStatus} by admin`
+        );
+
+        // Notify all admins
+        await notifyAllAdmins(
+          `Order ${newStatus.charAt(0).toUpperCase() + newStatus.slice(1)}`,
+          `Admin ${profile?.first_name} ${profile?.last_name} ${newStatus} order #${orderId.substring(0, 8)}`,
+          profile?.id || '',
+          {
+            action: `order_${newStatus}`,
+            orderId: orderId
+          }
+        );
+      } catch (notifError) {
+        console.error('Failed to send notifications:', notifError);
+      }
+
+      // Show success message
+      Alert.alert('Success', `Order ${newStatus} successfully!`);
+
+      // Refresh data
+      if (selectedFarmer) {
+        await loadFarmerData(selectedFarmer.id);
+      }
+      if (selectedBuyer) {
+        await loadBuyerData(selectedBuyer.id);
+      }
+    } catch (error) {
+      console.error('Error updating order status:', error);
+      Alert.alert('Error', 'Failed to update order status');
+    }
+  };
+
   const renderUser = ({ item }: { item: User }) => {
     const chartData = {
       labels: item.salesData?.chartData.map(d => d.date.split(' ')[1]) || ['1', '2', '3', '4', '5', '6', '7'],
@@ -1464,16 +1621,18 @@ export default function AdminUsers() {
                 <Text style={[styles.tabText, activeTab === 'buyer' && styles.activeTabText]}>Buyers</Text>
               </TouchableOpacity>
             </View>
-            <View style={styles.headerButtons}>
-              {activeTab === 'buyer' && (
-                <TouchableOpacity style={styles.createUserCircleButton} onPress={() => setQrScannerVisible(true)}>
-                  <Icon name="qrcode" size={20} color={colors.white} />
+            {screenWidth >= 768 && (
+              <View style={styles.headerButtons}>
+                {activeTab === 'buyer' && (
+                  <TouchableOpacity style={styles.createUserCircleButton} onPress={() => setQrScannerVisible(true)}>
+                    <Icon name="qrcode" size={20} color={colors.white} />
+                  </TouchableOpacity>
+                )}
+                <TouchableOpacity style={styles.createUserCircleButton} onPress={openCreateUserModal}>
+                  <Icon name="plus" size={20} color={colors.white} />
                 </TouchableOpacity>
-              )}
-              <TouchableOpacity style={styles.createUserCircleButton} onPress={openCreateUserModal}>
-                <Icon name="plus" size={20} color={colors.white} />
-              </TouchableOpacity>
-            </View>
+              </View>
+            )}
           </View>
 
           <View style={styles.statsCard}>
@@ -1504,8 +1663,9 @@ export default function AdminUsers() {
           data={filteredUsers}
           renderItem={renderUser}
           keyExtractor={(item) => item.id}
-          numColumns={2}
-          columnWrapperStyle={styles.gridRow}
+          key={screenWidth < 600 ? 'single-column' : 'two-columns'}
+          numColumns={screenWidth < 600 ? 1 : 2}
+          columnWrapperStyle={screenWidth < 600 ? undefined : styles.gridRow}
           contentContainerStyle={[styles.listContainer, { paddingTop: 250 }]}
           showsVerticalScrollIndicator={false}
           onScroll={handleScroll}
@@ -1540,6 +1700,20 @@ export default function AdminUsers() {
             </View>
           }
         />
+
+        {/* Floating Action Button Widget (Mobile Only) */}
+        {screenWidth < 768 && (
+          <View style={styles.fabWidget}>
+            {activeTab === 'buyer' && (
+              <TouchableOpacity style={[styles.fabButton, { backgroundColor: colors.secondary }]} onPress={() => setQrScannerVisible(true)}>
+                <Icon name="qrcode" size={18} color={colors.white} />
+              </TouchableOpacity>
+            )}
+            <TouchableOpacity style={[styles.fabButton, { backgroundColor: colors.primary }]} onPress={openCreateUserModal}>
+              <Icon name="plus" size={18} color={colors.white} />
+            </TouchableOpacity>
+          </View>
+        )}
       </View>
 
       {/* Create User Modal */}
@@ -1842,87 +2016,210 @@ export default function AdminUsers() {
                     onCancel={() => setShowAddForm(false)}
                   />
                 ) : (
-                  <>
-                    <View style={styles.sectionHeader}>
-                      <Text style={styles.sectionTitle}>Products ({farmerProducts.length})</Text>
-                      <TouchableOpacity
-                        style={styles.addButton}
-                        onPress={() => setShowAddForm(true)}
-                      >
-                        <Icon name="plus" size={16} color={colors.white} />
-                        <Text style={styles.addButtonText}>Add Product</Text>
-                      </TouchableOpacity>
-
-                    </View>
-
-                    {farmerProducts.map((product) => (
-                      <AdminProductCard
-                        key={product.id}
-                        id={product.id}
-                        name={product.name}
-                        price={product.price}
-                        unit={product.unit}
-                        imageUrl={product.image_url}
-                        category={product.category}
-                        quantity={product.stock_quantity}
-                        status={product.status}
-                        description={product.description}
-                        farmer={selectedFarmer ? `${selectedFarmer.profiles?.first_name || ''} ${selectedFarmer.profiles?.last_name || ''}`.trim() : undefined}
-                        onStatusUpdate={() => loadFarmerData(selectedFarmer?.id || '')}
-                        onDelete={handleDeleteProduct}
-                      />
-                    ))}
-                  </>
+                  <AdminTable
+                    columns={[
+                      { key: 'name', title: 'Product Name', width: 180 },
+                      {
+                        key: 'price',
+                        title: 'Price',
+                        width: 120,
+                        render: (value, row) => <Text style={styles.cellText}>{formatCurrency(value)}/{row.unit}</Text>
+                      },
+                      { key: 'stock_quantity', title: 'Stock', width: 100 },
+                      { key: 'category', title: 'Category', width: 120 },
+                      {
+                        key: 'status',
+                        title: 'Status',
+                        width: 120,
+                        render: (value) => (
+                          <View style={[styles.statusBadge, {
+                            backgroundColor: value === 'approved' ? colors.success + '20' :
+                                           value === 'pending' ? colors.warning + '20' : colors.danger + '20'
+                          }]}>
+                            <Text style={{
+                              color: value === 'approved' ? colors.success :
+                                     value === 'pending' ? colors.warning : colors.danger,
+                              fontSize: 12,
+                              fontWeight: '600'
+                            }}>{value.toUpperCase()}</Text>
+                          </View>
+                        )
+                      },
+                    ]}
+                    data={farmerProducts}
+                    onAddPress={() => setShowAddForm(true)}
+                    addButtonText="+ Add Product"
+                    emptyMessage="No products found"
+                    actions={[
+                      {
+                        icon: 'eye',
+                        label: 'View',
+                        color: colors.primary,
+                        onPress: (product) => {
+                          setModalVisible(false);
+                          router.push(`/products/${product.id}` as any);
+                        }
+                      },
+                      {
+                        icon: 'check',
+                        label: 'Approve',
+                        color: colors.success,
+                        show: (product) => product.status === 'pending',
+                        onPress: (product) => handleProductStatusUpdate(product.id, 'approved')
+                      },
+                      {
+                        icon: 'times',
+                        label: 'Reject',
+                        color: colors.warning,
+                        show: (product) => product.status === 'pending',
+                        onPress: (product) => handleProductStatusUpdate(product.id, 'rejected')
+                      },
+                      {
+                        icon: 'trash-alt',
+                        label: 'Delete',
+                        color: colors.danger,
+                        onPress: (product) => handleDeleteProduct(product.id)
+                      },
+                    ]}
+                  />
                 )}
               </View>
             )}
 
             {farmerDetailTab === 'orders' && (
               <View style={styles.tabContent}>
-                <View style={styles.sectionHeader}>
-                  <Text style={styles.sectionTitle}>Orders ({farmerOrders.length})</Text>
-                </View>
-
-                {farmerOrders.map((order) => (
-                  <AdminOrderCard
-                    key={order.id}
-                    id={order.id}
-                    totalAmount={order.total_price}
-                    status={order.status}
-                    createdAt={order.created_at}
-                    buyerProfile={order.buyer_profile}
-                    farmer={selectedFarmer ? `${selectedFarmer.profiles?.first_name || ''} ${selectedFarmer.profiles?.last_name || ''}`.trim() : undefined}
-                    items={`Order details - Total: ${formatCurrency(order.total_price)}`}
-                    onStatusUpdate={() => loadFarmerData(selectedFarmer?.id || '')}
-                    onCloseModal={() => setModalVisible(false)}
-                  />
-                ))}
+                <AdminTable
+                  columns={[
+                    { key: 'id', title: 'Order ID', width: 100, render: (value) => <Text style={styles.cellText}>#{value.substring(0, 8)}</Text> },
+                    {
+                      key: 'buyer_profile',
+                      title: 'Buyer',
+                      width: 150,
+                      render: (value) => <Text style={styles.cellText}>{value?.first_name} {value?.last_name}</Text>
+                    },
+                    {
+                      key: 'total_price',
+                      title: 'Amount',
+                      width: 120,
+                      render: (value) => <Text style={styles.cellText}>{formatCurrency(value)}</Text>
+                    },
+                    {
+                      key: 'status',
+                      title: 'Status',
+                      width: 120,
+                      render: (value) => (
+                        <View style={[styles.statusBadge, {
+                          backgroundColor: value === 'delivered' ? colors.success + '20' :
+                                         value === 'cancelled' ? colors.danger + '20' :
+                                         value === 'ready' ? colors.primary + '20' : colors.warning + '20'
+                        }]}>
+                          <Text style={{
+                            color: value === 'delivered' ? colors.success :
+                                   value === 'cancelled' ? colors.danger :
+                                   value === 'ready' ? colors.primary : colors.warning,
+                            fontSize: 12,
+                            fontWeight: '600'
+                          }}>{value.toUpperCase()}</Text>
+                        </View>
+                      )
+                    },
+                    {
+                      key: 'created_at',
+                      title: 'Date',
+                      width: 140,
+                      render: (value) => <Text style={styles.cellText}>{formatOrderDate(value)}</Text>
+                    },
+                  ]}
+                  data={farmerOrders}
+                  emptyMessage="No orders found"
+                  actions={[
+                    {
+                      icon: 'eye',
+                      label: 'View',
+                      color: colors.primary,
+                      onPress: (order) => {
+                        setModalVisible(false);
+                        router.push(`/admin/orders/${order.id}` as any);
+                      }
+                    },
+                    {
+                      icon: 'check',
+                      label: 'Confirm',
+                      color: colors.success,
+                      show: (order) => order.status === 'pending',
+                      onPress: (order) => handleOrderStatusUpdate(order.id, 'confirmed')
+                    },
+                    {
+                      icon: 'times',
+                      label: 'Cancel',
+                      color: colors.danger,
+                      show: (order) => !['delivered', 'cancelled'].includes(order.status),
+                      onPress: (order) => handleOrderStatusUpdate(order.id, 'cancelled')
+                    },
+                  ]}
+                />
               </View>
             )}
 
             {farmerDetailTab === 'inventory' && (
               <View style={styles.tabContent}>
-                <View style={styles.sectionHeader}>
-                  <Text style={styles.sectionTitle}>Inventory ({farmerInventory.length})</Text>
-                </View>
-
-                {farmerInventory.map((item) => (
-                  <AdminInventoryCard
-                    key={item.id}
-                    id={item.id}
-                    name={item.name}
-                    price={item.price}
-                    unit={item.unit}
-                    stockQuantity={item.stock_quantity}
-                    category={item.category}
-                    imageUrl={item.image_url}
-                    status={item.status}
-                    description={item.description}
-                    farmer={selectedFarmer ? `${selectedFarmer.profiles?.first_name || ''} ${selectedFarmer.profiles?.last_name || ''}`.trim() : undefined}
-                    createdAt={item.created_at}
-                    onUpdate={() => loadFarmerData(selectedFarmer?.id || '')}
-                  />
-                ))}
+                <AdminTable
+                  columns={[
+                    { key: 'name', title: 'Product Name', width: 180 },
+                    {
+                      key: 'price',
+                      title: 'Price',
+                      width: 120,
+                      render: (value, row) => <Text style={styles.cellText}>{formatCurrency(value)}/{row.unit}</Text>
+                    },
+                    {
+                      key: 'stock_quantity',
+                      title: 'Stock',
+                      width: 100,
+                      render: (value) => (
+                        <Text style={[styles.cellText, {
+                          color: value === 0 ? colors.danger : value < 10 ? colors.warning : colors.success,
+                          fontWeight: '600'
+                        }]}>{value}</Text>
+                      )
+                    },
+                    { key: 'category', title: 'Category', width: 120 },
+                    {
+                      key: 'created_at',
+                      title: 'Added',
+                      width: 140,
+                      render: (value) => <Text style={styles.cellText}>{new Date(value).toLocaleDateString()}</Text>
+                    },
+                  ]}
+                  data={farmerInventory}
+                  emptyMessage="No inventory items"
+                  actions={[
+                    {
+                      icon: 'eye',
+                      label: 'View',
+                      color: colors.primary,
+                      onPress: (item) => {
+                        setModalVisible(false);
+                        router.push(`/products/${item.id}` as any);
+                      }
+                    },
+                    {
+                      icon: 'edit',
+                      label: 'Edit',
+                      color: colors.secondary,
+                      onPress: (item) => {
+                        setModalVisible(false);
+                        router.push(`/admin/products/edit/${item.id}` as any);
+                      }
+                    },
+                    {
+                      icon: 'trash-alt',
+                      label: 'Delete',
+                      color: colors.danger,
+                      onPress: (item) => handleDeleteProduct(item.id)
+                    },
+                  ]}
+                />
               </View>
             )}
           </ScrollView>
@@ -1982,77 +2279,136 @@ export default function AdminUsers() {
           <ScrollView style={styles.modalContent}>
             {buyerDetailTab === 'orders' && (
               <View style={styles.tabContent}>
-                <View style={styles.sectionHeader}>
-                  <Text style={styles.sectionTitle}>Current Orders ({buyerOrders.length})</Text>
-                </View>
-
-                {buyerOrders.map((order) => (
-                  <AdminOrderCard
-                    key={order.id}
-                    id={order.id}
-                    totalAmount={order.total_price}
-                    status={order.status}
-                    createdAt={order.created_at}
-                    buyerProfile={selectedBuyer?.profiles ? {
-                      first_name: selectedBuyer.profiles.first_name,
-                      last_name: selectedBuyer.profiles.last_name
-                    } : undefined}
-                    farmer={order.farmer_profile ?
-                      `${order.farmer_profile.first_name} ${order.farmer_profile.last_name}`.trim() ||
-                      order.farmer_profile.farm_name : undefined
-                    }
-                    items={order.product ?
-                      `${order.product.name} - Qty: ${order.quantity} ${order.product.unit}` :
-                      'Order details'
-                    }
-                    onStatusUpdate={() => loadBuyerData(selectedBuyer?.id || '')}
-                    onCloseModal={() => setBuyerModalVisible(false)}
-                  />
-                ))}
-
-                {buyerOrders.length === 0 && (
-                  <View style={styles.emptyContainer}>
-                    <Text style={styles.emptySubtitle}>No current orders</Text>
-                  </View>
-                )}
+                <AdminTable
+                  columns={[
+                    { key: 'id', title: 'Order ID', width: 100, render: (value) => <Text style={styles.cellText}>#{value.substring(0, 8)}</Text> },
+                    {
+                      key: 'farmer_profile',
+                      title: 'Farmer',
+                      width: 150,
+                      render: (value) => <Text style={styles.cellText}>{value?.first_name} {value?.last_name}</Text>
+                    },
+                    {
+                      key: 'product',
+                      title: 'Product',
+                      width: 150,
+                      render: (value, row) => <Text style={styles.cellText}>{value?.name} ({row.quantity} {value?.unit})</Text>
+                    },
+                    {
+                      key: 'total_price',
+                      title: 'Amount',
+                      width: 120,
+                      render: (value) => <Text style={styles.cellText}>{formatCurrency(value)}</Text>
+                    },
+                    {
+                      key: 'status',
+                      title: 'Status',
+                      width: 120,
+                      render: (value) => (
+                        <View style={[styles.statusBadge, {
+                          backgroundColor: value === 'delivered' ? colors.success + '20' :
+                                         value === 'cancelled' ? colors.danger + '20' :
+                                         value === 'ready' ? colors.primary + '20' : colors.warning + '20'
+                        }]}>
+                          <Text style={{
+                            color: value === 'delivered' ? colors.success :
+                                   value === 'cancelled' ? colors.danger :
+                                   value === 'ready' ? colors.primary : colors.warning,
+                            fontSize: 12,
+                            fontWeight: '600'
+                          }}>{value.toUpperCase()}</Text>
+                        </View>
+                      )
+                    },
+                  ]}
+                  data={buyerOrders}
+                  emptyMessage="No current orders"
+                  actions={[
+                    {
+                      icon: 'eye',
+                      label: 'View',
+                      color: colors.primary,
+                      onPress: (order) => {
+                        setBuyerModalVisible(false);
+                        router.push(`/admin/orders/${order.id}` as any);
+                      }
+                    },
+                    {
+                      icon: 'times',
+                      label: 'Cancel',
+                      color: colors.danger,
+                      show: (order) => !['delivered', 'cancelled'].includes(order.status),
+                      onPress: (order) => handleOrderStatusUpdate(order.id, 'cancelled')
+                    },
+                  ]}
+                />
               </View>
             )}
 
             {buyerDetailTab === 'history' && (
               <View style={styles.tabContent}>
-                <View style={styles.sectionHeader}>
-                  <Text style={styles.sectionTitle}>Purchase History ({buyerHistory.length})</Text>
-                </View>
-
-                {buyerHistory.map((order) => (
-                  <AdminOrderCard
-                    key={order.id}
-                    id={order.id}
-                    totalAmount={order.total_price}
-                    status={order.status}
-                    createdAt={order.created_at}
-                    buyerProfile={selectedBuyer?.profiles ? {
-                      first_name: selectedBuyer.profiles.first_name,
-                      last_name: selectedBuyer.profiles.last_name
-                    } : undefined}
-                    farmer={order.farmer_profile ?
-                      `${order.farmer_profile.first_name} ${order.farmer_profile.last_name}`.trim() ||
-                      order.farmer_profile.farm_name : undefined
-                    }
-                    items={order.product ?
-                      `${order.product.name} - Qty: ${order.quantity} ${order.product.unit}` :
-                      'Order details'
-                    }
-                    onStatusUpdate={() => loadBuyerData(selectedBuyer?.id || '')}
-                    onCloseModal={() => setBuyerModalVisible(false)}
-                  />
-                ))}
-
-                {buyerHistory.length === 0 && (
-                  <View style={styles.emptyContainer}>
-                    <Text style={styles.emptySubtitle}>No purchase history</Text>
-                  </View>
-                )}
+                <AdminTable
+                  columns={[
+                    { key: 'id', title: 'Order ID', width: 100, render: (value) => <Text style={styles.cellText}>#{value.substring(0, 8)}</Text> },
+                    {
+                      key: 'farmer_profile',
+                      title: 'Farmer',
+                      width: 150,
+                      render: (value) => <Text style={styles.cellText}>{value?.first_name} {value?.last_name}</Text>
+                    },
+                    {
+                      key: 'product',
+                      title: 'Product',
+                      width: 150,
+                      render: (value, row) => <Text style={styles.cellText}>{value?.name} ({row.quantity} {value?.unit})</Text>
+                    },
+                    {
+                      key: 'total_price',
+                      title: 'Amount',
+                      width: 120,
+                      render: (value) => <Text style={styles.cellText}>{formatCurrency(value)}</Text>
+                    },
+                    {
+                      key: 'status',
+                      title: 'Status',
+                      width: 120,
+                      render: (value) => (
+                        <View style={[styles.statusBadge, {
+                          backgroundColor: value === 'delivered' ? colors.success + '20' :
+                                         value === 'cancelled' ? colors.danger + '20' :
+                                         value === 'ready' ? colors.primary + '20' : colors.warning + '20'
+                        }]}>
+                          <Text style={{
+                            color: value === 'delivered' ? colors.success :
+                                   value === 'cancelled' ? colors.danger :
+                                   value === 'ready' ? colors.primary : colors.warning,
+                            fontSize: 12,
+                            fontWeight: '600'
+                          }}>{value.toUpperCase()}</Text>
+                        </View>
+                      )
+                    },
+                    {
+                      key: 'created_at',
+                      title: 'Date',
+                      width: 140,
+                      render: (value) => <Text style={styles.cellText}>{formatOrderDate(value)}</Text>
+                    },
+                  ]}
+                  data={buyerHistory}
+                  emptyMessage="No purchase history"
+                  actions={[
+                    {
+                      icon: 'eye',
+                      label: 'View',
+                      color: colors.primary,
+                      onPress: (order) => {
+                        setBuyerModalVisible(false);
+                        router.push(`/admin/orders/${order.id}` as any);
+                      }
+                    },
+                  ]}
+                />
               </View>
             )}
           </ScrollView>
@@ -2411,16 +2767,18 @@ const styles = StyleSheet.create({
     shadowRadius: 6,
     borderWidth: 1,
     borderColor: 'rgba(0, 0, 0, 0.04)',
+    flex: screenWidth < 400 ? 1 : 0,
+    minWidth: screenWidth < 400 ? '100%' : 'auto',
   },
   tab: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 14,
-    paddingHorizontal: 16,
+    paddingVertical: screenWidth < 400 ? 10 : 14,
+    paddingHorizontal: screenWidth < 400 ? 8 : 16,
     borderRadius: 12,
-    gap: 8,
+    gap: screenWidth < 400 ? 4 : 8,
   },
   activeTab: {
     backgroundColor: colors.primary,
@@ -2431,7 +2789,7 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
   },
   tabText: {
-    fontSize: 15,
+    fontSize: screenWidth < 400 ? 13 : 15,
     fontWeight: '600',
     color: colors.textSecondary,
   },
@@ -2499,8 +2857,9 @@ const styles = StyleSheet.create({
     color: colors.white,
   },
   listContainer: {
-    paddingHorizontal: 16,
+    paddingHorizontal: screenWidth < 600 ? 16 : 16,
     paddingBottom: 20,
+    alignItems: screenWidth < 600 ? 'stretch' : 'center',
   },
   gridRow: {
     justifyContent: 'space-between',
@@ -2515,7 +2874,7 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 1,
     shadowRadius: 8,
-    width: (screenWidth - 48) / 2,
+    width: screenWidth < 600 ? '100%' : (screenWidth - 48) / 2,
     borderWidth: 1,
     borderColor: colors.borderLight,
   },
@@ -2768,7 +3127,9 @@ const styles = StyleSheet.create({
     backgroundColor: colors.background,
   },
   tabContent: {
-    padding: 20,
+    padding: 0,
+    alignItems: 'center',
+    width: '100%',
   },
   sectionHeader: {
     flexDirection: 'row',
@@ -3279,11 +3640,13 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingTop: 20,
+    paddingHorizontal: screenWidth < 400 ? 12 : 20,
+    paddingTop: screenWidth < 400 ? 12 : 20,
     paddingBottom: 16,
     borderBottomWidth: 1,
     borderBottomColor: 'rgba(0, 0, 0, 0.05)',
+    flexWrap: 'wrap',
+    gap: 12,
   },
   pageTitle: {
     fontSize: 24,
@@ -3314,5 +3677,31 @@ const styles = StyleSheet.create({
   },
   statContent: {
     flex: 1,
+  },
+  cellText: {
+    fontSize: 14,
+    color: colors.text,
+  },
+  // Floating Action Button Widget
+  fabWidget: {
+    position: 'absolute',
+    bottom: 20,
+    right: 20,
+    flexDirection: 'column',
+    gap: 10,
+    zIndex: 1000,
+    elevation: 8,
+  },
+  fabButton: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: colors.shadow,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 8,
   },
 });

@@ -41,6 +41,7 @@ interface NotificationComponentProps {
   onRefresh?: () => void;
   loading?: boolean;
   unreadCount?: number;
+  userType?: 'farmer' | 'buyer' | 'admin' | 'super-admin';
 }
 
 const colors = {
@@ -78,6 +79,7 @@ export default function NotificationComponent({
   onRefresh,
   loading = false,
   unreadCount = 0,
+  userType,
 }: NotificationComponentProps) {
   const [modalVisible, setModalVisible] = useState(false);
   const [dropdownVisible, setDropdownVisible] = useState(false);
@@ -148,11 +150,27 @@ export default function NotificationComponent({
           case 'new_order':
           case 'order_updated':
           case 'order_cancelled':
-            // Navigate to specific order
+            // Navigate to specific order based on user type
             if (data.orderId) {
-              targetRoute = `/order/${data.orderId}`;
+              if (userType === 'admin') {
+                targetRoute = `/admin/orders/${data.orderId}`;
+              } else if (userType === 'farmer') {
+                targetRoute = `/farmer/order/${data.orderId}`;
+              } else if (userType === 'buyer') {
+                targetRoute = `/buyer/orders/${data.orderId}`;
+              } else {
+                targetRoute = `/order/${data.orderId}`;
+              }
             } else {
-              targetRoute = '/order';
+              if (userType === 'admin') {
+                targetRoute = '/admin/orders';
+              } else if (userType === 'farmer') {
+                targetRoute = '/farmer/orders';
+              } else if (userType === 'buyer') {
+                targetRoute = '/buyer/my-orders';
+              } else {
+                targetRoute = '/order';
+              }
             }
             break;
 
@@ -185,27 +203,67 @@ export default function NotificationComponent({
           default:
             // Default navigation based on notification title/message content
             if (notification.title.toLowerCase().includes('order')) {
-              targetRoute = '/order';
+              if (userType === 'admin') {
+                targetRoute = '/admin/orders';
+              } else if (userType === 'farmer') {
+                targetRoute = '/farmer/orders';
+              } else if (userType === 'buyer') {
+                targetRoute = '/buyer/my-orders';
+              } else {
+                targetRoute = '/order';
+              }
             } else if (notification.title.toLowerCase().includes('product')) {
-              targetRoute = '/products';
+              if (userType === 'admin') {
+                targetRoute = '/admin/products';
+              } else if (userType === 'farmer') {
+                targetRoute = '/farmer/my-products';
+              } else {
+                targetRoute = '/products';
+              }
             } else if (notification.title.toLowerCase().includes('verification')) {
               targetRoute = '/verification/status';
             } else {
-              // Fallback to marketplace
-              targetRoute = '/products';
+              // Fallback to appropriate home based on user type
+              if (userType === 'admin') {
+                targetRoute = '/admin/products';
+              } else if (userType === 'farmer') {
+                targetRoute = '/';
+              } else {
+                targetRoute = '/';
+              }
             }
         }
       } else {
         // Fallback navigation based on notification content
         if (notification.title.toLowerCase().includes('order')) {
-          targetRoute = '/order';
+          if (userType === 'admin') {
+            targetRoute = '/admin/orders';
+          } else if (userType === 'farmer') {
+            targetRoute = '/farmer/orders';
+          } else if (userType === 'buyer') {
+            targetRoute = '/buyer/my-orders';
+          } else {
+            targetRoute = '/order';
+          }
         } else if (notification.title.toLowerCase().includes('product')) {
-          targetRoute = '/products';
+          if (userType === 'admin') {
+            targetRoute = '/admin/products';
+          } else if (userType === 'farmer') {
+            targetRoute = '/farmer/my-products';
+          } else {
+            targetRoute = '/products';
+          }
         } else if (notification.title.toLowerCase().includes('verification')) {
           targetRoute = '/verification/status';
         } else {
-          // Default to marketplace
-          targetRoute = '/products';
+          // Default to appropriate home based on user type
+          if (userType === 'admin') {
+            targetRoute = '/admin/products';
+          } else if (userType === 'farmer') {
+            targetRoute = '/';
+          } else {
+            targetRoute = '/';
+          }
         }
       }
 

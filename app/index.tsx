@@ -347,7 +347,35 @@ export default function MarketplaceScreen() {
   // Visual Search Functions
   const handleVisualSearch = async () => {
     try {
-      // Show instruction before opening gallery
+      // On web, use file input instead of ImagePicker
+      if (Platform.OS === 'web') {
+        // Create a file input element
+        const input = document.createElement('input');
+        input.type = 'file';
+        input.accept = 'image/*';
+
+        input.onchange = async (e: any) => {
+          const file = e.target.files[0];
+          if (file) {
+            // Convert to base64
+            const reader = new FileReader();
+            reader.onload = async (event) => {
+              const base64String = event.target?.result as string;
+              const base64Data = base64String.split(',')[1]; // Remove data URI prefix
+
+              setVisualSearchImage(base64String);
+              setShowVisualSearchModal(true);
+              await performVisualSearch(base64Data);
+            };
+            reader.readAsDataURL(file);
+          }
+        };
+
+        input.click();
+        return;
+      }
+
+      // Mobile: Show instruction before opening gallery
       Alert.alert(
         'Visual Search Tips',
         'For best results:\n• Take a clear, well-lit photo\n• Focus on one main product\n• Avoid blurry or dark images',
@@ -389,7 +417,34 @@ export default function MarketplaceScreen() {
 
   const handleTakePhoto = async () => {
     try {
-      // Show instruction before opening camera
+      // On web, use file input with camera capture
+      if (Platform.OS === 'web') {
+        const input = document.createElement('input');
+        input.type = 'file';
+        input.accept = 'image/*';
+        input.capture = 'environment' as any; // Use rear camera on mobile browsers
+
+        input.onchange = async (e: any) => {
+          const file = e.target.files[0];
+          if (file) {
+            const reader = new FileReader();
+            reader.onload = async (event) => {
+              const base64String = event.target?.result as string;
+              const base64Data = base64String.split(',')[1];
+
+              setVisualSearchImage(base64String);
+              setShowVisualSearchModal(true);
+              await performVisualSearch(base64Data);
+            };
+            reader.readAsDataURL(file);
+          }
+        };
+
+        input.click();
+        return;
+      }
+
+      // Mobile: Show instruction before opening camera
       Alert.alert(
         'Visual Search Tips',
         'For best results:\n• Take a clear, well-lit photo\n• Focus on one main product\n• Avoid blurry or dark images',

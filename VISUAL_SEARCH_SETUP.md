@@ -1,55 +1,61 @@
 # Visual Search Setup Guide
 
-This guide will help you set up Google Cloud Vision API for the visual search feature in Farm2Go.
+This guide will help you set up Clarifai API for the visual search feature in Farm2Go.
 
 ## Features
 
 - **Image Upload**: Users can upload images from their gallery
 - **Camera Capture**: Users can take photos directly with their camera
-- **AI-Powered Analysis**: Google Cloud Vision API analyzes images to detect labels, categories, and objects
+- **AI-Powered Analysis**: Clarifai API analyzes images to detect labels, categories, and objects
+- **Web Support**: Works on both mobile (Expo) and web browsers using Supabase Edge Functions
 - **Smart Product Matching**: Products are automatically matched based on detected labels and categories
 - **Similarity Scoring**: Products are ranked by similarity to the uploaded image
 
 ## Setup Instructions
 
-### 1. Create a Google Cloud Project
+### 1. Get Clarifai API Key
 
-1. Go to [Google Cloud Console](https://console.cloud.google.com/)
-2. Create a new project or select an existing one
-3. Enable billing for your project (required for Vision API)
+1. Go to [Clarifai Portal](https://clarifai.com/)
+2. Sign up or log in to your account
+3. Go to Settings > Security
+4. Create a Personal Access Token (PAT) or API Key
+5. Copy the API key
 
-### 2. Enable Vision API
+### 2. Configure Environment Variables
 
-1. In the Google Cloud Console, go to **APIs & Services** > **Library**
-2. Search for "Cloud Vision API"
-3. Click on it and press **Enable**
+Add the Clarifai API key to your `.env` file:
 
-### 3. Create API Key
-
-1. Go to **APIs & Services** > **Credentials**
-2. Click **Create Credentials** > **API Key**
-3. Copy the generated API key
-4. (Optional but recommended) Restrict the API key:
-   - Click on the API key to edit
-   - Under "API restrictions", select "Restrict key"
-   - Choose "Cloud Vision API"
-   - Save
-
-### 4. Configure the App
-
-1. Open `services/visualSearch.ts`
-2. Replace `YOUR_GOOGLE_CLOUD_VISION_API_KEY` with your actual API key:
-
-```typescript
-const GOOGLE_VISION_API_KEY = 'YOUR_ACTUAL_API_KEY_HERE';
+```env
+EXPO_PUBLIC_CLARIFAI_API_KEY=your_api_key_here
+EXPO_PUBLIC_CLARIFAI_MODEL_ID=food-item-recognition
 ```
 
-**Important Security Note**: For production apps, never hardcode API keys in your source code. Instead:
-- Use environment variables (`.env` files)
-- Store keys in secure backend services
-- Use API key restrictions and monitoring
+### 3. Deploy Supabase Edge Function
 
-### 5. Test the Feature
+The visual search feature uses a Supabase Edge Function to avoid CORS issues on web browsers.
+
+**For Windows:**
+```bash
+deploy-visual-search.bat
+```
+
+**For Mac/Linux:**
+```bash
+chmod +x deploy-visual-search.sh
+./deploy-visual-search.sh
+```
+
+**Or manually:**
+```bash
+# Set secrets
+npx supabase secrets set CLARIFAI_API_KEY=your_api_key_here
+npx supabase secrets set CLARIFAI_MODEL_ID=food-item-recognition
+
+# Deploy function
+npx supabase functions deploy visual-search --no-verify-jwt
+```
+
+### 4. Test the Feature
 
 1. Start your app: `npm start` or `npx expo start`
 2. Navigate to the marketplace
@@ -61,13 +67,13 @@ const GOOGLE_VISION_API_KEY = 'YOUR_ACTUAL_API_KEY_HERE';
 
 ### Image Analysis
 
-The Google Cloud Vision API provides two main detection features:
+The Clarifai API uses the `food-item-recognition` model to analyze images:
 
-1. **Label Detection**: Identifies objects, concepts, and themes in the image
-   - Example: "vegetable", "tomato", "red", "fresh produce"
+1. **Concept Detection**: Identifies food items, ingredients, and categories
+   - Example: "tomato", "vegetable", "fresh produce", "red"
 
-2. **Web Detection**: Finds similar images on the web and provides entity information
-   - Example: Best guess labels like "organic tomato" or "roma tomato"
+2. **Confidence Scores**: Each detected concept has a confidence score (0-1)
+   - Higher scores indicate more confident predictions
 
 ### Product Matching Algorithm
 
@@ -82,12 +88,22 @@ Products with a score above 10 are shown, sorted by similarity.
 
 ## API Costs
 
-Google Cloud Vision API pricing (as of 2024):
-- First 1,000 requests/month: **FREE**
-- 1,001-5,000,000 requests: $1.50 per 1,000 requests
-- 5,000,001+ requests: $0.60 per 1,000 requests
+Clarifai API pricing:
+- **Community Plan**: 1,000 operations/month FREE
+- **Essential Plan**: $30/month for 10,000 operations
+- **Professional Plan**: Custom pricing for higher volumes
 
-For most small to medium applications, you'll stay within the free tier.
+For development and small applications, the free tier is sufficient.
+
+## Architecture
+
+The visual search feature uses a backend proxy to avoid CORS issues:
+
+1. **Mobile (Expo)**: Uses native image picker → Sends to Supabase Edge Function
+2. **Web Browser**: Uses HTML file input → Sends to Supabase Edge Function
+3. **Supabase Edge Function**: Proxies request to Clarifai API
+4. **Clarifai API**: Analyzes image and returns concepts
+5. **Frontend**: Processes results and matches products
 
 ## Troubleshooting
 
@@ -95,15 +111,15 @@ For most small to medium applications, you'll stay within the free tier.
 
 **Causes**:
 - API key not configured or invalid
-- Vision API not enabled in Google Cloud
+- Supabase Edge Function not deployed
 - Network connectivity issues
 - API quota exceeded
 
 **Solutions**:
-1. Double-check your API key is correct
-2. Verify Vision API is enabled in Google Cloud Console
+1. Double-check your API key is correct in Supabase secrets
+2. Verify the Edge Function is deployed: `npx supabase functions list`
 3. Check your internet connection
-4. Review your API usage in Google Cloud Console
+4. Review your API usage in Clarifai dashboard
 
 ### No Products Found
 
@@ -179,7 +195,7 @@ features: [
 
 ## Resources
 
-- [Google Cloud Vision API Documentation](https://cloud.google.com/vision/docs)
-- [Vision API Pricing](https://cloud.google.com/vision/pricing)
-- [API Key Best Practices](https://cloud.google.com/docs/authentication/api-keys)
+- [Clarifai Documentation](https://docs.clarifai.com/)
+- [Clarifai Pricing](https://www.clarifai.com/pricing)
+- [Supabase Edge Functions](https://supabase.com/docs/guides/functions)
 - [Expo ImagePicker Documentation](https://docs.expo.dev/versions/latest/sdk/imagepicker/)

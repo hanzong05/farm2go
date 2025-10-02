@@ -122,9 +122,11 @@ export default function Farm2GoFarmerProducts() {
     sortBy: 'newest'
   });
 
+  const [numColumns, setNumColumns] = useState(getNumColumns());
+
   useEffect(() => {
     loadData();
-    
+
     // Listen for orientation changes
     const subscription = Dimensions.addEventListener('change', ({ window }) => {
       setNumColumns(getNumColumns());
@@ -135,7 +137,7 @@ export default function Farm2GoFarmerProducts() {
 
   useEffect(() => {
     filterProducts();
-  }, [products, searchQuery, selectedCategory, selectedStatus, sortBy]);
+  }, [products, searchQuery, filterState]);
 
   const loadData = async () => {
     try {
@@ -181,15 +183,15 @@ export default function Farm2GoFarmerProducts() {
     let filtered = products;
 
     // Filter by category
-    if (selectedCategory !== 'all') {
+    if (filterState.category !== 'all') {
       filtered = filtered.filter(product =>
-        product.category.toLowerCase() === selectedCategory.toLowerCase()
+        product.category.toLowerCase() === filterState.category.toLowerCase()
       );
     }
 
     // Filter by status
-    if (selectedStatus !== 'all') {
-      filtered = filtered.filter(product => product.status === selectedStatus);
+    if (filterState.status !== 'all') {
+      filtered = filtered.filter(product => product.status === filterState.status);
     }
 
     // Filter by search query
@@ -201,7 +203,7 @@ export default function Farm2GoFarmerProducts() {
     }
 
     // Sort products
-    switch (sortBy) {
+    switch (filterState.sortBy) {
       case 'price-low':
         filtered = filtered.sort((a, b) => a.price - b.price);
         break;
@@ -259,6 +261,13 @@ export default function Farm2GoFarmerProducts() {
   };
 
 
+  const handleFilterChange = (key: string, value: any) => {
+    setFilterState(prev => ({
+      ...prev,
+      [key]: value
+    }));
+  };
+
   const renderSidebar = () => (
     <View style={styles.sidebar}>
       {/* Categories */}
@@ -269,13 +278,13 @@ export default function Farm2GoFarmerProducts() {
             key={category.key}
             style={[
               styles.sidebarCategoryItem,
-              selectedCategory === category.key && styles.sidebarCategoryItemActive
+              filterState.category === category.key && styles.sidebarCategoryItemActive
             ]}
-            onPress={() => setSelectedCategory(category.key)}
+            onPress={() => handleFilterChange('category', category.key)}
           >
             <Text style={[
               styles.sidebarCategoryText,
-              selectedCategory === category.key && styles.sidebarCategoryTextActive
+              filterState.category === category.key && styles.sidebarCategoryTextActive
             ]}>
               {category.label}
             </Text>
@@ -301,13 +310,13 @@ export default function Farm2GoFarmerProducts() {
             key={status.key}
             style={[
               styles.sidebarCategoryItem,
-              selectedStatus === status.key && styles.sidebarCategoryItemActive
+              filterState.status === status.key && styles.sidebarCategoryItemActive
             ]}
-            onPress={() => setSelectedStatus(status.key)}
+            onPress={() => handleFilterChange('status', status.key)}
           >
             <Text style={[
               styles.sidebarCategoryText,
-              selectedStatus === status.key && styles.sidebarCategoryTextActive
+              filterState.status === status.key && styles.sidebarCategoryTextActive
             ]}>
               {status.label}
             </Text>
@@ -335,13 +344,13 @@ export default function Farm2GoFarmerProducts() {
             key={sort.key}
             style={[
               styles.sortItem,
-              sortBy === sort.key && styles.sortItemActive
+              filterState.sortBy === sort.key && styles.sortItemActive
             ]}
-            onPress={() => setSortBy(sort.key)}
+            onPress={() => handleFilterChange('sortBy', sort.key)}
           >
             <Text style={[
               styles.sortText,
-              sortBy === sort.key && styles.sortTextActive
+              filterState.sortBy === sort.key && styles.sortTextActive
             ]}>
               {sort.label}
             </Text>
@@ -353,9 +362,12 @@ export default function Farm2GoFarmerProducts() {
       <TouchableOpacity
         style={styles.resetButton}
         onPress={() => {
-          setSelectedCategory('all');
-          setSelectedStatus('all');
-          setSortBy('newest');
+          setFilterState({
+            category: 'all',
+            status: 'all',
+            priceRange: 'all',
+            sortBy: 'newest'
+          });
           setSearchQuery('');
         }}
       >
@@ -680,6 +692,15 @@ export default function Farm2GoFarmerProducts() {
         onConfirm={confirmModal.onConfirm}
         onCancel={() => setConfirmModal(prev => ({ ...prev, visible: false }))}
       />
+
+      {/* Floating Add Product Button */}
+      <TouchableOpacity
+        style={styles.floatingAddButton}
+        onPress={() => router.push('/farmer/products/add')}
+        activeOpacity={0.8}
+      >
+        <Icon name="plus" size={24} color="#fff" />
+      </TouchableOpacity>
     </View>
   );
 }
@@ -1219,5 +1240,23 @@ const styles = StyleSheet.create({
     color: colors.white,
     fontSize: 16,
     fontWeight: '600',
+  },
+
+  // Floating Add Button
+  floatingAddButton: {
+    position: 'absolute',
+    bottom: 24,
+    right: 24,
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+    elevation: 8,
+    shadowColor: colors.primary,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
   },
 });

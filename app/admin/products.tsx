@@ -27,6 +27,7 @@ type Product = Database['public']['Tables']['products']['Row'] & {
     first_name: string | null;
     last_name: string | null;
     farm_name: string | null;
+    barangay: string | null;
   };
 };
 
@@ -157,7 +158,7 @@ export default function AdminProducts() {
         return;
       }
 
-      // Load products with farmer info
+      // Load products with farmer info, filtered by barangay
       const { data, error } = await supabase
         .from('products')
         .select(`
@@ -165,14 +166,23 @@ export default function AdminProducts() {
           farmer_profile:profiles!products_farmer_id_fkey(
             first_name,
             last_name,
-            farm_name
+            farm_name,
+            barangay
           )
         `)
         .order('created_at', { ascending: false });
 
       if (error) throw error;
 
-      setProducts(data || []);
+      // Filter products by admin's barangay
+      let filteredData = data || [];
+      if (userData.profile.barangay) {
+        filteredData = filteredData.filter(product =>
+          product.farmer_profile?.barangay === userData.profile.barangay
+        );
+      }
+
+      setProducts(filteredData);
     } catch (error) {
       console.error('Error loading products:', error);
       Alert.alert('Error', 'Failed to load products');

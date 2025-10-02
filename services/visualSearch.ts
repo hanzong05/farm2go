@@ -38,51 +38,43 @@ export class VisualSearchService {
   }
 
   /**
-   * Analyze an image using Clarifai API
+   * Analyze an image using Clarifai API via Supabase Edge Function
    * @param imageBase64 - Base64 encoded image
    * @returns Analysis results with labels and categories
    */
   async analyzeImage(imageBase64: string): Promise<VisualSearchResult> {
     try {
-      console.log('🔍 Visual Search: Analyzing image with Clarifai API');
-      console.log('API Key loaded:', this.apiKey ? 'Yes (length: ' + this.apiKey.length + ')' : 'No - MISSING!');
+      console.log('🔍 Visual Search: Analyzing image via Supabase Edge Function');
 
-      // Remove data URI prefix if present
-      const base64Image = imageBase64.replace(/^data:image\/\w+;base64,/, '');
+      // Get Supabase URL from environment
+      const SUPABASE_URL = process.env.EXPO_PUBLIC_SUPABASE_URL;
+      const SUPABASE_ANON_KEY = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
 
-      const requestBody = {
-        user_app_id: {
-          user_id: CLARIFAI_USER_ID,
-          app_id: CLARIFAI_APP_ID,
+      if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
+        throw new Error('Supabase configuration missing');
+      }
+
+      // Call Supabase Edge Function instead of Clarifai directly
+      // This avoids CORS issues on web
+      const functionUrl = `${SUPABASE_URL}/functions/v1/visual-search`;
+
+      console.log('Calling Edge Function:', functionUrl);
+
+      const response = await fetch(functionUrl, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+          'Content-Type': 'application/json',
         },
-        inputs: [
-          {
-            data: {
-              image: {
-                base64: base64Image,
-              },
-            },
-          },
-        ],
-      };
-
-      // Use direct model endpoint instead of workflow
-      const response = await fetch(
-        `https://api.clarifai.com/v2/models/${this.modelId}/outputs`,
-        {
-          method: 'POST',
-          headers: {
-            'Authorization': `Key ${this.apiKey}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify(requestBody),
-        }
-      );
+        body: JSON.stringify({
+          imageBase64: imageBase64,
+        }),
+      });
 
       if (!response.ok) {
         const errorText = await response.text();
-        console.error('Clarifai API error:', errorText);
-        throw new Error(`Clarifai API error: ${response.status} ${response.statusText}`);
+        console.error('Edge Function error:', errorText);
+        throw new Error(`Edge Function error: ${response.status} ${response.statusText}`);
       }
 
       const data: ClarifaiResponse = await response.json();

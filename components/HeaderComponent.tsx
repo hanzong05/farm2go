@@ -30,9 +30,7 @@ import { logoutUser } from '../services/auth';
 import { Database } from '../types/database';
 import MessageComponent, { Conversation } from './MessageComponent';
 import NotificationComponent, { Notification } from './NotificationComponent';
-import RealtimeStatus from './RealtimeStatus';
 import { useNotifications } from '../hooks/useNotifications';
-import { useSimplePush } from '../hooks/useSimplePush';
 
 type Profile = Database['public']['Tables']['profiles']['Row'];
 
@@ -63,13 +61,6 @@ const NAV_ITEMS: NavItem[] = [
     userTypes: ['farmer'],
   },
   {
-    id: 'farmer-add-product',
-    title: 'Add Product',
-    icon: 'plus',
-    route: '/farmer/products/add',
-    userTypes: ['farmer'],
-  },
-  {
     id: 'farmer-orders',
     title: 'Orders',
     icon: 'box',
@@ -91,9 +82,9 @@ const NAV_ITEMS: NavItem[] = [
     userTypes: ['farmer'],
   },
   {
-    id: 'farmer-settings',
-    title: 'Settings',
-    icon: 'cog',
+    id: 'farmer-profile',
+    title: 'Profile',
+    icon: 'user',
     route: '/farmer/settings',
     userTypes: ['farmer'],
   },
@@ -107,13 +98,6 @@ const NAV_ITEMS: NavItem[] = [
     userTypes: ['buyer'],
   },
   {
-    id: 'buyer-search',
-    title: 'Search',
-    icon: 'search',
-    route: '/buyer/search',
-    userTypes: ['buyer'],
-  },
-  {
     id: 'buyer-purchase-history',
     title: 'Purchase History',
     icon: 'history',
@@ -121,9 +105,9 @@ const NAV_ITEMS: NavItem[] = [
     userTypes: ['buyer'],
   },
   {
-    id: 'buyer-settings',
-    title: 'Settings',
-    icon: 'cog',
+    id: 'buyer-profile',
+    title: 'Profile',
+    icon: 'user',
     route: '/buyer/settings',
     userTypes: ['buyer'],
   },
@@ -153,6 +137,13 @@ const NAV_ITEMS: NavItem[] = [
     userTypes: ['admin'],
   },
   {
+    id: 'admin-orders',
+    title: 'Orders',
+    icon: 'box',
+    route: '/admin/orders',
+    userTypes: ['admin'],
+  },
+  {
     id: 'admin-verifications',
     title: 'Verifications',
     icon: 'id-badge',
@@ -176,24 +167,10 @@ const NAV_ITEMS: NavItem[] = [
     userTypes: ['super-admin'],
   },
   {
-    id: 'super-admin-settings',
-    title: 'System Settings',
-    icon: 'cogs',
+    id: 'super-admin-profile',
+    title: 'Profile',
+    icon: 'user',
     route: '/super-admin/settings',
-    userTypes: ['super-admin'],
-  },
-  {
-    id: 'super-admin-reports',
-    title: 'System Reports',
-    icon: 'chart-line',
-    route: '/super-admin/reports',
-    userTypes: ['super-admin'],
-  },
-  {
-    id: 'super-admin-backup',
-    title: 'Backup & Restore',
-    icon: 'database',
-    route: '/super-admin/backup',
     userTypes: ['super-admin'],
   },
 ];
@@ -328,20 +305,6 @@ export default function HeaderComponent({
     refreshNotifications
   } = useNotifications(profile?.id || null);
 
-  // Push notifications hook
-  const { sendTestNotification, isInitialized, pushToken } = useSimplePush(profile?.id || null);
-
-  // For debugging: show push status
-  useEffect(() => {
-    if (profile?.id) {
-      console.log('🔍 Push notification status:', {
-        isInitialized,
-        hasPushToken: !!pushToken,
-        platform: Platform.OS,
-        userId: profile.id
-      });
-    }
-  }, [isInitialized, pushToken, profile?.id]);
 
   // Helper function to convert notification type
   const getNotificationType = (type: string): 'info' | 'success' | 'warning' | 'error' => {
@@ -359,7 +322,7 @@ export default function HeaderComponent({
     type: getNotificationType(notif.type),
     timestamp: notif.created_at,
     read: notif.is_read,
-    actionUrl: notif.action_url
+    actionUrl: notif.action_url || undefined
   }));
 
   // Update dimensions on window resize
@@ -474,20 +437,6 @@ export default function HeaderComponent({
     window.open(primaryUrl, '_blank');
     console.log('Primary download:', primaryUrl);
     console.log('Alternative downloads available:', urls.slice(1));
-  };
-
-  const handleTestNotification = async () => {
-    if (!profile?.id) {
-      console.warn('⚠️ No user logged in for push notification test');
-      return;
-    }
-
-    try {
-      await sendTestNotification();
-      console.log('✅ Test notification sent successfully');
-    } catch (error) {
-      console.error('❌ Failed to send test notification:', error);
-    }
   };
 
   // Filter navigation items based on user type - this ensures only role-appropriate nav items are shown
@@ -854,11 +803,6 @@ export default function HeaderComponent({
 
         {/* Header Actions */}
         <View style={dynamicStyles.headerActions}>
-          {/* Real-time Status Indicator */}
-          <View style={styles.notificationContainer}>
-            <RealtimeStatus size="small" />
-          </View>
-
           {/* Messages and Notifications - Always show on all devices */}
           {showMessages && (
             <View style={styles.notificationContainer}>
@@ -900,28 +844,9 @@ export default function HeaderComponent({
                 onRefresh={refreshNotifications}
                 loading={false}
                 unreadCount={unreadCount}
+                userType={resolvedUserType}
               />
             </View>
-          )}
-
-          {/* Push Notification Test Button */}
-          {profile && (
-            <TouchableOpacity
-              style={[styles.testNotificationButton, !isInitialized && styles.disabledButton]}
-              onPress={handleTestNotification}
-              disabled={!isInitialized}
-            >
-              <Icon
-                name="rocket"
-                size={isMobile ? 14 : 16}
-                color={isInitialized ? colors.white : colors.gray400}
-              />
-              {!isMobile && (
-                <Text style={[styles.testNotificationText, !isInitialized && styles.disabledText]}>
-                  Test Push
-                </Text>
-              )}
-            </TouchableOpacity>
           )}
 
           {/* Download App Button */}
@@ -1134,34 +1059,6 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '600',
     color: colors.white,
-  },
-
-  testNotificationButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(16, 185, 129, 0.2)',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 6,
-    gap: 4,
-    borderWidth: 1,
-    borderColor: 'rgba(16, 185, 129, 0.4)',
-    minHeight: 28,
-  },
-
-  testNotificationText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: colors.white,
-  },
-
-  disabledButton: {
-    backgroundColor: 'rgba(107, 114, 128, 0.2)',
-    borderColor: 'rgba(107, 114, 128, 0.3)',
-  },
-
-  disabledText: {
-    color: colors.gray400,
   },
 
   authButton: {

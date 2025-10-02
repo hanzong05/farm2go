@@ -131,7 +131,7 @@ export default function ProductDetailScreen() {
 
     Alert.alert(
       'Delete Product?',
-      `Are you sure you want to delete "${product.name}"?`,
+      `Are you sure you want to delete "${product.name}"?${isAdmin && !isOwner ? '\n\nNote: You are deleting this as an admin.' : ''}`,
       [
         { text: 'Cancel', style: 'cancel' },
         {
@@ -140,16 +140,40 @@ export default function ProductDetailScreen() {
           onPress: async () => {
             try {
               setProcessing(true);
-              const { error } = await supabase
+
+              // Admins can delete any product, farmers can only delete their own
+              const deleteQuery = supabase
                 .from('products')
                 .delete()
-                .eq('id', id)
-                .eq('farmer_id', profile.id);
+                .eq('id', id);
+
+              // Only add farmer_id filter if user is not admin
+              if (!isAdmin) {
+                deleteQuery.eq('farmer_id', profile.id);
+              }
+
+              const { error } = await deleteQuery;
 
               if (error) throw error;
 
               Alert.alert('Success', 'Product deleted', [
-                { text: 'OK', onPress: () => router.back() }
+                {
+                  text: 'OK',
+                  onPress: () => {
+                    if (router.canGoBack()) {
+                      router.back();
+                    } else {
+                      // Navigate to appropriate home screen
+                      if (isAdmin) {
+                        router.replace('/admin/products' as any);
+                      } else if (isFarmer) {
+                        router.replace('/farmer/my-products' as any);
+                      } else {
+                        router.replace('/' as any);
+                      }
+                    }
+                  }
+                }
               ]);
             } catch (err) {
               Alert.alert('Error', 'Failed to delete product');
@@ -280,7 +304,16 @@ export default function ProductDetailScreen() {
         <View style={styles.errorContent}>
           <Text style={styles.errorIcon}>⚠️</Text>
           <Text style={styles.errorText}>{error || 'Product not found'}</Text>
-          <TouchableOpacity style={styles.primaryButton} onPress={() => router.back()}>
+          <TouchableOpacity
+            style={styles.primaryButton}
+            onPress={() => {
+              if (router.canGoBack()) {
+                router.back();
+              } else {
+                router.replace('/' as any);
+              }
+            }}
+          >
             <Text style={styles.primaryButtonText}>Go Back</Text>
           </TouchableOpacity>
         </View>
@@ -303,7 +336,20 @@ export default function ProductDetailScreen() {
       <View style={styles.header}>
         <TouchableOpacity
           style={styles.backButton}
-          onPress={() => router.back()}
+          onPress={() => {
+            if (router.canGoBack()) {
+              router.back();
+            } else {
+              // Navigate to appropriate home screen based on user type
+              if (isAdmin) {
+                router.replace('/admin/products' as any);
+              } else if (isFarmer) {
+                router.replace('/farmer/my-products' as any);
+              } else {
+                router.replace('/' as any);
+              }
+            }
+          }}
           activeOpacity={0.7}
         >
           <Icon name="arrow-left" size={20} color={colors.white} />
@@ -395,8 +441,8 @@ export default function ProductDetailScreen() {
               </View>
             </View>
 
-            {/* Farmer Management Section */}
-            {(isFarmer || isAdmin) && isOwner && (
+            {/* Farmer Management Section - Only for product owners */}
+            {isFarmer && isOwner && (
               <View style={styles.managementSection}>
                 <Text style={styles.sectionTitle}>PRODUCT MANAGEMENT</Text>
                 <View style={styles.managementButtons}>
@@ -416,36 +462,59 @@ export default function ProductDetailScreen() {
               </View>
             )}
 
-            {/* Admin Approval Section */}
-            {isAdmin && product.status === 'pending' && (
+            {/* Admin Management Section - Admins can manage any product */}
+            {isAdmin && (
               <View style={styles.managementSection}>
-                <Text style={styles.sectionTitle}>PRODUCT APPROVAL</Text>
+                <Text style={styles.sectionTitle}>ADMIN ACTIONS</Text>
+
+                {/* Edit and Delete buttons */}
                 <View style={styles.managementButtons}>
-                  <TouchableOpacity
-                    style={styles.rejectButton}
-                    onPress={() => handleApproveReject('rejected')}
-                    disabled={processing}
-                  >
-                    {processing ? (
-                      <ActivityIndicator size="small" color={colors.white} />
-                    ) : (
-                      <Icon name="times" size={16} color={colors.white} />
-                    )}
-                    <Text style={styles.rejectButtonText}>Reject</Text>
+                  <TouchableOpacity style={styles.editButton} onPress={handleEdit} disabled={processing}>
+                    <Icon name="edit" size={16} color={colors.primary} />
+                    <Text style={styles.editButtonText}>Edit Product</Text>
                   </TouchableOpacity>
-                  <TouchableOpacity
-                    style={styles.approveButton}
-                    onPress={() => handleApproveReject('approved')}
-                    disabled={processing}
-                  >
+                  <TouchableOpacity style={styles.deleteButton} onPress={handleDelete} disabled={processing}>
                     {processing ? (
-                      <ActivityIndicator size="small" color={colors.white} />
+                      <ActivityIndicator size="small" color={colors.danger} />
                     ) : (
-                      <Icon name="check" size={16} color={colors.white} />
+                      <Icon name="trash" size={16} color={colors.danger} />
                     )}
-                    <Text style={styles.approveButtonText}>Approve</Text>
+                    <Text style={styles.deleteButtonText}>Delete Product</Text>
                   </TouchableOpacity>
                 </View>
+
+                {/* Approval buttons for pending products */}
+                {product.status === 'pending' && (
+                  <>
+                    <Text style={[styles.sectionTitle, { marginTop: 16 }]}>PRODUCT APPROVAL</Text>
+                    <View style={styles.managementButtons}>
+                      <TouchableOpacity
+                        style={styles.rejectButton}
+                        onPress={() => handleApproveReject('rejected')}
+                        disabled={processing}
+                      >
+                        {processing ? (
+                          <ActivityIndicator size="small" color={colors.white} />
+                        ) : (
+                          <Icon name="times" size={16} color={colors.white} />
+                        )}
+                        <Text style={styles.rejectButtonText}>Reject</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={styles.approveButton}
+                        onPress={() => handleApproveReject('approved')}
+                        disabled={processing}
+                      >
+                        {processing ? (
+                          <ActivityIndicator size="small" color={colors.white} />
+                        ) : (
+                          <Icon name="check" size={16} color={colors.white} />
+                        )}
+                        <Text style={styles.approveButtonText}>Approve</Text>
+                      </TouchableOpacity>
+                    </View>
+                  </>
+                )}
               </View>
             )}
 

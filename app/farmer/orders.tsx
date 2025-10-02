@@ -248,7 +248,7 @@ export default function FarmerOrdersScreen() {
   const loadOrders = async (farmerId: string) => {
     try {
       // Get orders directly for this farmer with product and buyer information
-      const { data: ordersData, error: ordersError } = await supabase
+      const { data: ordersData, error: ordersError} = await supabase
         .from('orders')
         .select(`
           id,
