@@ -8,8 +8,10 @@ import {
   Alert,
   Animated,
   Dimensions,
+  FlatList,
   Modal,
   Platform,
+  ScrollView,
   StatusBar,
   StyleSheet,
   Text,
@@ -18,7 +20,6 @@ import {
   View
 } from 'react-native';
 import Icon from 'react-native-vector-icons/FontAwesome5';
-import AdminTable from '../../components/AdminTable';
 import HeaderComponent from '../../components/HeaderComponent';
 import LocationPicker from '../../components/LocationPicker';
 import { supabase } from '../../lib/supabase';
@@ -85,7 +86,7 @@ export default function SuperAdminUsers() {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
-  const [tableKey, setTableKey] = useState(0);
+  const [refreshing, setRefreshing] = useState(false);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [focusedInput, setFocusedInput] = useState<string | null>(null);
@@ -212,9 +213,8 @@ export default function SuperAdminUsers() {
           },
         })) || [];
 
-     console.log('👥 Processed users data:', usersData);
-setUsers(usersData);
-setTableKey(prev => prev + 1);
+      console.log('👥 Processed users data:', usersData);
+      setUsers(usersData);
     } catch (error) {
       console.error('Error loading users:', error);
       Alert.alert('Error', 'Failed to load users');
@@ -407,34 +407,11 @@ setTableKey(prev => prev + 1);
     }
   };
 
-  const renderUser = ({ item, index }: { item: User; index: number }) => {
-    const animatedValue = new Animated.Value(0);
-    
-    Animated.timing(animatedValue, {
-      toValue: 1,
-      duration: 500,
-      delay: index * 100,
-      useNativeDriver: true,
-    }).start();
-
-    const translateY = animatedValue.interpolate({
-      inputRange: [0, 1],
-      outputRange: [30, 0],
-    });
-
+  const renderUserCard = ({ item, index }: { item: User; index: number }) => {
     const userTypeColors = getUserTypeColor(item.profiles?.user_type || '');
 
     return (
-      <Animated.ScrollView
-  style={[
-    styles.content,
-    {
-      opacity: fadeAnim,
-    },
-  ]}
-  contentContainerStyle={{ flexGrow: 1 }}
-  showsVerticalScrollIndicator={false}
-      >
+      <View style={styles.userCard}>
         <LinearGradient
           colors={[colors.white, colors.gray50]}
           style={styles.cardGradient}
@@ -535,7 +512,7 @@ setTableKey(prev => prev + 1);
             </TouchableOpacity>
           </View>
         </LinearGradient>
-      </Animated.ScrollView>
+      </View>
     );
   };
 
@@ -581,14 +558,10 @@ setTableKey(prev => prev + 1);
         searchPlaceholder="Search users..."
       />
 
-      <Animated.View
-        style={[
-          styles.content,
-          {
-            opacity: fadeAnim,
-            transform: [{ translateY: slideAnim }, { scale: scaleAnim }],
-          },
-        ]}
+      <ScrollView 
+        style={styles.scrollView}
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
       >
         {/* Enhanced Header */}
         <View style={styles.header}>
@@ -666,88 +639,31 @@ setTableKey(prev => prev + 1);
           </LinearGradient>
         </View>
 
-        {/* Admin Users Table */}
-        <View style={styles.tableContainer}>
-           <AdminTable
-    key={tableKey} // ← This was added
-    columns={[
-              {
-                key: 'name',
-                title: 'Name',
-                width: 180,
-                render: (value, row) => (
-                  <Text style={styles.cellText}>
-                    {row.profiles?.first_name} {row.profiles?.last_name}
-                  </Text>
-                )
-              },
-              {
-                key: 'email',
-                title: 'Email',
-                width: 200,
-                render: (value) => <Text style={styles.cellText}>{value}</Text>
-              },
-              {
-                key: 'phone',
-                title: 'Phone',
-                width: 140,
-                render: (value, row) => <Text style={styles.cellText}>{row.profiles?.phone || '-'}</Text>
-              },
-              {
-                key: 'barangay',
-                title: 'Barangay',
-                width: 140,
-                render: (value, row) => <Text style={styles.cellText}>{row.profiles?.barangay || '-'}</Text>
-              },
-              {
-                key: 'user_type',
-                title: 'Role',
-                width: 120,
-                render: (value, row) => (
-                  <View style={[styles.statusBadge, { backgroundColor: colors.primary + '20' }]}>
-                    <Text style={{
-                      color: colors.primary,
-                      fontSize: 12,
-                      fontWeight: '600'
-                    }}>{row.profiles?.user_type?.toUpperCase()}</Text>
-                  </View>
-                )
-              },
-              {
-                key: 'created_at',
-                title: 'Created',
-                width: 140,
-                render: (value) => (
-                  <Text style={styles.cellText}>
-                    {new Date(value).toLocaleDateString()}
-                  </Text>
-                )
-              },
-            ]}
-            data={filteredUsers}
-            onAddPress={() => setShowCreateModal(true)}
-            addButtonText="+ Add Admin"
-            emptyMessage={searchQuery ? 'No admins found matching your search' : 'No admin users yet'}
-            actions={[
-              {
-                icon: 'edit',
-                label: 'Edit',
-                color: colors.primary,
-                onPress: (user) => {
-                  setSelectedUser(user);
-                  setShowEditModal(true);
-                }
-              },
-              {
-                icon: 'trash-alt',
-                label: 'Delete',
-                color: colors.danger,
-                onPress: (user) => deleteUser(user.id)
-              },
-            ]}
-          />
-        </View>
-      </Animated.View>
+        {/* Admin Users List */}
+        <FlatList
+          data={filteredUsers}
+          renderItem={renderUserCard}
+          keyExtractor={(item) => item.id}
+          contentContainerStyle={styles.listContainer}
+          scrollEnabled={false}
+          ListEmptyComponent={
+            <View style={styles.emptyContainer}>
+              <LinearGradient
+                colors={[colors.primary, colors.primaryLight]}
+                style={styles.emptyIcon}
+              >
+                <Icon name="users" size={32} color={colors.white} />
+              </LinearGradient>
+              <Text style={styles.emptyTitle}>No Admins Found</Text>
+              <Text style={styles.emptyText}>
+                {searchQuery 
+                  ? 'No admins match your search criteria' 
+                  : 'Create your first admin user to get started'}
+              </Text>
+            </View>
+          }
+        />
+      </ScrollView>
 
       {/* Enhanced Create User Modal */}
       <Modal
@@ -777,7 +693,7 @@ setTableKey(prev => prev + 1);
             </TouchableOpacity>
           </BlurView>
 
-          <View style={styles.form}>
+          <ScrollView style={styles.form}>
             <View style={styles.inputGroup}>
               <Text style={styles.inputLabel}>Email Address *</Text>
               <View style={[styles.inputContainer, emailError ? styles.inputError : null]}>
@@ -897,7 +813,7 @@ setTableKey(prev => prev + 1);
                 </LinearGradient>
               </TouchableOpacity>
             </View>
-          </View>
+          </ScrollView>
         </LinearGradient>
       </Modal>
     </LinearGradient>
@@ -908,9 +824,12 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
-  content: {
+  scrollView: {
     flex: 1,
+  },
+  scrollContent: {
     padding: 20,
+    paddingBottom: 40,
   },
   loadingContainer: {
     flex: 1,
@@ -962,7 +881,6 @@ const styles = StyleSheet.create({
   },
   titleIcon: {
     width: 48,
-    height: 48,
     borderRadius: 24,
     justifyContent: 'center',
     alignItems: 'center',
@@ -1219,8 +1137,6 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     lineHeight: 24,
   },
-
-  // Modal Styles
   modalContainer: {
     flex: 1,
   },
@@ -1261,16 +1177,15 @@ const styles = StyleSheet.create({
   form: {
     flex: 1,
     padding: 20,
-    gap: 20,
   },
   inputGroup: {
-    gap: 8,
+    marginBottom: 20,
   },
   inputLabel: {
     fontSize: 16,
     fontWeight: '600',
     color: colors.text,
-    marginBottom: 4,
+    marginBottom: 8,
   },
   inputContainer: {
     flexDirection: 'row',
@@ -1315,7 +1230,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
   },
   userTypeSelector: {
-    gap: 8,
+    marginBottom: 20,
   },
   fixedUserType: {
     flexDirection: 'row',
@@ -1390,22 +1305,5 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: colors.white,
     fontWeight: '600',
-  },
-   tableContainer: {
-  flex: 1,
-  minHeight: 400,
-  marginTop: 20,
-  marginHorizontal: 20,
-  marginBottom: 20,
-  },
-  cellText: {
-    fontSize: 14,
-    color: colors.text,
-  },
-  statusBadge: {
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 12,
-    alignSelf: 'flex-start',
   },
 });
