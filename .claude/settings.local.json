@@ -28,7 +28,9 @@
       "WebFetch(domain:shopee.ph)",
       "Bash(find:*)",
       "Bash(timeout:*)",
-      "Bash(where:*)"
+      "Bash(where:*)",
+      "Bash(for file in c:/xampp/htdocs/farm2go/app/admin/*.tsx)",
+      "Bash(done)"
     ],
     "deny": [],
     "ask": []

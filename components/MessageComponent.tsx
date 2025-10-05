@@ -1,4 +1,4 @@
-import React, { useRef, useState, useEffect } from 'react';
+import React, { useRef, useState, useEffect, useImperativeHandle, forwardRef } from 'react';
 import {
     Dimensions,
     FlatList,
@@ -10,7 +10,8 @@ import {
     TextInput,
     TouchableOpacity,
     View,
-    Alert
+    Alert,
+    Image
 } from 'react-native';
 import Icon from 'react-native-vector-icons/FontAwesome5';
 import { supabase } from '../lib/supabase';
@@ -54,6 +55,10 @@ interface MessageComponentProps {
   visible?: boolean;
 }
 
+export interface MessageComponentRef {
+  openChatWithUser: (userId: string, userName: string, userType: 'farmer' | 'buyer' | 'admin') => Promise<void>;
+}
+
 const colors = {
   primary: '#059669',
   secondary: '#10b981',
@@ -80,12 +85,12 @@ const colors = {
   shadow: 'rgba(0,0,0,0.1)',
 };
 
-export default function MessageComponent({
+const MessageComponent = forwardRef<MessageComponentRef, MessageComponentProps>(({
   onConversationPress,
   onNewConversation,
   currentUserId = 'current-user',
   visible = true,
-}: MessageComponentProps) {
+}, ref) => {
   // Create stable unique keys for this user's state to prevent conflicts
   const userStateKey = `user_${currentUserId}`;
   const componentInstanceIdRef = useRef(`msg_comp_${currentUserId}_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`);
@@ -117,6 +122,7 @@ export default function MessageComponent({
   const [messages, setMessages] = useState<DBMessage[]>([]);
   const [messageText, setMessageText] = useState('');
   const [loading, setLoading] = useState(false);
+  const [userAvatars, setUserAvatars] = useState<{ [key: string]: string | null }>({});
 
   // Per-user isolated sending state using refs to prevent cross-user interference
   const sendingStateRef = useRef<boolean>(false);
@@ -124,6 +130,53 @@ export default function MessageComponent({
   const [activeSubscriptions, setActiveSubscriptions] = useState<Set<string>>(new Set());
   const buttonRef = useRef<View>(null);
 
+  // Expose methods to parent components via ref
+  useImperativeHandle(ref, () => ({
+    openChatWithUser: async (userId: string, userName: string, userType: 'farmer' | 'buyer' | 'admin') => {
+      try {
+        // Create a conversation object
+        const conversation: DBConversation = {
+          other_user_id: userId,
+          other_user_name: userName,
+          other_user_type: userType,
+          last_message: '',
+          last_message_at: new Date().toISOString(),
+          unread_count: 0,
+          last_message_sender_id: '',
+          conversation_id: '',
+        };
+
+        // Use the existing handleConversationPress logic
+        const realConversationId = await messageService.getOrCreateConversationId(currentUserId, userId);
+
+        const updatedConversation = {
+          ...conversation,
+          conversation_id: realConversationId || ''
+        };
+
+        setSelectedConversation(updatedConversation);
+
+        const chatData = await messageService.initializeChat(currentUserId, userId);
+
+        if (chatData.exists) {
+          setMessages(chatData.messages);
+        } else {
+          setMessages([]);
+        }
+
+        // Open the chat modal
+        setDropdownVisible(false);
+        setModalVisible(false);
+        setChatModalVisible(true);
+
+        if (onConversationPress) {
+          onConversationPress(conversation);
+        }
+      } catch (error) {
+        console.error('Error opening chat with user:', error);
+      }
+    }
+  }), [currentUserId, onConversationPress]);
 
   // Load conversations on component mount
   useEffect(() => {
@@ -132,6 +185,23 @@ export default function MessageComponent({
         setLoading(true);
         const userConversations = await messageService.getUserConversations();
         setConversations(userConversations);
+
+        // Fetch avatars for all conversation participants
+        const userIds = userConversations.map(conv => conv.other_user_id);
+        if (userIds.length > 0) {
+          const { data: profiles } = await supabase
+            .from('profiles')
+            .select('id, avatar_url')
+            .in('id', userIds);
+
+          if (profiles) {
+            const avatarsMap: { [key: string]: string | null } = {};
+            profiles.forEach((profile: any) => {
+              avatarsMap[profile.id] = profile.avatar_url;
+            });
+            setUserAvatars(avatarsMap);
+          }
+        }
       } catch (error) {
         console.error('❌ Error loading conversations:', error);
       } finally {
@@ -508,11 +578,18 @@ export default function MessageComponent({
           styles.avatar,
           { backgroundColor: getUserIconColor(item.other_user_type) + '20' }
         ]}>
-          <Icon
-            name={getUserIcon(item.other_user_type)}
-            size={16}
-            color={getUserIconColor(item.other_user_type)}
-          />
+          {userAvatars[item.other_user_id] ? (
+            <Image
+              source={{ uri: userAvatars[item.other_user_id]! }}
+              style={styles.conversationAvatarImage}
+            />
+          ) : (
+            <Icon
+              name={getUserIcon(item.other_user_type)}
+              size={16}
+              color={getUserIconColor(item.other_user_type)}
+            />
+          )}
         </View>
         {item.unread_count > 0 && (
           <View style={styles.unreadBadge}>
@@ -621,11 +698,18 @@ export default function MessageComponent({
                       styles.desktopAvatar,
                       { backgroundColor: getUserIconColor(item.other_user_type) + '20' }
                     ]}>
-                      <Icon
-                        name={getUserIcon(item.other_user_type)}
-                        size={20}
-                        color={getUserIconColor(item.other_user_type)}
-                      />
+                      {userAvatars[item.other_user_id] ? (
+                        <Image
+                          source={{ uri: userAvatars[item.other_user_id]! }}
+                          style={styles.desktopAvatarImage}
+                        />
+                      ) : (
+                        <Icon
+                          name={getUserIcon(item.other_user_type)}
+                          size={20}
+                          color={getUserIconColor(item.other_user_type)}
+                        />
+                      )}
                     </View>
                     {item.unread_count > 0 && (
                       <View style={styles.desktopUnreadIndicator} />
@@ -766,6 +850,7 @@ export default function MessageComponent({
             name: selectedConversation.other_user_name,
             type: selectedConversation.other_user_type,
             isOnline: false,
+            avatarUrl: userAvatars[selectedConversation.other_user_id] || null,
           }}
           messages={messages.map((msg): ChatMessage => ({
             id: msg.id,
@@ -841,7 +926,7 @@ export default function MessageComponent({
       )}
     </View>
   );
-}
+});
 
 const styles = StyleSheet.create({
   messageWrapper: {
@@ -1020,6 +1105,13 @@ const styles = StyleSheet.create({
     borderRadius: 28,
     alignItems: 'center',
     justifyContent: 'center',
+    overflow: 'hidden',
+  },
+
+  desktopAvatarImage: {
+    width: '100%',
+    height: '100%',
+    borderRadius: 28,
   },
 
   desktopUnreadIndicator: {
@@ -1205,6 +1297,13 @@ const styles = StyleSheet.create({
     borderRadius: 24,
     alignItems: 'center',
     justifyContent: 'center',
+    overflow: 'hidden',
+  },
+
+  conversationAvatarImage: {
+    width: '100%',
+    height: '100%',
+    borderRadius: 24,
   },
 
   unreadBadge: {
@@ -1443,3 +1542,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
 });
+
+MessageComponent.displayName = 'MessageComponent';
+
+export default MessageComponent;

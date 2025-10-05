@@ -18,7 +18,7 @@
         "NSLocationWhenInUseUsageDescription": "This app uses your location to show directions to delivery addresses."
       },
       "config": {
-        "googleMapsApiKey": ""
+        "googleMapsApiKey": "AIzaSyCN6AOFP0MUjnC-B698TJeD-M_ZgIHRJkU"
       }
     },
     "android": {
@@ -42,7 +42,7 @@
       ],
       "config": {
         "googleMaps": {
-          "apiKey": ""
+          "apiKey": "AIzaSyCN6AOFP0MUjnC-B698TJeD-M_ZgIHRJkU"
         }
       }
     },

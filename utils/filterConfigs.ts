@@ -302,9 +302,11 @@ export const applyFilters = (
   data: any[],
   filterState: any,
   filterConfig: {
+    statusKey?: string;
     categoryKey?: string;
     priceKey?: string;
     dateKey?: string;
+    amountKey?: string;
     searchKeys?: string[];
     customFilters?: { [key: string]: (item: any, value: any) => boolean };
   }
@@ -324,6 +326,15 @@ export const applyFilters = (
     }
 
     switch (key) {
+      case 'status':
+        if (value !== 'all') {
+          filtered = filtered.filter(item => {
+            const statusKey = filterConfig.statusKey || 'status';
+            return item[statusKey]?.toLowerCase() === value.toLowerCase();
+          });
+        }
+        break;
+
       case 'category':
         if (filterConfig.categoryKey && value !== 'all') {
           filtered = filtered.filter(item => {

@@ -407,111 +407,35 @@ export default function SuperAdminUsers() {
     }
   };
 
-  const renderUserCard = ({ item, index }: { item: User; index: number }) => {
-    const userTypeColors = getUserTypeColor(item.profiles?.user_type || '');
-
+  const renderTableRow = ({ item, index }: { item: User; index: number }) => {
     return (
-      <View style={styles.userCard}>
-        <LinearGradient
-          colors={[colors.white, colors.gray50]}
-          style={styles.cardGradient}
-        >
-          <View style={styles.userInfo}>
-            <View style={styles.userHeader}>
-              <View style={styles.userTitleContainer}>
-                <View style={styles.avatarContainer}>
-                  <LinearGradient
-                    colors={userTypeColors}
-                    style={styles.avatar}
-                  >
-                    <Text style={styles.avatarText}>
-                      {item.profiles?.first_name?.charAt(0) || 'A'}
-                      {item.profiles?.last_name?.charAt(0) || ''}
-                    </Text>
-                  </LinearGradient>
-                </View>
-                <View style={styles.userNameContainer}>
-                  <Text style={styles.userName}>
-                    {item.profiles?.first_name} {item.profiles?.last_name}
-                  </Text>
-                  <LinearGradient
-                    colors={userTypeColors}
-                    style={styles.userTypeBadge}
-                  >
-                    <Text style={styles.userTypeText}>
-                      {item.profiles?.user_type?.toUpperCase()}
-                    </Text>
-                  </LinearGradient>
-                </View>
-              </View>
-            </View>
-
-            <View style={styles.userDetailsContainer}>
-              <View style={styles.userDetailRow}>
-                <View style={styles.iconContainer}>
-                  <Icon name="envelope" size={14} color={colors.primary} />
-                </View>
-                <Text style={styles.userDetail}>{item.email}</Text>
-              </View>
-
-              {item.profiles?.phone && (
-                <View style={styles.userDetailRow}>
-                  <View style={styles.iconContainer}>
-                    <Icon name="phone" size={14} color={colors.primary} />
-                  </View>
-                  <Text style={styles.userDetail}>{item.profiles.phone}</Text>
-                </View>
-              )}
-
-              {item.profiles?.barangay && (
-                <View style={styles.userDetailRow}>
-                  <View style={styles.iconContainer}>
-                    <Icon name="map-marker-alt" size={14} color={colors.primary} />
-                  </View>
-                  <Text style={styles.userDetail}>{item.profiles.barangay}</Text>
-                </View>
-              )}
-
-              <View style={styles.userDetailRow}>
-                <View style={styles.iconContainer}>
-                  <Icon name="calendar" size={14} color={colors.textLight} />
-                </View>
-                <Text style={styles.userDate}>
-                  Created: {new Date(item.created_at).toLocaleDateString()}
-                </Text>
-              </View>
-            </View>
-          </View>
-
-          <View style={styles.userActions}>
-            <TouchableOpacity
-              style={styles.actionButton}
-              onPress={() => {
-                setSelectedUser(item);
-                setShowEditModal(true);
-              }}
-            >
-              <LinearGradient
-                colors={[colors.warning, colors.warningLight]}
-                style={styles.actionButtonGradient}
-              >
-                <Icon name="edit" size={16} color={colors.white} />
-              </LinearGradient>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={styles.actionButton}
-              onPress={() => deleteUser(item.id)}
-            >
-              <LinearGradient
-                colors={[colors.danger, colors.dangerLight]}
-                style={styles.actionButtonGradient}
-              >
-                <Icon name="trash" size={16} color={colors.white} />
-              </LinearGradient>
-            </TouchableOpacity>
-          </View>
-        </LinearGradient>
+      <View style={[styles.tableRow, index % 2 === 0 && styles.tableRowEven]}>
+        <Text style={[styles.tableCell, styles.nameCell]}>
+          {item.profiles?.first_name} {item.profiles?.last_name}
+        </Text>
+        <Text style={[styles.tableCell, styles.emailCell]}>{item.email}</Text>
+        <Text style={[styles.tableCell, styles.phoneCell]}>{item.profiles?.phone || '-'}</Text>
+        <Text style={[styles.tableCell, styles.barangayCell]}>{item.profiles?.barangay || '-'}</Text>
+        <Text style={[styles.tableCell, styles.dateCell]}>
+          {new Date(item.created_at).toLocaleDateString()}
+        </Text>
+        <View style={[styles.tableCell, styles.actionsCell]}>
+          <TouchableOpacity
+            style={styles.tableActionButton}
+            onPress={() => {
+              setSelectedUser(item);
+              setShowEditModal(true);
+            }}
+          >
+            <Icon name="edit" size={14} color={colors.warning} />
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.tableActionButton}
+            onPress={() => deleteUser(item.id)}
+          >
+            <Icon name="trash" size={14} color={colors.danger} />
+          </TouchableOpacity>
+        </View>
       </View>
     );
   };
@@ -553,117 +477,64 @@ export default function SuperAdminUsers() {
         profile={profile}
         userType="super-admin"
         currentRoute="/super-admin/users"
+        showMessages={true}
+        showNotifications={true}
         searchQuery={searchQuery}
         onSearchChange={setSearchQuery}
         searchPlaceholder="Search users..."
       />
 
-      <ScrollView 
+      <ScrollView
         style={styles.scrollView}
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
-        {/* Enhanced Header */}
-        <View style={styles.header}>
-          <View style={styles.titleContainer}>
-            <LinearGradient
-              colors={[colors.primary, colors.primaryLight]}
-              style={styles.titleIcon}
-            >
-              <Icon name="users-cog" size={24} color={colors.white} />
-            </LinearGradient>
-            <View>
-              <Text style={styles.title}>Admin Management</Text>
-              <Text style={styles.subtitle}>
-                {filteredUsers.length} admin{filteredUsers.length !== 1 ? 's' : ''} found
-              </Text>
-            </View>
+        {/* Admin Users Table */}
+        <View style={styles.tableContainer}>
+          {/* Table Header */}
+          <View style={styles.tableHeader}>
+            <Text style={[styles.tableHeaderCell, styles.nameCell]}>Name</Text>
+            <Text style={[styles.tableHeaderCell, styles.emailCell]}>Email</Text>
+            <Text style={[styles.tableHeaderCell, styles.phoneCell]}>Phone</Text>
+            <Text style={[styles.tableHeaderCell, styles.barangayCell]}>Barangay</Text>
+            <Text style={[styles.tableHeaderCell, styles.dateCell]}>Created</Text>
+            <Text style={[styles.tableHeaderCell, styles.actionsCell]}>Actions</Text>
           </View>
-          
-          <TouchableOpacity
-            style={styles.addButtonContainer}
-            onPress={() => setShowCreateModal(true)}
-          >
-            <LinearGradient
-              colors={[colors.primary, colors.primaryLight]}
-              style={styles.addButton}
-            >
-              <Icon name="plus" size={16} color={colors.white} />
-              <Text style={styles.addButtonText}>Add Admin</Text>
-            </LinearGradient>
-          </TouchableOpacity>
-        </View>
 
-        {/* Statistics Cards */}
-        <View style={styles.statsContainer}>
-          <LinearGradient
-            colors={[colors.white, colors.gray50]}
-            style={styles.statCard}
-          >
-            <View style={styles.statIconContainer}>
-              <LinearGradient
-                colors={[colors.success, '#4ade80']}
-                style={styles.statIcon}
-              >
-                <Icon name="user-shield" size={20} color={colors.white} />
-              </LinearGradient>
-            </View>
-            <View>
-              <Text style={styles.statNumber}>{users.length}</Text>
-              <Text style={styles.statLabel}>Total Admins</Text>
-            </View>
-          </LinearGradient>
-
-          <LinearGradient
-            colors={[colors.white, colors.gray50]}
-            style={styles.statCard}
-          >
-            <View style={styles.statIconContainer}>
-              <LinearGradient
-                colors={[colors.warning, colors.warningLight]}
-                style={styles.statIcon}
-              >
-                <Icon name="clock" size={20} color={colors.white} />
-              </LinearGradient>
-            </View>
-            <View>
-              <Text style={styles.statNumber}>
-                {users.filter(u => {
-                  const createdDate = new Date(u.created_at);
-                  const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
-                  return createdDate > thirtyDaysAgo;
-                }).length}
-              </Text>
-              <Text style={styles.statLabel}>Recent</Text>
-            </View>
-          </LinearGradient>
-        </View>
-
-        {/* Admin Users List */}
-        <FlatList
-          data={filteredUsers}
-          renderItem={renderUserCard}
-          keyExtractor={(item) => item.id}
-          contentContainerStyle={styles.listContainer}
-          scrollEnabled={false}
-          ListEmptyComponent={
+          {/* Table Body */}
+          {filteredUsers.length === 0 ? (
             <View style={styles.emptyContainer}>
-              <LinearGradient
-                colors={[colors.primary, colors.primaryLight]}
-                style={styles.emptyIcon}
-              >
-                <Icon name="users" size={32} color={colors.white} />
-              </LinearGradient>
+              <Icon name="users" size={48} color={colors.textLight} />
               <Text style={styles.emptyTitle}>No Admins Found</Text>
               <Text style={styles.emptyText}>
-                {searchQuery 
-                  ? 'No admins match your search criteria' 
+                {searchQuery
+                  ? 'No admins match your search criteria'
                   : 'Create your first admin user to get started'}
               </Text>
             </View>
-          }
-        />
+          ) : (
+            <FlatList
+              data={filteredUsers}
+              renderItem={renderTableRow}
+              keyExtractor={(item) => item.id}
+              scrollEnabled={false}
+            />
+          )}
+        </View>
       </ScrollView>
+
+      {/* Floating Add Button */}
+      <TouchableOpacity
+        style={styles.floatingButton}
+        onPress={() => setShowCreateModal(true)}
+      >
+        <LinearGradient
+          colors={[colors.primary, colors.primaryLight]}
+          style={styles.floatingButtonGradient}
+        >
+          <Icon name="plus" size={24} color={colors.white} />
+        </LinearGradient>
+      </TouchableOpacity>
 
       {/* Enhanced Create User Modal */}
       <Modal
@@ -816,6 +687,172 @@ export default function SuperAdminUsers() {
           </ScrollView>
         </LinearGradient>
       </Modal>
+
+      {/* Edit User Modal */}
+      <Modal
+        visible={showEditModal}
+        animationType="slide"
+        presentationStyle="pageSheet"
+      >
+        <LinearGradient
+          colors={[colors.background, colors.white]}
+          style={styles.modalContainer}
+        >
+          <BlurView intensity={10} style={styles.modalHeader}>
+            <View style={styles.modalTitleContainer}>
+              <LinearGradient
+                colors={[colors.warning, colors.warningLight]}
+                style={styles.modalTitleIcon}
+              >
+                <Icon name="edit" size={20} color={colors.white} />
+              </LinearGradient>
+              <Text style={styles.modalTitle}>Edit Admin</Text>
+            </View>
+            <TouchableOpacity
+              onPress={() => {
+                setShowEditModal(false);
+                setSelectedUser(null);
+              }}
+              style={styles.closeButton}
+            >
+              <Icon name="times" size={24} color={colors.textSecondary} />
+            </TouchableOpacity>
+          </BlurView>
+
+          {selectedUser && (
+            <ScrollView style={styles.form}>
+              <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>Email Address</Text>
+                <View style={[styles.inputContainer, { backgroundColor: colors.gray100 }]}>
+                  <Icon name="envelope" size={16} color={colors.textSecondary} style={styles.inputIcon} />
+                  <Text style={[styles.input, { color: colors.textSecondary }]}>
+                    {selectedUser.email}
+                  </Text>
+                </View>
+                <Text style={[styles.errorText, { color: colors.textSecondary }]}>
+                  Email cannot be changed
+                </Text>
+              </View>
+
+              <View style={styles.nameRow}>
+                <View style={[styles.inputGroup, { flex: 1, marginRight: 8 }]}>
+                  <Text style={styles.inputLabel}>First Name *</Text>
+                  <View style={styles.inputContainer}>
+                    <Icon name="user" size={16} color={colors.textSecondary} style={styles.inputIcon} />
+                    <TextInput
+                      style={styles.input}
+                      placeholder="First name"
+                      value={selectedUser.profiles?.first_name || ''}
+                      onChangeText={(text) => setSelectedUser({
+                        ...selectedUser,
+                        profiles: { ...selectedUser.profiles!, first_name: text }
+                      })}
+                    />
+                  </View>
+                </View>
+
+                <View style={[styles.inputGroup, { flex: 1, marginLeft: 8 }]}>
+                  <Text style={styles.inputLabel}>Last Name</Text>
+                  <View style={styles.inputContainer}>
+                    <Icon name="user" size={16} color={colors.textSecondary} style={styles.inputIcon} />
+                    <TextInput
+                      style={styles.input}
+                      placeholder="Last name"
+                      value={selectedUser.profiles?.last_name || ''}
+                      onChangeText={(text) => setSelectedUser({
+                        ...selectedUser,
+                        profiles: { ...selectedUser.profiles!, last_name: text }
+                      })}
+                    />
+                  </View>
+                </View>
+              </View>
+
+              <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>Phone Number</Text>
+                <View style={styles.inputContainer}>
+                  <Icon name="phone" size={16} color={colors.textSecondary} style={styles.inputIcon} />
+                  <TextInput
+                    style={styles.input}
+                    placeholder="Phone number"
+                    value={selectedUser.profiles?.phone || ''}
+                    onChangeText={(text) => setSelectedUser({
+                      ...selectedUser,
+                      profiles: { ...selectedUser.profiles!, phone: text }
+                    })}
+                    keyboardType="phone-pad"
+                  />
+                </View>
+              </View>
+
+              <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>Location *</Text>
+                <LocationPicker
+                  onLocationSelect={(barangay) => setSelectedUser({
+                    ...selectedUser,
+                    profiles: { ...selectedUser.profiles!, barangay }
+                  })}
+                  initialBarangay={selectedUser.profiles?.barangay || ''}
+                  focusedInput={focusedInput}
+                  setFocusedInput={setFocusedInput}
+                />
+              </View>
+
+              <View style={styles.modalActions}>
+                <TouchableOpacity
+                  style={styles.cancelButtonContainer}
+                  onPress={() => {
+                    setShowEditModal(false);
+                    setSelectedUser(null);
+                  }}
+                >
+                  <Text style={styles.cancelButtonText}>Cancel</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={styles.createButtonContainer}
+                  onPress={async () => {
+                    try {
+                      if (!selectedUser.profiles?.first_name || !selectedUser.profiles?.barangay) {
+                        Alert.alert('Error', 'Please fill in all required fields');
+                        return;
+                      }
+
+                      const { error } = await supabase
+                        .from('profiles')
+                        .update({
+                          first_name: selectedUser.profiles.first_name,
+                          last_name: selectedUser.profiles.last_name,
+                          phone: selectedUser.profiles.phone,
+                          barangay: selectedUser.profiles.barangay,
+                        })
+                        .eq('id', selectedUser.id);
+
+                      if (error) throw error;
+
+                      Alert.alert('Success', 'Admin updated successfully');
+                      setShowEditModal(false);
+                      setSelectedUser(null);
+                      await loadUsers();
+                    } catch (error: any) {
+                      console.error('Error updating user:', error);
+                      Alert.alert('Error', error.message || 'Failed to update user');
+                    }
+                  }}
+                >
+                  <LinearGradient
+                    colors={[colors.warning, colors.warningLight]}
+                    style={styles.createButton}
+                  >
+                    <Icon name="save" size={16} color={colors.white} />
+                    <Text style={styles.createButtonText}>Save Changes</Text>
+                  </LinearGradient>
+                </TouchableOpacity>
+              </View>
+            </ScrollView>
+          )}
+        </LinearGradient>
+      </Modal>
     </LinearGradient>
   );
 }
@@ -867,272 +904,118 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
     fontWeight: '500',
   },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 24,
-    paddingHorizontal: 4,
-  },
-  titleContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flex: 1,
-  },
-  titleIcon: {
-    width: 48,
-    borderRadius: 24,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 16,
-    ...Platform.select({
-      ios: {
-        shadowColor: colors.primary,
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.3,
-        shadowRadius: 8,
-      },
-      android: {
-        elevation: 6,
-      },
-    }),
-  },
-  title: {
-    fontSize: 28,
-    fontWeight: 'bold',
-    color: colors.text,
-    marginBottom: 4,
-  },
-  subtitle: {
-    fontSize: 14,
-    color: colors.textSecondary,
-    fontWeight: '500',
-  },
-  addButtonContainer: {
-    borderRadius: 16,
-    ...Platform.select({
-      ios: {
-        shadowColor: colors.primary,
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.3,
-        shadowRadius: 8,
-      },
-      android: {
-        elevation: 6,
-      },
-    }),
-  },
-  addButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingVertical: 12,
-    borderRadius: 16,
-    gap: 8,
-  },
-  addButtonText: {
-    color: colors.white,
-    fontWeight: '600',
-    fontSize: 16,
-  },
-  statsContainer: {
-    flexDirection: 'row',
-    gap: 16,
-    marginBottom: 24,
-  },
-  statCard: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 16,
-    borderRadius: 16,
+  floatingButton: {
+    position: 'absolute',
+    bottom: 24,
+    right: 24,
+    borderRadius: 50,
     ...Platform.select({
       ios: {
         shadowColor: colors.shadow,
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.1,
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.3,
         shadowRadius: 8,
       },
       android: {
-        elevation: 4,
+        elevation: 8,
       },
     }),
   },
-  statIconContainer: {
-    marginRight: 12,
-  },
-  statIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+  floatingButtonGradient: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
     justifyContent: 'center',
     alignItems: 'center',
   },
-  statNumber: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: colors.text,
-    marginBottom: 2,
-  },
-  statLabel: {
-    fontSize: 12,
-    color: colors.textSecondary,
-    fontWeight: '500',
-  },
-  listContainer: {
-    gap: 16,
-    paddingBottom: 20,
-  },
-  userCard: {
-    borderRadius: 20,
+  tableContainer: {
+    backgroundColor: colors.white,
+    borderRadius: 12,
     overflow: 'hidden',
     ...Platform.select({
       ios: {
         shadowColor: colors.shadow,
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.1,
-        shadowRadius: 12,
-      },
-      android: {
-        elevation: 6,
-      },
-    }),
-  },
-  cardGradient: {
-    padding: 20,
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  userInfo: {
-    flex: 1,
-  },
-  userHeader: {
-    marginBottom: 16,
-  },
-  userTitleContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  avatarContainer: {
-    marginRight: 12,
-  },
-  avatar: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    justifyContent: 'center',
-    alignItems: 'center',
-    ...Platform.select({
-      ios: {
-        shadowColor: colors.shadow,
         shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.2,
-        shadowRadius: 4,
+        shadowOpacity: 0.1,
+        shadowRadius: 8,
       },
       android: {
-        elevation: 4,
+        elevation: 3,
       },
     }),
   },
-  avatarText: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: colors.white,
-  },
-  userNameContainer: {
-    flex: 1,
-  },
-  userName: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: colors.text,
-    marginBottom: 6,
-  },
-  userTypeBadge: {
-    alignSelf: 'flex-start',
-    paddingHorizontal: 12,
-    paddingVertical: 4,
-    borderRadius: 12,
+  tableHeader: {
     flexDirection: 'row',
-    alignItems: 'center',
+    backgroundColor: colors.primary,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    borderBottomWidth: 2,
+    borderBottomColor: colors.primaryDark,
   },
-  userTypeText: {
-    fontSize: 11,
+  tableHeaderCell: {
+    fontSize: 13,
+    fontWeight: '700',
     color: colors.white,
-    fontWeight: 'bold',
+    textTransform: 'uppercase',
     letterSpacing: 0.5,
   },
-  userDetailsContainer: {
-    gap: 8,
-  },
-  userDetailRow: {
+  tableRow: {
     flexDirection: 'row',
+    paddingVertical: 16,
+    paddingHorizontal: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
     alignItems: 'center',
   },
-  iconContainer: {
-    width: 32,
-    height: 20,
-    justifyContent: 'center',
-    alignItems: 'flex-start',
+  tableRowEven: {
+    backgroundColor: colors.gray50,
   },
-  userDetail: {
+  tableCell: {
     fontSize: 14,
+    color: colors.text,
+  },
+  nameCell: {
+    flex: 2,
+    fontWeight: '600',
+  },
+  emailCell: {
+    flex: 2.5,
+  },
+  phoneCell: {
+    flex: 1.5,
+  },
+  barangayCell: {
+    flex: 1.5,
+  },
+  dateCell: {
+    flex: 1.5,
+    fontSize: 13,
     color: colors.textSecondary,
-    fontWeight: '500',
+  },
+  actionsCell: {
     flex: 1,
+    flexDirection: 'row',
+    gap: 8,
+    justifyContent: 'flex-end',
   },
-  userDate: {
-    fontSize: 12,
-    color: colors.textLight,
-    fontWeight: '400',
-    flex: 1,
-  },
-  userActions: {
-    flexDirection: 'column',
-    gap: 12,
-    marginLeft: 16,
-  },
-  actionButton: {
-    borderRadius: 12,
-    ...Platform.select({
-      ios: {
-        shadowColor: colors.shadow,
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.2,
-        shadowRadius: 4,
-      },
-      android: {
-        elevation: 4,
-      },
-    }),
-  },
-  actionButtonGradient: {
-    width: 40,
-    height: 40,
-    borderRadius: 12,
-    justifyContent: 'center',
-    alignItems: 'center',
+  tableActionButton: {
+    padding: 8,
+    borderRadius: 6,
+    backgroundColor: colors.gray100,
   },
   emptyContainer: {
     padding: 60,
     alignItems: 'center',
   },
-  emptyIcon: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 24,
-  },
   emptyTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
+    fontSize: 18,
+    fontWeight: '600',
     color: colors.text,
+    marginTop: 16,
     marginBottom: 8,
   },
   emptyText: {
-    fontSize: 16,
+    fontSize: 14,
     color: colors.textSecondary,
     textAlign: 'center',
     lineHeight: 24,

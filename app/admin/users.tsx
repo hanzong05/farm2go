@@ -577,6 +577,26 @@ export default function AdminUsers() {
     if (!currentProfile) return;
 
     try {
+      // First, get approved users from verification_submissions
+      const { data: approvedVerifications, error: verificationsError } = await supabase
+        .from('verification_submissions')
+        .select('user_id')
+        .eq('status', 'approved');
+
+      if (verificationsError) {
+        console.error('❌ Error loading verifications:', verificationsError);
+        throw verificationsError;
+      }
+
+      const approvedUserIds = approvedVerifications?.map(v => v.user_id) || [];
+      console.log('✅ Found', approvedUserIds.length, 'approved users');
+
+      if (approvedUserIds.length === 0) {
+        console.log('❌ No approved users found');
+        setUsers([]);
+        setLoading(false);
+        return;
+      }
 
       let query = supabase
         .from('profiles')
@@ -592,6 +612,7 @@ export default function AdminUsers() {
           created_at
         `)
         .eq('user_type', activeTab)
+        .in('id', approvedUserIds)
         .order('created_at', { ascending: false });
 
       if (currentProfile?.barangay) {
@@ -1282,6 +1303,10 @@ export default function AdminUsers() {
 
   // Handle product status update
   const handleProductStatusUpdate = async (productId: string, newStatus: 'approved' | 'rejected') => {
+    // Close the user detail modal immediately when showing confirmation
+    setModalVisible(false);
+    setBuyerModalVisible(false);
+
     const actionText = newStatus === 'approved' ? 'approve' : 'reject';
     const confirmed = await showConfirmation(
       `${actionText.charAt(0).toUpperCase() + actionText.slice(1)} Product`,
@@ -1349,6 +1374,10 @@ export default function AdminUsers() {
 
   // Handle order status update
   const handleOrderStatusUpdate = async (orderId: string, newStatus: string) => {
+    // Close the user detail modal immediately when showing confirmation
+    setModalVisible(false);
+    setBuyerModalVisible(false);
+
     const actionMap: { [key: string]: string } = {
       confirmed: 'confirm',
       cancelled: 'cancel',
@@ -1508,10 +1537,18 @@ export default function AdminUsers() {
               </>
             )}
           </View>
-          <View style={[styles.userTypeBadge, { backgroundColor: getUserTypeColor(item.profiles?.user_type || '') + '15' }]}>
-            <Text style={[styles.userTypeText, { color: getUserTypeColor(item.profiles?.user_type || '') }]}>
-              {item.profiles?.user_type?.toUpperCase()}
-            </Text>
+          <View style={styles.badgeContainer}>
+            <View style={[styles.userTypeBadge, { backgroundColor: getUserTypeColor(item.profiles?.user_type || '') + '15' }]}>
+              <Text style={[styles.userTypeText, { color: getUserTypeColor(item.profiles?.user_type || '') }]}>
+                {item.profiles?.user_type?.toUpperCase()}
+              </Text>
+            </View>
+            <View style={[styles.approvedBadge, { backgroundColor: '#10b981' + '15' }]}>
+              <Icon name="check-circle" size={10} color="#10b981" style={{ marginRight: 4 }} />
+              <Text style={[styles.approvedBadgeText, { color: '#10b981' }]}>
+                APPROVED
+              </Text>
+            </View>
           </View>
         </View>
 
@@ -1579,6 +1616,8 @@ export default function AdminUsers() {
           profile={profile}
           userType="admin"
           currentRoute="/admin/users"
+          showMessages={true}
+          showNotifications={true}
         />
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={colors.primary} />
@@ -1598,6 +1637,8 @@ export default function AdminUsers() {
           searchQuery={searchQuery}
           onSearchChange={setSearchQuery}
           searchPlaceholder="Search users..."
+          showMessages={true}
+          showNotifications={true}
         />
       </View>
 
@@ -2960,6 +3001,11 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: colors.textSecondary,
   },
+  badgeContainer: {
+    flexDirection: 'column',
+    alignItems: 'flex-end',
+    gap: 4,
+  },
   userTypeBadge: {
     paddingHorizontal: 10,
     paddingVertical: 6,
@@ -2970,6 +3016,19 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     textTransform: 'uppercase',
     letterSpacing: 0.5,
+  },
+  approvedBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 10,
+  },
+  approvedBadgeText: {
+    fontSize: 9,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 0.3,
   },
   chartContainer: {
     alignItems: 'center',

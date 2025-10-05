@@ -14,6 +14,8 @@ import {
 import FilterSidebar from '../../components/FilterSidebar';
 import HeaderComponent from '../../components/HeaderComponent';
 import ContactButtonSimple from '../../components/ContactButtonSimple';
+import OrderDetailsModal from '../../components/OrderDetailsModal';
+import InvoiceModal from '../../components/InvoiceModal';
 import { supabase } from '../../lib/supabase';
 import { getUserWithProfile } from '../../services/auth';
 import { Database } from '../../types/database';
@@ -59,6 +61,7 @@ interface Sale {
   status: 'pending' | 'confirmed' | 'processing' | 'ready' | 'delivered' | 'cancelled';
   created_at: string;
   delivery_date: string | null;
+  proof_of_payment?: string | null;
   buyer_profile?: {
     first_name: string | null;
     last_name: string | null;
@@ -115,6 +118,9 @@ export default function FarmerSalesHistoryScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [showSidebar, setShowSidebar] = useState(false);
+  const [selectedSale, setSelectedSale] = useState<Sale | null>(null);
+  const [showOrderDetailsModal, setShowOrderDetailsModal] = useState(false);
+  const [showInvoiceModal, setShowInvoiceModal] = useState(false);
 
   // Filter state
   const [filterState, setFilterState] = useState({
@@ -169,6 +175,7 @@ export default function FarmerSalesHistoryScreen() {
           delivery_address,
           notes,
           created_at,
+          proof_of_payment,
           products (
             name,
             unit,
@@ -194,34 +201,44 @@ export default function FarmerSalesHistoryScreen() {
         return;
       }
 
-      // Transform orders into sales format
-      const salesWithItems: Sale[] = typedOrdersData.map(order => {
-        // Create a single order item since each order is for one product
-        const items = [{
-          order_id: order.id,
-          quantity: order.quantity,
-          unit_price: order.products?.price || 0,
-          total_price: order.total_price,
-          product: {
-            name: order.products?.name || '',
-            unit: order.products?.unit || '',
-          },
-        }];
+      // Transform orders into sales format, filtering out orders with deleted products
+      const salesWithItems: Sale[] = typedOrdersData
+        .filter(order => {
+          // Skip orders where the product was deleted
+          if (!order.products || !order.products.name) {
+            console.warn('⚠️ Skipping order with deleted product:', order.id);
+            return false;
+          }
+          return true;
+        })
+        .map(order => {
+          // Create a single order item since each order is for one product
+          const items = [{
+            order_id: order.id,
+            quantity: order.quantity,
+            unit_price: order.products?.price || 0,
+            total_price: order.total_price,
+            product: {
+              name: order.products?.name || 'Deleted Product',
+              unit: order.products?.unit || 'unit',
+            },
+          }];
 
-        return {
-          id: order.id,
-          buyer_id: order.buyer_id,
-          total_amount: order.total_price,
-          status: order.status as Sale['status'],
-          created_at: order.created_at,
-          delivery_date: order.delivery_address, // Using delivery_address as delivery info
-          buyer_profile: order.profiles ? {
-            first_name: order.profiles.first_name,
-            last_name: order.profiles.last_name,
-          } : undefined,
-          order_items: items,
-        };
-      });
+          return {
+            id: order.id,
+            buyer_id: order.buyer_id,
+            total_amount: order.total_price,
+            status: order.status as Sale['status'],
+            created_at: order.created_at,
+            delivery_date: order.delivery_address, // Using delivery_address as delivery info
+            proof_of_payment: order.proof_of_payment,
+            buyer_profile: order.profiles ? {
+              first_name: order.profiles.first_name,
+              last_name: order.profiles.last_name,
+            } : undefined,
+            order_items: items,
+          };
+        });
 
       console.log('🔍 Final sales processed:', salesWithItems.length, 'sales found');
       console.log('🔍 Sales data sample:', JSON.stringify(salesWithItems.slice(0, 2), null, 2));
@@ -234,8 +251,13 @@ export default function FarmerSalesHistoryScreen() {
   };
 
   const filterSalesByPeriod = () => {
-    // Apply filters using the utility function
-    const filtered = applyFilters(sales, filterState, {
+    // First filter to show only delivered and cancelled orders
+    let filtered = sales.filter(sale =>
+      sale.status === 'delivered' || sale.status === 'cancelled'
+    );
+
+    // Then apply other filters using the utility function
+    filtered = applyFilters(filtered, filterState, {
       statusKey: 'status',
       dateKey: 'created_at',
       amountKey: 'total_amount',
@@ -432,10 +454,24 @@ export default function FarmerSalesHistoryScreen() {
           style={styles.contactBuyerButton}
           onSendMessage={handleSendMessageToBuyer}
         />
-        <TouchableOpacity style={styles.primaryActionButton}>
+        <TouchableOpacity
+          style={styles.primaryActionButton}
+          onPress={() => {
+            setSelectedSale(sale);
+            setShowOrderDetailsModal(true);
+          }}
+          activeOpacity={0.8}
+        >
           <Text style={styles.primaryButtonText}>Order Details</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={styles.secondaryButton}>
+        <TouchableOpacity
+          style={styles.secondaryButton}
+          onPress={() => {
+            setSelectedSale(sale);
+            setShowInvoiceModal(true);
+          }}
+          activeOpacity={0.8}
+        >
           <Text style={styles.secondaryButtonText}>Invoice</Text>
         </TouchableOpacity>
       </View>
@@ -542,6 +578,49 @@ export default function FarmerSalesHistoryScreen() {
             )}
           </ScrollView>
         </View>
+
+        {/* Order Details Modal */}
+        {selectedSale && (
+          <OrderDetailsModal
+            visible={showOrderDetailsModal}
+            onClose={() => {
+              setShowOrderDetailsModal(false);
+              setSelectedSale(null);
+            }}
+            order={{
+              id: selectedSale.id,
+              status: selectedSale.status,
+              total_price: selectedSale.total_amount,
+              created_at: selectedSale.created_at,
+              delivery_address: selectedSale.delivery_date,
+              notes: null,
+              farmer_profile: {
+                first_name: profile?.first_name,
+                last_name: profile?.last_name,
+                farm_name: profile?.farm_name,
+                barangay: profile?.barangay,
+              },
+              order_items: selectedSale.order_items,
+            }}
+          />
+        )}
+
+        {/* Invoice Modal */}
+        {selectedSale && (
+          <InvoiceModal
+            visible={showInvoiceModal}
+            onClose={() => {
+              setShowInvoiceModal(false);
+              setSelectedSale(null);
+            }}
+            order={selectedSale}
+            farmerProfile={{
+              first_name: profile?.first_name || null,
+              last_name: profile?.last_name || null,
+              farm_name: profile?.farm_name || null,
+            }}
+          />
+        )}
       </View>
     );
   }
@@ -594,6 +673,49 @@ export default function FarmerSalesHistoryScreen() {
           </View>
         )}
       </ScrollView>
+
+      {/* Order Details Modal */}
+      {selectedSale && (
+        <OrderDetailsModal
+          visible={showOrderDetailsModal}
+          onClose={() => {
+            setShowOrderDetailsModal(false);
+            setSelectedSale(null);
+          }}
+          order={{
+            id: selectedSale.id,
+            status: selectedSale.status,
+            total_price: selectedSale.total_amount,
+            created_at: selectedSale.created_at,
+            delivery_address: selectedSale.delivery_date,
+            notes: null,
+            farmer_profile: {
+              first_name: profile?.first_name,
+              last_name: profile?.last_name,
+              farm_name: profile?.farm_name,
+              barangay: profile?.barangay,
+            },
+            order_items: selectedSale.order_items,
+          }}
+        />
+      )}
+
+      {/* Invoice Modal */}
+      {selectedSale && (
+        <InvoiceModal
+          visible={showInvoiceModal}
+          onClose={() => {
+            setShowInvoiceModal(false);
+            setSelectedSale(null);
+          }}
+          order={selectedSale}
+          farmerProfile={{
+            first_name: profile?.first_name || null,
+            last_name: profile?.last_name || null,
+            farm_name: profile?.farm_name || null,
+          }}
+        />
+      )}
     </View>
   );
 }

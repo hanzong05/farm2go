@@ -1,21 +1,23 @@
 import { router, useLocalSearchParams } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import {
-  ActivityIndicator,
-  Alert,
-  Dimensions,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View
+    ActivityIndicator,
+    Alert,
+    Dimensions,
+    Image,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TouchableOpacity,
+    View
 } from 'react-native';
+import * as ImagePicker from 'expo-image-picker';
 import Icon from 'react-native-vector-icons/FontAwesome5';
 import HeaderComponent from '../../components/HeaderComponent';
 import { useConfirmationModal } from '../../contexts/ConfirmationModalContext';
 import { supabase } from '../../lib/supabase';
 import { getUserWithProfile } from '../../services/auth';
-import { notifyOrderStatusChange, notifyAllAdmins } from '../../services/notifications';
+import { notifyAllAdmins, notifyOrderStatusChange } from '../../services/notifications';
 
 const { width: screenWidth } = Dimensions.get('window');
 
@@ -46,6 +48,7 @@ interface OrderDetail {
   notes: string | null;
   created_at: string;
   purchase_code: string | null;
+  proof_of_payment: string | null;
   products: {
     name: string;
     unit: string;
@@ -73,6 +76,8 @@ export default function OrderDetailScreen() {
   const [loading, setLoading] = useState(true);
   const [userType, setUserType] = useState<string | null>(null);
   const [userProfile, setUserProfile] = useState<any>(null);
+  const [uploadingProof, setUploadingProof] = useState(false);
+  const [selectedProofImage, setSelectedProofImage] = useState<{uri: string, fileExt: string} | null>(null);
   const { showConfirmation } = useConfirmationModal();
 
   useEffect(() => {
@@ -131,6 +136,15 @@ export default function OrderDetailScreen() {
   };
 
   const handleStatusUpdate = async (newStatus: string) => {
+    // Check if trying to mark as delivered without proof of payment
+    if (newStatus === 'delivered' && !order?.proof_of_payment && !selectedProofImage) {
+      Alert.alert(
+        'Proof of Payment Required',
+        'Please select proof of payment before marking this order as delivered.'
+      );
+      return;
+    }
+
     const statusText = newStatus.charAt(0).toUpperCase() + newStatus.slice(1);
     const confirmed = await showConfirmation(
       `${statusText} Order`,
@@ -140,9 +154,101 @@ export default function OrderDetailScreen() {
     if (!confirmed) return;
 
     try {
+      setUploadingProof(true);
+
+      let proofUrl = order?.proof_of_payment;
+
+      console.log('🔄 Status update started:', { newStatus, hasProof: !!order?.proof_of_payment, hasSelectedImage: !!selectedProofImage });
+
+      // If marking as delivered and there's a selected proof image, upload it first
+      if (newStatus === 'delivered' && selectedProofImage) {
+        console.log('✅ Entering upload block - will upload proof');
+        // Clean the order ID to remove any special characters
+        const cleanOrderId = id.replace(/[^a-zA-Z0-9-]/g, '_');
+        const timestamp = Date.now();
+        const fileName = `${cleanOrderId}_${timestamp}.${selectedProofImage.fileExt}`;
+
+        // Get proper mime type
+        const mimeTypes: { [key: string]: string } = {
+          'jpg': 'image/jpeg',
+          'jpeg': 'image/jpeg',
+          'png': 'image/png',
+          'gif': 'image/gif',
+          'webp': 'image/webp',
+        };
+        const contentType = mimeTypes[selectedProofImage.fileExt] || 'image/jpeg';
+
+        console.log('📤 Uploading proof of payment...');
+        console.log('📁 File name:', fileName);
+        console.log('🔐 Content type:', contentType);
+
+        try {
+          // Fetch the image
+          console.log('🌐 Fetching image from:', selectedProofImage.uri);
+          const response = await fetch(selectedProofImage.uri);
+
+          if (!response.ok) {
+            throw new Error(`Failed to fetch image: ${response.status} ${response.statusText}`);
+          }
+
+          // Convert to ArrayBuffer instead of Blob for better compatibility
+          const arrayBuffer = await response.arrayBuffer();
+          console.log('✅ Fetched image, size:', arrayBuffer.byteLength, 'bytes');
+
+          console.log('🚀 Starting upload to proofs bucket...');
+          console.log('📋 Upload params:', { bucket: 'proofs', fileName, contentType, arrayBufferSize: arrayBuffer.byteLength });
+
+          const uploadResult = await supabase.storage
+            .from('proofs')
+            .upload(fileName, arrayBuffer, {
+              contentType: contentType,
+              upsert: false
+            });
+
+          console.log('📦 Upload complete!');
+          console.log('📊 Full upload result:', JSON.stringify(uploadResult, null, 2));
+
+          const { data: uploadData, error: uploadError } = uploadResult;
+          console.log('📊 Upload data:', uploadData);
+          console.log('❌ Upload error:', uploadError);
+
+          if (uploadError) {
+            console.error('❌ Upload failed:', JSON.stringify(uploadError, null, 2));
+            Alert.alert('Upload Error', uploadError.message || 'Failed to upload proof of payment');
+            throw uploadError;
+          }
+
+          if (!uploadData) {
+            throw new Error('Upload succeeded but no data returned');
+          }
+
+          console.log('✅ Upload successful! Path:', uploadData.path);
+
+          // Get public URL from proofs bucket
+          const { data: { publicUrl } } = supabase.storage
+            .from('proofs')
+            .getPublicUrl(fileName);
+
+          console.log('🔗 Public URL:', publicUrl);
+          proofUrl = publicUrl;
+
+        } catch (uploadErr: any) {
+          console.error('❌ Upload exception:', uploadErr);
+          console.error('❌ Error details:', JSON.stringify(uploadErr, null, 2));
+          Alert.alert('Upload Failed', uploadErr.message || 'Failed to upload proof of payment');
+          throw uploadErr;
+        }
+      }
+
+      // Update order status and proof
+      const updateData: any = { status: newStatus };
+      if (proofUrl && newStatus === 'delivered') {
+        updateData.proof_of_payment = proofUrl;
+      }
+
       const { error } = await supabase
         .from('orders')
-        .update({ status: newStatus })
+        .update(updateData)
         .eq('id', id);
 
       if (error) throw error;
@@ -151,21 +257,25 @@ export default function OrderDetailScreen() {
       if (order) {
         try {
           const productName = order.products?.name || 'Product';
+          const { user } = await getUserWithProfile();
+          const currentUserId = user?.id || '';
 
-          // Notify buyer about order status change
+          // Prepare order details for notification
+          const orderDetails = {
+            totalAmount: order.total_price,
+            itemCount: order.quantity,
+            farmerName: `${order.farmer_profile?.first_name || ''} ${order.farmer_profile?.last_name || ''}`.trim(),
+            buyerName: `${order.buyer_profile?.first_name || ''} ${order.buyer_profile?.last_name || ''}`.trim(),
+          };
+
+          // Notify about order status change
           await notifyOrderStatusChange(
             order.id,
+            newStatus,
             order.buyer_id,
-            newStatus,
-            `Your order for ${productName} has been ${newStatus}`
-          );
-
-          // Notify farmer about order status change
-          await notifyOrderStatusChange(
-            order.id,
             order.farmer_id,
-            newStatus,
-            `Order for ${productName} has been ${newStatus}`
+            orderDetails,
+            currentUserId
           );
 
           // Notify all admins if action was taken by farmer/buyer
@@ -186,10 +296,52 @@ export default function OrderDetailScreen() {
       }
 
       Alert.alert('Success', `Order ${newStatus} successfully`);
+      setSelectedProofImage(null);
       await loadOrderDetail();
     } catch (error) {
       console.error('Error updating order:', error);
       Alert.alert('Error', 'Failed to update order status');
+    } finally {
+      setUploadingProof(false);
+    }
+  };
+
+  const handleSelectProof = async () => {
+    try {
+      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+
+      if (status !== 'granted') {
+        Alert.alert('Permission Required', 'Please grant permission to access your photos');
+        return;
+      }
+
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        aspect: [4, 3],
+        quality: 0.8,
+      });
+
+      if (result.canceled) return;
+
+      const uri = result.assets[0].uri;
+
+      // Extract file extension properly - get the last part before any query params or fragments
+      const uriWithoutParams = uri.split('?')[0].split('#')[0];
+      const parts = uriWithoutParams.split('.');
+      const fileExt = parts.length > 1 ? parts[parts.length - 1].toLowerCase() : 'jpg';
+
+      // Validate file extension
+      const validExtensions = ['jpg', 'jpeg', 'png', 'gif', 'webp'];
+      const finalExt = validExtensions.includes(fileExt) ? fileExt : 'jpg';
+
+      console.log('📸 Selected image:', { uri, fileExt: finalExt });
+
+      // Just store the selected image, don't upload yet
+      setSelectedProofImage({ uri, fileExt: finalExt });
+    } catch (error: any) {
+      console.error('Error selecting proof:', error);
+      Alert.alert('Error', 'Failed to select image');
     }
   };
 
@@ -221,7 +373,13 @@ export default function OrderDetailScreen() {
   if (loading) {
     return (
       <View style={styles.container}>
-        <HeaderComponent />
+        <HeaderComponent
+          profile={userProfile}
+          userType={userType || undefined}
+          currentRoute="/order-detail"
+          showMessages={true}
+          showNotifications={true}
+        />
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={colors.primary} />
           <Text style={styles.loadingText}>Loading order details...</Text>
@@ -233,7 +391,13 @@ export default function OrderDetailScreen() {
   if (!order) {
     return (
       <View style={styles.container}>
-        <HeaderComponent />
+        <HeaderComponent
+          profile={userProfile}
+          userType={userType || undefined}
+          currentRoute="/order-detail"
+          showMessages={true}
+          showNotifications={true}
+        />
         <View style={styles.errorContainer}>
           <Icon name="exclamation-circle" size={64} color={colors.danger} />
           <Text style={styles.errorTitle}>Order Not Found</Text>
@@ -251,7 +415,13 @@ export default function OrderDetailScreen() {
 
   return (
     <View style={styles.container}>
-      <HeaderComponent />
+      <HeaderComponent
+        profile={userProfile}
+        userType={userType || undefined}
+        currentRoute="/order-detail"
+        showMessages={true}
+        showNotifications={true}
+      />
       <ScrollView style={styles.content} contentContainerStyle={styles.contentContainer}>
         {/* Header */}
         <View style={styles.header}>
@@ -369,6 +539,56 @@ export default function OrderDetailScreen() {
           <View style={styles.card}>
             <Text style={styles.cardTitle}>Order Notes</Text>
             <Text style={styles.notesText}>{order.notes}</Text>
+          </View>
+        )}
+
+        {/* Proof of Payment */}
+        {(order.status === 'ready' || order.proof_of_payment || selectedProofImage) && (
+          <View style={styles.card}>
+            <Text style={styles.cardTitle}>Proof of Payment</Text>
+            {order.proof_of_payment ? (
+              <View>
+                <Image
+                  source={{ uri: order.proof_of_payment }}
+                  style={styles.proofImage}
+                  resizeMode="contain"
+                />
+                <Text style={styles.proofUploadedText}>
+                  <Icon name="check-circle" size={14} color={colors.success} /> Proof uploaded
+                </Text>
+              </View>
+            ) : selectedProofImage ? (
+              <View>
+                <Image
+                  source={{ uri: selectedProofImage.uri }}
+                  style={styles.proofImage}
+                  resizeMode="contain"
+                />
+                <Text style={styles.proofSelectedText}>
+                  <Icon name="image" size={14} color={colors.primary} /> Image selected - will upload when marking as delivered
+                </Text>
+                <TouchableOpacity
+                  style={styles.changeImageButton}
+                  onPress={handleSelectProof}
+                >
+                  <Icon name="sync" size={14} color={colors.primary} />
+                  <Text style={styles.changeImageButtonText}>Change Image</Text>
+                </TouchableOpacity>
+              </View>
+            ) : (
+              <View>
+                <Text style={styles.proofRequiredText}>
+                  <Icon name="exclamation-circle" size={14} color={colors.warning} /> Proof of payment is required before delivery
+                </Text>
+                <TouchableOpacity
+                  style={styles.uploadProofButton}
+                  onPress={handleSelectProof}
+                >
+                  <Icon name="image" size={16} color={colors.white} />
+                  <Text style={styles.uploadProofButtonText}>Select Proof of Payment</Text>
+                </TouchableOpacity>
+              </View>
+            )}
           </View>
         )}
 
@@ -620,5 +840,74 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
     color: colors.white,
+  },
+  proofImage: {
+    width: '100%',
+    height: 300,
+    borderRadius: 8,
+    marginBottom: 12,
+    backgroundColor: colors.background,
+  },
+  proofUploadedText: {
+    fontSize: 14,
+    color: colors.success,
+    fontWeight: '600',
+    textAlign: 'center',
+  },
+  proofRequiredText: {
+    fontSize: 14,
+    color: colors.warning,
+    fontWeight: '500',
+    marginBottom: 16,
+    textAlign: 'center',
+  },
+  uploadProofButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    backgroundColor: colors.primary,
+    padding: 16,
+    borderRadius: 8,
+  },
+  uploadProofButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: colors.white,
+  },
+  uploadingContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    marginTop: 8,
+  },
+  uploadingText: {
+    fontSize: 14,
+    color: colors.primary,
+    fontWeight: '500',
+  },
+  proofSelectedText: {
+    fontSize: 14,
+    color: colors.primary,
+    fontWeight: '500',
+    textAlign: 'center',
+    marginBottom: 12,
+  },
+  changeImageButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    backgroundColor: colors.white,
+    borderWidth: 1,
+    borderColor: colors.primary,
+    padding: 12,
+    borderRadius: 8,
+  },
+  changeImageButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: colors.primary,
   },
 });

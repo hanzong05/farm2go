@@ -51,35 +51,35 @@ export default function OrderDetailsModal({
         id: 1,
         title: 'Order Placed',
         description: 'Your order has been successfully placed',
-        status: 'placed',
+        status: 'pending',
         icon: '📝',
       },
       {
         id: 2,
-        title: 'Approved by Admin',
-        description: 'Order has been reviewed and approved',
+        title: 'Confirmed',
+        description: 'Order has been confirmed by the farmer',
         status: 'confirmed',
         icon: '✅',
       },
       {
         id: 3,
-        title: 'Shipped by Farmer',
-        description: `Product shipped to ${order.farmer_profile?.barangay || 'barangay'}`,
-        status: 'preparing',
+        title: 'Processing',
+        description: 'Farmer is preparing your order',
+        status: 'processing',
         icon: '🚚',
       },
       {
         id: 4,
         title: 'Ready for Pickup',
-        description: `Available for pickup at ${order.farmer_profile?.barangay || 'barangay'}`,
+        description: `Available for pickup at ${order.delivery_address || order.farmer_profile?.barangay || 'barangay'}`,
         status: 'ready',
         icon: '📦',
       },
       {
         id: 5,
-        title: 'Finished',
+        title: 'Delivered',
         description: 'Order completed successfully',
-        status: 'completed',
+        status: 'delivered',
         icon: '🎉',
       },
     ];
@@ -88,16 +88,9 @@ export default function OrderDetailsModal({
   };
 
   const getCurrentStepIndex = () => {
-    switch (order.status) {
-      case 'pending': return 0;
-      case 'confirmed': return 1;
-      case 'processing':
-      case 'shipped': return 2;
-      case 'ready': return 3;
-      case 'delivered':
-      case 'completed': return 4;
-      default: return 0;
-    }
+    const statusOrder = ['pending', 'confirmed', 'processing', 'ready', 'delivered'];
+    const index = statusOrder.indexOf(order.status.toLowerCase());
+    return index >= 0 ? index : 0;
   };
 
   const formatDate = (dateString: string) => {

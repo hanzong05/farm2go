@@ -1,4 +1,4 @@
-import { useNavigation } from '@react-navigation/native';
+import { router } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
@@ -6,8 +6,11 @@ import {
   Animated,
   Dimensions,
   Image,
+  Platform,
   RefreshControl,
+  SafeAreaView,
   ScrollView,
+  StatusBar,
   StyleSheet,
   Text,
   TouchableOpacity,
@@ -68,7 +71,6 @@ const SORT_OPTIONS = [
 const isDesktop = width >= 1024;
 
 export default function BuyerMyOrdersScreen() {
-  const navigation = useNavigation();
   const [orders, setOrders] = useState<OrderWithDetails[]>([]);
   const [filteredOrders, setFilteredOrders] = useState<OrderWithDetails[]>([]);
   const [loading, setLoading] = useState(true);
@@ -769,7 +771,7 @@ export default function BuyerMyOrdersScreen() {
       {selectedStatus === 'all' && (
         <TouchableOpacity
           style={styles.ctaButton}
-          onPress={() => navigation.navigate('Marketplace' as never)}
+          onPress={() => router.push('/')}
           activeOpacity={0.8}
         >
           <Text style={styles.ctaIcon}>🛒</Text>
@@ -795,7 +797,7 @@ export default function BuyerMyOrdersScreen() {
   console.log('🎨 RENDERING - Selected status:', selectedStatus);
 
   return (
-    <View style={styles.container}>
+    <SafeAreaView style={styles.container}>
       <HeaderComponent
         profile={profile}
         userType="buyer"
@@ -933,14 +935,15 @@ export default function BuyerMyOrdersScreen() {
         onConfirm={confirmModal.onConfirm}
         onCancel={() => setConfirmModal(prev => ({ ...prev, visible: false }))}
       />
-    </View>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f8f9fa',
+    backgroundColor: '#000000', // Black background like Shopee
+    paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight : 0,
   },
 
   // Loading
@@ -968,6 +971,7 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.1,
     shadowRadius: 1,
+    marginHorizontal: 4, // Black space on sides
   },
   tab: {
     flex: 1,
@@ -1002,6 +1006,7 @@ const styles = StyleSheet.create({
   mainContent: {
     flex: 1,
     flexDirection: 'row',
+    paddingHorizontal: 4, // Add horizontal padding for black space on sides
   },
   ordersContainer: {
     flex: 1,
@@ -1015,10 +1020,12 @@ const styles = StyleSheet.create({
   scrollView: {
     flex: 1,
     backgroundColor: '#f5f5f5',
+    marginHorizontal: 4, // Black space on sides
   },
   ordersList: {
     padding: 12,
     gap: 8,
+    paddingBottom: 100, // Extra padding for bottom navigation (universal)
   },
   orderCard: {
     backgroundColor: '#ffffff',

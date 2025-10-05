@@ -27,6 +27,7 @@ const colors = {
 export default function ResponsiveLayout({ children }: ResponsiveLayoutProps) {
   // Since navigation is now handled by HeaderComponent,
   // this layout simply returns children without sidebar
+  // FloatingContactButton is now in root _layout.tsx
   return (
     <View style={styles.container}>
       {children}

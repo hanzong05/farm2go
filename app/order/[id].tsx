@@ -45,7 +45,7 @@ interface Profile {
 }
 
 export default function OrderProductScreen() {
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const { id, quantity } = useLocalSearchParams<{ id: string; quantity: string }>();
   const { user } = useAuth();
   const [product, setProduct] = useState<Product | null>(null);
   const [userProfile, setUserProfile] = useState<Profile | null>(null);
@@ -71,7 +71,6 @@ export default function OrderProductScreen() {
   });
 
   const [orderData, setOrderData] = useState({
-    quantity: '1',
     notes: '',
   });
 
@@ -106,34 +105,49 @@ export default function OrderProductScreen() {
   const fetchProduct = async () => {
     try {
       setLoading(true);
-      const { data, error } = await supabase
+
+      // First fetch the product
+      const { data: productData, error: productError } = await supabase
         .from('products')
-        .select(`
-          *,
-          profiles:farmer_id (
-            first_name,
-            last_name,
-            farm_name,
-            barangay
-          )
-        `)
+        .select('*')
         .eq('id', id)
         .eq('status', 'approved')
         .single();
 
-      if (error) {
-        console.error('Error fetching product:', error);
+      if (productError) {
+        console.error('Error fetching product:', productError);
         setError('Failed to load product');
         return;
       }
 
+      if (!productData) {
+        setError('Product not found');
+        return;
+      }
+
       // Prevent users from ordering their own products
-      if (user && data.farmer_id === user.id) {
+      if (user && productData.farmer_id === user.id) {
         setError('You cannot order your own products');
         return;
       }
 
-      setProduct(data);
+      // Then fetch the farmer profile
+      const { data: profileData, error: profileError } = await supabase
+        .from('profiles')
+        .select('first_name, last_name, farm_name, barangay')
+        .eq('id', productData.farmer_id)
+        .single();
+
+      if (profileError) {
+        console.error('Error fetching farmer profile:', profileError);
+        // Continue without profile data
+      }
+
+      // Combine the data
+      setProduct({
+        ...productData,
+        profiles: profileData || undefined
+      });
     } catch (err) {
       console.error('Product fetch error:', err);
       setError('An error occurred while loading the product');
@@ -144,21 +158,21 @@ export default function OrderProductScreen() {
 
   const calculateTotal = () => {
     if (!product) return 0;
-    const quantity = parseInt(orderData.quantity) || 0;
-    return product.price * quantity;
+    const orderQuantity = parseInt(quantity) || 0;
+    return product.price * orderQuantity;
   };
 
   const handleOrder = async () => {
     if (!product || !user || !userProfile) return;
 
-    const quantity = parseInt(orderData.quantity);
+    const orderQuantity = parseInt(quantity);
 
-    if (isNaN(quantity) || quantity <= 0) {
-      Alert.alert('Error', 'Please enter a valid quantity');
+    if (isNaN(orderQuantity) || orderQuantity <= 0) {
+      Alert.alert('Error', 'Invalid quantity');
       return;
     }
 
-    if (quantity > product.quantity_available) {
+    if (orderQuantity > product.quantity_available) {
       Alert.alert('Error', 'Requested quantity exceeds available stock');
       return;
     }
@@ -168,7 +182,7 @@ export default function OrderProductScreen() {
     setConfirmModal({
       visible: true,
       title: 'Confirm Order?',
-      message: `Are you sure you want to place this order for ${quantity} ${product.unit} of ${product.name} at ₱${totalAmount.toLocaleString()}?`,
+      message: `Are you sure you want to place this order for ${orderQuantity} ${product.unit} of ${product.name} at ₱${totalAmount.toLocaleString()}?`,
       isDestructive: false,
       confirmText: 'Yes, Place Order',
       onConfirm: () => {
@@ -181,7 +195,7 @@ export default function OrderProductScreen() {
   const processOrder = async () => {
     if (!product || !user || !userProfile) return;
 
-    const quantity = parseInt(orderData.quantity);
+    const orderQuantity = parseInt(quantity);
 
     try {
       setOrdering(true);
@@ -196,7 +210,7 @@ export default function OrderProductScreen() {
           buyer_id: user.id,
           farmer_id: product.farmer_id,
           product_id: product.id,
-          quantity: quantity,
+          quantity: orderQuantity,
           total_price: calculateTotal(),
           delivery_address: product.profiles?.barangay || 'Delivery location not available',
           notes: orderData.notes,
@@ -236,7 +250,7 @@ export default function OrderProductScreen() {
       }
 
       // Update product quantity
-      const newQuantity = product.quantity_available - quantity;
+      const newQuantity = product.quantity_available - orderQuantity;
       const { error: updateError } = await (supabase as any)
         .from('products')
         .update({
@@ -367,17 +381,10 @@ export default function OrderProductScreen() {
           <Text style={styles.sectionTitle}>Order Details</Text>
 
           <View style={styles.inputGroup}>
-            <Text style={styles.label}>
-              Quantity ({product.unit}) <Text style={styles.required}>*</Text>
-            </Text>
-            <TextInput
-              style={styles.input}
-              value={orderData.quantity}
-              onChangeText={(text) => setOrderData({ ...orderData, quantity: text })}
-              placeholder="Enter quantity"
-              placeholderTextColor="#9ca3af"
-              keyboardType="numeric"
-            />
+            <Text style={styles.label}>Quantity ({product.unit})</Text>
+            <View style={styles.quantityDisplay}>
+              <Text style={styles.quantityValue}>{quantity || '0'} {product.unit}(s)</Text>
+            </View>
           </View>
 
           <View style={styles.inputGroup}>
@@ -409,7 +416,7 @@ export default function OrderProductScreen() {
           <View style={styles.totalSection}>
             <View style={styles.totalRow}>
               <Text style={styles.totalLabel}>Quantity:</Text>
-              <Text style={styles.totalValue}>{orderData.quantity || 0} {product.unit}(s)</Text>
+              <Text style={styles.totalValue}>{quantity || 0} {product.unit}(s)</Text>
             </View>
             <View style={styles.totalRow}>
               <Text style={styles.totalLabel}>Price per unit:</Text>
@@ -446,7 +453,7 @@ export default function OrderProductScreen() {
             totalAmount: calculateTotal(),
             purchaseDate: new Date().toISOString(),
             productName: product.name,
-            quantity: parseInt(orderData.quantity) || 0,
+            quantity: parseInt(quantity) || 0,
             unit: product.unit,
           }}
           onViewOrders={() => {
@@ -616,6 +623,19 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#6b7280',
     fontStyle: 'italic',
+  },
+  quantityDisplay: {
+    backgroundColor: '#f0fdf4',
+    borderRadius: 8,
+    padding: 16,
+    borderWidth: 2,
+    borderColor: '#10b981',
+  },
+  quantityValue: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#059669',
+    textAlign: 'center',
   },
   totalSection: {
     borderTopWidth: 1,

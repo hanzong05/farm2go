@@ -388,8 +388,8 @@ export default function ProductDetailScreen() {
             {/* Product Name */}
             <Text style={styles.productName}>{product.name.toUpperCase()}</Text>
 
-            {/* Farmer Info (for buyers and admins) */}
-            {(isBuyer || isAdmin) && (
+            {/* Farmer Info (for buyers, admins, and farmers viewing other farmers' products) */}
+            {!isOwner && (
               <Text style={styles.farmerName}>by {getFarmerName()}</Text>
             )}
 
@@ -519,7 +519,7 @@ export default function ProductDetailScreen() {
             )}
 
             {/* Login Prompt for Non-Logged-In Users */}
-            {isBuyer && product.status === 'approved' && !isLoggedIn && (
+            {product.status === 'approved' && !isLoggedIn && (
               <View style={styles.orderSection}>
                 <Text style={styles.sectionTitle}>INTERESTED IN THIS PRODUCT?</Text>
                 <Text style={styles.loginPromptText}>Please log in to place an order</Text>
@@ -533,8 +533,8 @@ export default function ProductDetailScreen() {
               </View>
             )}
 
-            {/* Buyer Order Section - buyers can only order products, not edit them */}
-            {isBuyer && product.status === 'approved' && isLoggedIn && (
+            {/* Order Section - buyers and farmers (buying from others) can order products */}
+            {!isOwner && !isAdmin && product.status === 'approved' && isLoggedIn && (
               <View style={styles.orderSection}>
                 <Text style={styles.sectionTitle}>PLACE ORDER</Text>
                 <View style={styles.quantityContainer}>
@@ -596,7 +596,7 @@ export default function ProductDetailScreen() {
       </ScrollView>
 
       {/* Contact Widget - floating at bottom right for browser, full screen for mobile */}
-      {product && isBuyer && !isOwner && (
+      {product && !isOwner && !isAdmin && (
         <ContactWidget
           contactPerson={{
             id: product.farmer_id,
@@ -605,7 +605,7 @@ export default function ProductDetailScreen() {
             isOnline: true
           }}
           currentUserId={profile?.id}
-          currentUserName={`${profile?.first_name || ''} ${profile?.last_name || ''}`.trim() || 'Buyer'}
+          currentUserName={`${profile?.first_name || ''} ${profile?.last_name || ''}`.trim() || (isBuyer ? 'Buyer' : 'Farmer')}
           currentUserType={profile?.user_type || 'buyer'}
           visible={showContactWidget}
           onOpen={handleContactOpen}

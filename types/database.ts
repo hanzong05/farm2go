@@ -21,6 +21,7 @@ export interface Database {
           user_type: 'farmer' | 'buyer' | 'admin' | 'super-admin'
           created_at: string
           updated_at: string
+          avatar_url: string | null
           // Farmer specific fields
           farm_name: string | null
           farm_size: string | null
@@ -45,6 +46,7 @@ export interface Database {
           user_type: 'farmer' | 'buyer' | 'admin' | 'super-admin'
           created_at?: string
           updated_at?: string
+          avatar_url?: string | null
           farm_name?: string | null
           farm_size?: string | null
           verification_status?: 'pending' | 'approved' | 'rejected' | 'not_submitted'
@@ -67,6 +69,7 @@ export interface Database {
           user_type?: 'farmer' | 'buyer' | 'admin' | 'super-admin'
           created_at?: string
           updated_at?: string
+          avatar_url?: string | null
           farm_name?: string | null
           farm_size?: string | null
           verification_status?: 'pending' | 'approved' | 'rejected' | 'not_submitted'
@@ -135,6 +138,7 @@ export interface Database {
           delivery_address: string
           notes: string | null
           purchase_code: string | null
+          proof_of_payment: string | null
           created_at: string
           updated_at: string
         }
@@ -149,6 +153,7 @@ export interface Database {
           delivery_address: string
           notes?: string | null
           purchase_code?: string | null
+          proof_of_payment?: string | null
           created_at?: string
           updated_at?: string
         }
@@ -163,6 +168,7 @@ export interface Database {
           delivery_address?: string
           notes?: string | null
           purchase_code?: string | null
+          proof_of_payment?: string | null
           created_at?: string
           updated_at?: string
         }

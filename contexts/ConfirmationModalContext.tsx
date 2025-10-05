@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useRef, ReactNode } from 'react';
 import ConfirmationModal from '../components/ConfirmationModal';
 
 interface ConfirmationModalState {
@@ -15,11 +15,10 @@ interface ConfirmationModalContextType {
   showConfirmation: (
     title: string,
     message: string,
-    onConfirm: () => void,
     isDestructive?: boolean,
     confirmText?: string,
     cancelText?: string
-  ) => void;
+  ) => Promise<boolean>;
   hideConfirmation: () => void;
 }
 
@@ -48,30 +47,41 @@ export const ConfirmationModalProvider: React.FC<ConfirmationModalProviderProps>
     onConfirm: () => {},
   });
 
+  const resolveRef = useRef<((value: boolean) => void) | null>(null);
+
   const showConfirmation = (
     title: string,
     message: string,
-    onConfirm: () => void,
     isDestructive: boolean = false,
     confirmText: string = 'Confirm',
     cancelText: string = 'Cancel'
-  ) => {
-    setModalState({
-      visible: true,
-      title,
-      message,
-      confirmText,
-      cancelText,
-      isDestructive,
-      onConfirm: () => {
-        setModalState(prev => ({ ...prev, visible: false }));
-        onConfirm();
-      },
+  ): Promise<boolean> => {
+    return new Promise((resolve) => {
+      resolveRef.current = resolve;
+      setModalState({
+        visible: true,
+        title,
+        message,
+        confirmText,
+        cancelText,
+        isDestructive,
+        onConfirm: () => {
+          setModalState(prev => ({ ...prev, visible: false }));
+          if (resolveRef.current) {
+            resolveRef.current(true);
+            resolveRef.current = null;
+          }
+        },
+      });
     });
   };
 
   const hideConfirmation = () => {
     setModalState(prev => ({ ...prev, visible: false }));
+    if (resolveRef.current) {
+      resolveRef.current(false);
+      resolveRef.current = null;
+    }
   };
 
   return (

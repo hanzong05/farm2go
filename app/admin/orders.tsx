@@ -367,7 +367,7 @@ export default function AdminOrdersScreen() {
     return (
       <TouchableOpacity
         style={styles.orderCard}
-        onPress={() => router.push(`/order/${order.id}` as any)}
+        onPress={() => router.push(`/order-detail/${order.id}` as any)}
         activeOpacity={0.8}
       >
         <View style={styles.orderHeader}>

@@ -886,19 +886,6 @@ export default function FarmerOrdersScreen() {
                 </View>
               </TouchableOpacity>
             )}
-
-            {order.status === 'ready' && (
-              <TouchableOpacity
-                style={[styles.actionButton, styles.completeButton]}
-                onPress={() => handleOrderStatusUpdate(order, 'delivered')}
-                activeOpacity={0.8}
-              >
-                <View style={styles.actionButtonContent}>
-                  <Icon name="truck" size={14} color="#ffffff" style={{marginRight: 6}} />
-                  <Text style={styles.actionButtonText}>Complete Delivery</Text>
-                </View>
-              </TouchableOpacity>
-            )}
           </View>
         )}
 

@@ -546,7 +546,11 @@ export default function AdminProducts() {
   if (loading) {
     return (
       <View style={styles.container}>
-        <HeaderComponent />
+        <HeaderComponent
+          profile={profile}
+          showMessages={true}
+          showNotifications={true}
+        />
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color="#10B981" />
           <Text style={styles.loadingText}>Loading products...</Text>
@@ -565,6 +569,7 @@ export default function AdminProducts() {
         searchPlaceholder="Search products, farmers..."
         showFilterButton={!isDesktop}
         onFilterPress={() => setShowSidebar(!showSidebar)}
+        showMessages={true}
         showNotifications={true}
       />
 

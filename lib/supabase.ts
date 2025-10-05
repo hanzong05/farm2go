@@ -28,6 +28,12 @@ export const supabase = createClient<Database>(supabaseUrl, supabaseAnonKey, {
       scheme: 'farm2go',
     }),
   },
+  global: {
+    headers: {
+      'Accept': 'application/json',
+      'Content-Type': 'application/json',
+    },
+  },
   realtime: {
     params: {
       eventsPerSecond: 10,

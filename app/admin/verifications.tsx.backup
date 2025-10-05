@@ -14,7 +14,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import Icon from 'react-native-vector-icons/FontAwesome5';
+// import Swal from 'sweetalert2'; // Removed - not compatible with React Native
 import ConfirmationModal from '../../components/ConfirmationModal';
 import HeaderComponent from '../../components/HeaderComponent';
 import { supabase } from '../../lib/supabase';
@@ -66,10 +66,6 @@ export default function AdminVerificationsScreen() {
   const [processing, setProcessing] = useState(false);
   const [imageViewModal, setImageViewModal] = useState(false);
   const [selectedImage, setSelectedImage] = useState<{url: string, title: string} | null>(null);
-  const [viewModal, setViewModal] = useState(false);
-  const [selectedSubmission, setSelectedSubmission] = useState<VerificationSubmission | null>(null);
-  const [editModal, setEditModal] = useState(false);
-  const [editData, setEditData] = useState<{notes: string; status: string} | null>(null);
   const [confirmModal, setConfirmModal] = useState<{
     visible: boolean;
     title: string;
@@ -171,114 +167,6 @@ export default function AdminVerificationsScreen() {
     }
   };
 
-  const openViewModal = (submission: VerificationSubmission) => {
-    setSelectedSubmission(submission);
-    setViewModal(true);
-  };
-
-  const closeViewModal = () => {
-    setViewModal(false);
-    setSelectedSubmission(null);
-  };
-
-  const openEditModal = (submission: VerificationSubmission) => {
-    setSelectedSubmission(submission);
-    setEditData({
-      notes: submission.admin_notes || '',
-      status: submission.status,
-    });
-    setEditModal(true);
-  };
-
-  const closeEditModal = () => {
-    setEditModal(false);
-    setSelectedSubmission(null);
-    setEditData(null);
-  };
-
-  const handleUpdate = async () => {
-    if (!selectedSubmission || !editData || !profile) return;
-
-    try {
-      setProcessing(true);
-
-      const { error: submissionError } = await supabase
-        .from('verification_submissions')
-        .update({
-          status: editData.status as 'pending' | 'approved' | 'rejected',
-          admin_notes: editData.notes || null,
-          reviewed_at: new Date().toISOString(),
-          reviewed_by: profile.id,
-        })
-        .eq('id', selectedSubmission.id);
-
-      if (submissionError) throw submissionError;
-
-      // Update profile table
-      const { error: profileError } = await supabase
-        .from('profiles')
-        .update({
-          verification_status: editData.status,
-          verification_admin_notes: editData.notes || null,
-          ...(editData.status === 'approved' ? {
-            verification_approved_at: new Date().toISOString(),
-            verification_rejected_at: null,
-          } : {}),
-          ...(editData.status === 'rejected' ? {
-            verification_rejected_at: new Date().toISOString(),
-            verification_approved_at: null,
-          } : {}),
-        })
-        .eq('id', selectedSubmission.user_id);
-
-      if (profileError) {
-        console.error('Error updating profile:', profileError);
-      }
-
-      Alert.alert('Success', 'Verification updated successfully');
-      await loadVerificationSubmissions();
-      closeEditModal();
-    } catch (error) {
-      console.error('Error updating verification:', error);
-      Alert.alert('Error', 'Failed to update verification');
-    } finally {
-      setProcessing(false);
-    }
-  };
-
-  const handleDelete = (submission: VerificationSubmission) => {
-    const userName = `${submission.user_profile?.first_name} ${submission.user_profile?.last_name}`;
-
-    setConfirmModal({
-      visible: true,
-      title: 'Delete Verification?',
-      message: `Are you sure you want to delete ${userName}'s verification submission? This action cannot be undone.`,
-      isDestructive: true,
-      confirmText: 'Yes, Delete',
-      onConfirm: async () => {
-        try {
-          setProcessing(true);
-
-          const { error } = await supabase
-            .from('verification_submissions')
-            .delete()
-            .eq('id', submission.id);
-
-          if (error) throw error;
-
-          Alert.alert('Success', 'Verification deleted successfully');
-          await loadVerificationSubmissions();
-          setConfirmModal(prev => ({ ...prev, visible: false }));
-        } catch (error) {
-          console.error('Error deleting verification:', error);
-          Alert.alert('Error', 'Failed to delete verification');
-        } finally {
-          setProcessing(false);
-        }
-      }
-    });
-  };
-
   const openReviewModal = (submission: VerificationSubmission, action: 'approve' | 'reject') => {
     const userName = `${submission.user_profile?.first_name} ${submission.user_profile?.last_name}`;
     const isApproval = action === 'approve';
@@ -322,7 +210,8 @@ export default function AdminVerificationsScreen() {
     try {
       setProcessing(true);
 
-      const { error: submissionError } = await supabase
+      // Update verification submission
+      const { error: submissionError } = await (supabase as any)
         .from('verification_submissions')
         .update({
           status: action === 'approve' ? 'approved' : 'rejected',
@@ -334,8 +223,9 @@ export default function AdminVerificationsScreen() {
 
       if (submissionError) throw submissionError;
 
+      // Also update the profile table directly (in case trigger doesn't work)
       if (action === 'approve') {
-        const { error: profileError } = await supabase
+        const { error: profileError } = await (supabase as any)
           .from('profiles')
           .update({
             verification_status: 'approved',
@@ -350,9 +240,10 @@ export default function AdminVerificationsScreen() {
 
         if (profileError) {
           console.error('Error updating profile:', profileError);
+          // Don't throw here - the submission was already updated
         }
       } else if (action === 'reject') {
-        const { error: profileError } = await supabase
+        const { error: profileError } = await (supabase as any)
           .from('profiles')
           .update({
             verification_status: 'rejected',
@@ -364,12 +255,15 @@ export default function AdminVerificationsScreen() {
 
         if (profileError) {
           console.error('Error updating profile:', profileError);
+          // Don't throw here - the submission was already updated
         }
       }
 
+      // Send notifications
       try {
         const userName = `${submission.user_profile?.first_name} ${submission.user_profile?.last_name}`;
 
+        // Notify the user whose verification was reviewed
         await notifyUserAction(
           submission.user_id,
           action === 'approve' ? 'approved' : 'rejected',
@@ -379,6 +273,7 @@ export default function AdminVerificationsScreen() {
           adminNotes || `Verification ${action === 'approve' ? 'approved' : 'rejected'} by administrator`
         );
 
+        // Notify all other admins about the verification action
         await notifyAllAdmins(
           `Verification ${action === 'approve' ? 'Approved' : 'Rejected'}`,
           `Admin ${profile.first_name} ${profile.last_name} ${action === 'approve' ? 'approved' : 'rejected'} the verification for ${userName} (${submission.user_profile?.email})`,
@@ -441,6 +336,108 @@ export default function AdminVerificationsScreen() {
     }
   };
 
+  const renderSubmissionCard = (submission: VerificationSubmission) => (
+    <View key={submission.id} style={styles.submissionCard}>
+      <View style={styles.submissionHeader}>
+        <View style={styles.userInfo}>
+          <Text style={styles.userName}>
+            {submission.user_profile?.first_name} {submission.user_profile?.last_name}
+          </Text>
+          <Text style={styles.userEmail}>{submission.user_profile?.email}</Text>
+          <View style={styles.userBadge}>
+            <Text style={styles.userBadgeText}>
+              {submission.user_profile?.user_type?.toUpperCase()}
+            </Text>
+          </View>
+        </View>
+        <View style={[styles.statusBadge, { backgroundColor: getStatusColor(submission.status) }]}>
+          <Text style={styles.statusText}>{submission.status.toUpperCase()}</Text>
+        </View>
+      </View>
+
+      <View style={styles.submissionDetails}>
+        <Text style={styles.detailLabel}>ID Document Type:</Text>
+        <Text style={styles.detailValue}>
+          {submission.id_document_type.replace('_', ' ').toUpperCase()}
+        </Text>
+
+        <Text style={styles.detailLabel}>Submitted:</Text>
+        <Text style={styles.detailValue}>{formatDate(submission.submitted_at)}</Text>
+
+        {submission.user_profile?.barangay && (
+          <>
+            <Text style={styles.detailLabel}>Location:</Text>
+            <Text style={styles.detailValue}>{submission.user_profile.barangay}</Text>
+          </>
+        )}
+
+        {submission.user_profile?.farm_name && (
+          <>
+            <Text style={styles.detailLabel}>Farm Name:</Text>
+            <Text style={styles.detailValue}>{submission.user_profile.farm_name}</Text>
+          </>
+        )}
+
+        {submission.submission_notes && (
+          <>
+            <Text style={styles.detailLabel}>User Notes:</Text>
+            <Text style={styles.detailValue}>{submission.submission_notes}</Text>
+          </>
+        )}
+      </View>
+
+      <View style={styles.documentsSection}>
+        <Text style={styles.documentsTitle}>Documents</Text>
+        <View style={styles.documentsRow}>
+          <TouchableOpacity
+            style={styles.documentPreview}
+            onPress={() => openImageViewer(submission.id_document_url, 'ID Document')}
+            activeOpacity={0.8}
+          >
+            <Image source={{ uri: submission.id_document_url }} style={styles.documentImage} />
+            <Text style={styles.documentLabel}>ID Document</Text>
+            <Text style={styles.viewImageHint}>Tap to view full size</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.documentPreview}
+            onPress={() => openImageViewer(submission.face_photo_url, 'Face Photo')}
+            activeOpacity={0.8}
+          >
+            <Image source={{ uri: submission.face_photo_url }} style={styles.faceImage} />
+            <Text style={styles.documentLabel}>Face Photo</Text>
+            <Text style={styles.viewImageHint}>Tap to view full size</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+
+      {submission.status === 'pending' && (
+        <View style={styles.actionButtons}>
+          <TouchableOpacity
+            style={[styles.actionButton, styles.rejectButton]}
+            onPress={() => openReviewModal(submission, 'reject')}
+            activeOpacity={0.8}
+          >
+            <Text style={styles.rejectButtonText}>Reject</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.actionButton, styles.approveButton]}
+            onPress={() => openReviewModal(submission, 'approve')}
+            activeOpacity={0.8}
+          >
+            <Text style={styles.approveButtonText}>Approve</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+
+      {submission.status !== 'pending' && submission.admin_notes && (
+        <View style={styles.adminNotesSection}>
+          <Text style={styles.adminNotesLabel}>Admin Notes:</Text>
+          <Text style={styles.adminNotesText}>{submission.admin_notes}</Text>
+        </View>
+      )}
+    </View>
+  );
+
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
@@ -456,7 +453,7 @@ export default function AdminVerificationsScreen() {
         profile={profile}
         userType="admin"
         currentRoute="/admin/verifications"
-        showMessages={true}
+        showMessages={false}
         showNotifications={true}
       />
 
@@ -492,9 +489,8 @@ export default function AdminVerificationsScreen() {
       </View>
 
       <ScrollView
-        horizontal
         style={styles.scrollView}
-        contentContainerStyle={styles.tableContainer}
+        contentContainerStyle={styles.scrollContent}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
@@ -503,294 +499,29 @@ export default function AdminVerificationsScreen() {
             colors={['#10b981']}
           />
         }
+        showsVerticalScrollIndicator={false}
       >
-        <View style={styles.table}>
-          {/* Table Header */}
-          <View style={styles.tableHeader}>
-            <Text style={[styles.tableHeaderText, styles.colName]}>Name</Text>
-            <Text style={[styles.tableHeaderText, styles.colEmail]}>Email</Text>
-            <Text style={[styles.tableHeaderText, styles.colType]}>User Type</Text>
-            <Text style={[styles.tableHeaderText, styles.colBarangay]}>Barangay</Text>
-            <Text style={[styles.tableHeaderText, styles.colDocType]}>Doc Type</Text>
-            <Text style={[styles.tableHeaderText, styles.colStatus]}>Status</Text>
-            <Text style={[styles.tableHeaderText, styles.colDate]}>Submitted</Text>
-            <Text style={[styles.tableHeaderText, styles.colActions]}>Actions</Text>
+        {filteredSubmissions.length === 0 ? (
+          <View style={styles.emptyContainer}>
+            <Text style={styles.emptyIcon}>📄</Text>
+            <Text style={styles.emptyTitle}>No Verifications Found</Text>
+            <Text style={styles.emptyDescription}>
+              {selectedStatus === 'pending'
+                ? 'No pending verifications at the moment.'
+                : `No ${selectedStatus} verifications found.`}
+            </Text>
           </View>
-
-          {/* Table Body */}
-          {filteredSubmissions.length === 0 ? (
-            <View style={styles.emptyContainer}>
-              <Text style={styles.emptyIcon}>📄</Text>
-              <Text style={styles.emptyTitle}>No Verifications Found</Text>
-              <Text style={styles.emptyDescription}>
-                {selectedStatus === 'pending'
-                  ? 'No pending verifications at the moment.'
-                  : `No ${selectedStatus} verifications found.`}
-              </Text>
-            </View>
-          ) : (
-            filteredSubmissions.map((submission, index) => (
-              <View key={submission.id} style={[styles.tableRow, index % 2 === 0 && styles.tableRowEven]}>
-                <Text style={[styles.tableCell, styles.colName]}>
-                  {submission.user_profile?.first_name} {submission.user_profile?.last_name}
-                </Text>
-                <Text style={[styles.tableCell, styles.colEmail]}>
-                  {submission.user_profile?.email}
-                </Text>
-                <Text style={[styles.tableCell, styles.colType]}>
-                  {submission.user_profile?.user_type?.toUpperCase()}
-                </Text>
-                <Text style={[styles.tableCell, styles.colBarangay]}>
-                  {submission.user_profile?.barangay || 'N/A'}
-                </Text>
-                <Text style={[styles.tableCell, styles.colDocType]}>
-                  {submission.id_document_type.replace('_', ' ').toUpperCase()}
-                </Text>
-                <View style={[styles.tableCell, styles.colStatus]}>
-                  <View style={[styles.statusBadge, { backgroundColor: getStatusColor(submission.status) }]}>
-                    <Text style={styles.statusText}>{submission.status.toUpperCase()}</Text>
-                  </View>
-                </View>
-                <Text style={[styles.tableCell, styles.colDate]}>
-                  {formatDate(submission.submitted_at)}
-                </Text>
-                <View style={[styles.tableCell, styles.colActions, styles.actionButtons]}>
-                  <TouchableOpacity
-                    style={[styles.actionBtn, styles.viewBtn]}
-                    onPress={() => openViewModal(submission)}
-                  >
-                    <Icon name="eye" size={14} color="#1e40af" />
-                  </TouchableOpacity>
-                  {submission.status === 'pending' ? (
-                    <>
-                      <TouchableOpacity
-                        style={[styles.actionBtn, styles.editBtn]}
-                        onPress={() => openEditModal(submission)}
-                      >
-                        <Icon name="edit" size={14} color="#ca8a04" />
-                      </TouchableOpacity>
-                      <TouchableOpacity
-                        style={[styles.actionBtn, styles.approveBtn]}
-                        onPress={() => openReviewModal(submission, 'approve')}
-                      >
-                        <Icon name="check" size={14} color="#ffffff" />
-                      </TouchableOpacity>
-                      <TouchableOpacity
-                        style={[styles.actionBtn, styles.rejectBtn]}
-                        onPress={() => openReviewModal(submission, 'reject')}
-                      >
-                        <Icon name="times" size={14} color="#ffffff" />
-                      </TouchableOpacity>
-                      <TouchableOpacity
-                        style={[styles.actionBtn, styles.deleteBtn]}
-                        onPress={() => handleDelete(submission)}
-                      >
-                        <Icon name="trash" size={14} color="#ffffff" />
-                      </TouchableOpacity>
-                    </>
-                  ) : (
-                    <>
-                      <TouchableOpacity
-                        style={[styles.actionBtn, styles.editBtn]}
-                        onPress={() => openEditModal(submission)}
-                      >
-                        <Icon name="edit" size={14} color="#ca8a04" />
-                      </TouchableOpacity>
-                      <TouchableOpacity
-                        style={[styles.actionBtn, styles.deleteBtn]}
-                        onPress={() => handleDelete(submission)}
-                      >
-                        <Icon name="trash" size={14} color="#ffffff" />
-                      </TouchableOpacity>
-                    </>
-                  )}
-                </View>
-              </View>
-            ))
-          )}
-        </View>
+        ) : (
+          <View style={styles.submissionsList}>
+            {filteredSubmissions.map(renderSubmissionCard)}
+          </View>
+        )}
       </ScrollView>
-
-      {/* View Modal */}
-      <Modal
-        visible={viewModal}
-        animationType="slide"
-        transparent={true}
-        onRequestClose={closeViewModal}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContainer}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>View Verification Details</Text>
-              <TouchableOpacity onPress={closeViewModal} style={styles.closeButton}>
-                <Text style={styles.closeButtonText}>✕</Text>
-              </TouchableOpacity>
-            </View>
-
-            <ScrollView style={styles.modalContent}>
-              {selectedSubmission && (
-                <>
-                  <View style={styles.detailRow}>
-                    <Text style={styles.detailLabel}>Name:</Text>
-                    <Text style={styles.detailValue}>
-                      {selectedSubmission.user_profile?.first_name} {selectedSubmission.user_profile?.last_name}
-                    </Text>
-                  </View>
-                  <View style={styles.detailRow}>
-                    <Text style={styles.detailLabel}>Email:</Text>
-                    <Text style={styles.detailValue}>{selectedSubmission.user_profile?.email}</Text>
-                  </View>
-                  <View style={styles.detailRow}>
-                    <Text style={styles.detailLabel}>User Type:</Text>
-                    <Text style={styles.detailValue}>
-                      {selectedSubmission.user_profile?.user_type?.toUpperCase()}
-                    </Text>
-                  </View>
-                  <View style={styles.detailRow}>
-                    <Text style={styles.detailLabel}>Barangay:</Text>
-                    <Text style={styles.detailValue}>{selectedSubmission.user_profile?.barangay}</Text>
-                  </View>
-                  <View style={styles.detailRow}>
-                    <Text style={styles.detailLabel}>Document Type:</Text>
-                    <Text style={styles.detailValue}>
-                      {selectedSubmission.id_document_type.replace('_', ' ').toUpperCase()}
-                    </Text>
-                  </View>
-                  <View style={styles.detailRow}>
-                    <Text style={styles.detailLabel}>Status:</Text>
-                    <View style={[styles.statusBadge, { backgroundColor: getStatusColor(selectedSubmission.status) }]}>
-                      <Text style={styles.statusText}>{selectedSubmission.status.toUpperCase()}</Text>
-                    </View>
-                  </View>
-                  <View style={styles.detailRow}>
-                    <Text style={styles.detailLabel}>Submitted:</Text>
-                    <Text style={styles.detailValue}>{formatDate(selectedSubmission.submitted_at)}</Text>
-                  </View>
-                  {selectedSubmission.submission_notes && (
-                    <View style={styles.detailRow}>
-                      <Text style={styles.detailLabel}>User Notes:</Text>
-                      <Text style={styles.detailValue}>{selectedSubmission.submission_notes}</Text>
-                    </View>
-                  )}
-                  {selectedSubmission.admin_notes && (
-                    <View style={styles.detailRow}>
-                      <Text style={styles.detailLabel}>Admin Notes:</Text>
-                      <Text style={styles.detailValue}>{selectedSubmission.admin_notes}</Text>
-                    </View>
-                  )}
-
-                  <Text style={styles.documentsTitle}>Documents</Text>
-                  <View style={styles.modalDocuments}>
-                    <TouchableOpacity onPress={() => openImageViewer(selectedSubmission.id_document_url, 'ID Document')}>
-                      <Image
-                        source={{ uri: selectedSubmission.id_document_url }}
-                        style={styles.modalDocImage}
-                        resizeMode="cover"
-                      />
-                      <Text style={styles.modalImageLabel}>ID Document (Tap to enlarge)</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity onPress={() => openImageViewer(selectedSubmission.face_photo_url, 'Face Photo')}>
-                      <Image
-                        source={{ uri: selectedSubmission.face_photo_url }}
-                        style={styles.modalDocImage}
-                        resizeMode="cover"
-                      />
-                      <Text style={styles.modalImageLabel}>Face Photo (Tap to enlarge)</Text>
-                    </TouchableOpacity>
-                  </View>
-                </>
-              )}
-            </ScrollView>
-          </View>
-        </View>
-      </Modal>
-
-      {/* Edit Modal */}
-      <Modal
-        visible={editModal}
-        animationType="slide"
-        transparent={true}
-        onRequestClose={closeEditModal}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContainer}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Edit Verification</Text>
-              <TouchableOpacity onPress={closeEditModal} style={styles.closeButton}>
-                <Text style={styles.closeButtonText}>✕</Text>
-              </TouchableOpacity>
-            </View>
-
-            <ScrollView style={styles.modalContent}>
-              {selectedSubmission && editData && (
-                <>
-                  <Text style={styles.modalUserName}>
-                    {selectedSubmission.user_profile?.first_name} {selectedSubmission.user_profile?.last_name}
-                  </Text>
-
-                  <View style={styles.formGroup}>
-                    <Text style={styles.formLabel}>Status:</Text>
-                    <View style={styles.statusOptions}>
-                      {['pending', 'approved', 'rejected'].map((status) => (
-                        <TouchableOpacity
-                          key={status}
-                          style={[
-                            styles.statusOption,
-                            editData.status === status && styles.statusOptionActive,
-                            { borderColor: getStatusColor(status) }
-                          ]}
-                          onPress={() => setEditData({ ...editData, status })}
-                        >
-                          <Text style={[
-                            styles.statusOptionText,
-                            editData.status === status && { color: getStatusColor(status) }
-                          ]}>
-                            {status.toUpperCase()}
-                          </Text>
-                        </TouchableOpacity>
-                      ))}
-                    </View>
-                  </View>
-
-                  <View style={styles.formGroup}>
-                    <Text style={styles.formLabel}>Admin Notes:</Text>
-                    <TextInput
-                      style={styles.textArea}
-                      multiline
-                      numberOfLines={4}
-                      placeholder="Add notes..."
-                      value={editData.notes}
-                      onChangeText={(text) => setEditData({ ...editData, notes: text })}
-                    />
-                  </View>
-                </>
-              )}
-            </ScrollView>
-
-            <View style={styles.modalActions}>
-              <TouchableOpacity style={styles.modalCancelButton} onPress={closeEditModal}>
-                <Text style={styles.modalCancelText}>Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.modalConfirmButton}
-                onPress={handleUpdate}
-                disabled={processing}
-              >
-                {processing ? (
-                  <ActivityIndicator size="small" color="#ffffff" />
-                ) : (
-                  <Text style={styles.modalConfirmText}>Update</Text>
-                )}
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
 
       {/* Review Modal */}
       <Modal
         visible={showReviewModal}
-        animationType="slide"
+        animationKeyframesType="slide"
         transparent={true}
         onRequestClose={closeReviewModal}
       >
@@ -812,11 +543,39 @@ export default function AdminVerificationsScreen() {
                     {reviewModalData.submission.user_profile?.first_name}{' '}
                     {reviewModalData.submission.user_profile?.last_name}
                   </Text>
+                  <Text style={styles.modalUserType}>
+                    {reviewModalData.submission.user_profile?.user_type?.toUpperCase()}
+                  </Text>
 
-                  <View style={styles.formGroup}>
-                    <Text style={styles.formLabel}>Admin Notes (Optional):</Text>
+                  <View style={styles.modalDocuments}>
+                    <View style={styles.modalDocumentRow}>
+                      <TouchableOpacity
+                        onPress={() => openImageViewer(reviewModalData.submission.id_document_url, 'ID Document')}
+                        activeOpacity={0.8}
+                      >
+                        <Image
+                          source={{ uri: reviewModalData.submission.id_document_url }}
+                          style={styles.modalDocumentImage}
+                        />
+                        <Text style={styles.modalImageLabel}>ID Document (Tap to enlarge)</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        onPress={() => openImageViewer(reviewModalData.submission.face_photo_url, 'Face Photo')}
+                        activeOpacity={0.8}
+                      >
+                        <Image
+                          source={{ uri: reviewModalData.submission.face_photo_url }}
+                          style={styles.modalFaceImage}
+                        />
+                        <Text style={styles.modalImageLabel}>Face Photo (Tap to enlarge)</Text>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+
+                  <View style={styles.notesSection}>
+                    <Text style={styles.notesLabel}>Admin Notes (Optional):</Text>
                     <TextInput
-                      style={styles.textArea}
+                      style={styles.notesInput}
                       multiline
                       numberOfLines={4}
                       placeholder={
@@ -833,16 +592,23 @@ export default function AdminVerificationsScreen() {
             </ScrollView>
 
             <View style={styles.modalActions}>
-              <TouchableOpacity style={styles.modalCancelButton} onPress={closeReviewModal}>
+              <TouchableOpacity
+                style={styles.modalCancelButton}
+                onPress={closeReviewModal}
+                activeOpacity={0.8}
+              >
                 <Text style={styles.modalCancelText}>Cancel</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={[
                   styles.modalConfirmButton,
-                  reviewModalData?.action === 'approve' ? styles.modalApproveButton : styles.modalRejectButton
+                  reviewModalData?.action === 'approve'
+                    ? styles.modalApproveButton
+                    : styles.modalRejectButton
                 ]}
                 onPress={processVerification}
                 disabled={processing}
+                activeOpacity={0.8}
               >
                 {processing ? (
                   <ActivityIndicator size="small" color="#ffffff" />
@@ -857,10 +623,10 @@ export default function AdminVerificationsScreen() {
         </View>
       </Modal>
 
-      {/* Image Viewer Modal */}
+      {/* Full Screen Image Viewer Modal */}
       <Modal
         visible={imageViewModal}
-        animationType="fade"
+        animationKeyframesType="fade"
         transparent={true}
         onRequestClose={closeImageViewer}
       >
@@ -877,6 +643,8 @@ export default function AdminVerificationsScreen() {
             contentContainerStyle={styles.imageViewerContentContainer}
             maximumZoomScale={3}
             minimumZoomScale={1}
+            showsVerticalScrollIndicator={false}
+            showsHorizontalScrollIndicator={false}
           >
             {selectedImage && (
               <Image
@@ -887,7 +655,11 @@ export default function AdminVerificationsScreen() {
             )}
           </ScrollView>
 
-          <TouchableOpacity style={styles.imageViewerCloseArea} onPress={closeImageViewer}>
+          <TouchableOpacity
+            style={styles.imageViewerCloseArea}
+            onPress={closeImageViewer}
+            activeOpacity={1}
+          >
             <Text style={styles.imageViewerCloseHint}>Tap anywhere to close</Text>
           </TouchableOpacity>
         </View>
@@ -961,107 +733,161 @@ const styles = StyleSheet.create({
   scrollView: {
     flex: 1,
   },
-  tableContainer: {
+  scrollContent: {
     padding: 20,
   },
-  table: {
+  submissionsList: {
+    gap: 16,
+  },
+  submissionCard: {
     backgroundColor: '#ffffff',
     borderRadius: 12,
-    overflow: 'hidden',
+    padding: 16,
     borderWidth: 1,
     borderColor: '#e5e7eb',
   },
-  tableHeader: {
+  submissionHeader: {
     flexDirection: 'row',
-    backgroundColor: '#f9fafb',
-    borderBottomWidth: 2,
-    borderBottomColor: '#e5e7eb',
-    paddingVertical: 12,
-    paddingHorizontal: 8,
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: 16,
   },
-  tableHeaderText: {
-    fontSize: 12,
+  userInfo: {
+    flex: 1,
+  },
+  userName: {
+    fontSize: 16,
     fontWeight: 'bold',
-    color: '#374151',
-    textAlign: 'center',
+    color: '#1f2937',
+    marginBottom: 4,
   },
-  tableRow: {
-    flexDirection: 'row',
-    borderBottomWidth: 1,
-    borderBottomColor: '#e5e7eb',
-    paddingVertical: 12,
-    paddingHorizontal: 8,
-    alignItems: 'center',
-  },
-  tableRowEven: {
-    backgroundColor: '#f9fafb',
-  },
-  tableCell: {
-    fontSize: 12,
+  userEmail: {
+    fontSize: 14,
     color: '#6b7280',
-    textAlign: 'center',
+    marginBottom: 8,
   },
-  colName: {
-    width: 150,
+  userBadge: {
+    backgroundColor: '#eff6ff',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+    alignSelf: 'flex-start',
   },
-  colEmail: {
-    width: 200,
-  },
-  colType: {
-    width: 100,
-  },
-  colBarangay: {
-    width: 120,
-  },
-  colDocType: {
-    width: 120,
-  },
-  colStatus: {
-    width: 100,
-    alignItems: 'center',
-  },
-  colDate: {
-    width: 150,
-  },
-  colActions: {
-    width: 200,
-  },
-  actionButtons: {
-    flexDirection: 'row',
-    gap: 8,
-    justifyContent: 'center',
-  },
-  actionBtn: {
-    width: 32,
-    height: 32,
-    borderRadius: 6,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  viewBtn: {
-    backgroundColor: '#dbeafe',
-  },
-  editBtn: {
-    backgroundColor: '#fef3c7',
-  },
-  approveBtn: {
-    backgroundColor: '#10b981',
-  },
-  rejectBtn: {
-    backgroundColor: '#ef4444',
-  },
-  deleteBtn: {
-    backgroundColor: '#dc2626',
+  userBadgeText: {
+    fontSize: 12,
+    color: '#1d4ed8',
+    fontWeight: '600',
   },
   statusBadge: {
     paddingHorizontal: 12,
-    paddingVertical: 4,
-    borderRadius: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
   },
   statusText: {
-    fontSize: 10,
+    fontSize: 12,
     color: '#ffffff',
     fontWeight: 'bold',
+  },
+  submissionDetails: {
+    marginBottom: 16,
+    gap: 8,
+  },
+  detailLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#374151',
+  },
+  detailValue: {
+    fontSize: 14,
+    color: '#6b7280',
+    marginBottom: 8,
+  },
+  documentsSection: {
+    marginBottom: 16,
+  },
+  documentsTitle: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#1f2937',
+    marginBottom: 12,
+  },
+  documentsRow: {
+    flexDirection: 'row',
+    gap: 16,
+  },
+  documentPreview: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  documentImage: {
+    width: '100%',
+    height: 120,
+    borderRadius: 8,
+    marginBottom: 8,
+    resizeMode: 'cover',
+  },
+  faceImage: {
+    width: '100%',
+    height: 120,
+    borderRadius: 8,
+    marginBottom: 8,
+    resizeMode: 'cover',
+  },
+  documentLabel: {
+    fontSize: 12,
+    color: '#6b7280',
+    fontWeight: '500',
+  },
+  viewImageHint: {
+    fontSize: 10,
+    color: '#9ca3af',
+    fontStyle: 'italic',
+    textAlign: 'center',
+    marginTop: 2,
+  },
+  actionButtons: {
+    flexDirection: 'row',
+    gap: 12,
+    marginTop: 16,
+  },
+  actionButton: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  approveButton: {
+    backgroundColor: '#10b981',
+  },
+  rejectButton: {
+    backgroundColor: '#dc2626',
+  },
+  approveButtonText: {
+    color: '#ffffff',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  rejectButtonText: {
+    color: '#ffffff',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  adminNotesSection: {
+    marginTop: 16,
+    padding: 12,
+    backgroundColor: '#f3f4f6',
+    borderRadius: 8,
+  },
+  adminNotesLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#374151',
+    marginBottom: 4,
+  },
+  adminNotesText: {
+    fontSize: 14,
+    color: '#6b7280',
+    lineHeight: 20,
   },
   emptyContainer: {
     alignItems: 'center',
@@ -1131,54 +957,42 @@ const styles = StyleSheet.create({
     fontSize: 20,
     fontWeight: 'bold',
     color: '#1f2937',
-    marginBottom: 20,
-  },
-  detailRow: {
-    marginBottom: 16,
-  },
-  detailLabel: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#374151',
     marginBottom: 4,
   },
-  detailValue: {
+  modalUserType: {
     fontSize: 14,
     color: '#6b7280',
-  },
-  documentsTitle: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#1f2937',
-    marginTop: 20,
-    marginBottom: 12,
+    marginBottom: 20,
   },
   modalDocuments: {
+    marginBottom: 20,
+  },
+  modalDocumentRow: {
     flexDirection: 'row',
     gap: 12,
   },
-  modalDocImage: {
-    width: 120,
-    height: 120,
+  modalDocumentImage: {
+    flex: 1,
+    height: 160,
     borderRadius: 8,
-    marginBottom: 8,
+    resizeMode: 'cover',
   },
-  modalImageLabel: {
-    fontSize: 11,
-    color: '#6b7280',
-    textAlign: 'center',
-    fontStyle: 'italic',
+  modalFaceImage: {
+    flex: 1,
+    height: 160,
+    borderRadius: 8,
+    resizeMode: 'cover',
   },
-  formGroup: {
+  notesSection: {
     marginBottom: 20,
   },
-  formLabel: {
+  notesLabel: {
     fontSize: 16,
     fontWeight: '600',
     color: '#1f2937',
     marginBottom: 8,
   },
-  textArea: {
+  notesInput: {
     borderWidth: 1,
     borderColor: '#d1d5db',
     borderRadius: 8,
@@ -1186,26 +1000,6 @@ const styles = StyleSheet.create({
     fontSize: 14,
     textAlignVertical: 'top',
     minHeight: 80,
-  },
-  statusOptions: {
-    flexDirection: 'row',
-    gap: 12,
-  },
-  statusOption: {
-    flex: 1,
-    paddingVertical: 10,
-    paddingHorizontal: 16,
-    borderRadius: 8,
-    borderWidth: 2,
-    alignItems: 'center',
-  },
-  statusOptionActive: {
-    backgroundColor: '#f9fafb',
-  },
-  statusOptionText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#6b7280',
   },
   modalActions: {
     flexDirection: 'row',
@@ -1233,7 +1027,6 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#3b82f6',
   },
   modalApproveButton: {
     backgroundColor: '#10b981',
@@ -1246,8 +1039,15 @@ const styles = StyleSheet.create({
     color: '#ffffff',
     fontWeight: '600',
   },
+  modalImageLabel: {
+    fontSize: 11,
+    color: '#6b7280',
+    textAlign: 'center',
+    marginTop: 4,
+    fontStyle: 'italic',
+  },
 
-  // Image Viewer Modal
+  // Image Viewer Modal Styles
   imageViewerOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0, 0, 0, 0.95)',

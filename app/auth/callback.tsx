@@ -50,8 +50,45 @@ export default function AuthCallback() {
 
     // Global check to prevent any duplicate processing across all instances
     const now = Date.now();
-    if (globalOAuthProcessing || (globalOAuthTimestamp && (now - globalOAuthTimestamp) < 10000)) {
-      console.log('⏭️ OAuth callback: Skipping - global processing active or recent');
+    if (globalOAuthProcessing && (now - globalOAuthTimestamp) < 3000) {
+      console.log('⏭️ OAuth callback: Skipping - global processing active (within 3s)');
+      return;
+    }
+
+    // If processing was recent but completed, allow navigation check
+    if (globalOAuthTimestamp && (now - globalOAuthTimestamp) >= 3000 && (now - globalOAuthTimestamp) < 10000) {
+      console.log('✅ OAuth callback: Processing completed, checking session...');
+      // Processing is done, just check session and navigate
+      const checkAndNavigate = async () => {
+        try {
+          const { data: { user } } = await supabase.auth.getUser();
+          if (user) {
+            const { data: profile } = await supabase
+              .from('profiles')
+              .select('*')
+              .eq('id', user.id)
+              .single();
+
+            if (profile) {
+              switch (profile.user_type) {
+                case 'super-admin':
+                  safeNavigate('/super-admin');
+                  break;
+                case 'admin':
+                  safeNavigate('/admin/users');
+                  break;
+                default:
+                  safeNavigate('/');
+              }
+            } else {
+              safeNavigate('/auth/register?oauth=true&email=' + encodeURIComponent(user.email || ''));
+            }
+          }
+        } catch (error) {
+          console.error('Navigation check error:', error);
+        }
+      };
+      checkAndNavigate();
       return;
     }
 
@@ -170,31 +207,86 @@ export default function AuthCallback() {
           }
         }
 
-        // OAuth processing complete - navigate directly to marketplace
-        console.log('✅ OAuth code exchange completed, navigating to marketplace');
+        // OAuth processing complete - check for profile
+        console.log('✅ OAuth code exchange completed, checking user profile');
 
-        // Clean up OAuth state
-        try {
-          const { sessionManager } = await import('../../services/sessionManager');
-          await sessionManager.clearOAuthState();
-        } catch (error) {
-          console.log('Session manager cleanup error:', error);
+        // Check if user has a profile
+        const { data: { user } } = await supabase.auth.getUser();
+
+        if (user) {
+          console.log('👤 User authenticated, checking profile...');
+          const { data: profile, error: profileError } = await supabase
+            .from('profiles')
+            .select('*')
+            .eq('id', user.id)
+            .single();
+
+          if (profileError || !profile) {
+            console.log('📝 No profile found - redirecting to profile creation');
+
+            // Clean up OAuth state
+            try {
+              const { sessionManager } = await import('../../services/sessionManager');
+              await sessionManager.clearOAuthState();
+            } catch (error) {
+              console.log('Session manager cleanup error:', error);
+            }
+
+            // Clean up legacy storage
+            try {
+              await AsyncStorage.removeItem('oauth_user_type');
+              await AsyncStorage.removeItem('oauth_intent');
+              safeLocalStorage.removeItem('oauth_user_type');
+              safeLocalStorage.removeItem('oauth_intent');
+              safeLocalStorage.removeItem('oauth_timestamp');
+            } catch (error) {
+              console.log('Storage cleanup error:', error);
+            }
+
+            // Redirect to registration/profile creation
+            safeNavigate('/auth/register?oauth=true&email=' + encodeURIComponent(user.email || ''));
+            return;
+          }
+
+          console.log('✅ Profile found, user_type:', profile.user_type);
+
+          // Clean up OAuth state
+          try {
+            const { sessionManager } = await import('../../services/sessionManager');
+            await sessionManager.clearOAuthState();
+          } catch (error) {
+            console.log('Session manager cleanup error:', error);
+          }
+
+          // Clean up legacy storage
+          try {
+            await AsyncStorage.removeItem('oauth_user_type');
+            await AsyncStorage.removeItem('oauth_intent');
+            safeLocalStorage.removeItem('oauth_user_type');
+            safeLocalStorage.removeItem('oauth_intent');
+            safeLocalStorage.removeItem('oauth_timestamp');
+          } catch (error) {
+            console.log('Storage cleanup error:', error);
+          }
+
+          // Redirect based on user type
+          switch (profile.user_type) {
+            case 'super-admin':
+              console.log('🚀 Redirecting to super-admin dashboard');
+              safeNavigate('/super-admin');
+              break;
+            case 'admin':
+              console.log('🚀 Redirecting to admin dashboard');
+              safeNavigate('/admin/users');
+              break;
+            default:
+              console.log('🚀 Redirecting to marketplace');
+              safeNavigate('/');
+          }
+        } else {
+          console.log('❌ No user found after OAuth');
+          safeNavigate('/auth/login?error=no_user');
         }
-
-        // Clean up legacy storage
-        try {
-          await AsyncStorage.removeItem('oauth_user_type');
-          await AsyncStorage.removeItem('oauth_intent');
-          safeLocalStorage.removeItem('oauth_user_type');
-          safeLocalStorage.removeItem('oauth_intent');
-          safeLocalStorage.removeItem('oauth_timestamp');
-        } catch (error) {
-          console.log('Storage cleanup error:', error);
-        }
-
-        // Simple navigation to marketplace for all users
-        console.log('🚀 Navigating to marketplace');
-        safeNavigate('/');
 
       } catch (error: any) {
         console.error('❌ OAuth callback error:', error);
@@ -212,8 +304,10 @@ export default function AuthCallback() {
 
         safeNavigate(`/auth/login?error=${encodeURIComponent(error.message || 'OAuth sign-in failed. Please try again.')}`);
       } finally {
-        // Clear global flag
-        globalOAuthProcessing = false;
+        // Only clear global flag after a delay to allow navigation to complete
+        setTimeout(() => {
+          globalOAuthProcessing = false;
+        }, 1000);
 
         if (isMounted) {
           setIsProcessing(false);
@@ -226,11 +320,8 @@ export default function AuthCallback() {
 
     return () => {
       isMounted = false;
-      // Clear global flag if this component was processing
-      if (globalOAuthProcessing) {
-        console.log('🧹 OAuth callback: Cleaning up global flag on unmount');
-        globalOAuthProcessing = false;
-      }
+      // Don't clear global flag on unmount - let it clear naturally
+      // This prevents navigation from being interrupted
     };
   }, [isClient, isRouterReady]); // Remove isProcessing and hasProcessed from deps
 

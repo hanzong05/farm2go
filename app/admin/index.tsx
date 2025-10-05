@@ -189,9 +189,11 @@ export default function AdminDashboard() {
   return (
     <View style={styles.container}>
       <HeaderComponent
-        title="Admin Dashboard"
-        userRole="admin"
-        showBackButton={false}
+        profile={profile}
+        userType="admin"
+        currentRoute="/admin"
+        showMessages={true}
+        showNotifications={true}
       />
 
       <ScrollView

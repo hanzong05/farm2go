@@ -1,5 +1,5 @@
 import { router } from 'expo-router';
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import {
   Dimensions,
   Platform,
@@ -8,7 +8,9 @@ import {
   Text,
   TextInput,
   TouchableOpacity,
-  View
+  View,
+  Image,
+  Modal,
 } from 'react-native';
 import { useCustomAlert } from './CustomAlert';
 
@@ -28,7 +30,7 @@ import Icon from 'react-native-vector-icons/FontAwesome5';
 import { supabase } from '../lib/supabase';
 import { logoutUser } from '../services/auth';
 import { Database } from '../types/database';
-import MessageComponent, { Conversation } from './MessageComponent';
+import MessageComponent, { Conversation, MessageComponentRef } from './MessageComponent';
 import NotificationComponent, { Notification } from './NotificationComponent';
 import { useNotifications } from '../hooks/useNotifications';
 
@@ -81,13 +83,6 @@ const NAV_ITEMS: NavItem[] = [
     route: '/farmer/sales-history',
     userTypes: ['farmer'],
   },
-  {
-    id: 'farmer-profile',
-    title: 'Profile',
-    icon: 'user',
-    route: '/farmer/settings',
-    userTypes: ['farmer'],
-  },
 
   // Buyer items
   {
@@ -103,22 +98,6 @@ const NAV_ITEMS: NavItem[] = [
     icon: 'history',
     route: '/buyer/purchase-history',
     userTypes: ['buyer'],
-  },
-  {
-    id: 'buyer-profile',
-    title: 'Profile',
-    icon: 'user',
-    route: '/buyer/settings',
-    userTypes: ['buyer'],
-  },
-
-  // Farmer verification
-  {
-    id: 'farmer-verification',
-    title: 'Verification',
-    icon: 'id-card',
-    route: '/verification/status',
-    userTypes: ['farmer'],
   },
 
   // Admin items
@@ -150,27 +129,12 @@ const NAV_ITEMS: NavItem[] = [
     route: '/admin/verifications',
     userTypes: ['admin'],
   },
-  {
-    id: 'admin-settings',
-    title: 'Settings',
-    icon: 'cog',
-    route: '/admin/settings',
-    userTypes: ['admin'],
-  },
-
   // Super Admin items
   {
     id: 'super-admin-users',
     title: 'Manage Users',
     icon: 'users-cog',
     route: '/super-admin/users',
-    userTypes: ['super-admin'],
-  },
-  {
-    id: 'super-admin-profile',
-    title: 'Profile',
-    icon: 'user',
-    route: '/super-admin/settings',
     userTypes: ['super-admin'],
   },
 ];
@@ -290,9 +254,10 @@ export default function HeaderComponent({
   // Use state to track screen dimensions
   const [screenData, setScreenData] = useState(getScreenDimensions());
   const [showMobileNav, setShowMobileNav] = useState(false);
+  const [showProfileDropdown, setShowProfileDropdown] = useState(false);
 
-  // State to manage message and notification panel visibility
-  const [activePanel, setActivePanel] = useState<'messages' | 'notifications' | null>(null);
+  // Ref to access MessageComponent methods
+  const messageComponentRef = useRef<MessageComponentRef>(null);
 
   // Custom alert hook for web/mobile compatibility
   const { showAlert, AlertComponent } = useCustomAlert();
@@ -362,6 +327,53 @@ export default function HeaderComponent({
 
   const handleNavigation = (route: string) => {
     router.push(route as any);
+  };
+
+  const handleContactSupport = async () => {
+    if (!profile) return;
+
+    try {
+      // Find admin from same barangay
+      const { data: adminData, error: adminError } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('user_type', 'admin')
+        .eq('barangay', profile.barangay || '')
+        .limit(1)
+        .single();
+
+      let adminProfile: Profile | null = adminData;
+
+      if (adminError || !adminProfile) {
+        // Fallback to any admin
+        const { data: anyAdmin } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('user_type', 'admin')
+          .limit(1)
+          .single();
+
+        adminProfile = anyAdmin || null;
+      }
+
+      if (!adminProfile) {
+        showAlert('No Support Available', 'No support admin available at the moment. Please try again later.', [
+          { text: 'OK', style: 'default' }
+        ]);
+        return;
+      }
+
+      // Use the ref to open chat with the admin
+      if (messageComponentRef.current && adminProfile) {
+        const adminName = `${adminProfile.first_name || ''} ${adminProfile.last_name || ''}`.trim() || 'Support';
+        await messageComponentRef.current.openChatWithUser(adminProfile.id, adminName, 'admin');
+      }
+    } catch (error) {
+      console.error('Error opening support chat:', error);
+      showAlert('Error', 'Failed to open support chat. Please try again.', [
+        { text: 'OK', style: 'default' }
+      ]);
+    }
   };
 
   const handleAuthAction = async () => {
@@ -807,6 +819,7 @@ export default function HeaderComponent({
           {showMessages && (
             <View style={styles.notificationContainer}>
               <MessageComponent
+                ref={messageComponentRef}
                 key={`messages-${profile?.id}`}
                 currentUserId={profile?.id}
                 onConversationPress={onConversationPress}
@@ -849,20 +862,6 @@ export default function HeaderComponent({
             </View>
           )}
 
-          {/* Download App Button */}
-          {Platform.OS === 'web' && (
-            <TouchableOpacity style={styles.downloadButton} onPress={handleDownloadApp}>
-              <Icon
-                name="download"
-                size={isMobile ? 14 : 16}
-                color={colors.white}
-              />
-              {!isMobile && (
-                <Text style={styles.downloadText}>Get App</Text>
-              )}
-            </TouchableOpacity>
-          )}
-
           {/* Add Button */}
           {showAddButton && !isMobile && (
             <TouchableOpacity
@@ -873,19 +872,88 @@ export default function HeaderComponent({
             </TouchableOpacity>
           )}
 
-          {/* Auth Button */}
-          <TouchableOpacity style={styles.authButton} onPress={handleAuthAction}>
-            <Icon
-              name={profile ? "sign-out-alt" : "sign-in-alt"}
-              size={isMobile ? 14 : 16}
-              color={colors.white}
-            />
-            {!isMobile && (
-              <Text style={styles.authText}>
-                {profile ? "Log Out" : "Sign In"}
-              </Text>
-            )}
-          </TouchableOpacity>
+          {/* Profile Avatar Dropdown */}
+          {profile ? (
+            <View style={styles.profileAvatarContainer}>
+              <TouchableOpacity
+                onPress={() => setShowProfileDropdown(!showProfileDropdown)}
+                style={styles.avatarButton}
+              >
+                {profile.avatar_url ? (
+                  <Image
+                    source={{ uri: profile.avatar_url }}
+                    style={styles.profileAvatar}
+                  />
+                ) : (
+                  <View style={styles.profileAvatarPlaceholder}>
+                    <Text style={styles.profileAvatarText}>
+                      {profile.first_name?.charAt(0) || '?'}
+                    </Text>
+                  </View>
+                )}
+              </TouchableOpacity>
+
+              {showProfileDropdown && (
+                <View style={styles.dropdownMenu}>
+                  <TouchableOpacity
+                    style={styles.dropdownItem}
+                    onPress={() => {
+                      setShowProfileDropdown(false);
+                      const settingsRoute = resolvedUserType === 'farmer' ? '/farmer/settings'
+                        : resolvedUserType === 'buyer' ? '/buyer/settings'
+                        : resolvedUserType === 'admin' ? '/admin/settings'
+                        : '/super-admin/settings';
+                      router.push(settingsRoute as any);
+                    }}
+                  >
+                    <Icon name="user" size={14} color={colors.text} />
+                    <Text style={styles.dropdownItemText}>Profile</Text>
+                  </TouchableOpacity>
+                  <View style={styles.dropdownDivider} />
+                  <TouchableOpacity
+                    style={styles.dropdownItem}
+                    onPress={() => {
+                      setShowProfileDropdown(false);
+                      const verificationRoute = resolvedUserType === 'farmer' ? '/verification/status'
+                        : resolvedUserType === 'admin' ? '/admin/verifications'
+                        : '/verification/status';
+                      router.push(verificationRoute as any);
+                    }}
+                  >
+                    <Icon name="id-card" size={14} color={colors.text} />
+                    <Text style={styles.dropdownItemText}>Verification</Text>
+                  </TouchableOpacity>
+                  <View style={styles.dropdownDivider} />
+                  <TouchableOpacity
+                    style={styles.dropdownItem}
+                    onPress={() => {
+                      setShowProfileDropdown(false);
+                      handleContactSupport();
+                    }}
+                  >
+                    <Icon name="headset" size={14} color={colors.text} />
+                    <Text style={styles.dropdownItemText}>Contact Support</Text>
+                  </TouchableOpacity>
+                  <View style={styles.dropdownDivider} />
+                  <TouchableOpacity
+                    style={styles.dropdownItem}
+                    onPress={() => {
+                      setShowProfileDropdown(false);
+                      handleAuthAction();
+                    }}
+                  >
+                    <Icon name="sign-out-alt" size={14} color={colors.danger} />
+                    <Text style={[styles.dropdownItemText, styles.logoutItemText]}>Logout</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
+            </View>
+          ) : (
+            <TouchableOpacity style={styles.authButton} onPress={handleAuthAction}>
+              <Icon name="sign-in-alt" size={isMobile ? 14 : 16} color={colors.white} />
+              {!isMobile && <Text style={styles.authText}>Sign In</Text>}
+            </TouchableOpacity>
+          )}
 
           {/* Mobile Menu Button */}
           {isMobile && (
@@ -1121,5 +1189,91 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     color: colors.textSecondary,
     textAlign: 'center',
+  },
+
+  // Profile Avatar Dropdown
+  profileAvatarContainer: {
+    position: 'relative',
+    zIndex: 99999,
+    elevation: 99999,
+  },
+
+  avatarButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    overflow: 'hidden',
+    borderWidth: 2,
+    borderColor: colors.white,
+  },
+
+  profileAvatar: {
+    width: '100%',
+    height: '100%',
+  },
+
+  profileAvatarPlaceholder: {
+    width: '100%',
+    height: '100%',
+    backgroundColor: colors.white,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  profileAvatarText: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: colors.primary,
+  },
+
+  dropdownMenu: {
+    position: 'absolute',
+    top: 42,
+    right: 0,
+    backgroundColor: colors.white,
+    borderRadius: 8,
+    minWidth: 160,
+    ...Platform.select({
+      web: {
+        boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+      },
+      default: {
+        elevation: 8,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.15,
+        shadowRadius: 8,
+      },
+    }),
+    borderWidth: 1,
+    borderColor: colors.gray200,
+    overflow: 'hidden',
+  },
+
+  dropdownItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    gap: 12,
+    ...(Platform.OS === 'web' && {
+      cursor: 'pointer',
+    }),
+  },
+
+  dropdownItemText: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: colors.text,
+  },
+
+  logoutItemText: {
+    color: colors.danger,
+  },
+
+  dropdownDivider: {
+    height: 1,
+    backgroundColor: colors.gray200,
+    marginVertical: 4,
   },
 });

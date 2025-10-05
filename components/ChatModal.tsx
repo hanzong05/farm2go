@@ -10,9 +10,11 @@ import {
   TextInput,
   TouchableOpacity,
   View,
+  Image,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/FontAwesome5';
 import { messageService } from '../services/messageService';
+import { supabase } from '../lib/supabase';
 
 const { width } = Dimensions.get('window');
 const isDesktop = width >= 1024;
@@ -32,6 +34,7 @@ export interface ChatParticipant {
   name: string;
   type: 'farmer' | 'buyer' | 'admin';
   isOnline?: boolean;
+  avatarUrl?: string | null;
 }
 
 interface ChatModalProps {
@@ -100,6 +103,8 @@ export default function ChatModal({
   const [workflowStatus, setWorkflowStatus] = useState('initializing');
   const [conversationExists, setConversationExists] = useState(false);
   const [localMessages, setLocalMessages] = useState<ChatMessage[]>(messages);
+  const [participantAvatar, setParticipantAvatar] = useState<string | null>(participant.avatarUrl || null);
+  const [currentUserAvatar, setCurrentUserAvatar] = useState<string | null>(null);
   const flatListRef = useRef<FlatList>(null);
 
   // Update local messages when props change - merge intelligently to preserve all messages
@@ -151,6 +156,45 @@ export default function ChatModal({
       }, 100);
     }
   }, [localMessages.length]);
+
+  // Fetch user avatars
+  useEffect(() => {
+    const fetchAvatars = async () => {
+      try {
+        // Fetch participant avatar if not provided
+        if (!participant.avatarUrl && participant.id) {
+          const { data } = await supabase
+            .from('profiles')
+            .select('avatar_url')
+            .eq('id', participant.id)
+            .single();
+
+          if (data && (data as any).avatar_url) {
+            setParticipantAvatar((data as any).avatar_url);
+          }
+        }
+
+        // Fetch current user avatar
+        if (currentUserId) {
+          const { data } = await supabase
+            .from('profiles')
+            .select('avatar_url')
+            .eq('id', currentUserId)
+            .single();
+
+          if (data && (data as any).avatar_url) {
+            setCurrentUserAvatar((data as any).avatar_url);
+          }
+        }
+      } catch (error) {
+        console.error('Error fetching avatars:', error);
+      }
+    };
+
+    if (visible) {
+      fetchAvatars();
+    }
+  }, [visible, participant.id, participant.avatarUrl, currentUserId]);
 
   // WORKFLOW: When chat modal opens, implement the exact workflow diagram
   useEffect(() => {
@@ -462,11 +506,18 @@ export default function ChatModal({
                 styles.avatar,
                 { backgroundColor: getUserIconColor(item.senderType) + '20' }
               ]}>
-                <Icon
-                  name={getUserIcon(item.senderType)}
-                  size={16}
-                  color={getUserIconColor(item.senderType)}
-                />
+                {participantAvatar ? (
+                  <Image
+                    source={{ uri: participantAvatar }}
+                    style={styles.messageAvatarImage}
+                  />
+                ) : (
+                  <Icon
+                    name={getUserIcon(item.senderType)}
+                    size={16}
+                    color={getUserIconColor(item.senderType)}
+                  />
+                )}
               </View>
             </View>
           )}
@@ -501,11 +552,18 @@ export default function ChatModal({
           styles.emptyAvatar,
           { backgroundColor: getUserIconColor(participant.type) + '20' }
         ]}>
-          <Icon
-            name={getUserIcon(participant.type)}
-            size={32}
-            color={getUserIconColor(participant.type)}
-          />
+          {participantAvatar ? (
+            <Image
+              source={{ uri: participantAvatar }}
+              style={styles.emptyAvatarImage}
+            />
+          ) : (
+            <Icon
+              name={getUserIcon(participant.type)}
+              size={32}
+              color={getUserIconColor(participant.type)}
+            />
+          )}
         </View>
       </View>
       <Text style={styles.emptyTitle}>{participant.name}</Text>
@@ -601,11 +659,18 @@ export default function ChatModal({
                   styles.headerAvatar,
                   { backgroundColor: getUserIconColor(participant.type) + '20' }
                 ]}>
-                  <Icon
-                    name={getUserIcon(participant.type)}
-                    size={20}
-                    color={getUserIconColor(participant.type)}
-                  />
+                  {participantAvatar ? (
+                    <Image
+                      source={{ uri: participantAvatar }}
+                      style={styles.avatarImage}
+                    />
+                  ) : (
+                    <Icon
+                      name={getUserIcon(participant.type)}
+                      size={20}
+                      color={getUserIconColor(participant.type)}
+                    />
+                  )}
                 </View>
                 <View style={styles.headerText}>
                   <Text style={styles.headerName}>{participant.name}</Text>
@@ -774,6 +839,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 12,
+    overflow: 'hidden',
+  },
+
+  avatarImage: {
+    width: '100%',
+    height: '100%',
+    borderRadius: 20,
   },
 
   headerText: {
@@ -884,6 +956,13 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     alignItems: 'center',
     justifyContent: 'center',
+    overflow: 'hidden',
+  },
+
+  messageAvatarImage: {
+    width: '100%',
+    height: '100%',
+    borderRadius: 14,
   },
 
   messageBubble: {
@@ -945,6 +1024,13 @@ const styles = StyleSheet.create({
     borderRadius: 40,
     alignItems: 'center',
     justifyContent: 'center',
+    overflow: 'hidden',
+  },
+
+  emptyAvatarImage: {
+    width: '100%',
+    height: '100%',
+    borderRadius: 40,
   },
 
   emptyTitle: {
