@@ -50,17 +50,23 @@ export default function AuthCallback() {
 
     // Global check to prevent any duplicate processing across all instances
     const now = Date.now();
-    if (globalOAuthProcessing && (now - globalOAuthTimestamp) < 3000) {
-      console.log('⏭️ OAuth callback: Skipping - global processing active (within 3s)');
+    if (globalOAuthProcessing && (now - globalOAuthTimestamp) < 1500) {
+      console.log('⏭️ OAuth callback: Skipping - global processing active (within 1.5s)');
       return;
     }
 
-    // If processing was recent but completed, allow navigation check
-    if (globalOAuthTimestamp && (now - globalOAuthTimestamp) >= 3000 && (now - globalOAuthTimestamp) < 10000) {
-      console.log('✅ OAuth callback: Processing completed, checking session...');
-      // Processing is done, just check session and navigate
+    // If processing was recent (even if still active), check and navigate
+    if (globalOAuthTimestamp && (now - globalOAuthTimestamp) < 10000) {
+      console.log('✅ OAuth callback: Recent processing detected, checking session and navigating...');
+      // Mark as processed to prevent further attempts
+      hasProcessedRef.current = true;
+
+      // Processing is ongoing or done, check session and navigate
       const checkAndNavigate = async () => {
         try {
+          // Wait longer for the first instance to complete
+          await new Promise(resolve => setTimeout(resolve, 1000));
+
           const { data: { user } } = await supabase.auth.getUser();
           if (user) {
             const { data: profile } = await supabase
@@ -70,6 +76,7 @@ export default function AuthCallback() {
               .single();
 
             if (profile) {
+              console.log('✅ Profile found, navigating based on user type:', profile.user_type);
               switch (profile.user_type) {
                 case 'super-admin':
                   safeNavigate('/super-admin');
@@ -81,8 +88,11 @@ export default function AuthCallback() {
                   safeNavigate('/');
               }
             } else {
+              console.log('📝 No profile found, redirecting to registration');
               safeNavigate('/auth/register?oauth=true&email=' + encodeURIComponent(user.email || ''));
             }
+          } else {
+            console.log('⏳ No user yet, waiting for first instance to complete...');
           }
         } catch (error) {
           console.error('Navigation check error:', error);
