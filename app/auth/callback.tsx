@@ -74,17 +74,32 @@ export default function AuthCallback() {
           }, 2000);
         }, 500);
 
-        // Method 3: Create a clickable link as fallback
+        // Method 3: Create a clickable link as fallback with Chrome intent support
         setTimeout(() => {
+          // For Android Chrome, use intent:// URL for better deep link support
+          const chromeIntentUrl = `intent://auth/callback?${cleanParams.toString()}#Intent;scheme=farm2go;package=com.hanzpillerva.farm2go;end`;
+
           const linkDiv = document.createElement('div');
-          linkDiv.style.cssText = 'position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:white;padding:20px;border-radius:10px;box-shadow:0 4px 6px rgba(0,0,0,0.1);text-align:center;z-index:9999;font-family:system-ui,-apple-system,sans-serif;';
+          linkDiv.style.cssText = 'position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:white;padding:20px;border-radius:10px;box-shadow:0 4px 6px rgba(0,0,0,0.1);text-align:center;z-index:9999;font-family:system-ui,-apple-system,sans-serif;max-width:90%;';
+
+          // Detect if it's Android
+          const isAndroid = /Android/i.test(navigator.userAgent);
+          const linkHref = isAndroid ? chromeIntentUrl : appUrl;
+
           linkDiv.innerHTML = `
             <h3 style="margin:0 0 15px 0;color:#059669;">✓ Sign In Successful!</h3>
             <p style="margin:0 0 15px 0;color:#666;">Tap the button below to return to the app:</p>
-            <a href="${appUrl}" style="display:inline-block;background:#059669;color:white;padding:12px 24px;border-radius:6px;text-decoration:none;font-weight:600;">Open Farm2Go App</a>
+            <a href="${linkHref}" style="display:inline-block;background:#059669;color:white;padding:12px 24px;border-radius:6px;text-decoration:none;font-weight:600;">Open Farm2Go App</a>
             <p style="margin:15px 0 0 0;color:#999;font-size:12px;">If the app doesn't open automatically, tap the button above</p>
           `;
           document.body.appendChild(linkDiv);
+
+          // Also try the Chrome intent URL on Android
+          if (isAndroid) {
+            setTimeout(() => {
+              window.location.href = chromeIntentUrl;
+            }, 500);
+          }
         }, 1500);
       }
     }
