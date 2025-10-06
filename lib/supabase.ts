@@ -97,7 +97,7 @@ export const signInWithGoogleOAuth = async (userType: string, intent: string = '
       const { data, error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
-          redirectTo: 'https://farm2go.vercel.app/auth/callback',
+          redirectTo: 'https://farm2go.vercel.app/auth/callback?mobile=true',
           skipBrowserRedirect: true, // Important: don't auto-redirect
         },
       });
