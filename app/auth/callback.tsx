@@ -5,15 +5,10 @@ import { ActivityIndicator, Platform, StyleSheet, Text, View } from 'react-nativ
 import { supabase } from '../../lib/supabase';
 import { safeLocalStorage } from '../../utils/platformUtils';
 
-// Global flag to prevent multiple OAuth processing
-let globalOAuthProcessing = false;
-let globalOAuthTimestamp = 0;
-
 export default function AuthCallback() {
   const [isClient, setIsClient] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const hasProcessedRef = useRef(false);
-  const processingTimestampRef = useRef<number | null>(null);
   const router = useRouter();
   const navigationState = useRootNavigationState();
   const [pendingNavigation, setPendingNavigation] = useState<string | null>(null);
@@ -48,85 +43,15 @@ export default function AuthCallback() {
   useEffect(() => {
     if (!isClient || !isRouterReady || isProcessing || hasProcessedRef.current) return;
 
-    // Global check to prevent any duplicate processing across all instances
-    const now = Date.now();
-    if (globalOAuthProcessing && (now - globalOAuthTimestamp) < 1500) {
-      console.log('⏭️ OAuth callback: Skipping - global processing active (within 1.5s)');
-      return;
-    }
-
-    // If processing was recent (even if still active), check and navigate
-    if (globalOAuthTimestamp && (now - globalOAuthTimestamp) < 10000) {
-      console.log('✅ OAuth callback: Recent processing detected, checking session and navigating...');
-      // Mark as processed to prevent further attempts
-      hasProcessedRef.current = true;
-
-      // Processing is ongoing or done, check session and navigate
-      const checkAndNavigate = async () => {
-        try {
-          // Wait longer for the first instance to complete
-          await new Promise(resolve => setTimeout(resolve, 1000));
-
-          const { data: { user } } = await supabase.auth.getUser();
-          if (user) {
-            const { data: profile } = await supabase
-              .from('profiles')
-              .select('*')
-              .eq('id', user.id)
-              .single();
-
-            if (profile) {
-              console.log('✅ Profile found, navigating based on user type:', profile.user_type);
-              switch (profile.user_type) {
-                case 'super-admin':
-                  safeNavigate('/super-admin');
-                  break;
-                case 'admin':
-                  safeNavigate('/admin/users');
-                  break;
-                default:
-                  safeNavigate('/');
-              }
-            } else {
-              console.log('📝 No profile found, redirecting to registration');
-              safeNavigate('/auth/register?oauth=true&email=' + encodeURIComponent(user.email || ''));
-            }
-          } else {
-            console.log('⏳ No user yet, waiting for first instance to complete...');
-          }
-        } catch (error) {
-          console.error('Navigation check error:', error);
-        }
-      };
-      checkAndNavigate();
-      return;
-    }
-
-    // Additional local check
-    if (processingTimestampRef.current && (now - processingTimestampRef.current) < 5000) {
-      console.log('⏭️ OAuth callback: Skipping duplicate processing (within 5s)');
-      return;
-    }
-
     let isMounted = true;
 
     const handleCallback = async () => {
-      if (!isMounted || isProcessing || hasProcessedRef.current || globalOAuthProcessing) return;
-
-      // Final check before processing
-      const checkTime = Date.now();
-      if (globalOAuthProcessing || (globalOAuthTimestamp && (checkTime - globalOAuthTimestamp) < 10000)) {
-        console.log('⏭️ OAuth callback: Aborting - global processing detected');
-        return;
-      }
+      if (!isMounted || isProcessing || hasProcessedRef.current) return;
 
       console.log('🔄 OAuth callback starting processing (mounted)...');
 
-      // Set global and local flags
-      globalOAuthProcessing = true;
-      globalOAuthTimestamp = checkTime;
+      // Set flags to prevent duplicate processing
       hasProcessedRef.current = true;
-      processingTimestampRef.current = checkTime;
       setIsProcessing(true);
       try {
         console.log('🔄 OAuth callback processing...');
@@ -314,11 +239,6 @@ export default function AuthCallback() {
 
         safeNavigate(`/auth/login?error=${encodeURIComponent(error.message || 'OAuth sign-in failed. Please try again.')}`);
       } finally {
-        // Only clear global flag after a delay to allow navigation to complete
-        setTimeout(() => {
-          globalOAuthProcessing = false;
-        }, 1000);
-
         if (isMounted) {
           setIsProcessing(false);
         }
