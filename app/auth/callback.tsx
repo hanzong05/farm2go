@@ -38,6 +38,54 @@ export default function AuthCallback() {
 
   useEffect(() => {
     setIsClient(true);
+
+    // If on web, check if this is a mobile device trying to complete OAuth
+    if (Platform.OS === 'web' && typeof window !== 'undefined') {
+      const urlParams = new URLSearchParams(window.location.search);
+      const code = urlParams.get('code');
+
+      // Check if user agent indicates mobile device (not the app itself)
+      const isMobileDevice = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+      const isMobileApp = /farm2go|expo|wv/i.test(navigator.userAgent);
+      const hasCode = !!code;
+
+      if (hasCode && isMobileDevice && !isMobileApp) {
+        // This is mobile OAuth opened in browser - redirect to app
+        console.log('🔗 Mobile browser detected, attempting deep link redirect...');
+        const appUrl = `farm2go://auth/callback${window.location.search}`;
+
+        // Try multiple redirect methods for better compatibility
+
+        // Method 1: Direct location change
+        setTimeout(() => {
+          window.location.href = appUrl;
+        }, 100);
+
+        // Method 2: Create invisible iframe (works on some Android browsers)
+        setTimeout(() => {
+          const iframe = document.createElement('iframe');
+          iframe.style.display = 'none';
+          iframe.src = appUrl;
+          document.body.appendChild(iframe);
+
+          setTimeout(() => {
+            document.body.removeChild(iframe);
+          }, 2000);
+        }, 500);
+
+        // Method 3: Create a clickable link as fallback
+        setTimeout(() => {
+          const linkDiv = document.createElement('div');
+          linkDiv.style.cssText = 'position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:white;padding:20px;border-radius:10px;box-shadow:0 4px 6px rgba(0,0,0,0.1);text-align:center;z-index:9999;';
+          linkDiv.innerHTML = `
+            <h3 style="margin:0 0 15px 0;color:#059669;">Return to Farm2Go App</h3>
+            <p style="margin:0 0 15px 0;color:#666;">Tap the button below to continue in the app:</p>
+            <a href="${appUrl}" style="display:inline-block;background:#059669;color:white;padding:12px 24px;border-radius:6px;text-decoration:none;font-weight:600;">Open Farm2Go App</a>
+          `;
+          document.body.appendChild(linkDiv);
+        }, 1500);
+      }
+    }
   }, []);
 
   useEffect(() => {

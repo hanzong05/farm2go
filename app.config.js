@@ -7,6 +7,7 @@ export default {
     version: "1.0.0",
     orientation: "portrait",
     icon: "./assets/adaptive-icon.png",
+    scheme: "farm2go",
     userInterfaceStyle: "light",
     splash: {
       image: "./assets/adaptive-icon.png",
@@ -25,7 +26,23 @@ export default {
         foregroundImage: "./assets/adaptive-icon.png",
         backgroundColor: "#ffffff"
       },
-      package: "com.farm2go.app"
+      package: "com.farm2go.app",
+      intentFilters: [
+        {
+          action: "VIEW",
+          autoVerify: true,
+          data: [
+            {
+              scheme: "farm2go",
+              host: "*"
+            }
+          ],
+          category: [
+            "BROWSABLE",
+            "DEFAULT"
+          ]
+        }
+      ]
     },
     web: {
       favicon: "./assets/adaptive-icon.png",

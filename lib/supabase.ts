@@ -1,6 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
 import * as WebBrowser from 'expo-web-browser';
-import { Platform } from 'react-native';
+import { Linking, Platform } from 'react-native';
 import { Database } from '../types/database';
 
 // Use demo/placeholder values if environment variables are not set
@@ -93,11 +93,11 @@ export const signInWithGoogleOAuth = async (userType: string, intent: string = '
     if (Platform.OS !== 'web') {
       console.log('📱 Using WebBrowser for in-app OAuth on mobile');
 
-      // Start OAuth flow and get the URL - use web redirect for compatibility
+      // Start OAuth flow and get the URL - use web redirect for mobile compatibility
       const { data, error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
-          redirectTo: 'farm2go://auth/callback',
+          redirectTo: 'https://farm2go.vercel.app/auth/callback',
           skipBrowserRedirect: true, // Important: don't auto-redirect
         },
       });
@@ -118,11 +118,39 @@ export const signInWithGoogleOAuth = async (userType: string, intent: string = '
       console.log('✅ OAuth URL received:', data.url);
 
       if (data.url) {
-        console.log('🌐 Opening OAuth URL in WebBrowser...');
+        console.log('🌐 Opening OAuth URL in browser...');
         console.log('🔗 OAuth URL:', data.url);
         console.log('🔗 Redirect URL:', 'farm2go://auth/callback');
 
-        // Open the OAuth URL in WebBrowser (in-app) with error handling
+        // For Android, use system browser for better redirect handling
+        if (Platform.OS === 'android') {
+          console.log('📱 Android: Opening OAuth in system browser');
+
+          // Open in system browser
+          const canOpen = await Linking.canOpenURL(data.url);
+          if (canOpen) {
+            await Linking.openURL(data.url);
+
+            // Return immediately - the deep link handler will catch the callback
+            console.log('✅ OAuth opened in system browser, waiting for callback...');
+            return {
+              ...data,
+              success: true,
+              pending: true,
+              message: 'OAuth opened in browser, waiting for callback'
+            };
+          } else {
+            console.error('❌ Cannot open OAuth URL');
+            return {
+              ...data,
+              success: false,
+              error: 'Cannot open OAuth URL',
+              sessionData: null
+            };
+          }
+        }
+
+        // For iOS, use WebBrowser (in-app) with error handling
         let result;
         try {
           result = await WebBrowser.openAuthSessionAsync(

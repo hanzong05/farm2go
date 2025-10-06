@@ -191,12 +191,13 @@ export default function LoginScreen() {
         return; // Don't show error, user cancelled intentionally
       }
 
-      // For mobile/native platforms, let the callback handle everything
-      // This prevents conflicts between login page and callback page navigation
-      if (Platform.OS !== 'web') {
-        console.log('📱 Mobile platform detected - waiting for deep link callback processing');
-        // For mobile, the deep link will redirect to /auth/callback which will handle the rest
-        // Keep loading state until auth state changes or callback redirects
+      // For mobile/native platforms with pending OAuth
+      if (Platform.OS !== 'web' && result?.pending) {
+        console.log('📱 Mobile OAuth pending - browser opened, waiting for deep link callback...');
+        console.log('💡 After signing in, the browser should redirect back to the app');
+        console.log('💡 If it doesn\'t redirect automatically, tap the "Open Farm2Go App" button');
+
+        // Keep loading state active - the deep link or auth state change will handle it
         return;
       }
 
