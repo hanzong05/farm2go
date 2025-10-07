@@ -159,182 +159,33 @@ export default function AuthCallback() {
           console.log('Storage cleanup error:', error);
         }
 
-        // Check for authorization code and exchange if needed
-        let authorizationCode = null;
-        if (Platform.OS !== 'web') {
-          try {
-            authorizationCode = await AsyncStorage.getItem('oauth_authorization_code');
-            if (authorizationCode) {
-              console.log('🔑 Found authorization code from deep link');
-              await AsyncStorage.removeItem('oauth_authorization_code');
-            }
-          } catch (error) {
-            console.log('Error checking auth code:', error);
-          }
-        } else if (typeof window !== 'undefined') {
-          const urlParams = new URLSearchParams(window.location.search);
-          authorizationCode = urlParams.get('code');
+        // Check for existing session
+        console.log('🔍 Checking for session...');
+        const { data: { session } } = await supabase.auth.getSession();
+
+        if (!session?.user) {
+          console.log('❌ No session found, redirecting to login');
+          safeNavigate('/auth/login?error=no_session');
+          return;
         }
 
-        if (authorizationCode) {
-          console.log('🔑 Exchanging authorization code...');
-          try {
-            // Add timeout to prevent hanging
-            const exchangePromise = supabase.auth.exchangeCodeForSession(authorizationCode);
-            const timeoutPromise = new Promise((_, reject) =>
-              setTimeout(() => reject(new Error('Code exchange timeout')), 15000)
-            );
-
-            const { data: sessionData, error: exchangeError } = await Promise.race([
-              exchangePromise,
-              timeoutPromise
-            ]) as any;
-
-            if (exchangeError) {
-              console.error('❌ Code exchange error:', exchangeError);
-              // Handle specific auth code errors
-              if (exchangeError.message?.includes('invalid request') || exchangeError.message?.includes('code verifier')) {
-                console.log('🔄 Auth code exchange failed, checking for existing session...');
-                const { data: { session } } = await supabase.auth.getSession();
-                if (session?.user) {
-                  console.log('✅ Found existing valid session, proceeding...');
-                } else {
-                  console.log('❌ No valid session found, redirecting to login');
-                  safeNavigate('/auth/login?error=auth_expired');
-                  return;
-                }
-              } else {
-                // For other errors, also check for existing session
-                console.log('🔄 Checking for existing session after error...');
-                const { data: { session } } = await supabase.auth.getSession();
-                if (!session?.user) {
-                  safeNavigate('/auth/login?error=auth_failed');
-                  return;
-                }
-                console.log('✅ Found existing valid session, proceeding...');
-              }
-            } else {
-              console.log('✅ Code exchange successful');
-            }
-          } catch (exchangeError: any) {
-            console.error('❌ Code exchange exception:', exchangeError);
-
-            // If timeout or other error, check for existing session
-            console.log('🔄 Checking for existing session after exception...');
-            try {
-              const { data: { session } } = await supabase.auth.getSession();
-              if (session?.user) {
-                console.log('✅ Found existing valid session despite error, proceeding...');
-              } else {
-                console.log('❌ No valid session found');
-                safeNavigate('/auth/login?error=auth_failed');
-                return;
-              }
-            } catch (sessionError) {
-              console.error('❌ Session check failed:', sessionError);
-              safeNavigate('/auth/login?error=auth_failed');
-              return;
-            }
-          }
-        } else {
-          // No auth code - check for existing session
-          console.log('🔍 No auth code found, checking existing session...');
-          try {
-            const { data: { session } } = await supabase.auth.getSession();
-            if (!session?.user) {
-              console.log('❌ No valid session found');
-              safeNavigate('/auth/login?error=no_session');
-              return;
-            } else {
-              console.log('✅ Valid session found, proceeding...');
-            }
-          } catch (sessionError) {
-            console.error('❌ Session check failed:', sessionError);
-            safeNavigate('/auth/login?error=session_check_failed');
-            return;
-          }
-        }
-
-        // OAuth processing complete - check for profile
-        console.log('✅ OAuth code exchange completed, checking user profile');
+        console.log('✅ Session found, checking profile...');
 
         // Check if user has a profile
-        const { data: { user } } = await supabase.auth.getUser();
+        const { data: profile, error: profileError } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('id', session.user.id)
+          .single();
 
-        if (user) {
-          console.log('👤 User authenticated, checking profile...');
-          const { data: profile, error: profileError } = await supabase
-            .from('profiles')
-            .select('*')
-            .eq('id', user.id)
-            .single();
-
-          if (profileError || !profile) {
-            console.log('📝 No profile found - redirecting to profile creation');
-
-            // Clean up OAuth state
-            try {
-              const { sessionManager } = await import('../../services/sessionManager');
-              await sessionManager.clearOAuthState();
-            } catch (error) {
-              console.log('Session manager cleanup error:', error);
-            }
-
-            // Clean up legacy storage
-            try {
-              await AsyncStorage.removeItem('oauth_user_type');
-              await AsyncStorage.removeItem('oauth_intent');
-              safeLocalStorage.removeItem('oauth_user_type');
-              safeLocalStorage.removeItem('oauth_intent');
-              safeLocalStorage.removeItem('oauth_timestamp');
-            } catch (error) {
-              console.log('Storage cleanup error:', error);
-            }
-
-            // Redirect to registration/profile creation
-            safeNavigate('/auth/register?oauth=true&email=' + encodeURIComponent(user.email || ''));
-            return;
-          }
-
-          console.log('✅ Profile found, user_type:', profile.user_type);
-
-          // Clean up OAuth state
-          try {
-            const { sessionManager } = await import('../../services/sessionManager');
-            await sessionManager.clearOAuthState();
-          } catch (error) {
-            console.log('Session manager cleanup error:', error);
-          }
-
-          // Clean up legacy storage
-          try {
-            await AsyncStorage.removeItem('oauth_user_type');
-            await AsyncStorage.removeItem('oauth_intent');
-            safeLocalStorage.removeItem('oauth_user_type');
-            safeLocalStorage.removeItem('oauth_intent');
-            safeLocalStorage.removeItem('oauth_timestamp');
-          } catch (error) {
-            console.log('Storage cleanup error:', error);
-          }
-
-          // Redirect based on user type
-          switch (profile.user_type) {
-            case 'super-admin':
-              console.log('🚀 Redirecting to super-admin dashboard');
-              safeNavigate('/super-admin');
-              break;
-            case 'admin':
-              console.log('🚀 Redirecting to admin dashboard');
-              safeNavigate('/admin/users');
-              break;
-            default:
-              console.log('🚀 Redirecting to marketplace');
-              safeNavigate('/');
-          }
-        } else {
-          console.log('❌ No user found after OAuth');
-          safeNavigate('/auth/login?error=no_user');
+        if (profileError || !profile) {
+          console.log('📝 No profile found - redirecting to complete-profile');
+          safeNavigate('/auth/complete-profile');
+          return;
         }
+
+        console.log('✅ Profile found, redirecting to index');
+        safeNavigate('/');
 
       } catch (error: any) {
         console.error('❌ OAuth callback error:', error);
