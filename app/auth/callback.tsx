@@ -9,7 +9,6 @@ import { safeLocalStorage } from '../../utils/platformUtils';
 let globalProcessingFlag = false;
 
 export default function AuthCallback() {
-  const [isClient, setIsClient] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const hasProcessedRef = useRef(false);
   const router = useRouter();
@@ -40,8 +39,6 @@ export default function AuthCallback() {
   };
 
   useEffect(() => {
-    setIsClient(true);
-
     // If on web, check if this is from mobile app OAuth (using explicit mobile=true param)
     if (Platform.OS === 'web' && typeof window !== 'undefined') {
       const urlParams = new URLSearchParams(window.location.search);
@@ -109,9 +106,8 @@ export default function AuthCallback() {
   }, []);
 
   useEffect(() => {
-    if (!isClient || !isRouterReady || isProcessing || hasProcessedRef.current) {
+    if (!isRouterReady || isProcessing || hasProcessedRef.current) {
       console.log('⏭️ Skipping callback - already processing or not ready', {
-        isClient,
         isRouterReady,
         isProcessing,
         hasProcessed: hasProcessedRef.current
@@ -362,7 +358,7 @@ export default function AuthCallback() {
       // Don't clear global flag on unmount - let it clear naturally
       // This prevents navigation from being interrupted
     };
-  }, [isClient, isRouterReady]); // Remove isProcessing and hasProcessed from deps
+  }, [isRouterReady]); // Only depend on router ready state
 
   return (
     <View style={styles.container}>
