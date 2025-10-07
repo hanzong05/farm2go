@@ -5,6 +5,9 @@ import { ActivityIndicator, Platform, StyleSheet, Text, View } from 'react-nativ
 import { supabase } from '../../lib/supabase';
 import { safeLocalStorage } from '../../utils/platformUtils';
 
+// Global flag to prevent multiple concurrent callback processing
+let globalProcessingFlag = false;
+
 export default function AuthCallback() {
   const [isClient, setIsClient] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
@@ -106,16 +109,29 @@ export default function AuthCallback() {
   }, []);
 
   useEffect(() => {
-    if (!isClient || !isRouterReady || isProcessing || hasProcessedRef.current) return;
+    if (!isClient || !isRouterReady || isProcessing || hasProcessedRef.current) {
+      console.log('⏭️ Skipping callback - already processing or not ready', {
+        isClient,
+        isRouterReady,
+        isProcessing,
+        hasProcessed: hasProcessedRef.current
+      });
+      return;
+    }
 
     let isMounted = true;
 
     const handleCallback = async () => {
-      if (!isMounted || isProcessing || hasProcessedRef.current) return;
+      // Double-check before proceeding
+      if (!isMounted || hasProcessedRef.current || globalProcessingFlag) {
+        console.log('⏭️ Skipping callback - duplicate call detected');
+        return;
+      }
 
       console.log('🔄 OAuth callback starting processing (mounted)...');
 
-      // Set flags to prevent duplicate processing
+      // Set flags IMMEDIATELY to prevent duplicate processing
+      globalProcessingFlag = true;
       hasProcessedRef.current = true;
       setIsProcessing(true);
       try {
@@ -155,7 +171,17 @@ export default function AuthCallback() {
         if (authorizationCode) {
           console.log('🔑 Exchanging authorization code...');
           try {
-            const { data: sessionData, error: exchangeError } = await supabase.auth.exchangeCodeForSession(authorizationCode);
+            // Add timeout to prevent hanging
+            const exchangePromise = supabase.auth.exchangeCodeForSession(authorizationCode);
+            const timeoutPromise = new Promise((_, reject) =>
+              setTimeout(() => reject(new Error('Code exchange timeout')), 15000)
+            );
+
+            const { data: sessionData, error: exchangeError } = await Promise.race([
+              exchangePromise,
+              timeoutPromise
+            ]) as any;
+
             if (exchangeError) {
               console.error('❌ Code exchange error:', exchangeError);
               // Handle specific auth code errors
@@ -169,16 +195,30 @@ export default function AuthCallback() {
                   safeNavigate('/auth/login?error=auth_expired');
                   return;
                 }
+              } else {
+                // For other errors, also check for existing session
+                console.log('🔄 Checking for existing session after error...');
+                const { data: { session } } = await supabase.auth.getSession();
+                if (!session?.user) {
+                  safeNavigate('/auth/login?error=auth_failed');
+                  return;
+                }
+                console.log('✅ Found existing valid session, proceeding...');
               }
             } else {
               console.log('✅ Code exchange successful');
             }
-          } catch (exchangeError) {
+          } catch (exchangeError: any) {
             console.error('❌ Code exchange exception:', exchangeError);
-            // Check for existing session on exception
+
+            // If timeout or other error, check for existing session
+            console.log('🔄 Checking for existing session after exception...');
             try {
               const { data: { session } } = await supabase.auth.getSession();
-              if (!session?.user) {
+              if (session?.user) {
+                console.log('✅ Found existing valid session despite error, proceeding...');
+              } else {
+                console.log('❌ No valid session found');
                 safeNavigate('/auth/login?error=auth_failed');
                 return;
               }
@@ -307,6 +347,10 @@ export default function AuthCallback() {
         if (isMounted) {
           setIsProcessing(false);
         }
+        // Reset global flag after navigation has been initiated
+        setTimeout(() => {
+          globalProcessingFlag = false;
+        }, 2000);
       }
     };
 
