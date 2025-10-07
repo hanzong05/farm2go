@@ -19,10 +19,10 @@ if (Platform.OS !== 'web') {
 
 export const supabase = createClient<Database>(supabaseUrl, supabaseAnonKey, {
   auth: {
-    detectSessionInUrl: true, // Let Supabase auto-handle
+    detectSessionInUrl: true,
     persistSession: true,
     autoRefreshToken: true,
-    flowType: 'pkce',
+    flowType: Platform.OS === 'web' ? 'implicit' : 'pkce', // Use implicit for web, PKCE for mobile
     storage: Platform.OS !== 'web' ? require('@react-native-async-storage/async-storage').default : undefined,
   },
   global: {
@@ -375,9 +375,8 @@ export const signInWithGoogleOAuth = async (userType: string, intent: string = '
         throw new Error('No OAuth URL received');
       }
     } else {
-      // For web, use normal flow WITHOUT skipBrowserRedirect
-      // This keeps PKCE verifier in the same localStorage
-      console.log('🌐 Web: Starting OAuth in same tab...');
+      // For web, use implicit flow (no PKCE, no verifier needed)
+      console.log('🌐 Web: Starting OAuth with implicit flow...');
       const { data, error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
@@ -390,11 +389,7 @@ export const signInWithGoogleOAuth = async (userType: string, intent: string = '
         throw error;
       }
 
-      // CRITICAL: Wait for PKCE verifier to be saved to localStorage
-      console.log('⏳ Waiting for PKCE verifier to save...');
-      await new Promise(resolve => setTimeout(resolve, 500));
-
-      console.log('✅ Web OAuth initiated successfully');
+      // Auto-redirects immediately
       return data;
     }
 

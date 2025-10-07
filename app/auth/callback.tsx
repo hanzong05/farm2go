@@ -159,33 +159,14 @@ export default function AuthCallback() {
           console.log('Storage cleanup error:', error);
         }
 
-        // Check localStorage for PKCE verifier
-        if (typeof window !== 'undefined') {
-          const keys = Object.keys(localStorage);
-          console.log('📦 localStorage keys:', keys.filter(k => k.includes('supabase')));
+        // Implicit flow - session in URL hash
+        console.log('⏳ Checking session...');
+        await new Promise(resolve => setTimeout(resolve, 2000));
 
-          // Get the verifier
-          const authKey = keys.find(k => k.includes('supabase.auth'));
-          if (authKey) {
-            const authData = localStorage.getItem(authKey);
-            console.log('🔑 Auth data exists:', !!authData);
-          }
-        }
-
-        // Get code from URL
-        const params = new URLSearchParams(window.location.search);
-        const code = params.get('code');
-        console.log('📋 Code from URL:', code ? code.substring(0, 10) + '...' : 'none');
-
-        // Give Supabase time to detect and process the code in URL
-        console.log('⏳ Waiting for Supabase to auto-handle...');
-        await new Promise(resolve => setTimeout(resolve, 3000));
-
-        console.log('🔍 Checking session...');
         const { data: { session } } = await supabase.auth.getSession();
 
         if (!session) {
-          console.log('❌ No session found');
+          console.log('❌ No session');
           safeNavigate('/auth/login');
           return;
         }
