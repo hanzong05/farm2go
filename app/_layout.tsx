@@ -263,6 +263,11 @@ export default function RootLayout() {
       if (url.includes('access_token=') || url.includes('refresh_token=') || url.includes('code=')) {
         console.log('🔗 OAuth callback detected, extracting and storing code...');
 
+        // Check current path to avoid duplicate navigation
+        const currentPath = Platform.OS === 'web' && typeof window !== 'undefined'
+          ? window.location.pathname
+          : `/${segments.join('/')}`;
+
         // Extract the authorization code from the URL
         try {
           const urlObj = new URL(url);
@@ -279,11 +284,17 @@ export default function RootLayout() {
           console.error('❌ Error extracting OAuth code:', error);
         }
 
-        if (isRouterReady) {
-          router.replace('/auth/callback');
+        // Only navigate if we're not already on the callback page
+        if (!currentPath.includes('/auth/callback')) {
+          console.log('🚀 Navigating to callback page from:', currentPath);
+          if (isRouterReady) {
+            router.replace('/auth/callback');
+          } else {
+            // Router not ready, queue navigation
+            setPendingNavigation('/auth/callback');
+          }
         } else {
-          // Router not ready, queue navigation
-          setPendingNavigation('/auth/callback');
+          console.log('✅ Already on callback page, skipping navigation');
         }
         return;
       }
