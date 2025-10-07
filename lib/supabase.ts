@@ -19,14 +19,11 @@ if (Platform.OS !== 'web') {
 
 export const supabase = createClient<Database>(supabaseUrl, supabaseAnonKey, {
   auth: {
-    detectSessionInUrl: true, // Enable for all platforms
+    detectSessionInUrl: true, // Let Supabase auto-handle
     persistSession: true,
     autoRefreshToken: true,
     flowType: 'pkce',
     storage: Platform.OS !== 'web' ? require('@react-native-async-storage/async-storage').default : undefined,
-    ...(Platform.OS !== 'web' && {
-      scheme: 'farm2go',
-    }),
   },
   global: {
     headers: {
@@ -97,8 +94,8 @@ export const signInWithGoogleOAuth = async (userType: string, intent: string = '
       const { data, error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
-          redirectTo: 'https://farm2go.vercel.app/auth/callback?mobile=true',
-          skipBrowserRedirect: true, // Important: don't auto-redirect
+          redirectTo: 'https://farm2go.vercel.app/auth/callback',
+          skipBrowserRedirect: true,
         },
       });
 
@@ -382,7 +379,7 @@ export const signInWithGoogleOAuth = async (userType: string, intent: string = '
       const { data, error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
-          redirectTo: `${window.location.origin}/auth/callback`,
+          redirectTo: 'https://farm2go.vercel.app/auth/callback',
         },
       });
 

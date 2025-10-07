@@ -159,19 +159,26 @@ export default function AuthCallback() {
           console.log('Storage cleanup error:', error);
         }
 
-        // Just wait and check for session - Supabase will handle it
-        console.log('⏳ Waiting 3 seconds for session...');
-        await new Promise(resolve => setTimeout(resolve, 3000));
+        // Supabase auto-detects - just wait and check
+        console.log('⏳ Checking session...');
 
-        const { data: { session } } = await supabase.auth.getSession();
-
-        if (!session?.user) {
-          console.log('❌ No session found');
-          safeNavigate('/auth/login?error=no_session');
-          return;
+        let session = null;
+        // Try 10 times over 5 seconds
+        for (let i = 0; i < 10; i++) {
+          const { data } = await supabase.auth.getSession();
+          if (data.session) {
+            session = data.session;
+            console.log('✅ Session found!');
+            break;
+          }
+          await new Promise(resolve => setTimeout(resolve, 500));
         }
 
-        console.log('✅ Session found!');
+        if (!session) {
+          console.log('❌ No session found');
+          safeNavigate('/auth/login');
+          return;
+        }
 
         // Check if user has a profile
         const { data: profile, error: profileError } = await supabase
