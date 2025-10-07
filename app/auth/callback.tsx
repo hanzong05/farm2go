@@ -159,7 +159,31 @@ export default function AuthCallback() {
           console.log('Storage cleanup error:', error);
         }
 
-        // Check for existing session
+        // Get authorization code
+        let authorizationCode = null;
+        if (Platform.OS !== 'web') {
+          authorizationCode = await AsyncStorage.getItem('oauth_authorization_code');
+          if (authorizationCode) {
+            console.log('🔑 Found authorization code');
+            await AsyncStorage.removeItem('oauth_authorization_code');
+          }
+        } else if (typeof window !== 'undefined') {
+          const urlParams = new URLSearchParams(window.location.search);
+          authorizationCode = urlParams.get('code');
+        }
+
+        // Exchange code for session if we have one
+        if (authorizationCode) {
+          console.log('🔑 Exchanging code for session...');
+          const { error } = await supabase.auth.exchangeCodeForSession(authorizationCode);
+          if (error) {
+            console.error('❌ Code exchange error:', error);
+          } else {
+            console.log('✅ Code exchanged successfully');
+          }
+        }
+
+        // Check for session
         console.log('🔍 Checking for session...');
         const { data: { session } } = await supabase.auth.getSession();
 
