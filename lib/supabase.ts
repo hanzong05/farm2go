@@ -375,13 +375,17 @@ export const signInWithGoogleOAuth = async (userType: string, intent: string = '
         throw new Error('No OAuth URL received');
       }
     } else {
-      // For web, use the normal flow
+      // For web, use normal flow WITHOUT skipBrowserRedirect
+      // This keeps PKCE verifier in the same localStorage
+      console.log('🌐 Web: Starting OAuth in same tab...');
       const { data, error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
           redirectTo: 'https://farm2go.vercel.app/auth/callback',
         },
       });
+
+      // This will automatically redirect - don't return, let it redirect
 
       if (error) {
         console.error('❌ OAuth error:', error);
