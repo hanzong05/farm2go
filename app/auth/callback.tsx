@@ -159,33 +159,25 @@ export default function AuthCallback() {
           console.log('Storage cleanup error:', error);
         }
 
-        // Get code from URL
-        const params = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null;
-        const code = params?.get('code');
+        // Just wait and check for session - Supabase will handle it
+        console.log('⏳ Waiting 3 seconds for session...');
+        await new Promise(resolve => setTimeout(resolve, 3000));
 
-        if (!code) {
-          console.log('❌ No code in URL');
-          safeNavigate('/auth/login?error=no_code');
+        const { data: { session } } = await supabase.auth.getSession();
+
+        if (!session?.user) {
+          console.log('❌ No session found');
+          safeNavigate('/auth/login?error=no_session');
           return;
         }
 
-        console.log('🔄 Exchanging code immediately...');
-
-        const { data, error: exchangeError } = await supabase.auth.exchangeCodeForSession(code);
-
-        if (exchangeError || !data?.session) {
-          console.error('❌ Exchange failed:', exchangeError?.message);
-          safeNavigate('/auth/login?error=exchange_failed');
-          return;
-        }
-
-        console.log('✅ Session created!');
+        console.log('✅ Session found!');
 
         // Check if user has a profile
         const { data: profile, error: profileError } = await supabase
           .from('profiles')
           .select('*')
-          .eq('id', data.session.user.id)
+          .eq('id', session.user.id)
           .single();
 
         if (profileError || !profile) {
