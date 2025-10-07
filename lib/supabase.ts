@@ -385,12 +385,14 @@ export const signInWithGoogleOAuth = async (userType: string, intent: string = '
         },
       });
 
-      // This will automatically redirect - don't return, let it redirect
-
       if (error) {
         console.error('❌ OAuth error:', error);
         throw error;
       }
+
+      // CRITICAL: Wait for PKCE verifier to be saved to localStorage
+      console.log('⏳ Waiting for PKCE verifier to save...');
+      await new Promise(resolve => setTimeout(resolve, 500));
 
       console.log('✅ Web OAuth initiated successfully');
       return data;
