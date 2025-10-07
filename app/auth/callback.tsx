@@ -7,6 +7,7 @@ import { safeLocalStorage } from '../../utils/platformUtils';
 
 // Global flag to prevent multiple concurrent callback processing
 let globalProcessingFlag = false;
+let globalLastResetTime = 0;
 
 export default function AuthCallback() {
   const [isProcessing, setIsProcessing] = useState(false);
@@ -14,6 +15,17 @@ export default function AuthCallback() {
   const router = useRouter();
   const navigationState = useRootNavigationState();
   const [pendingNavigation, setPendingNavigation] = useState<string | null>(null);
+
+  // Reset global flag if component is mounting fresh (after navigation from deep link handler)
+  useEffect(() => {
+    const now = Date.now();
+    // If more than 1 second has passed since last reset, allow a fresh start
+    if (now - globalLastResetTime > 1000) {
+      console.log('🔄 Fresh callback mount detected, resetting processing flags');
+      globalProcessingFlag = false;
+      globalLastResetTime = now;
+    }
+  }, []);
 
   // Check if router is ready for navigation
   const isRouterReady = navigationState?.key != null;
