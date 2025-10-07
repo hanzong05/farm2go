@@ -159,28 +159,62 @@ export default function AuthCallback() {
           console.log('Storage cleanup error:', error);
         }
 
-        // Wait for Supabase to auto-detect and handle the session
-        console.log('⏳ Waiting for session to initialize...');
-        await new Promise(resolve => setTimeout(resolve, 2000));
+        // Get the code from storage OR URL, wait up to 3 seconds for it
+        let code = null;
+        console.log('⏳ Waiting for OAuth code...');
 
-        // Check for session
-        console.log('🔍 Checking for session...');
+        for (let i = 0; i < 6; i++) {
+          if (Platform.OS !== 'web') {
+            code = await AsyncStorage.getItem('oauth_authorization_code');
+            if (code) {
+              console.log('📦 Got code from storage');
+              await AsyncStorage.removeItem('oauth_authorization_code');
+              break;
+            }
+          } else if (typeof window !== 'undefined') {
+            const params = new URLSearchParams(window.location.search);
+            code = params.get('code');
+            if (code) {
+              console.log('📦 Got code from URL');
+              break;
+            }
+          }
+
+          if (i < 5) {
+            await new Promise(resolve => setTimeout(resolve, 500));
+          }
+        }
+
+        if (!code) {
+          console.log('⚠️ No code found after waiting');
+        }
+
         let session = null;
 
-        // Try multiple times with delays
-        for (let i = 0; i < 5; i++) {
-          const { data } = await supabase.auth.getSession();
-          if (data.session?.user) {
-            session = data.session;
-            console.log('✅ Session found on attempt', i + 1);
-            break;
+        if (code) {
+          console.log('🔄 Exchanging code...');
+          try {
+            const { data, error } = await supabase.auth.exchangeCodeForSession(code);
+            if (error) {
+              console.error('❌ Exchange failed:', error.message);
+            } else if (data?.session) {
+              console.log('✅ Exchange successful!');
+              session = data.session;
+            }
+          } catch (err: any) {
+            console.error('❌ Exchange error:', err.message);
           }
-          console.log(`⏳ Attempt ${i + 1}: No session yet, waiting...`);
-          await new Promise(resolve => setTimeout(resolve, 1000));
+        }
+
+        // If no session yet, try getting existing one
+        if (!session) {
+          console.log('🔍 Checking for existing session...');
+          const { data } = await supabase.auth.getSession();
+          session = data.session;
         }
 
         if (!session?.user) {
-          console.log('❌ No session found after retries, redirecting to login');
+          console.log('❌ No session, back to login');
           safeNavigate('/auth/login?error=no_session');
           return;
         }
