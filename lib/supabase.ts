@@ -19,7 +19,7 @@ if (Platform.OS !== 'web') {
 
 export const supabase = createClient<Database>(supabaseUrl, supabaseAnonKey, {
   auth: {
-    detectSessionInUrl: Platform.OS === 'web',
+    detectSessionInUrl: true, // Enable for all platforms
     persistSession: true,
     autoRefreshToken: true,
     flowType: 'pkce',
