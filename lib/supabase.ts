@@ -90,11 +90,11 @@ export const signInWithGoogleOAuth = async (userType: string, intent: string = '
     if (Platform.OS !== 'web') {
       console.log('📱 Using WebBrowser for in-app OAuth on mobile');
 
-      // Start OAuth flow and get the URL - use web redirect for mobile compatibility
+      // Start OAuth flow and get the URL - use deep link directly
       const { data, error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
-          redirectTo: 'https://farm2go.vercel.app/auth/callback',
+          redirectTo: 'farm2go://auth/callback',
           skipBrowserRedirect: true,
         },
       });
@@ -122,6 +122,8 @@ export const signInWithGoogleOAuth = async (userType: string, intent: string = '
         // For Android, use system browser for better redirect handling
         if (Platform.OS === 'android') {
           console.log('📱 Android: Opening OAuth in system browser');
+          console.log('🔗 Redirect URL configured: farm2go://auth/callback');
+          console.log('🔗 Full OAuth URL:', data.url);
 
           // Open in system browser
           const canOpen = await Linking.canOpenURL(data.url);
@@ -130,6 +132,7 @@ export const signInWithGoogleOAuth = async (userType: string, intent: string = '
 
             // Return immediately - the deep link handler will catch the callback
             console.log('✅ OAuth opened in system browser, waiting for callback...');
+            console.log('⏳ Waiting for deep link: farm2go://auth/callback?code=...');
             return {
               ...data,
               success: true,
@@ -152,7 +155,7 @@ export const signInWithGoogleOAuth = async (userType: string, intent: string = '
         try {
           result = await WebBrowser.openAuthSessionAsync(
             data.url,
-            'farm2go://auth/callback'
+            'https://farm2go.vercel.app/auth/callback'
           );
 
           console.log('🌐 WebBrowser result:', result);

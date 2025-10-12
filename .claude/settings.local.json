@@ -30,7 +30,8 @@
       "Bash(timeout:*)",
       "Bash(where:*)",
       "Bash(for file in c:/xampp/htdocs/farm2go/app/admin/*.tsx)",
-      "Bash(done)"
+      "Bash(done)",
+      "Bash(rm:*)"
     ],
     "deny": [],
     "ask": []

@@ -12,6 +12,7 @@ import {
   TouchableOpacity,
   View
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/FontAwesome5';
 
 const { width } = Dimensions.get('window');
@@ -509,8 +510,9 @@ export default function NotificationComponent({
         presentationStyle="pageSheet"
         onRequestClose={() => setModalVisible(false)}
       >
-        <View style={styles.modalContainer}>
-          <View style={styles.modalHeader}>
+        <SafeAreaView style={{ flex: 1, backgroundColor: '#000' }} edges={['bottom']}>
+          <View style={styles.modalContainer}>
+            <View style={styles.modalHeader}>
             <Text style={styles.modalTitle}>Notifications</Text>
             <View style={styles.headerActions}>
               {unreadCount > 0 && (
@@ -562,7 +564,8 @@ export default function NotificationComponent({
               </TouchableOpacity>
             </View>
           )}
-        </View>
+          </View>
+        </SafeAreaView>
       </Modal>
     </View>
   );

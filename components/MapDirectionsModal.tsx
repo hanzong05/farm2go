@@ -12,6 +12,7 @@ import {
   View,
   ScrollView,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import * as Location from 'expo-location';
 
 const { width, height } = Dimensions.get('window');
@@ -35,7 +36,7 @@ interface RouteStep {
 }
 
 // Import MapView for native platforms
-import MapView, { Marker, Polyline, PROVIDER_DEFAULT } from 'react-native-maps';
+import MapView, { Marker, Polyline, PROVIDER_DEFAULT, PROVIDER_GOOGLE } from 'react-native-maps';
 
 export default function MapDirectionsModal({
   visible,
@@ -60,6 +61,12 @@ export default function MapDirectionsModal({
 
   useEffect(() => {
     if (visible) {
+      // Version check - logs only, no alert to avoid blocking
+      const buildVersion = new Date().toISOString();
+      console.log('🔄 MapDirectionsModal opened - Build timestamp:', buildVersion);
+      console.log('📱 Platform:', Platform.OS);
+      console.log('🗺️ Google Maps API Key configured:', 'AIzaSy...JkU (check AndroidManifest.xml)');
+
       initializeMap();
       startLiveTracking();
     } else {
@@ -649,9 +656,23 @@ export default function MapDirectionsModal({
   };
 
   const renderNativeMap = () => {
+    console.log('📱 renderNativeMap called');
+    console.log('📍 currentLocation:', currentLocation);
+    console.log('📍 destinationLocation:', destinationLocation);
+
     if (!currentLocation || !destinationLocation) {
-      return null;
+      console.warn('⚠️ Missing location data, cannot render map');
+      return (
+        <View style={styles.loadingContainer}>
+          <Text style={styles.loadingText}>Waiting for location data...</Text>
+        </View>
+      );
     }
+
+    console.log('✅ Rendering MapView component');
+    console.log('🔑 Google Maps API Key should be in AndroidManifest.xml');
+    console.log('📦 Check package name matches in build.gradle and app.json');
+    console.log('🗺️ Using PROVIDER_GOOGLE for Android');
 
     // Calculate proper region to fit both markers and route
     const allCoords = routeCoordinates.length > 0 ? routeCoordinates : [currentLocation, destinationLocation];
@@ -668,23 +689,53 @@ export default function MapDirectionsModal({
     const latDelta = (maxLat - minLat) * 1.5 || 0.05; // Add 50% padding
     const lngDelta = (maxLng - minLng) * 1.5 || 0.05;
 
-    return (
-      <>
-        <MapView
-          provider={PROVIDER_DEFAULT}
-          style={styles.map}
-          initialRegion={{
-            latitude: centerLat,
-            longitude: centerLng,
-            latitudeDelta: latDelta,
-            longitudeDelta: lngDelta,
-          }}
-          showsUserLocation={true}
-          showsMyLocationButton={true}
-          showsTraffic={false}
-          showsCompass={true}
-          loadingEnabled={true}
-        >
+    // Wrap MapView in try-catch for error handling
+    try {
+      console.log('🎨 Rendering MapView with style: flex: 1, width: 100%, height: 100%');
+      return (
+        <View style={{ flex: 1, backgroundColor: '#e0e0e0' }}>
+          <MapView
+            provider={Platform.OS === 'android' ? PROVIDER_GOOGLE : PROVIDER_DEFAULT}
+            style={styles.map}
+            initialRegion={{
+              latitude: centerLat,
+              longitude: centerLng,
+              latitudeDelta: latDelta,
+              longitudeDelta: lngDelta,
+            }}
+            showsUserLocation={true}
+            showsMyLocationButton={true}
+            showsTraffic={false}
+            showsCompass={true}
+            onMapReady={() => {
+              console.log('✅ MapView ready - Google Maps loaded successfully');
+              console.log('✅ Map is now interactive and visible');
+              console.log('📍 Map center:', centerLat, centerLng);
+              console.log('📍 Map deltas:', latDelta, lngDelta);
+            }}
+            onMapLoaded={() => {
+              console.log('✅ Map tiles loaded successfully');
+            }}
+            onLayout={(event) => {
+              const { width, height } = event.nativeEvent.layout;
+              console.log('📐 MapView layout - Width:', width, 'Height:', height);
+              if (height === 0) {
+                console.error('❌ MapView has ZERO height! This will prevent rendering.');
+              }
+            }}
+            onRegionChange={(region) => {
+              console.log('🗺️ Map region changed:', region);
+            }}
+            onError={(error) => {
+              console.error('❌ MapView Error - Google Maps API failed to load:', error);
+              console.error('❌ Full error object:', JSON.stringify(error, null, 2));
+              console.error('❌ This usually means:');
+              console.error('   1. Google Maps API key is missing in AndroidManifest.xml');
+              console.error('   2. API key is invalid or not enabled');
+              console.error('   3. API key restrictions are blocking the request');
+              console.error('   4. Google Play Services not installed/updated');
+            }}
+          >
           {/* Draw route polyline first (behind markers) */}
           {routeCoordinates.length > 0 && (
             <Polyline
@@ -718,8 +769,19 @@ export default function MapDirectionsModal({
             <Text style={styles.routeInfoText}>⏱️ {duration}</Text>
           </View>
         </View>
-      </>
-    );
+        </View>
+      );
+    } catch (error) {
+      console.error('❌ FATAL: MapView crashed!', error);
+      console.error('❌ Error details:', JSON.stringify(error, null, 2));
+      return (
+        <View style={styles.loadingContainer}>
+          <Text style={styles.loadingText}>Map failed to load</Text>
+          <Text style={styles.loadingText}>Check logs for details</Text>
+          <Text style={styles.loadingText}>{String(error)}</Text>
+        </View>
+      );
+    }
   };
 
   return (
@@ -729,7 +791,7 @@ export default function MapDirectionsModal({
       animationType="slide"
       onRequestClose={onClose}
     >
-      <View style={styles.container}>
+      <SafeAreaView style={styles.container} edges={['bottom']}>
         {/* Header */}
         <View style={styles.header}>
           <TouchableOpacity onPress={onClose} style={styles.backButton}>
@@ -747,11 +809,14 @@ export default function MapDirectionsModal({
           <View style={styles.loadingContainer}>
             <ActivityIndicator size="large" color="#10b981" />
             <Text style={styles.loadingText}>Loading directions...</Text>
+            <Text style={styles.loadingText}>Platform: {Platform.OS}</Text>
           </View>
         ) : (
-          Platform.OS === 'web' ? renderWebMap() : renderNativeMap()
+          <>
+            {Platform.OS === 'web' ? renderWebMap() : renderNativeMap()}
+          </>
         )}
-      </View>
+      </SafeAreaView>
     </Modal>
   );
 }
@@ -809,6 +874,8 @@ const styles = StyleSheet.create({
   },
   map: {
     flex: 1,
+    width: '100%',
+    height: '100%',
   },
   loadingContainer: {
     flex: 1,

@@ -18,7 +18,7 @@
         "NSLocationWhenInUseUsageDescription": "This app uses your location to show directions to delivery addresses."
       },
       "config": {
-        "googleMapsApiKey": "AIzaSyCN6AOFP0MUjnC-B698TJeD-M_ZgIHRJkU"
+        "googleMapsApiKey": "AIzaSyA0M90dM91dZlLGAdCxMmeQggwGLOoWSyE"
       }
     },
     "android": {
@@ -56,7 +56,7 @@
       ],
       "config": {
         "googleMaps": {
-          "apiKey": "AIzaSyCN6AOFP0MUjnC-B698TJeD-M_ZgIHRJkU"
+          "apiKey": "AIzaSyA0M90dM91dZlLGAdCxMmeQggwGLOoWSyE"
         }
       }
     },
@@ -91,6 +91,12 @@
           "cameraPermissionText": "This app uses the camera to capture photos and videos for identity verification.",
           "enableMicrophonePermission": false,
           "enableCodeScanner": true
+        }
+      ],
+      [
+        "react-native-maps",
+        {
+          "googleMapsApiKey": "AIzaSyA0M90dM91dZlLGAdCxMmeQggwGLOoWSyE"
         }
       ]
     ],

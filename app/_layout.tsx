@@ -3,11 +3,13 @@ import { Stack, useRootNavigationState, useRouter, useSegments } from 'expo-rout
 import { StatusBar } from 'expo-status-bar';
 import { useEffect, useRef, useState } from 'react';
 import { AppState, Linking, Platform } from 'react-native';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 import 'react-native-reanimated';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import ErrorBoundary from '../components/ErrorBoundary';
+import SafeContainer from '../components/SafeContainer';
 import { AuthProvider } from '../contexts/AuthContext';
 import { ConfirmationModalProvider } from '../contexts/ConfirmationModalContext';
 import { SessionProvider } from '../contexts/SessionContext';
@@ -259,42 +261,50 @@ export default function RootLayout() {
     const handleDeepLink = async (url: string) => {
       console.log('🛒 Deep link handler:', url);
 
-      // Handle OAuth callback - extract code and redirect to callback page
-      if (url.includes('access_token=') || url.includes('refresh_token=') || url.includes('code=')) {
-        console.log('🔗 OAuth callback detected, extracting and storing code...');
+      // Handle OAuth callback - check if it's the auth/callback route OR has OAuth parameters
+      if (url.includes('/auth/callback') || url.includes('access_token=') || url.includes('refresh_token=') || url.includes('code=')) {
+        console.log('🔗 OAuth callback detected');
 
         // Check current path to avoid duplicate navigation
         const currentPath = Platform.OS === 'web' && typeof window !== 'undefined'
           ? window.location.pathname
           : `/${segments.join('/')}`;
 
-        // Extract the authorization code from the URL
+        console.log('🔍 Current path:', currentPath);
+        console.log('🔍 Already on callback?', currentPath.includes('auth/callback'));
+
+        // If we're already on the callback page, don't navigate again - let the page handle it
+        if (currentPath.includes('auth/callback')) {
+          console.log('✅ Already on callback page, skipping deep link navigation');
+          return;
+        }
+
+        // Extract and store the authorization code - do this FAST to avoid race conditions
+        console.log('💾 Extracting and storing authorization code...');
         try {
           const urlObj = new URL(url);
           const code = urlObj.searchParams.get('code');
 
           if (code) {
-            console.log('💾 Storing authorization code for callback processing:', code.substring(0, 10) + '...');
+            console.log('💾 Code found:', code.substring(0, 10) + '...');
 
             // Store the code for the callback handler to use
             await AsyncStorage.setItem('oauth_authorization_code', code);
             console.log('✅ Code stored successfully');
+          } else {
+            console.log('⚠️ No code found in OAuth URL');
           }
         } catch (error) {
           console.error('❌ Error extracting OAuth code:', error);
         }
 
-        // Only navigate if we're not already on the callback page
-        if (!currentPath.includes('/auth/callback')) {
-          console.log('🚀 Navigating to callback page from:', currentPath);
-          if (isRouterReady) {
-            router.replace('/auth/callback');
-          } else {
-            // Router not ready, queue navigation
-            setPendingNavigation('/auth/callback');
-          }
+        // Navigate to callback page IMMEDIATELY
+        console.log('🚀 Navigating to callback page from:', currentPath);
+        if (isRouterReady) {
+          router.replace('/auth/callback');
         } else {
-          console.log('✅ Already on callback page, skipping navigation');
+          // Router not ready, queue navigation
+          setPendingNavigation('/auth/callback');
         }
         return;
       }
@@ -314,6 +324,7 @@ export default function RootLayout() {
 
     // Listen for incoming deep links with enhanced error handling
     const subscription = Linking.addEventListener('url', (event) => {
+      console.log('🔔 Deep link event received:', event.url);
       try {
         handleDeepLink(event.url);
       } catch (error) {
@@ -325,26 +336,33 @@ export default function RootLayout() {
     Linking.getInitialURL()
       .then((url) => {
         if (url) {
+          console.log('🔔 Initial deep link detected:', url);
           handleDeepLink(url);
+        } else {
+          console.log('ℹ️ No initial deep link');
         }
       })
       .catch((error) => {
         console.error('🚨 Initial URL error:', error);
       });
 
+    console.log('👂 Deep link listener registered');
+
     return () => {
+      console.log('🔇 Deep link listener removed');
       subscription?.remove();
     };
   }, [router, isRouterReady]);
 
   return (
-    <ErrorBoundary>
-      <SessionProvider>
-        <AuthProvider>
-          <ConfirmationModalProvider>
-            <ThemeProvider
-              value={colorScheme === 'dark' ? Farm2GoDarkTheme : Farm2GoTheme}
-            >
+    <SafeAreaProvider>
+      <ErrorBoundary>
+        <SessionProvider>
+          <AuthProvider>
+            <ConfirmationModalProvider>
+              <ThemeProvider
+                value={colorScheme === 'dark' ? Farm2GoDarkTheme : Farm2GoTheme}
+              >
         <Stack
           screenOptions={{
             headerShown: false,
@@ -353,6 +371,11 @@ export default function RootLayout() {
               backgroundColor: colorScheme === 'dark' ? '#0f1419' : '#f0f9f4',
             },
           }}
+          screenLayout={({ children }) => (
+            <SafeContainer>
+              {children}
+            </SafeContainer>
+          )}
         >
           {/* Landing & Marketing Pages */}
           <Stack.Screen
@@ -652,10 +675,11 @@ export default function RootLayout() {
           backgroundColor={colorScheme === 'dark' ? '#0f1419' : '#059669'}
           translucent={Platform.OS === 'android'}
         />
-            </ThemeProvider>
-          </ConfirmationModalProvider>
-        </AuthProvider>
-      </SessionProvider>
-    </ErrorBoundary>
+              </ThemeProvider>
+            </ConfirmationModalProvider>
+          </AuthProvider>
+        </SessionProvider>
+      </ErrorBoundary>
+    </SafeAreaProvider>
   );
 }

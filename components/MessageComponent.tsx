@@ -13,6 +13,7 @@ import {
     Alert,
     Image
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/FontAwesome5';
 import { supabase } from '../lib/supabase';
 import { messageService, Conversation as DBConversation, Message as DBMessage } from '../services/messageService';
@@ -806,9 +807,10 @@ const MessageComponent = forwardRef<MessageComponentRef, MessageComponentProps>(
         presentationStyle="pageSheet"
         onRequestClose={handleCloseModal}
       >
-        <View style={styles.modalContainer}>
-          {/* Conversations List View Only */}
-          <View style={styles.modalHeader}>
+        <SafeAreaView style={{ flex: 1, backgroundColor: '#000' }} edges={['bottom']}>
+          <View style={styles.modalContainer}>
+            {/* Conversations List View Only */}
+            <View style={styles.modalHeader}>
             <Text style={styles.modalTitle}>Messages</Text>
             <View style={styles.headerActions}>
               <TouchableOpacity
@@ -837,7 +839,8 @@ const MessageComponent = forwardRef<MessageComponentRef, MessageComponentProps>(
               showsVerticalScrollIndicator={false}
             />
           )}
-        </View>
+          </View>
+        </SafeAreaView>
       </Modal>
 
       {/* Chat Modal */}

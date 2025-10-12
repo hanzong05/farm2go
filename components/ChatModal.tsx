@@ -12,6 +12,7 @@ import {
   View,
   Image,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/FontAwesome5';
 import { messageService } from '../services/messageService';
 import { supabase } from '../lib/supabase';
@@ -635,15 +636,16 @@ export default function ChatModal({
       transparent={isDesktop}
       onRequestClose={onClose}
     >
-      <KeyboardAvoidingView
-        style={styles.keyboardView}
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={[
-            styles.modalContainer,
-            isDesktop && styles.modalContainerDesktop
-          ]}>
+      <SafeAreaView style={{ flex: 1, backgroundColor: '#000' }} edges={['bottom']}>
+        <KeyboardAvoidingView
+          style={styles.keyboardView}
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        >
+          <View style={styles.modalOverlay}>
+            <View style={[
+              styles.modalContainer,
+              isDesktop && styles.modalContainerDesktop
+            ]}>
             {/* Header */}
             <View style={styles.header}>
               <TouchableOpacity
@@ -752,7 +754,8 @@ export default function ChatModal({
             </View>
           </View>
         </View>
-      </KeyboardAvoidingView>
+        </KeyboardAvoidingView>
+      </SafeAreaView>
     </Modal>
   );
 }

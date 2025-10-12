@@ -8,10 +8,12 @@ import { safeLocalStorage } from '../../utils/platformUtils';
 // Global flag to prevent multiple concurrent callback processing
 let globalProcessingFlag = false;
 let globalLastResetTime = 0;
+let globalNavigationLock = false;
 
 export default function AuthCallback() {
   const [isProcessing, setIsProcessing] = useState(false);
   const hasProcessedRef = useRef(false);
+  const exchangeInProgressRef = useRef(false);
   const router = useRouter();
   const navigationState = useRootNavigationState();
   const [pendingNavigation, setPendingNavigation] = useState<string | null>(null);
@@ -19,11 +21,15 @@ export default function AuthCallback() {
   // Reset global flag if component is mounting fresh (after navigation from deep link handler)
   useEffect(() => {
     const now = Date.now();
-    // If more than 1 second has passed since last reset, allow a fresh start
-    if (now - globalLastResetTime > 1000) {
+    // If more than 500ms has passed since last reset, allow a fresh start
+    // Lowered from 1000ms to handle race conditions better
+    if (now - globalLastResetTime > 500) {
       console.log('🔄 Fresh callback mount detected, resetting processing flags');
       globalProcessingFlag = false;
+      hasProcessedRef.current = false; // Also reset the ref
       globalLastResetTime = now;
+    } else {
+      console.log('⏭️ Callback mount too soon after last one, keeping flags');
     }
   }, []);
 
@@ -118,11 +124,10 @@ export default function AuthCallback() {
   }, []);
 
   useEffect(() => {
-    if (!isRouterReady || isProcessing || hasProcessedRef.current) {
-      console.log('⏭️ Skipping callback - already processing or not ready', {
+    if (!isRouterReady || isProcessing) {
+      console.log('⏭️ Skipping callback - router not ready or already processing', {
         isRouterReady,
-        isProcessing,
-        hasProcessed: hasProcessedRef.current
+        isProcessing
       });
       return;
     }
@@ -130,18 +135,23 @@ export default function AuthCallback() {
     let isMounted = true;
 
     const handleCallback = async () => {
-      // Double-check before proceeding
-      if (!isMounted || hasProcessedRef.current || globalProcessingFlag) {
-        console.log('⏭️ Skipping callback - duplicate call detected');
+      // Check if already processing
+      if (!isMounted || globalProcessingFlag) {
+        console.log('⏭️ Skipping callback - already processing');
         return;
       }
 
       console.log('🔄 OAuth callback starting processing (mounted)...');
+      console.log('🔍 Platform:', Platform.OS);
+      console.log('🔍 Current URL/Path:', Platform.OS === 'web' ? window.location.href : 'native');
 
       // Set flags IMMEDIATELY to prevent duplicate processing
       globalProcessingFlag = true;
       hasProcessedRef.current = true;
       setIsProcessing(true);
+
+      let session = null;
+
       try {
         console.log('🔄 OAuth callback processing...');
 
@@ -159,21 +169,64 @@ export default function AuthCallback() {
           console.log('Storage cleanup error:', error);
         }
 
-        // Implicit flow - session in URL hash
-        console.log('⏳ Checking session...');
-        await new Promise(resolve => setTimeout(resolve, 2000));
+        // Check if there's a stored authorization code from the deep link handler
+        const storedCode = await AsyncStorage.getItem('oauth_authorization_code');
+        let session = null;
 
-        const { data: { session } } = await supabase.auth.getSession();
+        if (storedCode) {
+          console.log('🔑 Found stored authorization code, exchanging for session...');
+          console.log('🔑 Code:', storedCode.substring(0, 10) + '...');
 
-        if (!session) {
-          console.log('❌ No session');
-          safeNavigate('/auth/login');
-          return;
+          // Start the exchange in the background (don't wait for it)
+          console.log('🔄 Triggering supabase.auth.exchangeCodeForSession...');
+          supabase.auth.exchangeCodeForSession(storedCode).then(() => {
+            console.log('📦 Exchange completed in background');
+          }).catch(err => {
+            console.error('❌ Background exchange error:', err);
+          });
+
+          // Clean up the stored code
+          await AsyncStorage.removeItem('oauth_authorization_code');
+          console.log('🗑️ Cleaned up stored authorization code');
+
+          // Wait for the session to appear (the exchange creates it)
+          console.log('⏳ Waiting for session to be created by exchange...');
+          let attempts = 0;
+          const maxAttempts = 30; // 15 seconds
+
+          while (!session && attempts < maxAttempts) {
+            await new Promise(resolve => setTimeout(resolve, 500));
+            const { data: { session: currentSession } } = await supabase.auth.getSession();
+            session = currentSession;
+            attempts++;
+
+            if (session) {
+              console.log(`✅ Session found after ${attempts * 500}ms!`);
+              console.log('👤 User ID:', session.user?.id);
+              console.log('📧 User email:', session.user?.email);
+            }
+          }
+
+          if (!session) {
+            console.error('❌ No session found after waiting');
+            safeNavigate('/auth/login?error=' + encodeURIComponent('Failed to complete sign in. Please try again.'));
+            return;
+          }
+        } else {
+          console.log('⏳ No stored code, checking for existing session...');
+          const { data: { session: existingSession } } = await supabase.auth.getSession();
+
+          if (!existingSession) {
+            console.log('❌ No session found');
+            safeNavigate('/auth/login');
+            return;
+          }
+
+          session = existingSession;
+          console.log('✅ Found existing session');
         }
 
-        console.log('✅ Session found!');
-
-        // Check if user has a profile
+        // Check if user has a profile (single check for both flows)
         const { data: profile, error: profileError } = await supabase
           .from('profiles')
           .select('*')
