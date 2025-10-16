@@ -15,6 +15,7 @@ import {
 } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
+import * as FileSystem from 'expo-file-system/legacy';
 import ConfirmationModal from '../../../../components/ConfirmationModal';
 import HeaderComponent from '../../../../components/HeaderComponent';
 import VerificationGuard from '../../../../components/VerificationGuard';
@@ -186,7 +187,7 @@ export default function EditProductScreen() {
       }
 
       const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        mediaTypes: ['images'],
         allowsEditing: true,
         aspect: [1, 1],
         quality: 0.8,
@@ -229,43 +230,104 @@ export default function EditProductScreen() {
   const uploadImage = async (imageUri: string): Promise<string | null> => {
     try {
       setUploadingImage(true);
-      const filename = `product_${Date.now()}_${Math.random().toString(36).substring(7)}.jpg`;
 
-      let fileData: any;
-      let mimeType = 'image/jpeg';
+      // Check authentication
+      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+      if (sessionError || !session) {
+        console.error('Authentication error:', sessionError);
+        Alert.alert('Error', 'You must be logged in to upload images');
+        return null;
+      }
+
+      // Get file extension
+      const fileExt = imageUri.split('.').pop()?.toLowerCase() || 'jpg';
+      const filename = `${Date.now()}_${Math.random().toString(36).substring(7)}.${fileExt}`;
+      const filePath = `products/${filename}`;
+
+      const mimeTypes: { [key: string]: string } = {
+        'jpg': 'image/jpeg',
+        'jpeg': 'image/jpeg',
+        'png': 'image/png',
+        'webp': 'image/webp',
+      };
+      const mimeType = mimeTypes[fileExt] || 'image/jpeg';
 
       if (Platform.OS === 'web') {
+        // Web upload
         const webFile = (setSelectedImage as any).webFile;
+        let fileData;
         if (webFile) {
           fileData = webFile;
-          mimeType = webFile.type;
         } else {
           const response = await fetch(imageUri);
           fileData = await response.blob();
         }
-      } else {
-        const response = await fetch(imageUri);
-        const arrayBuffer = await response.arrayBuffer();
-        fileData = new Uint8Array(arrayBuffer);
-      }
 
-      const { data, error } = await supabase.storage
-        .from('product-images')
-        .upload(filename, fileData, {
-          contentType: mimeType,
-          upsert: false
+        const { data, error } = await supabase.storage
+          .from('product-images')
+          .upload(filePath, fileData, {
+            contentType: mimeType,
+            upsert: false,
+            cacheControl: '3600'
+          });
+
+        if (error) throw error;
+
+        const { data: { publicUrl } } = supabase.storage
+          .from('product-images')
+          .getPublicUrl(data.path);
+
+        return publicUrl;
+      } else {
+        // React Native upload
+        console.log('📤 Uploading product image...');
+
+        // Get file info
+        const fileInfo = await FileSystem.getInfoAsync(imageUri);
+        console.log('📁 File size:', fileInfo.size ? (fileInfo.size / (1024 * 1024)).toFixed(2) + 'MB' : 'unknown');
+
+        // Create FormData
+        const formData = new FormData();
+        formData.append('file', {
+          uri: imageUri,
+          type: mimeType,
+          name: filename
+        } as any);
+
+        // Upload directly to Supabase Storage
+        const uploadUrl = `https://lipviwhsjgvcmdggecqn.supabase.co/storage/v1/object/product-images/${filePath}`;
+
+        const uploadResponse = await fetch(uploadUrl, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${session.access_token}`,
+            'apikey': process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || '',
+          },
+          body: formData,
         });
 
-      if (error) throw error;
+        console.log('📡 Upload response:', uploadResponse.status);
 
-      const { data: { publicUrl } } = supabase.storage
-        .from('product-images')
-        .getPublicUrl(data.path);
+        if (!uploadResponse.ok) {
+          const errorText = await uploadResponse.text();
+          console.error('❌ Upload failed:', errorText);
+          throw new Error(`Upload failed with status ${uploadResponse.status}`);
+        }
 
-      return publicUrl;
-    } catch (error) {
+        console.log('✅ Upload successful');
+
+        // Get public URL
+        const { data: { publicUrl } } = supabase.storage
+          .from('product-images')
+          .getPublicUrl(filePath);
+
+        console.log('🔗 Public URL:', publicUrl);
+
+        return publicUrl;
+      }
+    } catch (error: any) {
       console.error('Error uploading image:', error);
-      Alert.alert('Error', 'Failed to upload image');
+      Alert.alert('Error', error.message || 'Failed to upload image');
       return null;
     } finally {
       setUploadingImage(false);

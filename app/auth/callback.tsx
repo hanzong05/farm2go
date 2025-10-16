@@ -1,7 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRootNavigationState, useRouter } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Platform, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Linking, Platform, StyleSheet, Text, View } from 'react-native';
 import { supabase } from '../../lib/supabase';
 import { safeLocalStorage } from '../../utils/platformUtils';
 
@@ -9,6 +9,7 @@ import { safeLocalStorage } from '../../utils/platformUtils';
 let globalProcessingFlag = false;
 let globalLastResetTime = 0;
 let globalNavigationLock = false;
+let globalAuthCode: string | null = null;
 
 export default function AuthCallback() {
   const [isProcessing, setIsProcessing] = useState(false);
@@ -17,6 +18,56 @@ export default function AuthCallback() {
   const router = useRouter();
   const navigationState = useRootNavigationState();
   const [pendingNavigation, setPendingNavigation] = useState<string | null>(null);
+
+  // Capture the authorization code from deep link
+  useEffect(() => {
+    const captureAuthCode = async () => {
+      // Try to get the URL from initial URL or from linking
+      let url: string | null = null;
+
+      if (Platform.OS === 'web' && typeof window !== 'undefined') {
+        url = window.location.href;
+      } else {
+        // For native, get the initial URL
+        url = await Linking.getInitialURL();
+      }
+
+      if (url) {
+        console.log('🔍 Capturing auth code from URL:', url);
+        try {
+          const urlObj = new URL(url);
+          const code = urlObj.searchParams.get('code');
+          if (code) {
+            console.log('🔑 Auth code captured:', code.substring(0, 10) + '...');
+            globalAuthCode = code;
+          }
+        } catch (error) {
+          console.log('Could not parse URL:', error);
+        }
+      }
+    };
+
+    captureAuthCode();
+
+    // Also listen for incoming deep links
+    const subscription = Linking.addEventListener('url', (event) => {
+      console.log('🔍 Deep link in callback:', event.url);
+      try {
+        const urlObj = new URL(event.url);
+        const code = urlObj.searchParams.get('code');
+        if (code) {
+          console.log('🔑 Auth code from event:', code.substring(0, 10) + '...');
+          globalAuthCode = code;
+        }
+      } catch (error) {
+        console.log('Could not parse deep link URL:', error);
+      }
+    });
+
+    return () => {
+      subscription?.remove();
+    };
+  }, []);
 
   // Reset global flag if component is mounting fresh (after navigation from deep link handler)
   useEffect(() => {
@@ -136,12 +187,12 @@ export default function AuthCallback() {
 
     const handleCallback = async () => {
       // Check if already processing
-      if (!isMounted || globalProcessingFlag) {
+      if (!isMounted || globalProcessingFlag || hasProcessedRef.current) {
         console.log('⏭️ Skipping callback - already processing');
         return;
       }
 
-      console.log('🔄 OAuth callback starting processing (mounted)...');
+      console.log('🔄 OAuth callback starting processing...');
       console.log('🔍 Platform:', Platform.OS);
       console.log('🔍 Current URL/Path:', Platform.OS === 'web' ? window.location.href : 'native');
 
@@ -150,11 +201,7 @@ export default function AuthCallback() {
       hasProcessedRef.current = true;
       setIsProcessing(true);
 
-      let session = null;
-
       try {
-        console.log('🔄 OAuth callback processing...');
-
         // Clear any stale storage state
         try {
           const storedTimestamp = safeLocalStorage.getItem('oauth_timestamp');
@@ -169,56 +216,67 @@ export default function AuthCallback() {
           console.log('Storage cleanup error:', error);
         }
 
-        // Check if there's a stored authorization code from the deep link handler
-        const storedCode = await AsyncStorage.getItem('oauth_authorization_code');
+        // Wait for authorization code to be captured and stored (with timeout)
+        console.log('⏳ Waiting for authorization code...');
+        let authCode: string | null = null;
+        let attempts = 0;
+        const maxAttempts = 10; // 5 seconds
+
+        while (!authCode && attempts < maxAttempts && isMounted) {
+          await new Promise(resolve => setTimeout(resolve, 500));
+
+          // Check both global variable and AsyncStorage
+          authCode = globalAuthCode || await AsyncStorage.getItem('oauth_code');
+          attempts++;
+
+          if (authCode) {
+            console.log(`✅ Auth code found after ${attempts * 500}ms`);
+          }
+        }
+
+        console.log('🔑 Authorization code:', authCode ? authCode.substring(0, 10) + '...' : 'not found');
+
+        // Clean up the stored code
+        if (authCode) {
+          await AsyncStorage.removeItem('oauth_code');
+          console.log('🗑️ Cleaned up stored auth code');
+        }
+
         let session = null;
 
-        if (storedCode) {
-          console.log('🔑 Found stored authorization code, exchanging for session...');
-          console.log('🔑 Code:', storedCode.substring(0, 10) + '...');
+        if (authCode) {
+          // Exchange the authorization code for a session
+          console.log('🔄 Exchanging authorization code for session...');
 
-          // Start the exchange in the background (don't wait for it)
-          console.log('🔄 Triggering supabase.auth.exchangeCodeForSession...');
-          supabase.auth.exchangeCodeForSession(storedCode).then(() => {
-            console.log('📦 Exchange completed in background');
-          }).catch(err => {
-            console.error('❌ Background exchange error:', err);
+          const { data, error: exchangeError } = await supabase.auth.exchangeCodeForSession(authCode);
+
+          console.log('📦 Exchange result:', {
+            hasData: !!data,
+            hasSession: !!data?.session,
+            hasError: !!exchangeError,
+            errorMessage: exchangeError?.message
           });
 
-          // Clean up the stored code
-          await AsyncStorage.removeItem('oauth_authorization_code');
-          console.log('🗑️ Cleaned up stored authorization code');
-
-          // Wait for the session to appear (the exchange creates it)
-          console.log('⏳ Waiting for session to be created by exchange...');
-          let attempts = 0;
-          const maxAttempts = 30; // 15 seconds
-
-          while (!session && attempts < maxAttempts) {
-            await new Promise(resolve => setTimeout(resolve, 500));
-            const { data: { session: currentSession } } = await supabase.auth.getSession();
-            session = currentSession;
-            attempts++;
-
-            if (session) {
-              console.log(`✅ Session found after ${attempts * 500}ms!`);
-              console.log('👤 User ID:', session.user?.id);
-              console.log('📧 User email:', session.user?.email);
-            }
-          }
-
-          if (!session) {
-            console.error('❌ No session found after waiting');
+          if (exchangeError) {
+            console.error('❌ Code exchange failed:', exchangeError);
             safeNavigate('/auth/login?error=' + encodeURIComponent('Failed to complete sign in. Please try again.'));
             return;
           }
+
+          session = data.session;
+          console.log('✅ Session created from code exchange!');
+          console.log('👤 User ID:', session?.user?.id);
+          console.log('📧 User email:', session?.user?.email);
+          console.log('🔄 Checking if still mounted:', isMounted);
+          console.log('🔄 Continuing to profile check...');
         } else {
-          console.log('⏳ No stored code, checking for existing session...');
+          // No code in URL, check if there's already a session
+          console.log('⏳ No code found, checking for existing session...');
           const { data: { session: existingSession } } = await supabase.auth.getSession();
 
           if (!existingSession) {
-            console.log('❌ No session found');
-            safeNavigate('/auth/login');
+            console.error('❌ No session found and no code to exchange');
+            safeNavigate('/auth/login?error=' + encodeURIComponent('Failed to complete sign in. Please try again.'));
             return;
           }
 
@@ -226,12 +284,26 @@ export default function AuthCallback() {
           console.log('✅ Found existing session');
         }
 
-        // Check if user has a profile (single check for both flows)
+        if (!session) {
+          console.error('❌ No session available');
+          safeNavigate('/auth/login?error=' + encodeURIComponent('Failed to complete sign in. Please try again.'));
+          return;
+        }
+
+        // Check if user has a profile
+        console.log('🔍 Checking for user profile...');
         const { data: profile, error: profileError } = await supabase
           .from('profiles')
           .select('*')
           .eq('id', session.user.id)
           .single();
+
+        console.log('📋 Profile check result:', {
+          hasProfile: !!profile,
+          hasError: !!profileError,
+          errorCode: profileError?.code,
+          errorMessage: profileError?.message
+        });
 
         if (profileError || !profile) {
           console.log('📝 No profile found - redirecting to complete-profile');
@@ -239,8 +311,30 @@ export default function AuthCallback() {
           return;
         }
 
-        console.log('✅ Profile found, redirecting to index');
-        safeNavigate('/');
+        console.log('✅ Profile found:', profile.user_type);
+        console.log('🚀 Navigating to dashboard...');
+
+        // Navigate based on user type
+        let targetPath = '/';
+        switch (profile.user_type) {
+          case 'super-admin':
+            targetPath = '/super-admin';
+            break;
+          case 'admin':
+            targetPath = '/admin/users';
+            break;
+          case 'farmer':
+            targetPath = '/';
+            break;
+          case 'buyer':
+            targetPath = '/';
+            break;
+        }
+
+        console.log('🎯 Target path:', targetPath);
+        console.log('🚀 About to navigate...');
+        safeNavigate(targetPath);
+        console.log('✅ Navigation called');
 
       } catch (error: any) {
         console.error('❌ OAuth callback error:', error);
@@ -273,8 +367,6 @@ export default function AuthCallback() {
 
     return () => {
       isMounted = false;
-      // Don't clear global flag on unmount - let it clear naturally
-      // This prevents navigation from being interrupted
     };
   }, [isRouterReady]); // Only depend on router ready state
 

@@ -649,8 +649,10 @@ export default function RegisterScreen() {
             placeholderTextColor={colors.gray400}
             onFocus={() => setFocusedInput(field)}
             onBlur={() => setFocusedInput(null)}
+            keyboardType={options.keyboardType}
+            autoCapitalize={options.autoCapitalize}
+            multiline={options.multiline}
             secureTextEntry={isPassword ? !showPassword : isConfirmPassword ? !showConfirmPassword : options.secureTextEntry}
-            {...options}
           />
           {(isPassword || isConfirmPassword) && (
             <TouchableOpacity 
@@ -660,14 +662,14 @@ export default function RegisterScreen() {
               }}
               style={styles.passwordToggle}
             >
-              <Icon 
+              <Icon
                 name={
-                  isPassword 
+                  isPassword
                     ? (showPassword ? 'eye-slash' : 'eye')
                     : (showConfirmPassword ? 'eye-slash' : 'eye')
-                } 
-                size={14} 
-                color={colors.gray400} 
+                }
+                size={16}
+                color={colors.gray400}
               />
             </TouchableOpacity>
           )}
@@ -1317,7 +1319,8 @@ const styles = StyleSheet.create({
   },
 
   passwordToggle: {
-    padding: 8,
+    padding: 12,
+    marginLeft: 4,
   },
 
   passwordStrength: {

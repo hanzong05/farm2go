@@ -14,8 +14,20 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import * as Location from 'expo-location';
+import { errorLogger } from '../utils/errorLogger';
 
 const { width, height } = Dimensions.get('window');
+
+// Safe console logging - only in development
+const devLog = (...args: any[]) => {
+  if (__DEV__) console.log(...args);
+};
+const devWarn = (...args: any[]) => {
+  if (__DEV__) console.warn(...args);
+};
+const devError = (...args: any[]) => {
+  if (__DEV__) console.error(...args);
+};
 
 interface MapDirectionsModalProps {
   visible: boolean;
@@ -58,14 +70,16 @@ export default function MapDirectionsModal({
   const [routeSteps, setRouteSteps] = useState<RouteStep[]>([]);
   const [routeCoordinates, setRouteCoordinates] = useState<any[]>([]);
   const [locationSubscription, setLocationSubscription] = useState<any>(null);
+  const [mapError, setMapError] = useState<string | null>(null);
+  const [mapReady, setMapReady] = useState(false);
 
   useEffect(() => {
     if (visible) {
       // Version check - logs only, no alert to avoid blocking
       const buildVersion = new Date().toISOString();
-      console.log('🔄 MapDirectionsModal opened - Build timestamp:', buildVersion);
-      console.log('📱 Platform:', Platform.OS);
-      console.log('🗺️ Google Maps API Key configured:', 'AIzaSy...JkU (check AndroidManifest.xml)');
+      devLog('🔄 MapDirectionsModal opened - Build timestamp:', buildVersion);
+      devLog('📱 Platform:', Platform.OS);
+      devLog('🗺️ Google Maps API Key configured:', 'AIzaSy...JkU (check AndroidManifest.xml)');
 
       initializeMap();
       startLiveTracking();
@@ -81,7 +95,7 @@ export default function MapDirectionsModal({
   // Automatically fetch route when both locations are available
   useEffect(() => {
     if (currentLocation && destinationLocation) {
-      console.log('🗺️ Both locations available, fetching route...');
+      devLog('🗺️ Both locations available, fetching route...');
       fetchRoute(currentLocation, destinationLocation);
     }
   }, [currentLocation, destinationLocation]);
@@ -89,41 +103,50 @@ export default function MapDirectionsModal({
   const initializeMap = async () => {
     try {
       setLoading(true);
-      console.log('Initializing map...');
+      setMapError(null);
+      devLog('Initializing map...');
 
       // Get current location first
       const location = await getCurrentLocation();
-      console.log('✅ Current location obtained:', location);
+      devLog('✅ Current location obtained:', location);
 
       // Geocode delivery address
-      console.log('📍 Geocoding address:', deliveryAddress);
+      devLog('📍 Geocoding address:', deliveryAddress);
       await geocodeAddress(deliveryAddress);
 
       setLoading(false);
-      console.log('✅ Map initialization complete');
+      devLog('✅ Map initialization complete');
     } catch (error) {
-      console.error('❌ Map initialization error:', error);
+      devError('❌ Map initialization error:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Failed to initialize map';
+      setMapError(errorMessage);
+
+      // Log to error logger for production debugging
+      if (!__DEV__) {
+        errorLogger.logMapError(error instanceof Error ? error : new Error(errorMessage));
+      }
+
       setLoading(false);
     }
   };
 
   const startLiveTracking = async () => {
     try {
-      console.log('🔴 Starting live location tracking...');
+      devLog('🔴 Starting live location tracking...');
 
       if (Platform.OS === 'web') {
         // Web live tracking using watchPosition
         if (navigator && navigator.geolocation) {
           const watchId = navigator.geolocation.watchPosition(
             (position) => {
-              console.log('📍 Live location update:', position.coords);
+              devLog('📍 Live location update:', position.coords);
               setCurrentLocation({
                 latitude: position.coords.latitude,
                 longitude: position.coords.longitude,
               });
             },
             (error) => {
-              console.warn('⚠️ Live tracking error:', error.message);
+              devWarn('⚠️ Live tracking error:', error.message);
             },
             {
               enableHighAccuracy: true,
@@ -132,7 +155,7 @@ export default function MapDirectionsModal({
             }
           );
           setLocationSubscription(watchId);
-          console.log('✅ Web live tracking started, watchId:', watchId);
+          devLog('✅ Web live tracking started, watchId:', watchId);
         }
       } else {
         // Native live tracking
@@ -145,7 +168,7 @@ export default function MapDirectionsModal({
               timeInterval: 5000, // Update every 5 seconds
             },
             (location) => {
-              console.log('📍 Live location update:', location.coords);
+              devLog('📍 Live location update:', location.coords);
               setCurrentLocation({
                 latitude: location.coords.latitude,
                 longitude: location.coords.longitude,
@@ -153,16 +176,16 @@ export default function MapDirectionsModal({
             }
           );
           setLocationSubscription(subscription);
-          console.log('✅ Native live tracking started');
+          devLog('✅ Native live tracking started');
         }
       }
     } catch (error) {
-      console.error('❌ Error starting live tracking:', error);
+      devError('❌ Error starting live tracking:', error);
     }
   };
 
   const stopLiveTracking = () => {
-    console.log('🛑 Stopping live location tracking...');
+    devLog('🛑 Stopping live location tracking...');
     if (locationSubscription) {
       if (Platform.OS === 'web') {
         navigator.geolocation.clearWatch(locationSubscription);
@@ -170,13 +193,13 @@ export default function MapDirectionsModal({
         locationSubscription.remove();
       }
       setLocationSubscription(null);
-      console.log('✅ Live tracking stopped');
+      devLog('✅ Live tracking stopped');
     }
   };
 
   const getCurrentLocation = async () => {
     try {
-      console.log('🔍 Getting current location, Platform:', Platform.OS);
+      devLog('🔍 Getting current location, Platform:', Platform.OS);
 
       if (Platform.OS === 'web') {
         // Use browser geolocation for web
@@ -184,7 +207,7 @@ export default function MapDirectionsModal({
           return new Promise<void>((resolve) => {
             navigator.geolocation.getCurrentPosition(
               (position) => {
-                console.log('✅ Browser location obtained:', position.coords);
+                devLog('✅ Browser location obtained:', position.coords);
                 const loc = {
                   latitude: position.coords.latitude,
                   longitude: position.coords.longitude,
@@ -193,7 +216,7 @@ export default function MapDirectionsModal({
                 resolve();
               },
               (error) => {
-                console.warn('⚠️ Browser geolocation failed:', error.message, '- using default location');
+                devWarn('⚠️ Browser geolocation failed:', error.message, '- using default location');
                 // Default to Manila
                 const loc = {
                   latitude: 14.5995,
@@ -205,7 +228,7 @@ export default function MapDirectionsModal({
             );
           });
         } else {
-          console.warn('⚠️ No geolocation available, using default location');
+          devWarn('⚠️ No geolocation available, using default location');
           // No geolocation available, use default
           setCurrentLocation({
             latitude: 14.5995,
@@ -214,16 +237,16 @@ export default function MapDirectionsModal({
         }
       } else {
         // Native platform
-        console.log('📱 Requesting location permission...');
+        devLog('📱 Requesting location permission...');
         const { status } = await Location.requestForegroundPermissionsAsync();
-        console.log('📱 Permission status:', status);
+        devLog('📱 Permission status:', status);
 
         if (status === 'granted') {
-          console.log('📱 Getting current position...');
+          devLog('📱 Getting current position...');
           const location = await Location.getCurrentPositionAsync({
             accuracy: Location.Accuracy.Balanced,
           });
-          console.log('✅ Native location obtained:', location.coords);
+          devLog('✅ Native location obtained:', location.coords);
 
           const loc = {
             latitude: location.coords.latitude,
@@ -231,7 +254,7 @@ export default function MapDirectionsModal({
           };
           setCurrentLocation(loc);
         } else {
-          console.warn('⚠️ Location permission denied, using default location');
+          devWarn('⚠️ Location permission denied, using default location');
           setCurrentLocation({
             latitude: 14.5995,
             longitude: 120.9842,
@@ -239,21 +262,21 @@ export default function MapDirectionsModal({
         }
       }
     } catch (error) {
-      console.error('❌ Error getting location:', error);
+      devError('❌ Error getting location:', error);
       const defaultLoc = {
         latitude: 14.5995,
         longitude: 120.9842,
       };
       setCurrentLocation(defaultLoc);
-      console.log('⚠️ Using default location:', defaultLoc);
+      devLog('⚠️ Using default location:', defaultLoc);
     }
   };
 
   const geocodeAddress = async (address: string) => {
     try {
-      console.log('🔍 Geocoding address:', address);
+      devLog('🔍 Geocoding address:', address);
       if (!address || address.trim() === '') {
-        console.warn('Empty address provided, using default location');
+        devWarn('Empty address provided, using default location');
         Alert.alert(
           'No Address',
           'This order does not have a delivery address set.',
@@ -273,10 +296,10 @@ export default function MapDirectionsModal({
       let nominatimUrl = `https://nominatim.openstreetmap.org/search?q=${encodedAddress}&format=json&limit=5&countrycodes=ph`;
       if (currentLocation) {
         nominatimUrl += `&viewbox=${currentLocation.longitude - 0.5},${currentLocation.latitude + 0.5},${currentLocation.longitude + 0.5},${currentLocation.latitude - 0.5}&bounded=1`;
-        console.log('🌐 Using proximity bias from current location:', currentLocation);
+        devLog('🌐 Using proximity bias from current location:', currentLocation);
       }
 
-      console.log('🌐 Trying Nominatim geocoding:', nominatimUrl);
+      devLog('🌐 Trying Nominatim geocoding:', nominatimUrl);
 
       const response = await fetch(nominatimUrl, {
         headers: {
@@ -285,8 +308,8 @@ export default function MapDirectionsModal({
       });
       const data = await response.json();
 
-      console.log('📍 Nominatim result:', data);
-      console.log('📍 Full address details:', data.length > 0 ? data[0].display_name : 'none');
+      devLog('📍 Nominatim result:', data);
+      devLog('📍 Full address details:', data.length > 0 ? data[0].display_name : 'none');
 
       if (data && data.length > 0) {
         const dest = {
@@ -295,15 +318,15 @@ export default function MapDirectionsModal({
         };
         setDestinationLocation(dest);
         setLoading(false);
-        console.log('✅ Destination location set from Nominatim:', dest);
-        console.log('📍 Matched address:', data[0].display_name);
+        devLog('✅ Destination location set from Nominatim:', dest);
+        devLog('📍 Matched address:', data[0].display_name);
         return;
       }
 
       // Fallback to Expo Location.geocodeAsync
-      console.log('⚠️ Nominatim failed, trying Expo geocoding');
+      devLog('⚠️ Nominatim failed, trying Expo geocoding');
       const geocoded = await Location.geocodeAsync(searchAddress);
-      console.log('📍 Expo geocoding result:', geocoded);
+      devLog('📍 Expo geocoding result:', geocoded);
 
       if (geocoded.length > 0) {
         const dest = {
@@ -312,9 +335,9 @@ export default function MapDirectionsModal({
         };
         setDestinationLocation(dest);
         setLoading(false);
-        console.log('✅ Destination location set from Expo:', dest);
+        devLog('✅ Destination location set from Expo:', dest);
       } else {
-        console.warn('⚠️ No geocoding results found for:', address);
+        devWarn('⚠️ No geocoding results found for:', address);
         setLoading(false);
         Alert.alert(
           'Location Not Found',
@@ -323,7 +346,7 @@ export default function MapDirectionsModal({
         );
       }
     } catch (error) {
-      console.error('❌ Geocoding error:', error);
+      devError('❌ Geocoding error:', error);
       setLoading(false);
       Alert.alert(
         'Geocoding Error',
@@ -335,31 +358,31 @@ export default function MapDirectionsModal({
 
   const fetchRoute = async (origin: any, destination: any) => {
     try {
-      console.log('🗺️ Fetching route from', origin, 'to', destination);
+      devLog('🗺️ Fetching route from', origin, 'to', destination);
 
       // Use OSRM (Open Source Routing Machine) for routing
       const url = `https://router.project-osrm.org/route/v1/driving/${origin.longitude},${origin.latitude};${destination.longitude},${destination.latitude}?overview=full&steps=true`;
-      console.log('🌐 OSRM URL:', url);
+      devLog('🌐 OSRM URL:', url);
 
       const response = await fetch(url);
       const data = await response.json();
 
-      console.log('📊 Route response code:', data.code);
+      devLog('📊 Route response code:', data.code);
 
       if (data.code === 'Ok' && data.routes && data.routes.length > 0) {
         const route = data.routes[0];
-        console.log('✅ Route found:', route);
+        devLog('✅ Route found:', route);
 
         // Set distance and duration
         const distKm = (route.distance / 1000).toFixed(2);
         const durationMin = Math.ceil(route.duration / 60);
         setDistance(`${distKm} km`);
         setDuration(`${durationMin} min`);
-        console.log(`📏 Distance: ${distKm} km, ⏱️ Duration: ${durationMin} min`);
+        devLog(`📏 Distance: ${distKm} km, ⏱️ Duration: ${durationMin} min`);
 
         // Decode the route geometry
         const coordinates = decodePolyline(route.geometry);
-        console.log(`🛣️ Route coordinates decoded: ${coordinates.length} points`);
+        devLog(`🛣️ Route coordinates decoded: ${coordinates.length} points`);
         setRouteCoordinates(coordinates);
 
         // Extract turn-by-turn directions
@@ -379,9 +402,9 @@ export default function MapDirectionsModal({
           });
         });
         setRouteSteps(steps);
-        console.log(`✅ ${steps.length} turn-by-turn steps extracted`);
+        devLog(`✅ ${steps.length} turn-by-turn steps extracted`);
       } else {
-        console.warn('⚠️ No route found from OSRM, using straight line fallback');
+        devWarn('⚠️ No route found from OSRM, using straight line fallback');
         // Fallback: straight line
         setRouteCoordinates([origin, destination]);
         const dist = calculateDistance(origin.latitude, origin.longitude, destination.latitude, destination.longitude);
@@ -394,10 +417,10 @@ export default function MapDirectionsModal({
             duration: `${Math.ceil(dist * 2)} min`,
           }
         ]);
-        console.log(`⚠️ Using straight line: ${dist.toFixed(2)} km`);
+        devLog(`⚠️ Using straight line: ${dist.toFixed(2)} km`);
       }
     } catch (error) {
-      console.error('❌ Error fetching route:', error);
+      devError('❌ Error fetching route:', error);
       // Fallback: straight line
       setRouteCoordinates([origin, destination]);
       const dist = calculateDistance(origin.latitude, origin.longitude, destination.latitude, destination.longitude);
@@ -410,7 +433,7 @@ export default function MapDirectionsModal({
           duration: `${Math.ceil(dist * 2)} min`,
         }
       ]);
-      console.log(`⚠️ Error fallback: using straight line ${dist.toFixed(2)} km`);
+      devLog(`⚠️ Error fallback: using straight line ${dist.toFixed(2)} km`);
     }
   };
 
@@ -511,13 +534,13 @@ export default function MapDirectionsModal({
   };
 
   const renderWebMap = () => {
-    console.log('🗺️ renderWebMap called');
-    console.log('📍 currentLocation:', currentLocation);
-    console.log('📍 destinationLocation:', destinationLocation);
-    console.log('🛣️ routeCoordinates:', routeCoordinates.length, 'points');
+    devLog('🗺️ renderWebMap called');
+    devLog('📍 currentLocation:', currentLocation);
+    devLog('📍 destinationLocation:', destinationLocation);
+    devLog('🛣️ routeCoordinates:', routeCoordinates.length, 'points');
 
     if (!currentLocation || !destinationLocation) {
-      console.warn('⚠️ Cannot render map: missing location data');
+      devWarn('⚠️ Cannot render map: missing location data');
       return null;
     }
 
@@ -656,12 +679,42 @@ export default function MapDirectionsModal({
   };
 
   const renderNativeMap = () => {
-    console.log('📱 renderNativeMap called');
-    console.log('📍 currentLocation:', currentLocation);
-    console.log('📍 destinationLocation:', destinationLocation);
+    devLog('📱 renderNativeMap called');
+    devLog('📍 currentLocation:', currentLocation);
+    devLog('📍 destinationLocation:', destinationLocation);
+
+    // Show error state if map failed
+    if (mapError) {
+      return (
+        <View style={styles.errorContainer}>
+          <Text style={styles.errorTitle}>Map Error</Text>
+          <Text style={styles.errorText}>{mapError}</Text>
+          <TouchableOpacity
+            style={styles.retryButton}
+            onPress={() => {
+              setMapError(null);
+              initializeMap();
+            }}
+          >
+            <Text style={styles.retryButtonText}>Retry</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.openExternalButton}
+            onPress={() => {
+              if (destinationLocation) {
+                const url = `https://www.google.com/maps/dir/?api=1&destination=${destinationLocation.latitude},${destinationLocation.longitude}`;
+                Linking.openURL(url);
+              }
+            }}
+          >
+            <Text style={styles.openExternalButtonText}>Open in Google Maps</Text>
+          </TouchableOpacity>
+        </View>
+      );
+    }
 
     if (!currentLocation || !destinationLocation) {
-      console.warn('⚠️ Missing location data, cannot render map');
+      devWarn('⚠️ Missing location data, cannot render map');
       return (
         <View style={styles.loadingContainer}>
           <Text style={styles.loadingText}>Waiting for location data...</Text>
@@ -669,10 +722,10 @@ export default function MapDirectionsModal({
       );
     }
 
-    console.log('✅ Rendering MapView component');
-    console.log('🔑 Google Maps API Key should be in AndroidManifest.xml');
-    console.log('📦 Check package name matches in build.gradle and app.json');
-    console.log('🗺️ Using PROVIDER_GOOGLE for Android');
+    devLog('✅ Rendering MapView component');
+    devLog('🔑 Google Maps API Key should be in AndroidManifest.xml');
+    devLog('📦 Check package name matches in build.gradle and app.json');
+    devLog('🗺️ Using PROVIDER_GOOGLE for Android');
 
     // Calculate proper region to fit both markers and route
     const allCoords = routeCoordinates.length > 0 ? routeCoordinates : [currentLocation, destinationLocation];
@@ -691,7 +744,7 @@ export default function MapDirectionsModal({
 
     // Wrap MapView in try-catch for error handling
     try {
-      console.log('🎨 Rendering MapView with style: flex: 1, width: 100%, height: 100%');
+      devLog('🎨 Rendering MapView with style: flex: 1, width: 100%, height: 100%');
       return (
         <View style={{ flex: 1, backgroundColor: '#e0e0e0' }}>
           <MapView
@@ -708,32 +761,29 @@ export default function MapDirectionsModal({
             showsTraffic={false}
             showsCompass={true}
             onMapReady={() => {
-              console.log('✅ MapView ready - Google Maps loaded successfully');
-              console.log('✅ Map is now interactive and visible');
-              console.log('📍 Map center:', centerLat, centerLng);
-              console.log('📍 Map deltas:', latDelta, lngDelta);
+              devLog('✅ MapView ready - Google Maps loaded successfully');
+              setMapReady(true);
             }}
             onMapLoaded={() => {
-              console.log('✅ Map tiles loaded successfully');
+              devLog('✅ Map tiles loaded successfully');
             }}
             onLayout={(event) => {
               const { width, height } = event.nativeEvent.layout;
-              console.log('📐 MapView layout - Width:', width, 'Height:', height);
+              devLog('📐 MapView layout - Width:', width, 'Height:', height);
               if (height === 0) {
-                console.error('❌ MapView has ZERO height! This will prevent rendering.');
+                devError('❌ MapView has ZERO height! This will prevent rendering.');
+                setMapError('Map layout error: invalid dimensions');
               }
             }}
-            onRegionChange={(region) => {
-              console.log('🗺️ Map region changed:', region);
-            }}
             onError={(error) => {
-              console.error('❌ MapView Error - Google Maps API failed to load:', error);
-              console.error('❌ Full error object:', JSON.stringify(error, null, 2));
-              console.error('❌ This usually means:');
-              console.error('   1. Google Maps API key is missing in AndroidManifest.xml');
-              console.error('   2. API key is invalid or not enabled');
-              console.error('   3. API key restrictions are blocking the request');
-              console.error('   4. Google Play Services not installed/updated');
+              const errorMsg = 'Google Maps failed to load. Please check your internet connection.';
+              devError('❌ MapView Error:', error);
+              setMapError(errorMsg);
+
+              // Log to error logger in production
+              if (!__DEV__) {
+                errorLogger.logMapError(new Error(`MapView error: ${JSON.stringify(error)}`));
+              }
             }}
           >
           {/* Draw route polyline first (behind markers) */}
@@ -772,8 +822,8 @@ export default function MapDirectionsModal({
         </View>
       );
     } catch (error) {
-      console.error('❌ FATAL: MapView crashed!', error);
-      console.error('❌ Error details:', JSON.stringify(error, null, 2));
+      devError('❌ FATAL: MapView crashed!', error);
+      devError('❌ Error details:', JSON.stringify(error, null, 2));
       return (
         <View style={styles.loadingContainer}>
           <Text style={styles.loadingText}>Map failed to load</Text>
@@ -1007,5 +1057,47 @@ const styles = StyleSheet.create({
   routeInfoText: {
     fontSize: 14,
     color: '#64748b',
+  },
+  errorContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#f8f9fa',
+    padding: 20,
+  },
+  errorTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#ef4444',
+    marginBottom: 12,
+  },
+  errorText: {
+    fontSize: 14,
+    color: '#64748b',
+    textAlign: 'center',
+    marginBottom: 24,
+  },
+  retryButton: {
+    backgroundColor: '#10b981',
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: 8,
+    marginBottom: 12,
+  },
+  retryButtonText: {
+    color: '#ffffff',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  openExternalButton: {
+    backgroundColor: '#3b82f6',
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: 8,
+  },
+  openExternalButtonText: {
+    color: '#ffffff',
+    fontSize: 16,
+    fontWeight: '600',
   },
 });

@@ -574,7 +574,7 @@ const styles = StyleSheet.create({
   ordersContainer: { flex: 1 },
   ordersContainerWithSidebar: { flex: 1, marginLeft: 0 },
   scrollView: { flex: 1, backgroundColor: '#f5f5f5' },
-  ordersList: { padding: 12, gap: 8 },
+  ordersList: { padding: 0, gap: 8 },
   orderCard: { backgroundColor: '#ffffff', borderRadius: 16, padding: 20, elevation: 3, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 8, marginBottom: 12, borderWidth: 1, borderColor: '#f1f5f9' },
   orderHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 },
   orderMainInfo: { flex: 1, marginRight: 16 },

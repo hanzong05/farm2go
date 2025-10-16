@@ -290,8 +290,9 @@ export default function LoginScreen() {
             onFocus={() => setFocusedInput(field)}
             onBlur={() => setFocusedInput(null)}
             editable={!isLoading}
+            keyboardType={options.keyboardType}
+            autoCapitalize={options.autoCapitalize}
             secureTextEntry={isPasswordField ? !showPassword : options.secureTextEntry}
-            {...options}
           />
           {isPasswordField && (
             <TouchableOpacity 
@@ -686,7 +687,8 @@ const styles = StyleSheet.create({
   },
 
   passwordToggle: {
-    padding: 8,
+    padding: 12,
+    marginLeft: 4,
   },
 
   forgotPassword: {

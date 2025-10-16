@@ -564,7 +564,12 @@ export default function SuperAdminUsers() {
             </TouchableOpacity>
           </BlurView>
 
-          <ScrollView style={styles.form}>
+          <ScrollView
+            style={styles.form}
+            showsVerticalScrollIndicator={false}
+            keyboardShouldPersistTaps="handled"
+            contentContainerStyle={{ paddingBottom: 40 }}
+          >
             <View style={styles.inputGroup}>
               <Text style={styles.inputLabel}>Email Address *</Text>
               <View style={[styles.inputContainer, emailError ? styles.inputError : null]}>
@@ -720,7 +725,12 @@ export default function SuperAdminUsers() {
           </BlurView>
 
           {selectedUser && (
-            <ScrollView style={styles.form}>
+            <ScrollView
+              style={styles.form}
+              showsVerticalScrollIndicator={false}
+              keyboardShouldPersistTaps="handled"
+              contentContainerStyle={{ paddingBottom: 40 }}
+            >
               <View style={styles.inputGroup}>
                 <Text style={styles.inputLabel}>Email Address</Text>
                 <View style={[styles.inputContainer, { backgroundColor: colors.gray100 }]}>

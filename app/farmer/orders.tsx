@@ -1323,7 +1323,7 @@ const styles = StyleSheet.create({
   },
 
   ordersList: {
-    padding: 12,
+    padding: 0,
     gap: 8,
   },
 

@@ -14,6 +14,7 @@ import {
   Animated,
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
+import * as FileSystem from 'expo-file-system/legacy';
 import { router } from 'expo-router';
 import { supabase } from '../lib/supabase';
 import { getUserWithProfile, logoutUser } from '../services/auth';
@@ -124,7 +125,7 @@ export default function Settings({ userType, currentRoute, onNavigateBack }: Set
       }
 
       const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        mediaTypes: ['images'],
         allowsEditing: true,
         aspect: [1, 1],
         quality: 0.8,
@@ -144,6 +145,9 @@ export default function Settings({ userType, currentRoute, onNavigateBack }: Set
 
     setUploadingImage(true);
     try {
+      console.log('📤 Uploading avatar...');
+
+      // Get file extension
       const uriWithoutParams = uri.split('?')[0].split('#')[0];
       const parts = uriWithoutParams.split('.');
       const fileExt = parts.length > 1 ? parts[parts.length - 1].toLowerCase() : 'jpg';
@@ -162,31 +166,65 @@ export default function Settings({ userType, currentRoute, onNavigateBack }: Set
       };
       const contentType = mimeTypes[finalExt] || 'image/jpeg';
 
-      const response = await fetch(uri);
-      const arrayBuffer = await response.arrayBuffer();
-
-      const { data: uploadData, error: uploadError } = await supabase.storage
-        .from('avatars')
-        .upload(filePath, arrayBuffer, {
-          contentType: contentType,
-          upsert: true
-        });
-
-      if (uploadError) {
-        Alert.alert('Upload Error', uploadError.message || 'Failed to upload image');
+      // Get session for auth
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        Alert.alert('Error', 'You must be logged in to upload photos');
         return;
       }
 
+      // Get file info
+      const fileInfo = await FileSystem.getInfoAsync(uri);
+      console.log('📁 Avatar file size:', fileInfo.size ? (fileInfo.size / (1024 * 1024)).toFixed(2) + 'MB' : 'unknown');
+
+      // Create FormData
+      const formData = new FormData();
+      formData.append('file', {
+        uri: uri,
+        type: contentType,
+        name: fileName
+      } as any);
+
+      console.log('📤 Uploading to Supabase Storage...');
+
+      // Upload using fetch directly
+      const uploadUrl = `https://lipviwhsjgvcmdggecqn.supabase.co/storage/v1/object/avatars/${filePath}`;
+
+      const uploadResponse = await fetch(uploadUrl, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${session.access_token}`,
+          'apikey': process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || '',
+        },
+        body: formData,
+      });
+
+      console.log('📡 Upload response:', uploadResponse.status);
+
+      if (!uploadResponse.ok) {
+        const errorText = await uploadResponse.text();
+        console.error('❌ Upload failed:', errorText);
+        Alert.alert('Upload Error', `Failed to upload image (${uploadResponse.status})`);
+        return;
+      }
+
+      console.log('✅ Avatar uploaded successfully');
+
+      // Get public URL
       const { data: { publicUrl } } = supabase.storage
         .from('avatars')
         .getPublicUrl(filePath);
 
+      console.log('🔗 Avatar URL:', publicUrl);
+
+      // Update profile
       const { error: updateError } = await supabase
         .from('profiles')
         .update({ avatar_url: publicUrl })
         .eq('id', profile.id);
 
       if (updateError) {
+        console.error('❌ Profile update error:', updateError);
         Alert.alert('Error', 'Failed to update profile: ' + updateError.message);
         return;
       }

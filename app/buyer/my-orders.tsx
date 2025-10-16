@@ -971,7 +971,7 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.1,
     shadowRadius: 1,
-    marginHorizontal: 4, // Black space on sides
+    marginHorizontal: 0,
   },
   tab: {
     flex: 1,
@@ -1006,7 +1006,7 @@ const styles = StyleSheet.create({
   mainContent: {
     flex: 1,
     flexDirection: 'row',
-    paddingHorizontal: 4, // Add horizontal padding for black space on sides
+    paddingHorizontal: 0,
   },
   ordersContainer: {
     flex: 1,
@@ -1020,10 +1020,10 @@ const styles = StyleSheet.create({
   scrollView: {
     flex: 1,
     backgroundColor: '#f5f5f5',
-    marginHorizontal: 4, // Black space on sides
+    marginHorizontal: 0,
   },
   ordersList: {
-    padding: 12,
+    padding: 0,
     gap: 8,
     paddingBottom: 100, // Extra padding for bottom navigation (universal)
   },

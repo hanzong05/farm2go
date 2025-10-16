@@ -88,7 +88,7 @@ const getModalScreenOptions = (title?: string) => ({
   }),
 });
 
-export default function RootLayout() {
+function RootLayout() {
   const colorScheme = useColorScheme();
   const appStateRef = useRef(AppState.currentState);
   const hasInitialized = useRef(false);
@@ -160,10 +160,11 @@ export default function RootLayout() {
         const isProtectedRoute = protectedRoutes.some(route => currentPath.startsWith(route));
 
         if (userData?.profile) {
-          // User is logged in with profile - redirect from auth pages and callback
-          const shouldRedirect = currentPath === '/' ||
+          // User is logged in with profile - redirect from auth pages (except callback)
+          const shouldRedirect = (currentPath === '/' ||
                                  currentPath === '/index' ||
-                                 currentPath.startsWith('/auth/');
+                                 currentPath.startsWith('/auth/')) &&
+                                 !currentPath.includes('/auth/callback'); // Let callback handle its own navigation
 
           if (shouldRedirect && isMounted) {
             console.log('🚀 Redirecting authenticated user to dashboard based on type:', userData.profile.user_type);
@@ -256,56 +257,47 @@ export default function RootLayout() {
     return () => subscription?.remove();
   }, []);
 
-  // Enhanced deep linking for OAuth and marketplace navigation
+  // Enhanced deep linking for marketplace navigation (non-OAuth links)
   useEffect(() => {
     const handleDeepLink = async (url: string) => {
       console.log('🛒 Deep link handler:', url);
 
-      // Handle OAuth callback - check if it's the auth/callback route OR has OAuth parameters
+      // Handle OAuth-related URLs - extract and store the code for the callback page
       if (url.includes('/auth/callback') || url.includes('access_token=') || url.includes('refresh_token=') || url.includes('code=')) {
-        console.log('🔗 OAuth callback detected');
+        console.log('🔗 OAuth callback detected - extracting code');
 
-        // Check current path to avoid duplicate navigation
-        const currentPath = Platform.OS === 'web' && typeof window !== 'undefined'
-          ? window.location.pathname
-          : `/${segments.join('/')}`;
-
-        console.log('🔍 Current path:', currentPath);
-        console.log('🔍 Already on callback?', currentPath.includes('auth/callback'));
-
-        // If we're already on the callback page, don't navigate again - let the page handle it
-        if (currentPath.includes('auth/callback')) {
-          console.log('✅ Already on callback page, skipping deep link navigation');
-          return;
-        }
-
-        // Extract and store the authorization code - do this FAST to avoid race conditions
-        console.log('💾 Extracting and storing authorization code...');
         try {
           const urlObj = new URL(url);
           const code = urlObj.searchParams.get('code');
 
           if (code) {
-            console.log('💾 Code found:', code.substring(0, 10) + '...');
+            console.log('💾 Storing auth code:', code.substring(0, 10) + '...');
+            await AsyncStorage.setItem('oauth_code', code);
+            console.log('✅ Auth code stored');
 
-            // Store the code for the callback handler to use
-            await AsyncStorage.setItem('oauth_authorization_code', code);
-            console.log('✅ Code stored successfully');
-          } else {
-            console.log('⚠️ No code found in OAuth URL');
+            // Check if we're already on the callback page
+            const currentPath = Platform.OS === 'web' && typeof window !== 'undefined'
+              ? window.location.pathname
+              : `/${segments.join('/')}`;
+
+            console.log('📍 Current path:', currentPath);
+
+            // Only navigate if we're NOT already on callback page
+            if (!currentPath.includes('auth/callback')) {
+              console.log('🚀 Navigating to callback page...');
+              if (isRouterReady) {
+                router.replace('/auth/callback');
+              } else {
+                setPendingNavigation('/auth/callback');
+              }
+            } else {
+              console.log('✅ Already on callback page, skipping navigation');
+            }
           }
         } catch (error) {
           console.error('❌ Error extracting OAuth code:', error);
         }
 
-        // Navigate to callback page IMMEDIATELY
-        console.log('🚀 Navigating to callback page from:', currentPath);
-        if (isRouterReady) {
-          router.replace('/auth/callback');
-        } else {
-          // Router not ready, queue navigation
-          setPendingNavigation('/auth/callback');
-        }
         return;
       }
 
@@ -683,3 +675,5 @@ export default function RootLayout() {
     </SafeAreaProvider>
   );
 }
+
+export default RootLayout;

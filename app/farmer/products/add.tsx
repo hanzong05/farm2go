@@ -15,6 +15,7 @@ import {
 } from 'react-native';
 import { router } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
+import * as FileSystem from 'expo-file-system/legacy';
 import ConfirmationModal from '../../../components/ConfirmationModal';
 import HeaderComponent from '../../../components/HeaderComponent';
 import VerificationGuard from '../../../components/VerificationGuard';
@@ -134,7 +135,7 @@ export default function AddProductScreen() {
       }
 
       const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        mediaTypes: ['images'],
         allowsEditing: true,
         aspect: [1, 1],
         quality: 0.8,
@@ -176,8 +177,18 @@ export default function AddProductScreen() {
     try {
       setUploadingImage(true);
 
-      // Create a unique filename
-      const filename = `product_${Date.now()}_${Math.random().toString(36).substring(7)}.jpg`;
+      // Check if user is authenticated
+      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+      if (sessionError || !session) {
+        console.error('Authentication error:', sessionError);
+        Alert.alert('Error', 'You must be logged in to upload images');
+        return null;
+      }
+
+      // Create a unique filename with proper extension
+      const fileExt = imageUri.split('.').pop()?.toLowerCase() || 'jpg';
+      const filename = `${Date.now()}_${Math.random().toString(36).substring(7)}.${fileExt}`;
+      const filePath = `products/${filename}`;
 
       // Read file data for React Native
       let fileData: any;
@@ -193,35 +204,134 @@ export default function AddProductScreen() {
           // Fallback: convert blob URL to blob
           const response = await fetch(imageUri);
           fileData = await response.blob();
+          mimeType = response.headers.get('content-type') || 'image/jpeg';
         }
-      } else {
-        // React Native: read as base64 and convert to ArrayBuffer
-        const response = await fetch(imageUri);
-        const arrayBuffer = await response.arrayBuffer();
-        fileData = new Uint8Array(arrayBuffer);
-      }
 
-      // Upload to Supabase storage
-      const { data, error } = await supabase.storage
-        .from('product-images')
-        .upload(filename, fileData, {
-          contentType: mimeType,
-          upsert: false
+        console.log('📤 Uploading image (web):', {
+          filename: filePath,
+          mimeType,
+          size: fileData.size || 'unknown'
         });
 
-      if (error) {
-        throw error;
+        // Upload to Supabase storage
+        const { data, error } = await supabase.storage
+          .from('product-images')
+          .upload(filePath, fileData, {
+            contentType: mimeType,
+            upsert: false,
+            cacheControl: '3600'
+          });
+
+        if (error) {
+          console.error('❌ Upload error:', error);
+          throw error;
+        }
+
+        console.log('✅ Upload successful:', data.path);
+
+        // Get public URL
+        const { data: { publicUrl } } = supabase.storage
+          .from('product-images')
+          .getPublicUrl(data.path);
+
+        console.log('🔗 Public URL:', publicUrl);
+
+        return publicUrl;
+      } else {
+        // React Native: use FileSystem to read as base64
+        console.log('📱 Reading file for React Native upload...');
+
+        // Determine mime type from extension
+        if (fileExt === 'png') {
+          mimeType = 'image/png';
+        } else if (fileExt === 'jpg' || fileExt === 'jpeg') {
+          mimeType = 'image/jpeg';
+        } else if (fileExt === 'webp') {
+          mimeType = 'image/webp';
+        }
+
+        console.log('📤 Preparing upload (React Native)...');
+
+        // Verify authentication before upload
+        console.log('🔐 Verifying auth token...');
+        const { data: { session: currentSession } } = await supabase.auth.getSession();
+        console.log('🔐 Auth status:', {
+          hasSession: !!currentSession,
+          hasAccessToken: !!currentSession?.access_token,
+          userId: currentSession?.user?.id
+        });
+
+        if (!currentSession) {
+          throw new Error('No active session found. Please log in again.');
+        }
+
+        // Get file info
+        const fileInfo = await FileSystem.getInfoAsync(imageUri);
+        console.log('📁 File info:', {
+          exists: fileInfo.exists,
+          size: fileInfo.size,
+          sizeInMB: fileInfo.size ? (fileInfo.size / (1024 * 1024)).toFixed(2) : 'unknown'
+        });
+
+        // Check file size - Supabase has limits
+        const maxSizeInMB = 50;
+        if (fileInfo.size && fileInfo.size / (1024 * 1024) > maxSizeInMB) {
+          throw new Error(`File size (${(fileInfo.size / (1024 * 1024)).toFixed(2)}MB) exceeds maximum allowed (${maxSizeInMB}MB)`);
+        }
+
+        // For React Native, create a FormData object
+        console.log('📦 Creating FormData for upload...');
+        const formData = new FormData();
+
+        // Add file to FormData - React Native way
+        formData.append('file', {
+          uri: imageUri,
+          type: mimeType,
+          name: filename
+        } as any);
+
+        console.log('📤 Starting upload to Supabase Storage...');
+        console.log('   Path:', filePath);
+        console.log('   Type:', mimeType);
+
+        // Upload using fetch directly with FormData
+        const uploadUrl = `https://lipviwhsjgvcmdggecqn.supabase.co/storage/v1/object/product-images/${filePath}`;
+
+        const uploadResponse = await fetch(uploadUrl, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${currentSession.access_token}`,
+            'apikey': process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || '',
+          },
+          body: formData,
+        });
+
+        console.log('📡 Upload response status:', uploadResponse.status);
+
+        if (!uploadResponse.ok) {
+          const errorText = await uploadResponse.text();
+          console.error('❌ Upload failed:', errorText);
+          throw new Error(`Upload failed with status ${uploadResponse.status}: ${errorText}`);
+        }
+
+        const uploadResult = await uploadResponse.json();
+        console.log('✅ Upload successful:', uploadResult);
+
+        console.log('✅ Upload completed successfully!');
+
+        // Get public URL
+        const { data: { publicUrl } } = supabase.storage
+          .from('product-images')
+          .getPublicUrl(filePath);
+
+        console.log('🔗 Public URL:', publicUrl);
+
+        return publicUrl;
       }
-
-      // Get public URL
-      const { data: { publicUrl } } = supabase.storage
-        .from('product-images')
-        .getPublicUrl(data.path);
-
-      return publicUrl;
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error uploading image:', error);
-      Alert.alert('Error', 'Failed to upload image');
+      const errorMessage = error?.message || 'Failed to upload image';
+      Alert.alert('Upload Error', errorMessage);
       return null;
     } finally {
       setUploadingImage(false);
