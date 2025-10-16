@@ -147,10 +147,18 @@ function RootLayout() {
       if (hasInitialized.current || !isMounted) return;
 
       try {
-        const userData = await getUserWithProfile();
         const currentPath = Platform.OS === 'web' && typeof window !== 'undefined'
           ? window.location.pathname
           : `/${segments.join('/')}`;
+
+        // IMPORTANT: Skip all session checks if on callback page - let callback handle everything
+        if (currentPath.includes('/auth/callback')) {
+          console.log('⏭️ On callback page - skipping layout session check');
+          hasInitialized.current = true;
+          return;
+        }
+
+        const userData = await getUserWithProfile();
 
         if (!isMounted) return;
 
@@ -257,93 +265,35 @@ function RootLayout() {
     return () => subscription?.remove();
   }, []);
 
-  // Enhanced deep linking for marketplace navigation (non-OAuth links)
+  // Simple deep linking - navigate to callback and store URL globally
   useEffect(() => {
-    const handleDeepLink = async (url: string) => {
-      console.log('🛒 Deep link handler:', url);
+    const handleDeepLink = (url: string) => {
+      console.log('🔗 Deep link:', url);
 
-      // Handle OAuth-related URLs - extract and store the code for the callback page
-      if (url.includes('/auth/callback') || url.includes('access_token=') || url.includes('refresh_token=') || url.includes('code=')) {
-        console.log('🔗 OAuth callback detected - extracting code');
-
+      // OAuth callback - store URL globally and navigate
+      if (url.includes('/auth/callback')) {
         try {
-          const urlObj = new URL(url);
-          const code = urlObj.searchParams.get('code');
+          console.log('✅ OAuth deep link detected');
 
-          if (code) {
-            console.log('💾 Storing auth code:', code.substring(0, 10) + '...');
-            await AsyncStorage.setItem('oauth_code', code);
-            console.log('✅ Auth code stored');
+          // Store URL globally so callback can access it
+          (global as any).oauthCallbackUrl = url;
 
-            // Check if we're already on the callback page
-            const currentPath = Platform.OS === 'web' && typeof window !== 'undefined'
-              ? window.location.pathname
-              : `/${segments.join('/')}`;
-
-            console.log('📍 Current path:', currentPath);
-
-            // Only navigate if we're NOT already on callback page
-            if (!currentPath.includes('auth/callback')) {
-              console.log('🚀 Navigating to callback page...');
-              if (isRouterReady) {
-                router.replace('/auth/callback');
-              } else {
-                setPendingNavigation('/auth/callback');
-              }
-            } else {
-              console.log('✅ Already on callback page, skipping navigation');
-            }
+          if (isRouterReady) {
+            router.push('/auth/callback');
           }
         } catch (error) {
-          console.error('❌ Error extracting OAuth code:', error);
+          console.error('❌ Deep link parse error:', error);
         }
-
-        return;
-      }
-
-      // Handle specific deep link patterns
-      if (url.includes('/products/')) {
-        // Product detail pages
-        console.log('🔗 Product deep link detected');
-      } else if (url.includes('/farmers/')) {
-        // Farmer profile pages
-        console.log('🔗 Farmer profile deep link detected');
-      } else if (url.includes('/orders/')) {
-        // Order tracking pages
-        console.log('🔗 Order tracking deep link detected');
       }
     };
 
-    // Listen for incoming deep links with enhanced error handling
-    const subscription = Linking.addEventListener('url', (event) => {
-      console.log('🔔 Deep link event received:', event.url);
-      try {
-        handleDeepLink(event.url);
-      } catch (error) {
-        console.error('🚨 Deep link handling error:', error);
-      }
+    const subscription = Linking.addEventListener('url', (event) => handleDeepLink(event.url));
+
+    Linking.getInitialURL().then((url) => {
+      if (url) handleDeepLink(url);
     });
 
-    // Check if app was opened with a deep link
-    Linking.getInitialURL()
-      .then((url) => {
-        if (url) {
-          console.log('🔔 Initial deep link detected:', url);
-          handleDeepLink(url);
-        } else {
-          console.log('ℹ️ No initial deep link');
-        }
-      })
-      .catch((error) => {
-        console.error('🚨 Initial URL error:', error);
-      });
-
-    console.log('👂 Deep link listener registered');
-
-    return () => {
-      console.log('🔇 Deep link listener removed');
-      subscription?.remove();
-    };
+    return () => subscription?.remove();
   }, [router, isRouterReady]);
 
   return (

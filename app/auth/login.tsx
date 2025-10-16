@@ -159,98 +159,24 @@ export default function LoginScreen() {
   };
 
   const handleGoogleSignIn = async () => {
-    console.log('🔥 handleGoogleSignIn function called!');
+    console.log('🚀 Google Sign In clicked');
     setIsLoading(true);
 
     try {
-      console.log('🔥 About to call signInWithGoogle...');
+      const { signInWithGoogleSimple } = await import('../../lib/supabase');
+      await signInWithGoogleSimple();
 
-      // Store OAuth intent for callback processing
-      const { sessionManager } = await import('../../services/sessionManager');
-      await sessionManager.storeOAuthState({
-        intent: 'signin',
-        userType: null, // Will be determined by callback page
-        timestamp: Date.now()
-      });
-
-      const result = await signInWithGoogle(false) as any;
-      console.log('🔄 OAuth result:', result);
-
-      // Check if OAuth failed completely (not just dismissed)
-      if (result && result.success === false && result.error !== 'OAuth was cancelled by user') {
-        console.log('❌ OAuth failed:', result.error);
-        setIsLoading(false);
-        Alert.alert('Sign In Failed', result.error || 'Google sign-in failed. Please try again.');
-        return;
-      }
-
-      // Check if OAuth was cancelled by user
-      if (result && result.success === false && result.error === 'OAuth was cancelled by user') {
-        console.log('ℹ️ OAuth cancelled by user');
-        setIsLoading(false);
-        return; // Don't show error, user cancelled intentionally
-      }
-
-      // For mobile/native platforms with pending OAuth
-      if (Platform.OS !== 'web' && result?.pending) {
-        console.log('📱 Mobile OAuth pending - browser opened, waiting for deep link callback...');
-        console.log('💡 After signing in, the browser should redirect back to the app');
-        console.log('💡 If it doesn\'t redirect automatically, tap the "Open Farm2Go App" button');
-
-        // Keep loading state active - the deep link or auth state change will handle it
-        return;
-      }
-
-      // For web, handle immediate session if available
-      if (result && result.sessionData && result.sessionData.user) {
-        console.log('✅ OAuth completed with session data on web');
-
-        // Clear OAuth state since we're handling it directly
-        await sessionManager.clearOAuthState();
-
-        // Let the layout handle the redirect to avoid conflicts
-        setIsLoading(false);
-        return;
-      }
-
-      // For web without immediate session data, wait for callback
-      console.log('ℹ️ No direct session data on web, waiting for callback...');
-
+      // On web, this will redirect automatically
+      // On mobile, user will complete OAuth in browser and return via deep link
+      console.log('✅ OAuth initiated');
     } catch (error: any) {
-      console.error('🔥 Error in handleGoogleSignIn:', error);
-      Alert.alert('Error', error.message || 'OAuth failed');
+      console.error('❌ OAuth error:', error);
+      Alert.alert('Sign In Failed', error.message || 'Please try again');
       setIsLoading(false);
     }
   };
 
-  // Listen for auth state changes to handle successful OAuth
-  useEffect(() => {
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      // Silently handle auth state changes
-
-      // Handle SIGNED_OUT events
-      if (event === 'SIGNED_OUT') {
-        // User signed out, resetting loading state
-        setIsLoading(false);
-      }
-
-      // Handle SIGNED_IN events during OAuth
-      if (event === 'SIGNED_IN' && session?.user && isLoading) {
-        console.log('✅ Auth state change: User signed in during OAuth');
-
-        // Clear loading state immediately to prevent getting stuck
-        setIsLoading(false);
-
-        // Let the layout handle navigation - don't compete with callback page
-        console.log('✅ Clearing loading state and letting layout handle navigation');
-      }
-    });
-
-    return () => subscription.unsubscribe();
-  }, [isLoading]);
-
-  // Auth state changes are now handled by the callback page for OAuth flows
-  // Regular email/password login still works through handleLogin above
+  // No auth listeners needed - callback and layout handle everything
 
   const renderFormInput = (
     field: string,

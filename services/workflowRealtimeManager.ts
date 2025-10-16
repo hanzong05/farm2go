@@ -1,4 +1,5 @@
-import { messageService, Message } from './messageService';
+
+import { Message, messageService } from './messageService';
 
 /**
  * Real-time manager that implements the workflow diagram:

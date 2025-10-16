@@ -19,10 +19,11 @@ if (Platform.OS !== 'web') {
 
 export const supabase = createClient<Database>(supabaseUrl, supabaseAnonKey, {
   auth: {
-    detectSessionInUrl: true,
+    detectSessionInUrl: Platform.OS === 'web',
     persistSession: true,
     autoRefreshToken: true,
-    flowType: Platform.OS === 'web' ? 'implicit' : 'pkce', // Use implicit for web, PKCE for mobile
+    // Use implicit flow for mobile to avoid PKCE/WebCrypto issues
+    flowType: 'implicit',
     storage: Platform.OS !== 'web' ? require('@react-native-async-storage/async-storage').default : undefined,
   },
   global: {
@@ -62,7 +63,37 @@ export const getUserProfile = async (userId: string) => {
   return data;
 };
 
-// Custom OAuth function using WebBrowser for in-app authentication
+// Simple OAuth function for Google Sign In
+export const signInWithGoogleSimple = async () => {
+  const redirectUrl = Platform.OS === 'web'
+    ? `${window.location.origin}/auth/callback`
+    : 'farm2go://auth/callback';
+
+  console.log('🚀 Starting Google OAuth...', Platform.OS);
+  console.log('🔗 Redirect URL:', redirectUrl);
+
+  const { data, error } = await supabase.auth.signInWithOAuth({
+    provider: 'google',
+    options: {
+      redirectTo: redirectUrl,
+      skipBrowserRedirect: Platform.OS !== 'web',
+    },
+  });
+
+  if (error) {
+    console.error('❌ OAuth error:', error);
+    throw error;
+  }
+
+  // On mobile, open the OAuth URL in system browser
+  if (Platform.OS !== 'web' && data.url) {
+    await Linking.openURL(data.url);
+  }
+
+  return data;
+};
+
+// Keep old function for backward compatibility (deprecated)
 export const signInWithGoogleOAuth = async (userType: string, intent: string = 'registration') => {
   try {
     console.log('🔥 signInWithGoogleOAuth function called!');
