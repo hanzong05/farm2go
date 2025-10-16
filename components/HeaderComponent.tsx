@@ -333,40 +333,66 @@ export default function HeaderComponent({
     if (!profile) return;
 
     try {
-      // Find admin from same barangay
-      const { data: adminData, error: adminError } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('user_type', 'admin')
-        .eq('barangay', profile.barangay || '')
-        .limit(1)
-        .single();
+      // If user is admin, contact super admin
+      // If user is farmer/buyer, contact admin from same barangay
+      const targetUserType = resolvedUserType === 'admin' ? 'super-admin' : 'admin';
 
-      let adminProfile: Profile | null = adminData;
+      let supportProfile: Profile | null = null;
 
-      if (adminError || !adminProfile) {
-        // Fallback to any admin
-        const { data: anyAdmin } = await supabase
+      if (targetUserType === 'super-admin') {
+        // Find super admin
+        const { data: superAdminData, error: superAdminError } = await supabase
           .from('profiles')
           .select('*')
-          .eq('user_type', 'admin')
+          .eq('user_type', 'super-admin')
           .limit(1)
           .single();
 
-        adminProfile = anyAdmin || null;
+        supportProfile = superAdminData;
+
+        if (superAdminError || !supportProfile) {
+          showAlert('No Support Available', 'No super admin available at the moment. Please try again later.', [
+            { text: 'OK', style: 'default' }
+          ]);
+          return;
+        }
+      } else {
+        // Find admin from same barangay (for farmers and buyers)
+        const { data: adminData, error: adminError } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('user_type', 'admin')
+          .eq('barangay', profile.barangay || '')
+          .limit(1)
+          .single();
+
+        supportProfile = adminData;
+
+        if (adminError || !supportProfile) {
+          // Fallback to any admin
+          const { data: anyAdmin } = await supabase
+            .from('profiles')
+            .select('*')
+            .eq('user_type', 'admin')
+            .limit(1)
+            .single();
+
+          supportProfile = anyAdmin || null;
+        }
+
+        if (!supportProfile) {
+          showAlert('No Support Available', 'No support admin available at the moment. Please try again later.', [
+            { text: 'OK', style: 'default' }
+          ]);
+          return;
+        }
       }
 
-      if (!adminProfile) {
-        showAlert('No Support Available', 'No support admin available at the moment. Please try again later.', [
-          { text: 'OK', style: 'default' }
-        ]);
-        return;
-      }
-
-      // Use the ref to open chat with the admin
-      if (messageComponentRef.current && adminProfile) {
-        const adminName = `${adminProfile.first_name || ''} ${adminProfile.last_name || ''}`.trim() || 'Support';
-        await messageComponentRef.current.openChatWithUser(adminProfile.id, adminName, 'admin');
+      // Use the ref to open chat with the support person
+      if (messageComponentRef.current && supportProfile) {
+        const supportName = `${supportProfile.first_name || ''} ${supportProfile.last_name || ''}`.trim() || 'Support';
+        const supportType = targetUserType === 'super-admin' ? 'admin' : 'admin'; // Both use 'admin' type for chat
+        await messageComponentRef.current.openChatWithUser(supportProfile.id, supportName, supportType);
       }
     } catch (error) {
       console.error('Error opening support chat:', error);

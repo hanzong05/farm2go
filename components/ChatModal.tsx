@@ -636,7 +636,7 @@ export default function ChatModal({
       transparent={isDesktop}
       onRequestClose={onClose}
     >
-      <SafeAreaView style={{ flex: 1, backgroundColor: '#000' }} edges={['bottom']}>
+      <SafeAreaView style={{ flex: 1, backgroundColor: isDesktop ? 'transparent' : '#000' }} edges={['bottom']}>
         <KeyboardAvoidingView
           style={styles.keyboardView}
           behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
@@ -767,7 +767,7 @@ const styles = StyleSheet.create({
 
   modalOverlay: {
     flex: 1,
-    backgroundColor: isDesktop ? 'transparent' : colors.white,
+    backgroundColor: 'transparent',
     justifyContent: isDesktop ? 'flex-end' : 'flex-start',
     alignItems: isDesktop ? 'flex-end' : 'stretch',
     paddingRight: isDesktop ? 20 : 0,

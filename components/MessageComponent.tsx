@@ -135,6 +135,9 @@ const MessageComponent = forwardRef<MessageComponentRef, MessageComponentProps>(
   useImperativeHandle(ref, () => ({
     openChatWithUser: async (userId: string, userName: string, userType: 'farmer' | 'buyer' | 'admin') => {
       try {
+        // Clear previous messages immediately to prevent showing old chat
+        setMessages([]);
+
         // Create a conversation object
         const conversation: DBConversation = {
           other_user_id: userId,
@@ -502,6 +505,9 @@ const MessageComponent = forwardRef<MessageComponentRef, MessageComponentProps>(
 
   const handleConversationPress = async (conversation: DBConversation) => {
     try {
+      // Clear previous messages immediately to prevent showing old chat
+      setMessages([]);
+
       // Get the REAL UUID conversation ID from database
       const realConversationId = await messageService.getOrCreateConversationId(currentUserId, conversation.other_user_id);
 
@@ -563,6 +569,7 @@ const MessageComponent = forwardRef<MessageComponentRef, MessageComponentProps>(
   const handleCloseChatModal = () => {
     setChatModalVisible(false);
     setSelectedConversation(null);
+    setMessages([]); // Clear messages when closing chat
   };
 
   const renderConversationItem = ({ item }: { item: DBConversation }) => (
