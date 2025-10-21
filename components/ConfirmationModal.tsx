@@ -35,42 +35,9 @@ const ConfirmationModal: React.FC<ConfirmationModalProps> = ({
   onConfirm,
   onCancel,
 }) => {
-  // Use native Alert for non-web platforms
-  React.useEffect(() => {
-    if (visible && Platform.OS !== 'web') {
-      Alert.alert(
-        title,
-        message,
-        [
-          {
-            text: cancelText,
-            style: 'cancel',
-            onPress: () => {
-              onCancel();
-            }
-          },
-          {
-            text: confirmText,
-            style: isDestructive ? 'destructive' : 'default',
-            onPress: () => {
-              onConfirm();
-            }
-          }
-        ],
-        { cancelable: true, onDismiss: onCancel }
-      );
-    }
-  }, [visible, title, message, confirmText, cancelText, isDestructive, onConfirm, onCancel]);
-
-  // For web, render custom modal
-  if (Platform.OS !== 'web') {
-    return null;
-  }
-
   if (!visible) {
     return null;
   }
-
 
   const buttonColor = isDestructive ? '#EF4444' : confirmButtonColor;
 

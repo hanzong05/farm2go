@@ -358,7 +358,7 @@ class MessageService {
   // Get conversation messages between current user and another user
   async getConversationMessages(
     otherUserId: string,
-    limit: number = 50,
+    limit: number = 20,
     offset: number = 0
   ): Promise<Message[]> {
     try {

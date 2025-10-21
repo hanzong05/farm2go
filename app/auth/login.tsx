@@ -1,9 +1,10 @@
 import { Link, router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { Alert, Dimensions, KeyboardAvoidingView, Modal, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { Dimensions, KeyboardAvoidingView, Modal, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import Icon from 'react-native-vector-icons/FontAwesome5';
-import { supabase } from '../../lib/supabase';
+import { supabase, signInWithGoogleSimple } from '../../lib/supabase';
 import { getUserWithProfile, loginUser, signInWithGoogle } from '../../services/auth';
+import { showError, showInfo } from '../../utils/alert';
 
 const { width, height } = Dimensions.get('window');
 const isMobile = width < 768;
@@ -61,7 +62,7 @@ export default function LoginScreen() {
       setInfoMessage(info);
       setShowInfoModal(true);
     } else if (error && typeof error === 'string') {
-      Alert.alert('Notice', error);
+      showInfo(error, 'Notice');
     }
   }, [info, error]);
 
@@ -94,7 +95,7 @@ export default function LoginScreen() {
 
   const handleLogin = async () => {
     if (!formData.email || !formData.password) {
-      Alert.alert('Error', 'Please fill in all fields');
+      showError('Please fill in all fields');
       return;
     }
 
@@ -149,9 +150,9 @@ export default function LoginScreen() {
       }
     } catch (error: any) {
       console.error('Login error:', error);
-      Alert.alert(
-        'Login Failed',
-        error.message || 'Please check your credentials and try again.'
+      showError(
+        error.message || 'Please check your credentials and try again.',
+        'Login Failed'
       );
     } finally {
       setIsLoading(false);
@@ -163,7 +164,6 @@ export default function LoginScreen() {
     setIsLoading(true);
 
     try {
-      const { signInWithGoogleSimple } = await import('../../lib/supabase');
       await signInWithGoogleSimple();
 
       // On web, this will redirect automatically
@@ -171,7 +171,7 @@ export default function LoginScreen() {
       console.log('✅ OAuth initiated');
     } catch (error: any) {
       console.error('❌ OAuth error:', error);
-      Alert.alert('Sign In Failed', error.message || 'Please try again');
+      showError(error.message || 'Please try again', 'Sign In Failed');
       setIsLoading(false);
     }
   };
@@ -241,7 +241,7 @@ export default function LoginScreen() {
     <Modal
       visible={showInfoModal}
       transparent={true}
-      animationKeyframesType="fade"
+      animationType="fade"
       onRequestClose={() => setShowInfoModal(false)}
     >
       <View style={styles.modalOverlay}>

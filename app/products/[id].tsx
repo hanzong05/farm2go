@@ -5,6 +5,7 @@ import Icon from 'react-native-vector-icons/FontAwesome5';
 import { supabase } from '../../lib/supabase';
 import { getUserWithProfile } from '../../services/auth';
 import ContactWidget, { ContactPerson } from '../../components/ContactWidget';
+import { showError } from '../../utils/alert';
 
 const { width } = Dimensions.get('window');
 
@@ -225,12 +226,12 @@ export default function ProductDetailScreen() {
     if (!product || !profile) return;
 
     if (profile.id === '00000000-0000-0000-0000-000000000000') {
-      Alert.alert('Login Required', 'Please log in to place an order.');
+      showError('Please log in to place an order.', 'Login Required');
       return;
     }
 
     if (orderQuantity > product.quantity_available) {
-      Alert.alert('Invalid Quantity', 'Order quantity cannot exceed available stock');
+      showError('Order quantity cannot exceed available stock', 'Invalid Quantity');
       return;
     }
 
@@ -242,7 +243,7 @@ export default function ProductDetailScreen() {
     if (!product || !profile) return;
 
     if (profile.id === '00000000-0000-0000-0000-000000000000') {
-      Alert.alert('Login Required', 'Please log in to contact the seller.');
+      showError('Please log in to contact the seller.', 'Login Required');
       return;
     }
 

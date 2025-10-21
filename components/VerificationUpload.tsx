@@ -3,7 +3,6 @@ import * as ImagePicker from 'expo-image-picker';
 import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   Image,
   Platform,
   ScrollView,
@@ -14,6 +13,7 @@ import {
 } from 'react-native';
 import { supabase } from '../lib/supabase';
 import { Database } from '../types/database';
+import { Alert, showError, showSuccess } from '../utils/alert';
 import WebFileInput from './WebFileInput';
 
 // Platform-specific import to prevent VisionCamera loading on web
@@ -409,12 +409,12 @@ const VerificationUpload: React.FC<VerificationUploadProps> = ({
 
     // Validation
     if (!verificationData.idDocument.uri) {
-      Alert.alert('Missing Document', 'Please upload a valid ID document');
+      showError('Please upload a valid ID document', 'Missing Document');
       return;
     }
 
     if (!verificationData.facePhoto.uri) {
-      Alert.alert('Missing Photo', 'Please upload a face photo');
+      showError('Please upload a face photo', 'Missing Photo');
       return;
     }
 
@@ -468,21 +468,18 @@ const VerificationUpload: React.FC<VerificationUploadProps> = ({
       }
 
       console.log('✅ Verification submitted successfully');
-      Alert.alert(
-        'Success',
-        'Your verification documents have been submitted successfully. You will be notified once they are reviewed.',
-        [{ text: 'OK', onPress: onVerificationSubmitted }]
-      );
+      showSuccess('Your verification documents have been submitted successfully. You will be notified once they are reviewed.');
+
+      // Call the callback after a short delay to allow toast to be seen
+      setTimeout(() => {
+        onVerificationSubmitted();
+      }, 1500);
 
     } catch (error: unknown) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
       console.error('Error submitting verification:', errorMessage);
 
-      Alert.alert(
-        'Upload Failed',
-        `Failed to submit verification: ${errorMessage}`,
-        [{ text: 'Try Again' }]
-      );
+      showError(`Failed to submit verification: ${errorMessage}`, 'Upload Failed');
     } finally {
       setIsUploading(false);
       setUploadProgress({});

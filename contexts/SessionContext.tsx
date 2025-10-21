@@ -2,6 +2,8 @@ import React, { createContext, useContext, useEffect, useState, ReactNode } from
 import { User } from '@supabase/supabase-js';
 import { sessionManager, SessionState } from '../services/sessionManager';
 import { Database } from '../types/database';
+import { supabase } from '../lib/supabase';
+import { loginUser } from '../services/auth';
 
 type Profile = Database['public']['Tables']['profiles']['Row'];
 
@@ -86,7 +88,6 @@ export const SessionProvider: React.FC<SessionProviderProps> = ({ children }) =>
 
         // Try a simple direct approach instead of sessionManager
         console.log('🔄 SessionProvider: Trying direct Supabase session...');
-        const { supabase } = await import('../lib/supabase');
 
         const directTimeoutPromise = new Promise<never>((_, reject) => {
           setTimeout(() => {
@@ -176,9 +177,6 @@ export const SessionProvider: React.FC<SessionProviderProps> = ({ children }) =>
   const login = async (email: string, password: string): Promise<{ success: boolean; error?: string }> => {
     try {
       setSessionState(prev => ({ ...prev, isLoading: true, error: null }));
-
-      // Import auth service dynamically to avoid circular dependencies
-      const { loginUser } = await import('../services/auth');
 
       const authResult = await loginUser({ email, password });
 

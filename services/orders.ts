@@ -34,29 +34,33 @@ export const createOrder = async (buyerId: string, orderData: CreateOrderData): 
 
     const totalPrice = product.price * orderData.quantity;
 
-    // Start transaction
-    const { data, error } = await supabase.rpc('create_order_with_transaction', {
-      p_buyer_id: buyerId,
-      p_farmer_id: product.farmer_id,
-      p_product_id: orderData.product_id,
-      p_quantity: orderData.quantity,
-      p_total_price: totalPrice,
-      p_delivery_address: orderData.delivery_address,
-      p_notes: orderData.notes || null,
-      p_payment_method: 'pending' // Default payment method
-    });
+    // Try using RPC function first
+    try {
+      const { data, error } = await supabase.rpc('create_order_with_transaction', {
+        p_buyer_id: buyerId,
+        p_farmer_id: product.farmer_id,
+        p_product_id: orderData.product_id,
+        p_quantity: orderData.quantity,
+        p_total_price: totalPrice,
+        p_delivery_address: orderData.delivery_address,
+        p_notes: orderData.notes || null,
+        p_payment_method: 'pending' // Default payment method
+      });
 
-    if (error) {
-      console.error('Error creating order:', error);
-      throw error;
+      // If RPC succeeded and has data, return it
+      if (!error && data) {
+        console.log('✅ Order created via RPC function with automatic stock decrease');
+        return data;
+      }
+
+      // If RPC failed or no data, fall back to manual
+      console.log('⚠️ RPC function unavailable or failed, using manual order creation');
+    } catch (rpcError) {
+      console.log('⚠️ RPC error, falling back to manual creation:', rpcError);
     }
 
-    // If the RPC function doesn't exist, fall back to manual transaction
-    if (!data) {
-      return await createOrderManually(buyerId, product.farmer_id, orderData, totalPrice);
-    }
-
-    return data;
+    // Fallback to manual order creation with stock management
+    return await createOrderManually(buyerId, product.farmer_id, orderData, totalPrice);
   } catch (error) {
     console.error('Create order error:', error);
     throw error;
@@ -110,6 +114,7 @@ const createOrderManually = async (
   }
 
   // Update product availability (manual approach)
+  console.log('📦 Updating product stock...');
   const { data: currentProduct } = await supabase
     .from('products')
     .select('quantity_available')
@@ -117,12 +122,25 @@ const createOrderManually = async (
     .single();
 
   if (currentProduct) {
-    await supabase
+    const oldStock = (currentProduct as any).quantity_available;
+    const newStock = Math.max(0, oldStock - orderData.quantity);
+
+    console.log(`📦 Stock update: ${oldStock} → ${newStock} (ordered: ${orderData.quantity})`);
+
+    const { error: stockError } = await supabase
       .from('products')
       .update({
-        quantity_available: Math.max(0, (currentProduct as any).quantity_available - orderData.quantity)
+        quantity_available: newStock
       })
       .eq('id', orderData.product_id);
+
+    if (stockError) {
+      console.error('❌ Failed to update stock:', stockError);
+    } else {
+      console.log('✅ Stock updated successfully');
+    }
+  } else {
+    console.error('❌ Product not found for stock update');
   }
 
   return { order: order as Order, transaction: transaction as Transaction };
@@ -182,7 +200,18 @@ export const getBuyerOrders = async (buyerId: string): Promise<OrderWithDetails[
       ...order,
       product: order.products,
       farmer_profile: order.profiles,
-      transaction: order.transactions?.[0] // Get the first/main transaction
+      transaction: order.transactions?.[0], // Get the first/main transaction
+      // Create order_items array for the modal to consume
+      order_items: order.products ? [{
+        order_id: order.id,
+        quantity: order.quantity,
+        unit_price: order.products.price || 0,
+        product: {
+          name: order.products.name || '',
+          unit: order.products.unit || '',
+          image_url: order.products.image_url || null,
+        },
+      }] : []
     }));
 
     console.log('✅ Mapped orders:', mappedOrders);
@@ -238,7 +267,18 @@ export const getFarmerOrders = async (farmerId: string): Promise<OrderWithDetail
       ...order,
       product: order.products,
       farmer_profile: order.profiles, // This will be the buyer profile
-      transaction: order.transactions?.[0]
+      transaction: order.transactions?.[0],
+      // Create order_items array for the modal to consume
+      order_items: order.products ? [{
+        order_id: order.id,
+        quantity: order.quantity,
+        unit_price: order.products.price || 0,
+        product: {
+          name: order.products.name || '',
+          unit: order.products.unit || '',
+          image_url: order.products.image_url || null,
+        },
+      }] : []
     })) as OrderWithDetails[];
   } catch (error) {
     console.error('Error fetching farmer orders:', error);
@@ -385,11 +425,23 @@ export const getOrderById = async (orderId: string): Promise<OrderWithDetails | 
       throw error;
     }
 
+    const order = data as any;
     return {
-      ...(data as any),
-      product: (data as any).products,
-      farmer_profile: (data as any).farmer_profile,
-      transaction: (data as any).transactions?.[0]
+      ...order,
+      product: order.products,
+      farmer_profile: order.farmer_profile,
+      transaction: order.transactions?.[0],
+      // Create order_items array for the modal to consume
+      order_items: order.products ? [{
+        order_id: order.id,
+        quantity: order.quantity,
+        unit_price: order.products.price || 0,
+        product: {
+          name: order.products.name || '',
+          unit: order.products.unit || '',
+          image_url: order.products.image_url || null,
+        },
+      }] : []
     } as OrderWithDetails;
   } catch (error) {
     console.error('Error fetching order:', error);
@@ -400,63 +452,79 @@ export const getOrderById = async (orderId: string): Promise<OrderWithDetails | 
 // Cancel order (can only cancel pending orders)
 export const cancelOrder = async (orderId: string, reason?: string): Promise<Order> => {
   try {
-    const { data: order, error: fetchError } = await supabase
-      .from('orders')
-      .select('*')
-      .eq('id', orderId)
-      .single();
-
-    if (fetchError || !order) {
-      throw new Error('Order not found');
-    }
-
-    if ((order as any).status !== 'pending') {
-      throw new Error('Can only cancel pending orders');
-    }
-
-    // Update order status to cancelled
-    const { data, error } = await supabase
-      .from('orders')
-      .update({
-        status: 'cancelled',
-        notes: reason ? `${(order as any).notes || ''}\nCancellation reason: ${reason}`.trim() : (order as any).notes,
-        updated_at: new Date().toISOString()
-      })
-      .eq('id', orderId)
-      .select()
-      .single();
+    // Try using the database function first
+    const { data, error } = await supabase.rpc('cancel_order_with_stock_restore', {
+      p_order_id: orderId,
+      p_cancellation_reason: reason || 'No reason provided'
+    });
 
     if (error) {
-      throw error;
+      console.error('RPC error, falling back to manual cancellation:', error);
+      return await cancelOrderManually(orderId, reason);
     }
-
-    // Restore product quantity (manual approach)
-    const { data: currentProduct } = await supabase
-      .from('products')
-      .select('quantity_available')
-      .eq('id', (order as any).product_id)
-      .single();
-
-    if (currentProduct) {
-      await supabase
-        .from('products')
-        .update({
-          quantity_available: (currentProduct as any).quantity_available + (order as any).quantity
-        })
-        .eq('id', (order as any).product_id);
-    }
-
-    // Update transaction status to failed
-    await supabase
-      .from('transactions')
-      .update({ status: 'failed' })
-      .eq('order_id', orderId);
 
     return data as Order;
   } catch (error) {
     console.error('Error cancelling order:', error);
     throw error;
   }
+};
+
+// Manual fallback for order cancellation
+const cancelOrderManually = async (orderId: string, reason?: string): Promise<Order> => {
+  const { data: order, error: fetchError } = await supabase
+    .from('orders')
+    .select('*')
+    .eq('id', orderId)
+    .single();
+
+  if (fetchError || !order) {
+    throw new Error('Order not found');
+  }
+
+  if ((order as any).status !== 'pending') {
+    throw new Error('Can only cancel pending orders');
+  }
+
+  // Update order status to cancelled
+  const { data, error } = await supabase
+    .from('orders')
+    .update({
+      status: 'cancelled',
+      notes: reason ? `${(order as any).notes || ''}\nCancellation reason: ${reason}`.trim() : (order as any).notes,
+      updated_at: new Date().toISOString()
+    })
+    .eq('id', orderId)
+    .select()
+    .single();
+
+  if (error) {
+    throw error;
+  }
+
+  // Restore product quantity
+  const { data: currentProduct } = await supabase
+    .from('products')
+    .select('quantity_available')
+    .eq('id', (order as any).product_id)
+    .single();
+
+  if (currentProduct) {
+    await supabase
+      .from('products')
+      .update({
+        quantity_available: (currentProduct as any).quantity_available + (order as any).quantity
+      })
+      .eq('id', (order as any).product_id);
+  }
+
+  // Update transaction status to failed
+  await supabase
+    .from('transactions')
+    .update({ status: 'failed' })
+    .eq('order_id', orderId);
+
+  return data as Order;
 };
 
 // Real-time subscriptions for orders

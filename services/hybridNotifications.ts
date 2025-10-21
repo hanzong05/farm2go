@@ -1,7 +1,7 @@
 import { Platform } from 'react-native';
 import { realtimeNotificationService } from './realtimeNotifications';
 import { websocketNotificationService } from './websocketNotifications';
-import { subscribeToNotifications, broadcastNotification } from './notifications';
+import { subscribeToNotifications, broadcastNotification, getUserNotifications } from './notifications';
 import { NotificationData } from '../hooks/useNotifications';
 
 interface HybridNotificationService {
@@ -107,8 +107,6 @@ class HybridNotificationServiceImpl implements HybridNotificationService {
       try {
         console.log('📊 Polling for new notifications...');
 
-        // Import getUserNotifications dynamically to avoid circular imports
-        const { getUserNotifications } = await import('./notifications');
         const recentNotifications = await getUserNotifications(this.userId, 5);
 
         // Check for new notifications since last check

@@ -886,7 +886,7 @@ export default function MarketplaceScreen() {
       {/* Floating Visual Search Button */}
       <TouchableOpacity
         style={styles.visualSearchFab}
-        onPress={handleVisualSearch}
+        onPress={() => setShowVisualSearchModal(true)}
         activeOpacity={0.8}
       >
         <Icon name="camera" size={24} color="#fff" />

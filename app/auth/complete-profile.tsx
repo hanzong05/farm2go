@@ -7,6 +7,7 @@ import LocationPicker from '../../components/LocationPicker';
 import { supabase } from '../../lib/supabase';
 import { Database } from '../../types/database';
 import { safeLocalStorage } from '../../utils/platformUtils';
+import { checkExistingUserProfile } from '../../services/auth';
 
 const { width, height } = Dimensions.get('window');
 const isMobile = width < 768;
@@ -138,8 +139,7 @@ export default function CompleteProfileScreen() {
           if (user && user.email) {
             console.log('🔍 Complete Profile: Checking database for existing profile with email:', user.email);
 
-            // Import and use the helper function
-            const { checkExistingUserProfile } = await import('../../services/auth');
+            // Use the helper function
             const existingProfile = await checkExistingUserProfile(user.email);
 
             if (existingProfile && existingProfile.user_type) {
@@ -448,7 +448,7 @@ export default function CompleteProfileScreen() {
     <Modal
       visible={showSuccessModal}
       transparent={true}
-      animationKeyframesType="fade"
+      animationType="fade"
       onRequestClose={() => setShowSuccessModal(false)}
     >
       <View style={styles.modalOverlay}>
@@ -480,7 +480,7 @@ export default function CompleteProfileScreen() {
     <Modal
       visible={showErrorModal}
       transparent={true}
-      animationKeyframesType="fade"
+      animationType="fade"
       onRequestClose={() => setShowErrorModal(false)}
     >
       <View style={styles.modalOverlay}>

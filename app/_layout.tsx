@@ -13,6 +13,7 @@ import SafeContainer from '../components/SafeContainer';
 import { AuthProvider } from '../contexts/AuthContext';
 import { ConfirmationModalProvider } from '../contexts/ConfirmationModalContext';
 import { SessionProvider } from '../contexts/SessionContext';
+import { ToastProvider } from '../contexts/ToastContext';
 import { supabase } from '../lib/supabase';
 import { getUserWithProfile } from '../services/auth';
 
@@ -299,12 +300,13 @@ function RootLayout() {
   return (
     <SafeAreaProvider>
       <ErrorBoundary>
-        <SessionProvider>
-          <AuthProvider>
-            <ConfirmationModalProvider>
-              <ThemeProvider
-                value={colorScheme === 'dark' ? Farm2GoDarkTheme : Farm2GoTheme}
-              >
+        <ToastProvider>
+          <SessionProvider>
+            <AuthProvider>
+              <ConfirmationModalProvider>
+                <ThemeProvider
+                  value={colorScheme === 'dark' ? Farm2GoDarkTheme : Farm2GoTheme}
+                >
         <Stack
           screenOptions={{
             headerShown: false,
@@ -617,10 +619,11 @@ function RootLayout() {
           backgroundColor={colorScheme === 'dark' ? '#0f1419' : '#059669'}
           translucent={Platform.OS === 'android'}
         />
-              </ThemeProvider>
-            </ConfirmationModalProvider>
-          </AuthProvider>
-        </SessionProvider>
+                </ThemeProvider>
+              </ConfirmationModalProvider>
+            </AuthProvider>
+          </SessionProvider>
+        </ToastProvider>
       </ErrorBoundary>
     </SafeAreaProvider>
   );

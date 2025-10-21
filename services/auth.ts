@@ -2,6 +2,7 @@ import { Linking, Platform } from 'react-native';
 import { supabase, signInWithGoogleOAuth } from '../lib/supabase';
 import { Database } from '../types/database';
 import type { AuthResponse } from '@supabase/supabase-js';
+import { sessionManager } from './sessionManager';
 
 // Check if we're in demo mode
 const isDemoMode = !process.env.EXPO_PUBLIC_SUPABASE_URL || process.env.EXPO_PUBLIC_SUPABASE_URL === 'https://demo.supabase.co';
@@ -240,7 +241,6 @@ export const logoutUser = async () => {
     clearUserProfileCache();
 
     // Use session manager for logout to ensure proper cleanup
-    const { sessionManager } = await import('./sessionManager');
     await sessionManager.clearSession();
 
     console.log('✅ Auth service: Logout completed successfully');
@@ -377,7 +377,6 @@ export const signInWithGoogle = async (isRegistration = false) => {
     let userType = 'buyer'; // Default for sign-in
     if (isRegistration) {
       try {
-        const { sessionManager } = await import('./sessionManager');
         const oauthState = await sessionManager.getOAuthState();
         userType = oauthState?.userType || 'buyer';
         console.log('📝 Retrieved userType from session:', userType);
@@ -567,7 +566,6 @@ export const getUserWithProfile = async (): Promise<{ user: any; profile: Profil
 
     // Try to get from session manager first with timeout
     const sessionPromise = (async () => {
-      const { sessionManager } = await import('./sessionManager');
       return sessionManager.getSessionState();
     })();
 

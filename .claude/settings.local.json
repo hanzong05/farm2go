@@ -31,7 +31,8 @@
       "Bash(where:*)",
       "Bash(for file in c:/xampp/htdocs/farm2go/app/admin/*.tsx)",
       "Bash(done)",
-      "Bash(rm:*)"
+      "Bash(rm:*)",
+      "Bash(watchman watch-del-all:*)"
     ],
     "deny": [],
     "ask": []

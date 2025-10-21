@@ -1,7 +1,9 @@
 import { createClient } from '@supabase/supabase-js';
 import * as WebBrowser from 'expo-web-browser';
 import { Linking, Platform } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Database } from '../types/database';
+import { sessionManager } from '../services/sessionManager';
 
 // Use demo/placeholder values if environment variables are not set
 const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL || 'https://demo.supabase.co';
@@ -24,7 +26,7 @@ export const supabase = createClient<Database>(supabaseUrl, supabaseAnonKey, {
     autoRefreshToken: true,
     // Use implicit flow for mobile to avoid PKCE/WebCrypto issues
     flowType: 'implicit',
-    storage: Platform.OS !== 'web' ? require('@react-native-async-storage/async-storage').default : undefined,
+    storage: Platform.OS !== 'web' ? AsyncStorage : undefined,
   },
   global: {
     headers: {
@@ -102,10 +104,9 @@ export const signInWithGoogleOAuth = async (userType: string, intent: string = '
     // Store user type and intent for callback
     if (Platform.OS !== 'web') {
       // Use AsyncStorage for mobile
-      const AsyncStorage = await import('@react-native-async-storage/async-storage');
-      await AsyncStorage.default.setItem('oauth_user_type', userType);
-      await AsyncStorage.default.setItem('oauth_intent', intent);
-      await AsyncStorage.default.setItem('oauth_timestamp', Date.now().toString());
+      await AsyncStorage.setItem('oauth_user_type', userType);
+      await AsyncStorage.setItem('oauth_intent', intent);
+      await AsyncStorage.setItem('oauth_timestamp', Date.now().toString());
     } else {
       // Use localStorage for web
       try {
@@ -222,8 +223,7 @@ export const signInWithGoogleOAuth = async (userType: string, intent: string = '
           await new Promise(resolve => setTimeout(resolve, 2000));
 
           // Check for authorization code that might have been stored by deep link handler
-          const AsyncStorage = await import('@react-native-async-storage/async-storage');
-          const storedCode = await AsyncStorage.default.getItem('oauth_authorization_code');
+          const storedCode = await AsyncStorage.getItem('oauth_authorization_code');
 
           if (storedCode) {
             try {
@@ -231,7 +231,7 @@ export const signInWithGoogleOAuth = async (userType: string, intent: string = '
               const { data: sessionData, error: exchangeError } = await supabase.auth.exchangeCodeForSession(storedCode);
 
               // Clean up the stored code
-              await AsyncStorage.default.removeItem('oauth_authorization_code');
+              await AsyncStorage.removeItem('oauth_authorization_code');
 
               if (exchangeError) {
                 return {
@@ -307,7 +307,6 @@ export const signInWithGoogleOAuth = async (userType: string, intent: string = '
                 // Import SessionManager and create session
                 if (sessionData?.session && sessionData?.user) {
                   try {
-                    const { sessionManager } = await import('../services/sessionManager');
                     const sessionCreated = await sessionManager.createSession(sessionData.user, sessionData.session);
                     console.log('🔄 SessionManager create result:', sessionCreated);
                   } catch (smError) {
@@ -339,7 +338,6 @@ export const signInWithGoogleOAuth = async (userType: string, intent: string = '
                   // Import SessionManager and create session
                   if (sessionData?.session && sessionData?.user) {
                     try {
-                      const { sessionManager } = await import('../services/sessionManager');
                       const sessionCreated = await sessionManager.createSession(sessionData.user, sessionData.session);
                       console.log('🔄 SessionManager create result:', sessionCreated);
 

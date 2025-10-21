@@ -19,6 +19,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { supabase } from '../../lib/supabase';
 import { notifyOrderCreated, notifyLowStock } from '../../services/notifications';
 import { generateUniquePurchaseCode } from '../../utils/purchaseCode';
+import { showError, showSuccess } from '../../utils/alert';
 
 interface Product {
   id: string;
@@ -163,21 +164,31 @@ export default function OrderProductScreen() {
   };
 
   const handleOrder = async () => {
-    if (!product || !user || !userProfile) return;
+    console.log('🔵 PLACE ORDER BUTTON TAPPED!');
+    console.log('Product:', !!product, 'User:', !!user, 'Profile:', !!userProfile);
+
+    if (!product || !user || !userProfile) {
+      console.log('❌ Missing data, returning early');
+      return;
+    }
 
     const orderQuantity = parseInt(quantity);
+    console.log('📦 Order quantity:', orderQuantity);
 
     if (isNaN(orderQuantity) || orderQuantity <= 0) {
-      Alert.alert('Error', 'Invalid quantity');
+      console.log('❌ Invalid quantity');
+      showError('Invalid quantity');
       return;
     }
 
     if (orderQuantity > product.quantity_available) {
-      Alert.alert('Error', 'Requested quantity exceeds available stock');
+      console.log('❌ Quantity exceeds stock');
+      showError('Requested quantity exceeds available stock');
       return;
     }
 
     // Show confirmation modal
+    console.log('✅ All checks passed, showing confirmation modal');
     const totalAmount = calculateTotal();
     setConfirmModal({
       visible: true,
@@ -223,7 +234,7 @@ export default function OrderProductScreen() {
       if (orderError) {
         console.error('Error creating order:', orderError);
         console.error('Error details:', JSON.stringify(orderError, null, 2));
-        Alert.alert('Error', `Failed to create order: ${orderError.message || 'Please try again.'}`);
+        showError(`Failed to create order: ${orderError.message || 'Please try again.'}`);
         return;
       }
 
@@ -250,21 +261,26 @@ export default function OrderProductScreen() {
       }
 
       // Update product quantity
-      const newQuantity = product.quantity_available - orderQuantity;
+      console.log(`📦 Attempting to decrease stock for product ${product.id}: ${product.quantity_available} (ordered: ${orderQuantity})`);
+
+      const newQuantity = Math.max(0, product.quantity_available - orderQuantity);
+
       const { error: updateError } = await (supabase as any)
         .from('products')
-        .update({
-          quantity_available: newQuantity
-        })
+        .update({ quantity_available: newQuantity })
         .eq('id', product.id);
 
       if (updateError) {
-        console.error('Error updating product quantity:', updateError);
-        // Note: Order was created but quantity wasn't updated
-        // In a real app, you'd want to handle this with a transaction
+        console.error('❌ Error updating product quantity:', updateError);
+        console.error('❌ This means RLS is blocking the update. You need to:');
+        console.error('1. Run fix_products_stock_update_policy.sql in Supabase');
+        console.error('2. Or temporarily disable RLS on products table');
       } else {
+        console.log('✅ Product stock decreased successfully');
+        console.log(`✅ New stock: ${newQuantity}`);
+
         // Check for low stock and notify farmer
-        const lowStockThreshold = 5; // Default threshold
+        const lowStockThreshold = 5;
         if (newQuantity <= lowStockThreshold && newQuantity > 0) {
           try {
             await notifyLowStock(
@@ -281,18 +297,14 @@ export default function OrderProductScreen() {
       }
 
       // Set purchase code and show success modal immediately
+      console.log('✅ Order placed successfully!');
+      console.log('🎫 Purchase code:', uniquePurchaseCode);
       setPurchaseCode(uniquePurchaseCode);
       setShowSuccessModal(true);
-
-      // Also show a quick alert for immediate feedback
-      Alert.alert(
-        '✅ Success!',
-        'Your order has been placed successfully! You can view your purchase details and QR code in the modal that just opened.',
-        [{ text: 'OK', style: 'default' }]
-      );
+      console.log('📱 PurchaseSuccessModal should now be visible with purchase code and QR code!');
     } catch (err) {
       console.error('Order error:', err);
-      Alert.alert('Error', 'An error occurred while placing the order');
+      showError('An error occurred while placing the order');
     } finally {
       setOrdering(false);
     }

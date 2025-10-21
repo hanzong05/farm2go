@@ -5,9 +5,10 @@ import { Dimensions, KeyboardAvoidingView, Modal, Platform, ScrollView, StyleShe
 import Icon from 'react-native-vector-icons/FontAwesome5';
 import LocationPicker from '../../components/LocationPicker';
 import { supabase } from '../../lib/supabase';
-import { registerUser, signInWithFacebook, signInWithGoogle } from '../../services/auth';
+import { registerUser, signInWithFacebook, signInWithGoogle, checkExistingUserProfile } from '../../services/auth';
 import { Database } from '../../types/database';
 import { safeLocalStorage } from '../../utils/platformUtils';
+import { sessionManager } from '../../services/sessionManager';
 
 const { width, height } = Dimensions.get('window');
 const isMobile = width < 768;
@@ -119,7 +120,6 @@ export default function RegisterScreen() {
 
               if (emailFromUrl) {
                 console.log('🔍 Checking for existing profile with email from URL:', emailFromUrl);
-                const { checkExistingUserProfile } = await import('../../services/auth');
                 const existingProfile = await checkExistingUserProfile(emailFromUrl);
 
                 if (existingProfile && existingProfile.user_type) {
@@ -151,7 +151,6 @@ export default function RegisterScreen() {
 
           if (!storedUserType && session.user.email) {
             console.log('🔍 No stored user type, checking database for existing profile...');
-            const { checkExistingUserProfile } = await import('../../services/auth');
             const existingProfile = await checkExistingUserProfile(session.user.email);
 
             if (existingProfile && existingProfile.user_type) {
@@ -371,7 +370,6 @@ export default function RegisterScreen() {
       console.log(`🚀 Starting ${provider} registration...`);
       console.log('🚀 User type selected:', userType);
 
-      const { sessionManager } = await import('../../services/sessionManager');
       await sessionManager.storeOAuthState({
         intent: 'registration',
         userType: userType,
@@ -394,7 +392,6 @@ export default function RegisterScreen() {
     } catch (error: any) {
       console.error(`❌ ${provider} registration error:`, error);
 
-      const { sessionManager } = await import('../../services/sessionManager');
       await sessionManager.clearOAuthState();
 
       setErrorTitle(`${provider === 'google' ? 'Google' : 'Facebook'} Registration Failed`);
@@ -408,7 +405,7 @@ export default function RegisterScreen() {
     <Modal
       visible={showSuccessModal}
       transparent={true}
-      animationKeyframesType="fade"
+      animationType="fade"
       onRequestClose={() => setShowSuccessModal(false)}
     >
       <View style={styles.modalOverlay}>
@@ -439,7 +436,7 @@ export default function RegisterScreen() {
     <Modal
       visible={showErrorModal}
       transparent={true}
-      animationKeyframesType="fade"
+      animationType="fade"
       onRequestClose={() => setShowErrorModal(false)}
     >
       <View style={styles.modalOverlay}>

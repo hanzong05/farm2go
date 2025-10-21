@@ -1,12 +1,12 @@
 import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   StyleSheet,
   Text,
   View,
 } from 'react-native';
 import { supabase } from '../lib/supabase';
+import { showError } from '../utils/alert';
 import VerificationStatus from './VerificationStatus';
 import VerificationUpload from './VerificationUpload';
 
@@ -51,7 +51,7 @@ export default function VerificationGuard({
       setVerificationStatus(latestSubmission?.status || 'not_submitted');
     } catch (error) {
       console.error('Error checking verification status:', error);
-      Alert.alert('Error', 'Failed to check verification status');
+      showError('Failed to check verification status');
     } finally {
       setLoading(false);
     }
@@ -76,7 +76,7 @@ export default function VerificationGuard({
       console.log('✅ Verification submitted successfully, status updated to pending');
     } catch (error) {
       console.error('Error handling verification submission:', error);
-      Alert.alert('Error', 'Failed to update verification status. Please refresh the page.');
+      showError('Failed to update verification status. Please refresh the page.');
     }
   };
 

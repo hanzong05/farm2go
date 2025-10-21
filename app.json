@@ -36,7 +36,8 @@
         "WRITE_EXTERNAL_STORAGE",
         "RECORD_AUDIO",
         "ACCESS_COARSE_LOCATION",
-        "ACCESS_FINE_LOCATION"
+        "ACCESS_FINE_LOCATION",
+        "WAKE_LOCK"
       ],
       "intentFilters": [
         {

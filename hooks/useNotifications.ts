@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react';
-import { Alert } from 'react-native';
+import { useEffect, useState, useRef } from 'react';
+import { Alert, AppState } from 'react-native';
 import {
   getUserNotifications,
   markNotificationAsRead,
@@ -52,6 +52,18 @@ export const useNotifications = (userId: string | null): UseNotificationsResult 
     polling: false
   });
 
+  // Track if app is ready to show alerts (avoid Activity attachment issues)
+  const isAppReady = useRef(false);
+
+  useEffect(() => {
+    // Wait 2 seconds after mount before allowing alerts
+    const timer = setTimeout(() => {
+      isAppReady.current = true;
+    }, 2000);
+
+    return () => clearTimeout(timer);
+  }, []);
+
   // Load notifications
   const loadNotifications = async () => {
     if (!userId) return;
@@ -93,7 +105,10 @@ export const useNotifications = (userId: string | null): UseNotificationsResult 
       setUnreadCount(prev => Math.max(0, prev - 1));
     } catch (err) {
       console.error('Error marking notification as read:', err);
-      Alert.alert('Error', 'Failed to mark notification as read');
+      // Only show alert if app is ready to avoid Activity attachment issues
+      if (isAppReady.current) {
+        Alert.alert('Error', 'Failed to mark notification as read');
+      }
     }
   };
 
@@ -124,7 +139,8 @@ export const useNotifications = (userId: string | null): UseNotificationsResult 
       playNotificationSound();
 
       // Show in-app notification alert for important notifications
-      if (newNotification.type.includes('approved') || newNotification.type.includes('rejected')) {
+      // Only show if app is ready to avoid Activity attachment issues
+      if ((newNotification.type.includes('approved') || newNotification.type.includes('rejected')) && isAppReady.current) {
         Alert.alert(
           newNotification.title,
           newNotification.message,
@@ -139,6 +155,8 @@ export const useNotifications = (userId: string | null): UseNotificationsResult 
             }
           ]
         );
+      } else if (!isAppReady.current) {
+        console.log('⏰ App not ready for alerts yet, notification will appear in list:', newNotification.title);
       }
     };
 
