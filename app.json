@@ -28,6 +28,11 @@
         "foregroundImage": "./assets/images/icon.png",
         "backgroundColor": "#059669"
       },
+      "splash": {
+        "image": "./assets/images/splash-icon.png",
+        "resizeMode": "contain",
+        "backgroundColor": "#ffffff"
+      },
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,
       "permissions": [
