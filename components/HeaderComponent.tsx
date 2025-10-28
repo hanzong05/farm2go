@@ -663,7 +663,7 @@ export default function HeaderComponent({
       backgroundColor: colors.white,
       borderRadius: 8,
       paddingHorizontal: isMobile ? 8 : 12,
-      height: isMobile ? 32 : isTablet ? 36 : 40,
+      height: isMobile ? 44 : isTablet ? 48 : 52,
       zIndex: -1,
       position: 'relative',
       ...Platform.select({
@@ -841,8 +841,8 @@ export default function HeaderComponent({
 
         {/* Header Actions */}
         <View style={dynamicStyles.headerActions}>
-          {/* Messages and Notifications - Always show on all devices */}
-          {showMessages && (
+          {/* Messages and Notifications - Only show when user is logged in */}
+          {profile && showMessages && (
             <View style={styles.notificationContainer}>
               <MessageComponent
                 ref={messageComponentRef}
@@ -855,7 +855,7 @@ export default function HeaderComponent({
             </View>
           )}
 
-          {showNotifications && (
+          {profile && showNotifications && (
             <View style={styles.notificationContainer}>
               <NotificationComponent
                 key={`notifications-${profile?.id}`}

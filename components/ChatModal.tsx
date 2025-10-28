@@ -579,6 +579,35 @@ export default function ChatModal({
   };
 
   const handleAttachment = async () => {
+    // On web, directly trigger file input
+    if (Platform.OS === 'web') {
+      const input = document.createElement('input');
+      input.type = 'file';
+      input.accept = 'image/*,application/pdf,.doc,.docx,.txt';
+
+      input.onchange = async (e: any) => {
+        const file = e.target.files?.[0];
+        if (file) {
+          // Validate file size (max 20MB)
+          if (file.size > 20 * 1024 * 1024) {
+            Alert.alert('File Too Large', 'Please select a file smaller than 20MB.');
+            return;
+          }
+
+          const fileUri = URL.createObjectURL(file);
+          await handleFileUpload(
+            fileUri,
+            file.name,
+            file.type
+          );
+        }
+      };
+
+      input.click();
+      return;
+    }
+
+    // Mobile: Show options menu
     Alert.alert(
       'Add Attachment',
       'Choose attachment type',

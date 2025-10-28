@@ -75,6 +75,7 @@ export default function BuyerMyOrdersScreen() {
   const [filteredOrders, setFilteredOrders] = useState<OrderWithDetails[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
   const [selectedStatus, setSelectedStatus] = useState('all');
   const [showSidebar, setShowSidebar] = useState(false);
   const [profile, setProfile] = useState<Profile | null>(null);
@@ -173,7 +174,7 @@ export default function BuyerMyOrdersScreen() {
 
   useEffect(() => {
     filterOrders();
-  }, [orders, selectedStatus, filterState]);
+  }, [orders, selectedStatus, filterState, searchQuery]);
 
   const loadData = async () => {
     try {
@@ -246,6 +247,23 @@ export default function BuyerMyOrdersScreen() {
         return match;
       });
       console.log('🔍 After status filter:', filtered.length, 'orders');
+    }
+
+    // Filter by search query
+    if (searchQuery.trim()) {
+      const searchLower = searchQuery.toLowerCase();
+      filtered = filtered.filter(order => {
+        const orderId = order.id.slice(-8).toLowerCase();
+        const productName = order.product?.name?.toLowerCase() || '';
+        const farmerName = order.farmer_profile ?
+          `${order.farmer_profile.first_name || ''} ${order.farmer_profile.last_name || ''}`.toLowerCase() : '';
+        const address = order.delivery_address?.toLowerCase() || '';
+
+        return orderId.includes(searchLower) ||
+               productName.includes(searchLower) ||
+               farmerName.includes(searchLower) ||
+               address.includes(searchLower);
+      });
     }
 
     // Apply other filters using the utility function
@@ -804,6 +822,10 @@ export default function BuyerMyOrdersScreen() {
         currentRoute="/buyer/my-orders"
         showMessages={true}
         showNotifications={true}
+        showSearch={true}
+        searchQuery={searchQuery}
+        onSearchChange={setSearchQuery}
+        searchPlaceholder="Search orders..."
         showFilterButton={!isDesktop}
         onFilterPress={() => setShowSidebar(!showSidebar)}
       />

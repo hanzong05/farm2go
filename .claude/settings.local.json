@@ -32,7 +32,9 @@
       "Bash(for file in c:/xampp/htdocs/farm2go/app/admin/*.tsx)",
       "Bash(done)",
       "Bash(rm:*)",
-      "Bash(watchman watch-del-all:*)"
+      "Bash(watchman watch-del-all:*)",
+      "Bash(for:*)",
+      "Bash(do rm -rf \"$dir/.cxx\" \"$dir/build\")"
     ],
     "deny": [],
     "ask": []

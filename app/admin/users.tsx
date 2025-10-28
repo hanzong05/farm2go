@@ -251,6 +251,7 @@ export default function AdminUsers() {
 
   useEffect(() => {
     if (profile) {
+      console.log('🔄 useEffect triggered - loading users for activeTab:', activeTab);
       loadUsers(profile);
       // Update form barangay when profile loads
       setCreateUserForm(prev => ({
@@ -572,9 +573,14 @@ export default function AdminUsers() {
     }
   };
 
-  const loadUsers = async (adminProfile?: Profile) => {
+  const loadUsers = async (adminProfile?: Profile, forceUserType?: 'farmer' | 'buyer') => {
     const currentProfile = adminProfile || profile;
     if (!currentProfile) return;
+
+    // Use forceUserType if provided, otherwise use activeTab
+    const userTypeToLoad = forceUserType || activeTab;
+    console.log('🔄 loadUsers called for', userTypeToLoad, 'in barangay:', currentProfile?.barangay);
+    setLoading(true);
 
     try {
       // First, get approved users from verification_submissions
@@ -589,10 +595,11 @@ export default function AdminUsers() {
       }
 
       const approvedUserIds = approvedVerifications?.map(v => v.user_id) || [];
-      console.log('✅ Found', approvedUserIds.length, 'approved users');
+      console.log('✅ Found', approvedUserIds.length, 'approved users from verifications');
+      console.log('📋 Approved user IDs:', approvedUserIds);
 
       if (approvedUserIds.length === 0) {
-        console.log('❌ No approved users found');
+        console.log('ℹ️ No approved users found in this barangay yet');
         setUsers([]);
         setLoading(false);
         return;
@@ -611,7 +618,7 @@ export default function AdminUsers() {
           barangay,
           created_at
         `)
-        .eq('user_type', activeTab)
+        .eq('user_type', userTypeToLoad)
         .in('id', approvedUserIds)
         .order('created_at', { ascending: false });
 
@@ -628,6 +635,8 @@ export default function AdminUsers() {
       }
 
       console.log('📊 Raw data from database:', data?.length, 'users found');
+      console.log('📊 User IDs from profiles:', data?.map(u => u.id));
+      console.log('📊 User types from profiles:', data?.map(u => u.user_type));
 
       // Convert to User format without fetching sales data initially
       let usersData: User[] = (data as ProfileResponse[] | null)?.map(profile => ({
@@ -654,7 +663,10 @@ export default function AdminUsers() {
       setLoading(false);
 
       // Fetch sales data in background without blocking UI
-      loadSalesDataInBackground(usersData);
+      // Use setTimeout to ensure loading state is updated first
+      setTimeout(() => {
+        loadSalesDataInBackground(usersData);
+      }, 100);
 
     } catch (error) {
       console.error('Error loading users:', error);
@@ -723,7 +735,15 @@ export default function AdminUsers() {
       );
 
       if (!loading && hasChanges) {
-        setUsers(usersWithSalesData);
+        // Use callback form to avoid overwriting with stale data
+        setUsers(currentUsers => {
+          // Only update if the user count matches (prevents overwriting with old data)
+          if (currentUsers.length === usersWithSalesData.length) {
+            return usersWithSalesData;
+          }
+          console.log('⚠️ User count mismatch, skipping sales data update');
+          return currentUsers;
+        });
       }
     } catch (error) {
       console.error('Error loading sales data in background:', error);
@@ -1200,27 +1220,20 @@ export default function AdminUsers() {
     setCreateUserLoading(true);
     
     try {
-      // Create user account with Supabase Auth
-      const { data: authData, error: authError } = await supabase.auth.signUp({
-        email: createUserForm.email,
-        password: createUserForm.password,
-      });
+      console.log('🚀 Creating user via Edge Function (no auto-login)');
 
-      if (authError) {
-        throw new Error(`Failed to create user account: ${authError.message}`);
+      // Get current session token
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        throw new Error('No active session');
       }
 
-      if (!authData.user) {
-        throw new Error('Failed to create user account');
-      }
-
-      // Create profile in the profiles table
-      const { error: profileError } = await supabase
-        .from('profiles')
-        .insert([
-          {
-            id: authData.user.id,
-            email: createUserForm.email,
+      // Call Edge Function to create user without logging in
+      const { data, error } = await supabase.functions.invoke('create-user', {
+        body: {
+          email: createUserForm.email,
+          password: createUserForm.password,
+          user_metadata: {
             first_name: createUserForm.first_name,
             last_name: createUserForm.last_name,
             user_type: createUserForm.user_type,
@@ -1228,19 +1241,29 @@ export default function AdminUsers() {
             phone: createUserForm.phone.trim() || null,
             barangay: createUserForm.barangay,
           }
-        ] as any);
+        }
+      });
 
-      if (profileError) {
-        // If profile creation fails, we should try to clean up the auth user
-        console.error('Profile creation error:', profileError);
-        throw new Error(`Failed to create user profile: ${profileError.message}`);
+      if (error) {
+        if (error.message?.includes('already registered') || error.message?.includes('User already registered')) {
+          throw new Error('This email address is already registered. Please use a different email.');
+        }
+        throw new Error(error.message || 'Failed to create user');
       }
+
+      if (!data?.success || !data?.user_id) {
+        throw new Error(data?.error || 'Failed to create user');
+      }
+
+      const newUserId = data.user_id;
+      console.log('✅ User, profile, and verification created successfully via Edge Function');
+      console.log('✅ User ID:', newUserId);
 
       // Send notifications
       try {
         // Notify the newly created user
         await notifyUserAction(
-          authData.user.id,
+          newUserId,
           'approved',
           'account',
           `${createUserForm.first_name} ${createUserForm.last_name}`,
@@ -1267,18 +1290,26 @@ export default function AdminUsers() {
         // Don't fail the user creation if notifications fail
       }
 
-      // Success
+      // Success - user created WITHOUT logging you out!
+      console.log('🎉 User created successfully - you remain logged in as admin');
+
       Alert.alert(
         'Success',
         `${createUserForm.user_type} account created successfully for ${createUserForm.first_name} ${createUserForm.last_name}`,
         [
           {
             text: 'OK',
-            onPress: () => {
+            onPress: async () => {
               closeCreateUserModal();
-              // Refresh the users list
+
+              // Switch to the correct tab
+              if (createUserForm.user_type === 'farmer' || createUserForm.user_type === 'buyer') {
+                setActiveTab(createUserForm.user_type);
+              }
+
+              // Reload users list
               if (profile) {
-                loadUsers(profile);
+                await loadUsers(profile);
               }
             }
           }
@@ -1772,7 +1803,7 @@ export default function AdminUsers() {
               style={styles.backButton}
               onPress={closeCreateUserModal}
             >
-              <Icon name="times" size={20} color={colors.textSecondary} />
+              <Icon name="times" size={20} color={colors.white} />
             </TouchableOpacity>
             <View style={styles.modalTitleContainer}>
               <Text style={styles.modalTitle}>Create New {createUserForm.user_type}</Text>
@@ -1781,7 +1812,11 @@ export default function AdminUsers() {
           </View>
 
           {/* Form Content */}
-          <ScrollView style={styles.modalContent} showsVerticalScrollIndicator={false}>
+          <ScrollView
+            style={styles.modalContent}
+            showsVerticalScrollIndicator={false}
+            contentContainerStyle={{ paddingBottom: Platform.OS === 'ios' ? 100 : 80 }}
+          >
             <View style={styles.formContainer}>
               
               {/* User Type Selection */}
@@ -1955,31 +1990,21 @@ export default function AdminUsers() {
                 </View>
               )}
 
-              {/* Action Buttons */}
-              <View style={styles.formActions}>
-                <TouchableOpacity
-                  style={styles.cancelButton}
-                  onPress={closeCreateUserModal}
-                  disabled={createUserLoading}
-                >
-                  <Text style={styles.cancelButtonText}>Cancel</Text>
-                </TouchableOpacity>
-                
-                <TouchableOpacity
-                  style={[styles.submitButton, createUserLoading && styles.submitButtonDisabled]}
-                  onPress={handleCreateUser}
-                  disabled={createUserLoading}
-                >
-                  {createUserLoading ? (
-                    <ActivityIndicator size="small" color={colors.white} />
-                  ) : (
-                    <>
-                      <Icon name="user-plus" size={16} color={colors.white} />
-                      <Text style={styles.submitButtonText}>Create User</Text>
-                    </>
-                  )}  
-                </TouchableOpacity>
-              </View>
+              {/* Action Button */}
+              <TouchableOpacity
+                style={[styles.submitButton, createUserLoading && styles.submitButtonDisabled, { flex: 1 }]}
+                onPress={handleCreateUser}
+                disabled={createUserLoading}
+              >
+                {createUserLoading ? (
+                  <ActivityIndicator size="small" color={colors.white} />
+                ) : (
+                  <>
+                    <Icon name="user-plus" size={16} color={colors.white} />
+                    <Text style={styles.submitButtonText}>Create User</Text>
+                  </>
+                )}
+              </TouchableOpacity>
             </View>
           </ScrollView>
         </View>
@@ -3116,7 +3141,7 @@ const styles = StyleSheet.create({
   // Modal Styles
   modalContainer: {
     flex: 1,
-    backgroundColor: colors.background,
+    backgroundColor: colors.white,
     zIndex: 1000,
     elevation: 1000,
   },
@@ -3124,8 +3149,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 20,
-    paddingVertical: 16,
-    backgroundColor: colors.white,
+    paddingVertical: 20,
+    paddingTop: Platform.OS === 'ios' ? 60 : 20,
+    backgroundColor: colors.primary,
     borderBottomWidth: 1,
     borderBottomColor: colors.border,
     elevation: 2,
@@ -3137,19 +3163,21 @@ const styles = StyleSheet.create({
   backButton: {
     padding: 8,
     marginRight: 12,
+    borderRadius: 8,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
   },
   modalTitleContainer: {
     flex: 1,
   },
   modalTitle: {
-    fontSize: 18,
+    fontSize: 20,
     fontWeight: '700',
-    color: colors.text,
+    color: colors.white,
   },
   modalSubtitle: {
-    fontSize: 14,
-    color: colors.textSecondary,
-    marginTop: 2,
+    fontSize: 13,
+    color: 'rgba(255, 255, 255, 0.8)',
+    marginTop: 4,
   },
   modalTabContainer: {
     flexDirection: 'row',
@@ -3183,7 +3211,7 @@ const styles = StyleSheet.create({
   },
   modalContent: {
     flex: 1,
-    backgroundColor: colors.background,
+    backgroundColor: '#f5f5f5',
   },
   tabContent: {
     padding: 0,
@@ -3274,13 +3302,24 @@ const styles = StyleSheet.create({
     padding: 20,
   },
   formSection: {
-    marginBottom: 24,
+    marginBottom: 20,
+    backgroundColor: colors.white,
+    borderRadius: 12,
+    padding: 16,
+    shadowColor: colors.shadow,
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 3,
+    elevation: 2,
   },
   formSectionTitle: {
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: '700',
-    color: colors.text,
+    color: colors.primary,
     marginBottom: 16,
+    paddingBottom: 8,
+    borderBottomWidth: 2,
+    borderBottomColor: colors.primary,
   },
   formGroup: {
     marginBottom: 16,
@@ -3299,45 +3338,46 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   formInput: {
-    backgroundColor: colors.white,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: 12,
+    backgroundColor: '#f8f9fa',
+    borderWidth: 1.5,
+    borderColor: '#e0e0e0',
+    borderRadius: 10,
     paddingHorizontal: 16,
     paddingVertical: 14,
-    fontSize: 16,
+    fontSize: 15,
     color: colors.text,
-    elevation: 1,
-    shadowColor: colors.shadow,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 1,
-    shadowRadius: 4,
   },
   userTypeSelection: {
     flexDirection: 'row',
-    gap: 8,
+    gap: 10,
+    marginBottom: 8,
   },
   userTypeOption: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    borderRadius: 12,
-    backgroundColor: colors.gray100,
-    borderWidth: 1,
-    borderColor: colors.border,
+    paddingVertical: 14,
+    paddingHorizontal: 12,
+    borderRadius: 10,
+    backgroundColor: '#f8f9fa',
+    borderWidth: 2,
+    borderColor: '#e0e0e0',
     gap: 8,
   },
   userTypeOptionActive: {
     backgroundColor: colors.primary,
     borderColor: colors.primary,
+    shadowColor: colors.primary,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 3,
   },
   userTypeOptionText: {
     fontSize: 14,
     fontWeight: '600',
-    color: colors.textSecondary,
+    color: '#666',
   },
   userTypeOptionTextActive: {
     color: colors.white,
@@ -3345,24 +3385,22 @@ const styles = StyleSheet.create({
   formActions: {
     flexDirection: 'row',
     gap: 12,
-    marginTop: 32,
-    paddingTop: 20,
-    borderTopWidth: 1,
-    borderTopColor: colors.border,
+    marginTop: 24,
+    paddingTop: 0,
   },
   cancelButton: {
     flex: 1,
     paddingVertical: 16,
-    paddingHorizontal: 24,
     borderRadius: 12,
-    backgroundColor: colors.gray100,
     alignItems: 'center',
-    justifyContent: 'center',
+    backgroundColor: '#f8fafc',
+    borderWidth: 2,
+    borderColor: '#e5e7eb',
   },
   cancelButtonText: {
     fontSize: 16,
     fontWeight: '600',
-    color: colors.textSecondary,
+    color: '#6b7280',
   },
   submitButton: {
     flex: 2,
@@ -3371,18 +3409,19 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingVertical: 16,
     paddingHorizontal: 24,
-    borderRadius: 12,
+    borderRadius: 10,
     backgroundColor: colors.primary,
     gap: 8,
-    elevation: 2,
-    shadowColor: colors.shadowDark,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 1,
-    shadowRadius: 4,
+    shadowColor: colors.primary,
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.3,
+    shadowRadius: 5,
+    elevation: 4,
   },
   submitButtonDisabled: {
-    backgroundColor: colors.textLight,
+    backgroundColor: '#ccc',
     elevation: 0,
+    shadowOpacity: 0,
   },
   submitButtonText: {
     fontSize: 16,

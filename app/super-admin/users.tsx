@@ -491,17 +491,6 @@ export default function SuperAdminUsers() {
       >
         {/* Admin Users Table */}
         <View style={styles.tableContainer}>
-          {/* Table Header */}
-          <View style={styles.tableHeader}>
-            <Text style={[styles.tableHeaderCell, styles.nameCell]}>Name</Text>
-            <Text style={[styles.tableHeaderCell, styles.emailCell]}>Email</Text>
-            <Text style={[styles.tableHeaderCell, styles.phoneCell]}>Phone</Text>
-            <Text style={[styles.tableHeaderCell, styles.barangayCell]}>Barangay</Text>
-            <Text style={[styles.tableHeaderCell, styles.dateCell]}>Created</Text>
-            <Text style={[styles.tableHeaderCell, styles.actionsCell]}>Actions</Text>
-          </View>
-
-          {/* Table Body */}
           {filteredUsers.length === 0 ? (
             <View style={styles.emptyContainer}>
               <Icon name="users" size={48} color={colors.textLight} />
@@ -513,12 +502,31 @@ export default function SuperAdminUsers() {
               </Text>
             </View>
           ) : (
-            <FlatList
-              data={filteredUsers}
-              renderItem={renderTableRow}
-              keyExtractor={(item) => item.id}
-              scrollEnabled={false}
-            />
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={true}
+              style={styles.tableScrollView}
+            >
+              <View style={styles.tableInnerContainer}>
+                {/* Table Header */}
+                <View style={styles.tableHeader}>
+                  <Text style={[styles.tableHeaderCell, styles.nameCell]}>Name</Text>
+                  <Text style={[styles.tableHeaderCell, styles.emailCell]}>Email</Text>
+                  <Text style={[styles.tableHeaderCell, styles.phoneCell]}>Phone</Text>
+                  <Text style={[styles.tableHeaderCell, styles.barangayCell]}>Barangay</Text>
+                  <Text style={[styles.tableHeaderCell, styles.dateCell]}>Created</Text>
+                  <Text style={[styles.tableHeaderCell, styles.actionsCell]}>Actions</Text>
+                </View>
+
+                {/* Table Body */}
+                <FlatList
+                  data={filteredUsers}
+                  renderItem={renderTableRow}
+                  keyExtractor={(item) => item.id}
+                  scrollEnabled={false}
+                />
+              </View>
+            </ScrollView>
           )}
         </View>
       </ScrollView>
@@ -980,30 +988,34 @@ const styles = StyleSheet.create({
   tableRowEven: {
     backgroundColor: colors.gray50,
   },
+  tableScrollView: {
+    width: '100%',
+  },
+  tableInnerContainer: {
+    minWidth: 900,
+  },
   tableCell: {
     fontSize: 14,
     color: colors.text,
   },
   nameCell: {
-    flex: 2,
+    width: 180,
     fontWeight: '600',
   },
   emailCell: {
-    flex: 2.5,
+    width: 220,
   },
   phoneCell: {
-    flex: 1.5,
+    width: 140,
   },
   barangayCell: {
-    flex: 1.5,
+    width: 140,
   },
   dateCell: {
-    flex: 1.5,
-    fontSize: 13,
-    color: colors.textSecondary,
+    width: 120,
   },
   actionsCell: {
-    flex: 1,
+    width: 100,
     flexDirection: 'row',
     gap: 8,
     justifyContent: 'flex-end',

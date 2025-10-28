@@ -2,16 +2,18 @@ import React from 'react';
 import { View, TouchableOpacity, Text, StyleSheet, Platform } from 'react-native';
 
 interface WebFileInputProps {
-  onFileSelected: (fileUri: string) => void;
+  onFileSelected: (fileUri: string, file?: File) => void;
   type: 'id' | 'face';
+  acceptedTypes?: string; // Allow custom file types
 }
 
-export default function WebFileInput({ onFileSelected, type }: WebFileInputProps) {
+export default function WebFileInput({ onFileSelected, type, acceptedTypes = 'image/*' }: WebFileInputProps) {
   if (Platform.OS !== 'web') {
     return null;
   }
 
   const isMobile = /Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator?.userAgent || '');
+  const isImageOnly = acceptedTypes === 'image/*';
 
   return (
     <View style={styles.container}>
@@ -19,31 +21,31 @@ export default function WebFileInput({ onFileSelected, type }: WebFileInputProps
         Select {type === 'id' ? 'ID Document' : 'Face Photo'}
       </Text>
       <Text style={styles.subtitle}>
-        Choose an image file from your computer
+        Choose {isImageOnly ? 'an image' : 'a'} file from your computer
       </Text>
 
       {React.createElement('input', {
         type: 'file',
-        accept: 'image/*',
-        capture: isMobile ? (type === 'face' ? 'user' : 'environment') : undefined,
+        accept: acceptedTypes,
+        capture: isMobile && isImageOnly ? (type === 'face' ? 'user' : 'environment') : undefined,
         multiple: false,
         onChange: (e: any) => {
           const file = e.target.files?.[0];
           if (file) {
             // Validate file size (max 20MB)
             if (file.size > 20 * 1024 * 1024) {
-              alert('File size too large. Please select an image smaller than 20MB.');
+              alert('File size too large. Please select a file smaller than 20MB.');
               return;
             }
 
-            // Validate file type
-            if (!file.type.startsWith('image/')) {
+            // Validate file type if image only
+            if (isImageOnly && !file.type.startsWith('image/')) {
               alert('Please select a valid image file.');
               return;
             }
 
             const fileUri = URL.createObjectURL(file);
-            onFileSelected(fileUri);
+            onFileSelected(fileUri, file);
           }
         },
         style: {
