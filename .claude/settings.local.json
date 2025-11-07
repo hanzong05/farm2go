@@ -34,7 +34,13 @@
       "Bash(rm:*)",
       "Bash(watchman watch-del-all:*)",
       "Bash(for:*)",
-      "Bash(do rm -rf \"$dir/.cxx\" \"$dir/build\")"
+      "Bash(do rm -rf \"$dir/.cxx\" \"$dir/build\")",
+      "Bash(echo:*)",
+      "Bash(if [ -z \"$ANDROID_HOME\" ])",
+      "Bash(then echo \"ANDROID_HOME not set\")",
+      "Bash(else echo \"ANDROID_HOME=$ANDROID_HOME\")",
+      "Bash(fi)",
+      "Read(//c/Users/**)"
     ],
     "deny": [],
     "ask": []
