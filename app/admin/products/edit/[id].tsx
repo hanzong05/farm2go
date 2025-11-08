@@ -6,7 +6,6 @@ import {
   ScrollView,
   TextInput,
   TouchableOpacity,
-  Alert,
   KeyboardAvoidingView,
   Platform,
   Dimensions,
@@ -16,6 +15,7 @@ import {
 import { router, useLocalSearchParams } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
 import ConfirmationModal from '../../../../components/ConfirmationModal';
+import { useCustomAlert } from '../../../../components/CustomAlert';
 import HeaderComponent from '../../../../components/HeaderComponent';
 import { supabase } from '../../../../lib/supabase';
 import { getUserWithProfile } from '../../../../services/auth';
@@ -95,6 +95,8 @@ export default function AdminEditProductScreen() {
     onConfirm: () => {},
   });
 
+  const { showAlert, AlertComponent } = useCustomAlert();
+
   useEffect(() => {
     loadProfile();
   }, []);
@@ -110,8 +112,9 @@ export default function AdminEditProductScreen() {
       const userData = await getUserWithProfile();
       if (userData?.profile) {
         if (userData.profile.user_type !== 'admin') {
-          Alert.alert('Access Denied', 'Only admins can access this page');
-          router.replace('/' as any);
+          showAlert('Access Denied', 'Only admins can access this page', [
+            { text: 'OK', style: 'default', onPress: () => router.replace('/' as any) }
+          ]);
           return;
         }
         setProfile(userData.profile);
@@ -134,8 +137,9 @@ export default function AdminEditProductScreen() {
 
       if (error) {
         console.error('Error fetching product:', error);
-        Alert.alert('Error', 'Product not found');
-        router.back();
+        showAlert('Error', 'Product not found', [
+          { text: 'OK', style: 'default', onPress: () => router.back() }
+        ]);
         return;
       }
 
@@ -152,8 +156,9 @@ export default function AdminEditProductScreen() {
       setSelectedImage(data.image_url);
     } catch (err) {
       console.error('Product fetch error:', err);
-      Alert.alert('Error', 'Failed to load product');
-      router.back();
+      showAlert('Error', 'Failed to load product', [
+        { text: 'OK', style: 'default', onPress: () => router.back() }
+      ]);
     } finally {
       setLoading(false);
     }
@@ -186,7 +191,9 @@ export default function AdminEditProductScreen() {
     try {
       const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (status !== 'granted') {
-        Alert.alert('Permission needed', 'Sorry, we need camera roll permissions to add product images.');
+        showAlert('Permission needed', 'Sorry, we need camera roll permissions to add product images.', [
+          { text: 'OK', style: 'default' }
+        ]);
         return;
       }
 
@@ -203,7 +210,9 @@ export default function AdminEditProductScreen() {
       }
     } catch (error) {
       console.error('Error picking image:', error);
-      Alert.alert('Error', 'Failed to select image');
+      showAlert('Error', 'Failed to select image', [
+        { text: 'OK', style: 'default' }
+      ]);
     }
   };
 
@@ -211,7 +220,9 @@ export default function AdminEditProductScreen() {
     try {
       const { status } = await ImagePicker.requestCameraPermissionsAsync();
       if (status !== 'granted') {
-        Alert.alert('Permission needed', 'Sorry, we need camera permissions to take product photos.');
+        showAlert('Permission needed', 'Sorry, we need camera permissions to take product photos.', [
+          { text: 'OK', style: 'default' }
+        ]);
         return;
       }
 
@@ -227,7 +238,9 @@ export default function AdminEditProductScreen() {
       }
     } catch (error) {
       console.error('Error taking photo:', error);
-      Alert.alert('Error', 'Failed to take photo');
+      showAlert('Error', 'Failed to take photo', [
+        { text: 'OK', style: 'default' }
+      ]);
     }
   };
 
@@ -270,7 +283,9 @@ export default function AdminEditProductScreen() {
       return publicUrl;
     } catch (error) {
       console.error('Error uploading image:', error);
-      Alert.alert('Error', 'Failed to upload image');
+      showAlert('Error', 'Failed to upload image', [
+        { text: 'OK', style: 'default' }
+      ]);
       return null;
     } finally {
       setUploadingImage(false);
@@ -286,11 +301,15 @@ export default function AdminEditProductScreen() {
         const file = (event.target as HTMLInputElement).files?.[0];
         if (file) {
           if (file.size > 5 * 1024 * 1024) {
-            Alert.alert('Error', 'Image size must be less than 5MB');
+            showAlert('Error', 'Image size must be less than 5MB', [
+              { text: 'OK', style: 'default' }
+            ]);
             return;
           }
           if (!file.type.startsWith('image/')) {
-            Alert.alert('Error', 'Please select a valid image file');
+            showAlert('Error', 'Please select a valid image file', [
+              { text: 'OK', style: 'default' }
+            ]);
             return;
           }
           const imageUrl = URL.createObjectURL(file);
@@ -301,7 +320,7 @@ export default function AdminEditProductScreen() {
       };
       input.click();
     } else {
-      Alert.alert(
+      showAlert(
         'Change Product Image',
         'Choose how you want to change the product image',
         [
@@ -401,14 +420,16 @@ export default function AdminEditProductScreen() {
         console.error('⚠️ Failed to send notifications:', notifError);
       }
 
-      Alert.alert(
+      showAlert(
         'Success',
         'Product updated successfully!',
         [{ text: 'OK', onPress: () => router.back() }]
       );
     } catch (error) {
       console.error('Error updating product:', error);
-      Alert.alert('Error', 'Failed to update product. Please try again.');
+      showAlert('Error', 'Failed to update product. Please try again.', [
+        { text: 'OK', style: 'default' }
+      ]);
     } finally {
       setIsSubmitting(false);
     }
@@ -640,6 +661,8 @@ export default function AdminEditProductScreen() {
           </Text>
         </TouchableOpacity>
       </View>
+
+      {AlertComponent}
 
       <ConfirmationModal
         visible={confirmModal.visible}

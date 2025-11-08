@@ -2,7 +2,6 @@ import { router } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   Dimensions,
   Image,
   RefreshControl,
@@ -13,6 +12,7 @@ import {
   View,
 } from 'react-native';
 import ConfirmationModal from '../../components/ConfirmationModal';
+import { useCustomAlert } from '../../components/CustomAlert';
 import FilterSidebar, { FilterSection, FilterState } from '../../components/FilterSidebar';
 import HeaderComponent from '../../components/HeaderComponent';
 import { supabase } from '../../lib/supabase';
@@ -62,6 +62,8 @@ export default function AdminProducts() {
     confirmText: '',
     onConfirm: () => {},
   });
+
+  const { showAlert, AlertComponent } = useCustomAlert();
 
   const isDesktop = width >= 1024;
   const isTablet = width >= 768;
@@ -153,8 +155,9 @@ export default function AdminProducts() {
       // Verify admin access
       const userData = await getUserWithProfile();
       if (!userData?.profile || !['admin', 'super-admin'].includes(userData.profile.user_type)) {
-        Alert.alert('Access Denied', 'You do not have permission to access this page.');
-        router.back();
+        showAlert('Access Denied', 'You do not have permission to access this page.', [
+          { text: 'OK', style: 'default', onPress: () => router.back() }
+        ]);
         return;
       }
 
@@ -185,7 +188,9 @@ export default function AdminProducts() {
       setProducts(filteredData);
     } catch (error) {
       console.error('Error loading products:', error);
-      Alert.alert('Error', 'Failed to load products');
+      showAlert('Error', 'Failed to load products', [
+        { text: 'OK', style: 'default' }
+      ]);
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -220,21 +225,39 @@ export default function AdminProducts() {
 
   const updateProductStatus = async (productId: string, status: 'approved' | 'rejected') => {
     try {
+      console.log('🔄 Starting product status update:', productId, status);
       setProcessing(productId);
 
       // Get product details before update for notifications
       const product = products.find(p => p.id === productId);
       if (!product) {
-        Alert.alert('Error', 'Product not found');
+        console.error('❌ Product not found:', productId);
+        showAlert('Error', 'Product not found', [
+          { text: 'OK', style: 'default' }
+        ]);
+        setProcessing(null);
         return;
       }
 
+      console.log('📝 Updating product in database...');
       const { error } = await supabase
         .from('products')
         .update({ status } as any)
         .eq('id', productId);
 
-      if (error) throw error;
+      if (error) {
+        console.error('❌ Database update error:', error);
+        throw error;
+      }
+
+      console.log('✅ Product status updated in database');
+
+      // Update local state immediately for instant UI feedback
+      setProducts(prevProducts =>
+        prevProducts.map(p =>
+          p.id === productId ? { ...p, status } : p
+        )
+      );
 
       // Send notifications
       try {
@@ -266,16 +289,25 @@ export default function AdminProducts() {
         console.error('⚠️ Failed to send notifications:', notifError);
       }
 
-      Alert.alert(
-        'Success!',
-        `Product ${status} successfully`,
-        [{ text: 'OK', onPress: () => loadProducts() }]
-      );
-    } catch (error) {
-      console.error('Error updating product:', error);
-      Alert.alert('Error', 'Failed to update product status');
-    } finally {
       setProcessing(null);
+
+      // Show success alert on both web and mobile
+      console.log('📢 Showing success alert...');
+      showAlert(
+        'Success!',
+        `Product ${status} successfully!`,
+        [{
+          text: 'OK',
+          style: 'default'
+        }]
+      );
+      console.log('📢 Success alert called');
+    } catch (error) {
+      console.error('❌ Error updating product:', error);
+      setProcessing(null);
+      showAlert('Error', 'Failed to update product status. Please try again.', [
+        { text: 'OK', style: 'default' }
+      ]);
     }
   };
 
@@ -657,6 +689,8 @@ export default function AdminProducts() {
           </ScrollView>
         </View>
       )}
+
+      {AlertComponent}
 
       <ConfirmationModal
         visible={confirmModal.visible}

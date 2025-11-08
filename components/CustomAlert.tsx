@@ -31,12 +31,16 @@ const WebAlert: React.FC<CustomAlertProps> = ({
   buttons,
   onRequestClose,
 }) => {
+  if (!visible) return null;
+
   return (
     <Modal
       transparent
       visible={visible}
       animationType="fade"
       onRequestClose={onRequestClose}
+      presentationStyle="overFullScreen"
+      statusBarTranslucent={true}
     >
       <View style={styles.overlay}>
         <View style={styles.alertContainer}>
@@ -160,6 +164,15 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
     justifyContent: 'center',
     alignItems: 'center',
+    zIndex: 99999999,
+    elevation: 99999,
+    ...(Platform.OS === 'web' && {
+      position: 'fixed' as any,
+      top: 0,
+      left: 0,
+      right: 0,
+      bottom: 0,
+    }),
   },
   alertContainer: {
     backgroundColor: '#ffffff',
@@ -172,7 +185,8 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.25,
     shadowRadius: 8,
-    elevation: 8,
+    elevation: 100000,
+    zIndex: 100000000,
   },
   title: {
     fontSize: 18,
@@ -198,7 +212,7 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     paddingHorizontal: 16,
     borderRadius: 8,
-    backgroundColor: '#f3f4f6',
+    backgroundColor: '#10b981',
     alignItems: 'center',
   },
   cancelButton: {
@@ -210,7 +224,7 @@ const styles = StyleSheet.create({
   buttonText: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#374151',
+    color: '#ffffff',
   },
   cancelText: {
     color: '#6b7280',

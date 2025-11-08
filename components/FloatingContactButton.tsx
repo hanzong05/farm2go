@@ -11,6 +11,7 @@ import {
   Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { supabase } from '../lib/supabase';
 import { useCustomAlert } from './CustomAlert';
 
@@ -58,10 +59,20 @@ export default function FloatingContactButton({
   const [message, setMessage] = useState('');
   const [subject, setSubject] = useState('');
   const [sending, setSending] = useState(false);
+  const insets = useSafeAreaInsets();
 
   const { showAlert, AlertComponent } = useCustomAlert();
 
   if (!visible) return null;
+
+  // Calculate safe position with insets
+  const safePosition = {
+    ...position,
+    bottom: position.bottom !== undefined ? position.bottom + insets.bottom : undefined,
+    right: position.right !== undefined ? position.right + insets.right : undefined,
+    left: position.left !== undefined ? position.left + insets.left : undefined,
+    top: position.top !== undefined ? position.top + insets.top : undefined,
+  };
 
   const handleSendMessage = async () => {
     if (!message.trim() || !subject.trim()) {
@@ -115,7 +126,7 @@ export default function FloatingContactButton({
   return (
     <>
       <TouchableOpacity
-        style={[styles.floatingButton, position]}
+        style={[styles.floatingButton, safePosition]}
         onPress={() => setShowModal(true)}
         activeOpacity={0.8}
       >

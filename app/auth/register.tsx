@@ -5,7 +5,7 @@ import { Dimensions, KeyboardAvoidingView, Modal, Platform, ScrollView, StyleShe
 import Icon from 'react-native-vector-icons/FontAwesome5';
 import LocationPicker from '../../components/LocationPicker';
 import { supabase } from '../../lib/supabase';
-import { registerUser, signInWithFacebook, signInWithGoogle, checkExistingUserProfile } from '../../services/auth';
+import { registerUser, signInWithGoogle, checkExistingUserProfile } from '../../services/auth';
 import { Database } from '../../types/database';
 import { safeLocalStorage } from '../../utils/platformUtils';
 import { sessionManager } from '../../services/sessionManager';
@@ -356,7 +356,7 @@ export default function RegisterScreen() {
     }
   };
 
-  const handleSocialSignup = async (provider: 'google' | 'facebook') => {
+  const handleSocialSignup = async () => {
     if (!userType) {
       setErrorTitle('Selection Required');
       setErrorMessage('Please select your account type first');
@@ -367,7 +367,7 @@ export default function RegisterScreen() {
     setIsRegistering(true);
 
     try {
-      console.log(`🚀 Starting ${provider} registration...`);
+      console.log('🚀 Starting Google registration...');
       console.log('🚀 User type selected:', userType);
 
       await sessionManager.storeOAuthState({
@@ -377,24 +377,18 @@ export default function RegisterScreen() {
       });
       console.log('💾 Stored OAuth state for registration:', userType);
 
-      if (provider === 'google') {
-        console.log('🔄 Initiating Google OAuth...');
-        const result = await signInWithGoogle(true);
-        console.log('📤 Google OAuth result:', result);
-      } else {
-        console.log('🔄 Initiating Facebook OAuth...');
-        const result = await signInWithFacebook();
-        console.log('📤 Facebook OAuth result:', result);
-      }
+      console.log('🔄 Initiating Google OAuth...');
+      const result = await signInWithGoogle(true);
+      console.log('📤 Google OAuth result:', result);
 
       console.log('🔄 OAuth initiated, user should be redirected to provider...');
 
     } catch (error: any) {
-      console.error(`❌ ${provider} registration error:`, error);
+      console.error('❌ Google registration error:', error);
 
       await sessionManager.clearOAuthState();
 
-      setErrorTitle(`${provider === 'google' ? 'Google' : 'Facebook'} Registration Failed`);
+      setErrorTitle('Google Registration Failed');
       setErrorMessage(error.message || 'Please try again.');
       setShowErrorModal(true);
       setIsRegistering(false);
@@ -816,24 +810,13 @@ export default function RegisterScreen() {
           <View style={styles.socialButtonsContainer}>
             <TouchableOpacity
               style={[styles.socialButton, isRegistering && styles.socialButtonDisabled]}
-              onPress={() => handleSocialSignup('google')}
+              onPress={handleSocialSignup}
               disabled={isRegistering}
             >
               <View style={styles.googleIcon}>
                 <Text style={styles.googleIconText}>G</Text>
               </View>
               <Text style={styles.socialButtonText}>Continue with Google</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={[styles.socialButton, isRegistering && styles.socialButtonDisabled]}
-              onPress={() => handleSocialSignup('facebook')}
-              disabled={isRegistering}
-            >
-              <View style={styles.facebookIcon}>
-                <Text style={styles.facebookIconText}>f</Text>
-              </View>
-              <Text style={styles.socialButtonText}>Continue with Facebook</Text>
             </TouchableOpacity>
           </View>
 

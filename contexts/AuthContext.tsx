@@ -77,19 +77,13 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       // Profile fetch completed
 
       if (error) {
-        console.error('❌ Error fetching profile:', error);
-        console.error('❌ Error details:', {
-          code: error.code,
-          message: error.message,
-          details: error.details,
-          hint: error.hint
-        });
-
-        // If it's a PGRST116 error (no rows), the profile doesn't exist
+        // If it's a PGRST116 error (no rows), the profile doesn't exist - this is expected
         if (error.code === 'PGRST116') {
-          console.log('📝 No profile found - user needs to complete profile');
           return null;
         }
+
+        // Only log other errors (not "no rows found")
+        console.error('❌ Error fetching profile:', error);
 
         // If it's an RLS error, we have a permissions issue
         if (error.code === '42501') {

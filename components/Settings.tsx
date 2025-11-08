@@ -12,6 +12,7 @@ import {
   Image,
   Alert,
   Animated,
+  Modal,
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import * as FileSystem from 'expo-file-system/legacy';
@@ -80,8 +81,16 @@ export default function Settings({ userType, currentRoute, onNavigateBack }: Set
   const [uploadingImage, setUploadingImage] = useState(false);
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
   const [fadeAnim] = useState(new Animated.Value(0));
+  const [showPasswordModal, setShowPasswordModal] = useState(false);
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [changingPassword, setChangingPassword] = useState(false);
+  const [showCurrentPassword, setShowCurrentPassword] = useState(false);
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
-  const { showAlert, AlertComponent } = useCustomAlert();
+  const { showAlert, AlertComponent} = useCustomAlert();
 
   const fieldConfigs = FIELD_CONFIGS[userType] || FIELD_CONFIGS.farmer;
   const sectionTitle = SECTION_TITLES[userType] || 'Profile';
@@ -270,6 +279,103 @@ export default function Settings({ userType, currentRoute, onNavigateBack }: Set
       Alert.alert('Error', 'Failed to update profile');
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleChangePassword = () => {
+    setShowPasswordModal(true);
+    setCurrentPassword('');
+    setNewPassword('');
+    setConfirmPassword('');
+  };
+
+  const handlePasswordChange = async () => {
+    if (!currentPassword || !newPassword || !confirmPassword) {
+      showAlert('Error', 'Please fill in all fields', [
+        { text: 'OK', style: 'default' }
+      ]);
+      return;
+    }
+
+    if (newPassword.length < 6) {
+      showAlert('Error', 'New password must be at least 6 characters', [
+        { text: 'OK', style: 'default' }
+      ]);
+      return;
+    }
+
+    if (newPassword !== confirmPassword) {
+      showAlert('Error', 'New passwords do not match', [
+        { text: 'OK', style: 'default' }
+      ]);
+      return;
+    }
+
+    if (!profile?.email) {
+      showAlert('Error', 'User email not found', [
+        { text: 'OK', style: 'default' }
+      ]);
+      return;
+    }
+
+    setChangingPassword(true);
+
+    try {
+      // First verify current password by signing in
+      const { error: signInError } = await supabase.auth.signInWithPassword({
+        email: profile.email,
+        password: currentPassword,
+      });
+
+      if (signInError) {
+        showAlert('Error', 'Current password is incorrect', [
+          { text: 'OK', style: 'default' }
+        ]);
+        setChangingPassword(false);
+        return;
+      }
+
+      // Update password
+      const { error: updateError } = await supabase.auth.updateUser({
+        password: newPassword,
+      });
+
+      if (updateError) {
+        showAlert('Error', updateError.message || 'Failed to update password', [
+          { text: 'OK', style: 'default' }
+        ]);
+        setChangingPassword(false);
+        return;
+      }
+
+      // Success!
+      setShowPasswordModal(false);
+      setCurrentPassword('');
+      setNewPassword('');
+      setConfirmPassword('');
+      setChangingPassword(false);
+
+      showAlert('Success', 'Password updated successfully! Please log in again with your new password.', [
+        {
+          text: 'OK',
+          style: 'default',
+          onPress: async () => {
+            try {
+              await logoutUser();
+              router.replace('/auth/login');
+            } catch (error) {
+              console.error('Logout error:', error);
+              router.replace('/auth/login');
+            }
+          }
+        }
+      ]);
+    } catch (error: any) {
+      console.error('Password change error:', error);
+      showAlert('Error', error.message || 'Failed to change password', [
+        { text: 'OK', style: 'default' }
+      ]);
+      setChangingPassword(false);
     }
   };
 
@@ -533,21 +639,19 @@ export default function Settings({ userType, currentRoute, onNavigateBack }: Set
               <Text style={styles.sectionTitle}>Account</Text>
             </View>
 
-            {userType !== 'admin' && (
-              <TouchableOpacity
-                style={styles.actionItem}
-                onPress={() => router.push('/auth/forgot-password')}
-                activeOpacity={0.6}
-              >
-                <View style={styles.actionLeft}>
-                  <View style={styles.actionIconContainer}>
-                    <Ionicons name="key-outline" size={20} color="#16a34a" />
-                  </View>
-                  <Text style={styles.actionText}>Change Password</Text>
+            <TouchableOpacity
+              style={styles.actionItem}
+              onPress={handleChangePassword}
+              activeOpacity={0.6}
+            >
+              <View style={styles.actionLeft}>
+                <View style={styles.actionIconContainer}>
+                  <Ionicons name="key-outline" size={20} color="#16a34a" />
                 </View>
-                <Ionicons name="chevron-forward" size={20} color="#9ca3af" />
-              </TouchableOpacity>
-            )}
+                <Text style={styles.actionText}>Change Password</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={20} color="#9ca3af" />
+            </TouchableOpacity>
 
             <TouchableOpacity
               style={styles.actionItem}
@@ -583,6 +687,117 @@ export default function Settings({ userType, currentRoute, onNavigateBack }: Set
       </ScrollView>
 
       {AlertComponent}
+
+      {/* Change Password Modal */}
+      <Modal
+        visible={showPasswordModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowPasswordModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Change Password</Text>
+              <TouchableOpacity onPress={() => setShowPasswordModal(false)}>
+                <Ionicons name="close" size={24} color="#111827" />
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.modalBody}>
+              <Text style={styles.modalLabel}>Current Password</Text>
+              <View style={styles.passwordInputContainer}>
+                <TextInput
+                  style={styles.modalInput}
+                  value={currentPassword}
+                  onChangeText={setCurrentPassword}
+                  placeholder="Enter current password"
+                  secureTextEntry={!showCurrentPassword}
+                  autoCapitalize="none"
+                  editable={!changingPassword}
+                />
+                <TouchableOpacity
+                  style={styles.eyeIconButton}
+                  onPress={() => setShowCurrentPassword(!showCurrentPassword)}
+                >
+                  <Ionicons
+                    name={showCurrentPassword ? 'eye-off' : 'eye'}
+                    size={22}
+                    color="#6b7280"
+                  />
+                </TouchableOpacity>
+              </View>
+
+              <Text style={styles.modalLabel}>New Password</Text>
+              <View style={styles.passwordInputContainer}>
+                <TextInput
+                  style={styles.modalInput}
+                  value={newPassword}
+                  onChangeText={setNewPassword}
+                  placeholder="Enter new password"
+                  secureTextEntry={!showNewPassword}
+                  autoCapitalize="none"
+                  editable={!changingPassword}
+                />
+                <TouchableOpacity
+                  style={styles.eyeIconButton}
+                  onPress={() => setShowNewPassword(!showNewPassword)}
+                >
+                  <Ionicons
+                    name={showNewPassword ? 'eye-off' : 'eye'}
+                    size={22}
+                    color="#6b7280"
+                  />
+                </TouchableOpacity>
+              </View>
+
+              <Text style={styles.modalLabel}>Confirm New Password</Text>
+              <View style={styles.passwordInputContainer}>
+                <TextInput
+                  style={styles.modalInput}
+                  value={confirmPassword}
+                  onChangeText={setConfirmPassword}
+                  placeholder="Confirm new password"
+                  secureTextEntry={!showConfirmPassword}
+                  autoCapitalize="none"
+                  editable={!changingPassword}
+                />
+                <TouchableOpacity
+                  style={styles.eyeIconButton}
+                  onPress={() => setShowConfirmPassword(!showConfirmPassword)}
+                >
+                  <Ionicons
+                    name={showConfirmPassword ? 'eye-off' : 'eye'}
+                    size={22}
+                    color="#6b7280"
+                  />
+                </TouchableOpacity>
+              </View>
+
+              <View style={styles.modalButtonRow}>
+                <TouchableOpacity
+                  style={[styles.modalButton, styles.cancelButton]}
+                  onPress={() => setShowPasswordModal(false)}
+                  disabled={changingPassword}
+                >
+                  <Text style={styles.cancelButtonText}>Cancel</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.modalButton, styles.confirmButton, changingPassword && styles.disabledButton]}
+                  onPress={handlePasswordChange}
+                  disabled={changingPassword}
+                >
+                  {changingPassword ? (
+                    <ActivityIndicator size="small" color="#ffffff" />
+                  ) : (
+                    <Text style={styles.confirmButtonText}>Change Password</Text>
+                  )}
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -927,5 +1142,106 @@ const styles = StyleSheet.create({
 
   bottomSpacing: {
     height: 40,
+  },
+
+  // Modal styles
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  modalContent: {
+    backgroundColor: '#ffffff',
+    borderRadius: 16,
+    width: '100%',
+    maxWidth: 500,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 12,
+    elevation: 8,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: '#e5e7eb',
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#111827',
+  },
+  modalBody: {
+    padding: 20,
+  },
+  modalLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#374151',
+    marginBottom: 8,
+  },
+  passwordInputContainer: {
+    position: 'relative',
+    marginBottom: 16,
+  },
+  modalInput: {
+    borderWidth: 2,
+    borderColor: '#e5e7eb',
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    paddingRight: 50,
+    fontSize: 16,
+    backgroundColor: '#ffffff',
+    color: '#111827',
+  },
+  eyeIconButton: {
+    position: 'absolute',
+    right: 12,
+    top: 12,
+    padding: 4,
+  },
+  modalButtonRow: {
+    flexDirection: 'row',
+    gap: 12,
+    marginTop: 8,
+  },
+  modalButton: {
+    flex: 1,
+    paddingVertical: 14,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  cancelButton: {
+    backgroundColor: '#ffffff',
+    borderWidth: 2,
+    borderColor: '#e5e7eb',
+  },
+  cancelButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#374151',
+  },
+  confirmButton: {
+    backgroundColor: '#16a34a',
+    shadowColor: '#16a34a',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  confirmButtonText: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#ffffff',
+  },
+  disabledButton: {
+    opacity: 0.6,
   },
 });

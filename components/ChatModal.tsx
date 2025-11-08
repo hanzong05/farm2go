@@ -545,6 +545,68 @@ export default function ChatModal({
     setShowEmojiPicker(false);
   };
 
+  // Web-specific file upload using File object directly
+  const handleFileUploadWeb = async (file: File) => {
+    try {
+      // Show uploading message
+      Alert.alert('Uploading', 'Please wait while we upload your file...');
+
+      // Validate file size
+      if (file.size > 50 * 1024 * 1024) {
+        Alert.alert('File Too Large', 'File size must be less than 50MB');
+        return;
+      }
+
+      // Generate unique file path
+      const timestamp = Date.now();
+      const sanitizedFileName = file.name.replace(/[^a-zA-Z0-9.-]/g, '_');
+      const filePath = `${currentUserId}/${timestamp}_${sanitizedFileName}`;
+
+      // Get session token
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        throw new Error('User not authenticated');
+      }
+
+      // Upload to Supabase Storage using fetch API
+      const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL || 'https://demo.supabase.co';
+      const uploadUrl = `${supabaseUrl}/storage/v1/object/chat-attachments/${filePath}`;
+
+      const response = await fetch(uploadUrl, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${session.access_token}`,
+          'Content-Type': file.type,
+          'x-upsert': 'false',
+        },
+        body: file,
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('❌ Upload failed:', response.status, errorText);
+        throw new Error(`Upload failed: ${response.statusText}`);
+      }
+
+      // Get public URL
+      const { data: urlData } = supabase.storage
+        .from('chat-attachments')
+        .getPublicUrl(filePath);
+
+      // Send message with file attachment
+      const fileMessage = `📎 ${file.name}\n${urlData.publicUrl}`;
+
+      if (onSendMessage) {
+        onSendMessage(fileMessage);
+        Alert.alert('Success', 'File uploaded and sent successfully!');
+      }
+    } catch (error) {
+      console.error('File upload error:', error);
+      Alert.alert('Upload Failed', 'Failed to upload file. Please try again.');
+    }
+  };
+
+  // Mobile file upload using FileSystem
   const handleFileUpload = async (fileUri: string, fileName: string, mimeType: string) => {
     try {
       // Show uploading message
@@ -579,27 +641,29 @@ export default function ChatModal({
   };
 
   const handleAttachment = async () => {
-    // On web, directly trigger file input
+    // On web, directly trigger file input for images only
     if (Platform.OS === 'web') {
       const input = document.createElement('input');
       input.type = 'file';
-      input.accept = 'image/*,application/pdf,.doc,.docx,.txt';
+      input.accept = 'image/*';
 
       input.onchange = async (e: any) => {
         const file = e.target.files?.[0];
         if (file) {
           // Validate file size (max 20MB)
           if (file.size > 20 * 1024 * 1024) {
-            Alert.alert('File Too Large', 'Please select a file smaller than 20MB.');
+            Alert.alert('File Too Large', 'Please select an image smaller than 20MB.');
             return;
           }
 
-          const fileUri = URL.createObjectURL(file);
-          await handleFileUpload(
-            fileUri,
-            file.name,
-            file.type
-          );
+          // Validate it's an image
+          if (!file.type.startsWith('image/')) {
+            Alert.alert('Invalid File', 'Please select an image file.');
+            return;
+          }
+
+          // Call web-specific upload function with File object
+          await handleFileUploadWeb(file);
         }
       };
 
@@ -607,10 +671,10 @@ export default function ChatModal({
       return;
     }
 
-    // Mobile: Show options menu
+    // Mobile: Show options menu (photos only)
     Alert.alert(
-      'Add Attachment',
-      'Choose attachment type',
+      'Add Photo',
+      'Choose how to add a photo',
       [
         {
           text: 'Take Photo',
@@ -663,17 +727,6 @@ export default function ChatModal({
                 asset.mimeType || 'image/jpeg'
               );
             }
-            setShowAttachmentMenu(false);
-          },
-        },
-        {
-          text: 'Choose Document',
-          onPress: () => {
-            Alert.alert(
-              'Document Upload',
-              'Document upload requires a full app rebuild. For now, please use the photo options to share images and screenshots of documents.',
-              [{ text: 'OK' }]
-            );
             setShowAttachmentMenu(false);
           },
         },

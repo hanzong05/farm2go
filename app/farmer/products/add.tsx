@@ -173,172 +173,90 @@ export default function AddProductScreen() {
     }
   };
 
-  const uploadImage = async (imageUri: string): Promise<string | null> => {
+  const uploadImageWeb = async (file: File): Promise<string | null> => {
     try {
       setUploadingImage(true);
 
-      // Check if user is authenticated
-      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-      if (sessionError || !session) {
-        console.error('Authentication error:', sessionError);
-        Alert.alert('Error', 'You must be logged in to upload images');
-        return null;
+      // Create a unique filename
+      const fileExt = file.name.split('.').pop();
+      const filename = `product_${Date.now()}_${Math.random().toString(36).substring(7)}.${fileExt}`;
+
+      // Upload file directly
+      const { data, error } = await supabase.storage
+        .from('product-images')
+        .upload(filename, file, {
+          contentType: file.type,
+          upsert: false
+        });
+
+      if (error) {
+        throw error;
       }
 
-      // Create a unique filename with proper extension
-      const fileExt = imageUri.split('.').pop()?.toLowerCase() || 'jpg';
-      const filename = `${Date.now()}_${Math.random().toString(36).substring(7)}.${fileExt}`;
-      const filePath = `products/${filename}`;
+      // Get public URL
+      const { data: { publicUrl } } = supabase.storage
+        .from('product-images')
+        .getPublicUrl(data.path);
 
-      // Read file data for React Native
-      let fileData: any;
-      let mimeType = 'image/jpeg';
-
-      if (Platform.OS === 'web') {
-        // Web: use the stored File object if available, otherwise fetch the blob URL
-        const webFile = (setSelectedImage as any).webFile;
-        if (webFile) {
-          fileData = webFile;
-          mimeType = webFile.type;
-        } else {
-          // Fallback: convert blob URL to blob
-          const response = await fetch(imageUri);
-          fileData = await response.blob();
-          mimeType = response.headers.get('content-type') || 'image/jpeg';
-        }
-
-        console.log('📤 Uploading image (web):', {
-          filename: filePath,
-          mimeType,
-          size: fileData.size || 'unknown'
-        });
-
-        // Upload to Supabase storage
-        const { data, error } = await supabase.storage
-          .from('product-images')
-          .upload(filePath, fileData, {
-            contentType: mimeType,
-            upsert: false,
-            cacheControl: '3600'
-          });
-
-        if (error) {
-          console.error('❌ Upload error:', error);
-          throw error;
-        }
-
-        console.log('✅ Upload successful:', data.path);
-
-        // Get public URL
-        const { data: { publicUrl } } = supabase.storage
-          .from('product-images')
-          .getPublicUrl(data.path);
-
-        console.log('🔗 Public URL:', publicUrl);
-
-        return publicUrl;
-      } else {
-        // React Native: use FileSystem to read as base64
-        console.log('📱 Reading file for React Native upload...');
-
-        // Determine mime type from extension
-        if (fileExt === 'png') {
-          mimeType = 'image/png';
-        } else if (fileExt === 'jpg' || fileExt === 'jpeg') {
-          mimeType = 'image/jpeg';
-        } else if (fileExt === 'webp') {
-          mimeType = 'image/webp';
-        }
-
-        console.log('📤 Preparing upload (React Native)...');
-
-        // Verify authentication before upload
-        console.log('🔐 Verifying auth token...');
-        const { data: { session: currentSession } } = await supabase.auth.getSession();
-        console.log('🔐 Auth status:', {
-          hasSession: !!currentSession,
-          hasAccessToken: !!currentSession?.access_token,
-          userId: currentSession?.user?.id
-        });
-
-        if (!currentSession) {
-          throw new Error('No active session found. Please log in again.');
-        }
-
-        // Get file info
-        const fileInfo = await FileSystem.getInfoAsync(imageUri);
-        console.log('📁 File info:', {
-          exists: fileInfo.exists,
-          size: fileInfo.size,
-          sizeInMB: fileInfo.size ? (fileInfo.size / (1024 * 1024)).toFixed(2) : 'unknown'
-        });
-
-        // Check file size - Supabase has limits
-        const maxSizeInMB = 50;
-        if (fileInfo.size && fileInfo.size / (1024 * 1024) > maxSizeInMB) {
-          throw new Error(`File size (${(fileInfo.size / (1024 * 1024)).toFixed(2)}MB) exceeds maximum allowed (${maxSizeInMB}MB)`);
-        }
-
-        // For React Native, create a FormData object
-        console.log('📦 Creating FormData for upload...');
-        const formData = new FormData();
-
-        // Add file to FormData - React Native way
-        formData.append('file', {
-          uri: imageUri,
-          type: mimeType,
-          name: filename
-        } as any);
-
-        console.log('📤 Starting upload to Supabase Storage...');
-        console.log('   Path:', filePath);
-        console.log('   Type:', mimeType);
-
-        // Upload using fetch directly with FormData
-        const uploadUrl = `https://lipviwhsjgvcmdggecqn.supabase.co/storage/v1/object/product-images/${filePath}`;
-
-        const uploadResponse = await fetch(uploadUrl, {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${currentSession.access_token}`,
-            'apikey': process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || '',
-          },
-          body: formData,
-        });
-
-        console.log('📡 Upload response status:', uploadResponse.status);
-
-        if (!uploadResponse.ok) {
-          const errorText = await uploadResponse.text();
-          console.error('❌ Upload failed:', errorText);
-          throw new Error(`Upload failed with status ${uploadResponse.status}: ${errorText}`);
-        }
-
-        const uploadResult = await uploadResponse.json();
-        console.log('✅ Upload successful:', uploadResult);
-
-        console.log('✅ Upload completed successfully!');
-
-        // Get public URL
-        const { data: { publicUrl } } = supabase.storage
-          .from('product-images')
-          .getPublicUrl(filePath);
-
-        console.log('🔗 Public URL:', publicUrl);
-
-        return publicUrl;
-      }
-    } catch (error: any) {
+      return publicUrl;
+    } catch (error) {
       console.error('Error uploading image:', error);
-      const errorMessage = error?.message || 'Failed to upload image';
-      Alert.alert('Upload Error', errorMessage);
+      Alert.alert('Error', 'Failed to upload image');
       return null;
     } finally {
       setUploadingImage(false);
     }
   };
 
-  const pickWebImage = () => {
+  const uploadImage = async (imageUri: string): Promise<string | null> => {
+    try {
+      setUploadingImage(true);
+
+      // Create a unique filename
+      const filename = `product_${Date.now()}_${Math.random().toString(36).substring(7)}.jpg`;
+
+      // React Native: read file as base64
+      const base64 = await FileSystem.readAsStringAsync(imageUri, {
+        encoding: FileSystem.EncodingType.Base64,
+      });
+
+      // Decode base64 to binary string, then convert to Blob
+      const byteCharacters = atob(base64);
+      const byteNumbers = new Array(byteCharacters.length);
+      for (let i = 0; i < byteCharacters.length; i++) {
+        byteNumbers[i] = byteCharacters.charCodeAt(i);
+      }
+      const byteArray = new Uint8Array(byteNumbers);
+      const blob = new Blob([byteArray], { type: 'image/jpeg' });
+
+      // Upload to Supabase storage
+      const { data, error } = await supabase.storage
+        .from('product-images')
+        .upload(filename, blob, {
+          contentType: 'image/jpeg',
+          upsert: false
+        });
+
+      if (error) {
+        throw error;
+      }
+
+      // Get public URL
+      const { data: { publicUrl } } = supabase.storage
+        .from('product-images')
+        .getPublicUrl(data.path);
+
+      return publicUrl;
+    } catch (error) {
+      console.error('Error uploading image:', error);
+      Alert.alert('Error', 'Failed to upload image');
+      return null;
+    } finally {
+      setUploadingImage(false);
+    }
+  };
+
+  const pickWebImage = async () => {
     // Only available on web platform
     if (Platform.OS !== 'web') return;
 
@@ -346,27 +264,27 @@ export default function AddProductScreen() {
     const input = document.createElement('input');
     input.type = 'file';
     input.accept = 'image/*';
-    input.onchange = (event) => {
+    input.onchange = async (event) => {
       const file = (event.target as HTMLInputElement).files?.[0];
       if (file) {
-        // Check file size (limit to 5MB)
-        if (file.size > 5 * 1024 * 1024) {
-          Alert.alert('Error', 'Image size must be less than 5MB');
+        // Check file size (limit to 10MB)
+        if (file.size > 10 * 1024 * 1024) {
+          Alert.alert('File Too Large', 'Please select an image smaller than 10MB.');
           return;
         }
 
         // Check file type
         if (!file.type.startsWith('image/')) {
-          Alert.alert('Error', 'Please select a valid image file');
+          Alert.alert('Invalid File', 'Please select an image file.');
           return;
         }
 
-        // Create object URL for preview
-        const imageUrl = URL.createObjectURL(file);
-        setSelectedImage(imageUrl);
+        // Upload the file directly
+        const publicUrl = await uploadImageWeb(file);
 
-        // Store the file for later upload
-        (setSelectedImage as any).webFile = file;
+        if (publicUrl) {
+          setSelectedImage(publicUrl);
+        }
       }
     };
     input.click();
@@ -421,9 +339,16 @@ export default function AddProductScreen() {
 
       let imageUrl = null;
       if (selectedImage) {
-        imageUrl = await uploadImage(selectedImage);
-        if (!imageUrl) {
-          throw new Error('Failed to upload image');
+        // Check if image is already a URL (web) or needs upload (mobile)
+        if (selectedImage.startsWith('http://') || selectedImage.startsWith('https://')) {
+          // Already uploaded (web)
+          imageUrl = selectedImage;
+        } else {
+          // Need to upload (mobile)
+          imageUrl = await uploadImage(selectedImage);
+          if (!imageUrl) {
+            throw new Error('Failed to upload image');
+          }
         }
       }
 

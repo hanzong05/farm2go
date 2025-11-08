@@ -13,6 +13,7 @@ import {
   View,
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
+import * as FileSystem from 'expo-file-system/legacy';
 import { supabase } from '../lib/supabase';
 
 const { width } = Dimensions.get('window');
@@ -59,6 +60,41 @@ export default function AddProductForm({ farmerId, onSuccess, onCancel }: AddPro
 
   const pickImage = async () => {
     try {
+      // On web, use native file input
+      if (Platform.OS === 'web') {
+        const input = document.createElement('input');
+        input.type = 'file';
+        input.accept = 'image/*';
+
+        input.onchange = async (e: any) => {
+          const file = e.target.files?.[0];
+          if (file) {
+            // Validate file size (max 10MB)
+            if (file.size > 10 * 1024 * 1024) {
+              Alert.alert('File Too Large', 'Please select an image smaller than 10MB.');
+              return;
+            }
+
+            // Validate it's an image
+            if (!file.type.startsWith('image/')) {
+              Alert.alert('Invalid File', 'Please select an image file.');
+              return;
+            }
+
+            // Upload the file directly (not the blob URL)
+            const publicUrl = await uploadImageToSupabaseWeb(file);
+
+            if (publicUrl) {
+              setFormData(prev => ({ ...prev, image: publicUrl }));
+            }
+          }
+        };
+
+        input.click();
+        return;
+      }
+
+      // Mobile: use ImagePicker
       const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
 
       if (status !== 'granted') {
@@ -87,6 +123,41 @@ export default function AddProductForm({ farmerId, onSuccess, onCancel }: AddPro
     }
   };
 
+  const uploadImageToSupabaseWeb = async (file: File): Promise<string | null> => {
+    try {
+      setUploadingImage(true);
+
+      // Create a unique filename
+      const fileExt = file.name.split('.').pop();
+      const filename = `product_${Date.now()}_${Math.random().toString(36).substring(7)}.${fileExt}`;
+
+      // Upload file directly
+      const { data, error } = await supabase.storage
+        .from('product-images')
+        .upload(filename, file, {
+          contentType: file.type,
+          upsert: false
+        });
+
+      if (error) {
+        throw error;
+      }
+
+      // Get public URL
+      const { data: { publicUrl } } = supabase.storage
+        .from('product-images')
+        .getPublicUrl(data.path);
+
+      return publicUrl;
+    } catch (error) {
+      console.error('Error uploading image:', error);
+      Alert.alert('Error', 'Failed to upload image');
+      return null;
+    } finally {
+      setUploadingImage(false);
+    }
+  };
+
   const uploadImageToSupabase = async (imageUri: string): Promise<string | null> => {
     try {
       setUploadingImage(true);
@@ -94,26 +165,25 @@ export default function AddProductForm({ farmerId, onSuccess, onCancel }: AddPro
       // Create a unique filename
       const filename = `product_${Date.now()}_${Math.random().toString(36).substring(7)}.jpg`;
 
-      // Read file data for React Native
-      let fileData: any;
-      let mimeType = 'image/jpeg';
+      // React Native: read file as base64
+      const base64 = await FileSystem.readAsStringAsync(imageUri, {
+        encoding: FileSystem.EncodingType.Base64,
+      });
 
-      if (Platform.OS === 'web') {
-        // Web: convert to blob
-        const response = await fetch(imageUri);
-        fileData = await response.blob();
-      } else {
-        // React Native: read as base64 and convert to ArrayBuffer
-        const response = await fetch(imageUri);
-        const arrayBuffer = await response.arrayBuffer();
-        fileData = new Uint8Array(arrayBuffer);
+      // Decode base64 to binary string, then convert to Blob
+      const byteCharacters = atob(base64);
+      const byteNumbers = new Array(byteCharacters.length);
+      for (let i = 0; i < byteCharacters.length; i++) {
+        byteNumbers[i] = byteCharacters.charCodeAt(i);
       }
+      const byteArray = new Uint8Array(byteNumbers);
+      const blob = new Blob([byteArray], { type: 'image/jpeg' });
 
       // Upload to Supabase storage
       const { data, error } = await supabase.storage
         .from('product-images')
-        .upload(filename, fileData, {
-          contentType: mimeType,
+        .upload(filename, blob, {
+          contentType: 'image/jpeg',
           upsert: false
         });
 
