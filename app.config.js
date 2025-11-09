@@ -6,11 +6,11 @@ export default {
     slug: "farm2go",
     version: "1.0.0",
     orientation: "portrait",
-    icon: "./assets/adaptive-icon.png",
+    icon: "./assets/images/icon.png",
     scheme: "farm2go",
     userInterfaceStyle: "light",
     splash: {
-      image: "./assets/adaptive-icon.png",
+      image: "./assets/images/splash-icon.png",
       resizeMode: "contain",
       backgroundColor: "#ffffff"
     },
@@ -23,8 +23,8 @@ export default {
     },
     android: {
       adaptiveIcon: {
-        foregroundImage: "./assets/adaptive-icon.png",
-        backgroundColor: "#ffffff"
+        foregroundImage: "./assets/images/icon.png",
+        backgroundColor: "#059669"
       },
       package: "com.farm2go.app",
       intentFilters: [
@@ -45,7 +45,7 @@ export default {
       ]
     },
     web: {
-      favicon: "./assets/adaptive-icon.png",
+      favicon: "./assets/images/icon.png",
       bundler: "metro"
     },
     plugins: [
@@ -53,8 +53,8 @@ export default {
       [
         "expo-notifications",
         {
-          icon: "./assets/adaptive-icon.png",
-          color: "#ffffff",
+          icon: "./assets/images/icon.png",
+          color: "#059669",
           defaultChannel: "default"
         }
       ]
