@@ -32,6 +32,7 @@ export const supabase = createClient<Database>(supabaseUrl, supabaseAnonKey, {
     headers: {
       'Accept': 'application/json',
       'Content-Type': 'application/json',
+      'Prefer': 'return=representation',
     },
   },
   realtime: {

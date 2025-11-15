@@ -285,26 +285,60 @@ export default function CompleteProfileScreen() {
 
       console.log('📝 Creating complete profile:', profileData);
 
-      // Insert profile into database with better error handling
-      const { data: insertResult, error: profileError } = await supabase
+      // Check if profile already exists
+      const { data: existingProfile, error: checkError } = await supabase
         .from('profiles')
-        .insert(profileData as any)
-        .select()
-        .single();
+        .select('id, email')
+        .eq('id', userId)
+        .maybeSingle();
 
-      console.log('📝 Insert result:', insertResult);
-      console.log('📝 Insert error:', profileError);
+      console.log('🔍 Existing profile check:', existingProfile);
+      console.log('🔍 Check error:', checkError);
 
-      if (profileError) {
-        console.error('❌ Profile creation error details:', {
-          code: profileError.code,
-          message: profileError.message,
-          details: profileError.details,
-          hint: profileError.hint
-        });
+      if (existingProfile) {
+        console.log('✅ Profile already exists, updating instead...');
 
-        // Try a different approach if UUID format issue
-        if (profileError.message.includes('invalid input syntax') || profileError.code === '22P02') {
+        // Update existing profile
+        const { data: updateResult, error: updateError } = await supabase
+          .from('profiles')
+          .update({
+            phone: formData.phone,
+            barangay: formData.barangay,
+            user_type: userType,
+            farm_name: formData.farmName || null,
+            farm_size: formData.farmSize || null,
+          })
+          .eq('id', userId)
+          .select()
+          .single();
+
+        if (updateError) {
+          console.error('❌ Profile update error:', updateError);
+          throw updateError;
+        }
+
+        console.log('✅ Profile updated successfully:', updateResult);
+      } else {
+        // Insert new profile
+        const { data: insertResult, error: profileError } = await supabase
+          .from('profiles')
+          .insert(profileData as any)
+          .select()
+          .single();
+
+        console.log('📝 Insert result:', insertResult);
+        console.log('📝 Insert error:', profileError);
+
+        if (profileError) {
+          console.error('❌ Profile creation error details:', {
+            code: profileError.code,
+            message: profileError.message,
+            details: profileError.details,
+            hint: profileError.hint
+          });
+
+          // Try a different approach if UUID format issue
+          if (profileError.message.includes('invalid input syntax') || profileError.code === '22P02') {
           console.log('🔧 UUID format issue detected, trying with different ID...');
 
           // Generate a proper UUID v4
@@ -329,8 +363,9 @@ export default function CompleteProfileScreen() {
           } else {
             console.log('✅ Retry successful:', retryResult);
           }
-        } else {
-          throw profileError;
+          } else {
+            throw profileError;
+          }
         }
       }
 
