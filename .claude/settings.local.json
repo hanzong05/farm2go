@@ -40,7 +40,8 @@
       "Bash(then echo \"ANDROID_HOME not set\")",
       "Bash(else echo \"ANDROID_HOME=$ANDROID_HOME\")",
       "Bash(fi)",
-      "Read(//c/Users/**)"
+      "Read(//c/Users/**)",
+      "Bash(nul)"
     ],
     "deny": [],
     "ask": []

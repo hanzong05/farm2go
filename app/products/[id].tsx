@@ -4,7 +4,7 @@ import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, ActivityIn
 import Icon from 'react-native-vector-icons/FontAwesome5';
 import { supabase } from '../../lib/supabase';
 import { getUserWithProfile } from '../../services/auth';
-import ContactWidget, { ContactPerson } from '../../components/ContactWidget';
+import ChatModal from '../../components/ChatModal';
 import { showError } from '../../utils/alert';
 
 const { width } = Dimensions.get('window');
@@ -597,21 +597,25 @@ export default function ProductDetailScreen() {
       </ScrollView>
 
       {/* Contact Widget - floating at bottom right for browser, full screen for mobile */}
-      {product && !isOwner && !isAdmin && (
-        <ContactWidget
-          contactPerson={{
+      {product && !isOwner && !isAdmin && showContactWidget && (
+        <ChatModal
+          visible={showContactWidget}
+          onClose={handleContactClose}
+          participant={{
             id: product.farmer_id,
             name: getFarmerName(),
             type: 'farmer',
-            isOnline: true
+            isOnline: true,
+            avatarUrl: null
           }}
-          currentUserId={profile?.id}
-          currentUserName={`${profile?.first_name || ''} ${profile?.last_name || ''}`.trim() || (isBuyer ? 'Buyer' : 'Farmer')}
+          messages={[]}
+          onSendMessage={(content: string) => {
+            // Message sending is handled internally by ChatModal
+            console.log('Message sent:', content);
+          }}
+          currentUserId={profile?.id || ''}
           currentUserType={profile?.user_type || 'buyer'}
-          visible={showContactWidget}
-          onOpen={handleContactOpen}
-          onClose={handleContactClose}
-          relatedProductId={product.id}
+          loading={processing}
         />
       )}
     </View>

@@ -12,6 +12,8 @@ import {
     View
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
+import * as FileSystem from 'expo-file-system';
+import { decode } from 'base64-arraybuffer';
 import Icon from 'react-native-vector-icons/FontAwesome5';
 import HeaderComponent from '../../components/HeaderComponent';
 import { useConfirmationModal } from '../../contexts/ConfirmationModalContext';
@@ -183,46 +185,49 @@ export default function OrderDetailScreen() {
         console.log('🔐 Content type:', contentType);
 
         try {
-          // Fetch the image
-          console.log('🌐 Fetching image from:', selectedProofImage.uri);
-          const response = await fetch(selectedProofImage.uri);
+          // Get session for authentication
+          const { data: { session } } = await supabase.auth.getSession();
+          if (!session) {
+            Alert.alert('Authentication Error', 'Please log in to upload proof of payment');
+            throw new Error('No session found');
+          }
+
+          // Read file as base64
+          console.log('📖 Reading file as base64...');
+          const base64 = await FileSystem.readAsStringAsync(selectedProofImage.uri, {
+            encoding: 'base64',
+          });
+
+          // Convert base64 to ArrayBuffer
+          const arrayBuffer = decode(base64);
+          console.log('✅ Converted to ArrayBuffer, size:', arrayBuffer.byteLength, 'bytes');
+
+          // Upload using fetch API
+          const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL || '';
+          const uploadUrl = `${supabaseUrl}/storage/v1/object/proofs/${fileName}`;
+
+          console.log('🚀 Starting upload to:', uploadUrl);
+
+          const response = await fetch(uploadUrl, {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${session.access_token}`,
+              'Content-Type': contentType,
+              'x-upsert': 'false',
+            },
+            body: arrayBuffer,
+          });
+
+          console.log('📦 Upload response status:', response.status);
 
           if (!response.ok) {
-            throw new Error(`Failed to fetch image: ${response.status} ${response.statusText}`);
+            const errorText = await response.text();
+            console.error('❌ Upload failed:', errorText);
+            throw new Error(`Upload failed: ${response.status} ${response.statusText}`);
           }
 
-          // Convert to ArrayBuffer instead of Blob for better compatibility
-          const arrayBuffer = await response.arrayBuffer();
-          console.log('✅ Fetched image, size:', arrayBuffer.byteLength, 'bytes');
-
-          console.log('🚀 Starting upload to proofs bucket...');
-          console.log('📋 Upload params:', { bucket: 'proofs', fileName, contentType, arrayBufferSize: arrayBuffer.byteLength });
-
-          const uploadResult = await supabase.storage
-            .from('proofs')
-            .upload(fileName, arrayBuffer, {
-              contentType: contentType,
-              upsert: false
-            });
-
-          console.log('📦 Upload complete!');
-          console.log('📊 Full upload result:', JSON.stringify(uploadResult, null, 2));
-
-          const { data: uploadData, error: uploadError } = uploadResult;
-          console.log('📊 Upload data:', uploadData);
-          console.log('❌ Upload error:', uploadError);
-
-          if (uploadError) {
-            console.error('❌ Upload failed:', JSON.stringify(uploadError, null, 2));
-            Alert.alert('Upload Error', uploadError.message || 'Failed to upload proof of payment');
-            throw uploadError;
-          }
-
-          if (!uploadData) {
-            throw new Error('Upload succeeded but no data returned');
-          }
-
-          console.log('✅ Upload successful! Path:', uploadData.path);
+          const uploadData = await response.json();
+          console.log('✅ Upload successful! Data:', uploadData);
 
           // Get public URL from proofs bucket
           const { data: { publicUrl } } = supabase.storage
@@ -543,7 +548,7 @@ export default function OrderDetailScreen() {
         )}
 
         {/* Proof of Payment */}
-        {(order.status === 'ready' || order.proof_of_payment || selectedProofImage) && (
+        {(canUpdateStatus || order.proof_of_payment || selectedProofImage) && (
           <View style={styles.card}>
             <Text style={styles.cardTitle}>Proof of Payment</Text>
             {order.proof_of_payment ? (

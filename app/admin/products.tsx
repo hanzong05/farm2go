@@ -11,7 +11,6 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import ConfirmationModal from '../../components/ConfirmationModal';
 import { useCustomAlert } from '../../components/CustomAlert';
 import FilterSidebar, { FilterSection, FilterState } from '../../components/FilterSidebar';
 import HeaderComponent from '../../components/HeaderComponent';
@@ -46,21 +45,6 @@ export default function AdminProducts() {
     status: 'all',
     category: 'all',
     sort: 'newest'
-  });
-  const [confirmModal, setConfirmModal] = useState<{
-    visible: boolean;
-    title: string;
-    message: string;
-    isDestructive: boolean;
-    confirmText: string;
-    onConfirm: () => void;
-  }>({
-    visible: false,
-    title: '',
-    message: '',
-    isDestructive: false,
-    confirmText: '',
-    onConfirm: () => {},
   });
 
   const { showAlert, AlertComponent } = useCustomAlert();
@@ -210,17 +194,22 @@ export default function AdminProducts() {
 
     const isApproval = action === 'approved';
 
-    setConfirmModal({
-      visible: true,
-      title: `${isApproval ? 'Approve' : 'Reject'} Product?`,
-      message: `Are you sure you want to ${isApproval ? 'approve' : 'reject'} "${product?.name}" by ${farmerName}?`,
-      isDestructive: !isApproval,
-      confirmText: `Yes, ${isApproval ? 'Approve' : 'Reject'}`,
-      onConfirm: () => {
-        updateProductStatus(productId, action);
-        setConfirmModal(prev => ({ ...prev, visible: false }));
-      }
-    });
+    // Use showAlert for mobile compatibility
+    showAlert(
+      `${isApproval ? 'Approve' : 'Reject'} Product?`,
+      `Are you sure you want to ${isApproval ? 'approve' : 'reject'} "${product?.name}" by ${farmerName}?`,
+      [
+        {
+          text: 'Cancel',
+          style: 'cancel',
+        },
+        {
+          text: `Yes, ${isApproval ? 'Approve' : 'Reject'}`,
+          style: isApproval ? 'default' : 'destructive',
+          onPress: () => updateProductStatus(productId, action),
+        },
+      ]
+    );
   };
 
   const updateProductStatus = async (productId: string, status: 'approved' | 'rejected') => {
@@ -691,16 +680,6 @@ export default function AdminProducts() {
       )}
 
       {AlertComponent}
-
-      <ConfirmationModal
-        visible={confirmModal.visible}
-        title={confirmModal.title}
-        message={confirmModal.message}
-        confirmText={confirmModal.confirmText}
-        isDestructive={confirmModal.isDestructive}
-        onConfirm={confirmModal.onConfirm}
-        onCancel={() => setConfirmModal(prev => ({ ...prev, visible: false }))}
-      />
     </View>
   );
 }

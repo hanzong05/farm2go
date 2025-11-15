@@ -11,6 +11,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import { decode } from 'base64-arraybuffer';
 import { supabase } from '../lib/supabase';
 import { Database } from '../types/database';
 import { Alert, showError, showSuccess } from '../utils/alert';
@@ -266,14 +267,8 @@ const VerificationUpload: React.FC<VerificationUploadProps> = ({
               throw new Error('File is empty or could not be read');
             }
 
-            // Convert base64 to ArrayBuffer
-            const binaryString = atob(base64String);
-            const bytes = new Uint8Array(binaryString.length);
-            for (let i = 0; i < binaryString.length; i++) {
-              bytes[i] = binaryString.charCodeAt(i);
-            }
-
-            fileData = bytes.buffer;
+            // Convert base64 to ArrayBuffer using decode (React Native compatible)
+            fileData = decode(base64String);
             console.log('Legacy FileSystem: Created ArrayBuffer, size:', fileData.byteLength);
 
             // Clean up temp file if we created one
@@ -319,58 +314,72 @@ const VerificationUpload: React.FC<VerificationUploadProps> = ({
 
       clearTimeout(timeoutId);
 
+      // Get session for authentication
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        throw new Error('Session expired. Please log in again.');
+      }
+
       // Generate unique file ID for the actual file
       const fileId = Math.random().toString(36).substring(2) + Date.now().toString(36);
 
       // Create nested folder structure: userId/documentType_timestamp.app/fileId
       const userFileName = `${user.id}/${fileName}.app/${fileId}`;
 
-      // Upload to Supabase with user-specific path
+      // Upload to Supabase using fetch API (React Native compatible)
       console.log(`Uploading to Supabase: ${userFileName}`);
-      const { data: uploadData, error: uploadError } = await supabase.storage
-        .from(bucket)
-        .upload(userFileName, fileData, {
-          contentType: mimeType,
-          upsert: true,
-        });
+      const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL || '';
+      const uploadUrl = `${supabaseUrl}/storage/v1/object/${bucket}/${userFileName}`;
 
-      if (uploadError) {
-        console.error('Supabase upload error:', uploadError);
+      console.log('📡 Upload URL:', uploadUrl);
 
-        // If RLS error, try uploading to a different bucket or with different approach
-        if (uploadError.message.includes('row-level security') || uploadError.message.includes('policy')) {
-          console.log('🔄 RLS policy error, trying alternative approach...');
+      const response = await fetch(uploadUrl, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${session.access_token}`,
+          'Content-Type': mimeType,
+          'x-upsert': 'true',
+        },
+        body: fileData,
+      });
 
-          // Try using a different bucket name or approach
-          try {
-            const alternativeFileName = `temp_verifications/${user.id}/${fileName}`;
-            console.log(`Trying alternative upload: ${alternativeFileName}`);
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('❌ Upload failed:', response.status, errorText);
 
-            const { data: altUploadData, error: altUploadError } = await supabase.storage
-              .from('avatars') // Using avatars bucket as fallback (usually more permissive)
-              .upload(alternativeFileName, fileData, {
-                contentType: mimeType,
-                upsert: true,
-              });
+        // If RLS error, try uploading to avatars bucket as fallback
+        if (response.status === 403 || errorText.includes('policy')) {
+          console.log('🔄 RLS policy error, trying avatars bucket...');
 
-            if (altUploadError) {
-              throw altUploadError;
-            }
+          const alternativeFileName = `temp_verifications/${user.id}/${fileName}`;
+          const altUploadUrl = `${supabaseUrl}/storage/v1/object/avatars/${alternativeFileName}`;
 
-            console.log('✅ Alternative upload successful:', altUploadData.path);
-            return altUploadData.path;
+          const altResponse = await fetch(altUploadUrl, {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${session.access_token}`,
+              'Content-Type': mimeType,
+              'x-upsert': 'true',
+            },
+            body: fileData,
+          });
 
-          } catch (altError) {
-            console.error('Alternative upload also failed:', altError);
+          if (!altResponse.ok) {
+            const altErrorText = await altResponse.text();
+            console.error('❌ Alternative upload failed:', altResponse.status, altErrorText);
             throw new Error(`Upload failed: Unable to upload to storage. Please contact support.`);
           }
+
+          console.log('✅ Alternative upload successful');
+          return alternativeFileName;
         }
 
-        throw uploadError;
+        throw new Error(`Upload failed: ${response.statusText}`);
       }
 
-      console.log('✅ Upload successful:', uploadData.path);
-      return uploadData.path;
+      const uploadResult = await response.json();
+      console.log('✅ Upload successful:', uploadResult);
+      return userFileName;
 
     } catch (error: unknown) {
       clearTimeout(timeoutId);

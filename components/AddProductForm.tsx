@@ -14,6 +14,7 @@ import {
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import * as FileSystem from 'expo-file-system/legacy';
+import { decode } from 'base64-arraybuffer';
 import { supabase } from '../lib/supabase';
 
 const { width } = Dimensions.get('window');
@@ -127,9 +128,24 @@ export default function AddProductForm({ farmerId, onSuccess, onCancel }: AddPro
     try {
       setUploadingImage(true);
 
+      // Validate file size (10MB limit)
+      if (file.size > 10 * 1024 * 1024) {
+        Alert.alert('File Too Large', 'Image size must be less than 10MB');
+        return null;
+      }
+
+      // Get session token
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        Alert.alert('Authentication Error', 'Please log in to upload images');
+        return null;
+      }
+
       // Create a unique filename
       const fileExt = file.name.split('.').pop();
       const filename = `product_${Date.now()}_${Math.random().toString(36).substring(7)}.${fileExt}`;
+
+      console.log('📤 Uploading product image:', filename);
 
       // Upload file directly
       const { data, error } = await supabase.storage
@@ -140,8 +156,11 @@ export default function AddProductForm({ farmerId, onSuccess, onCancel }: AddPro
         });
 
       if (error) {
+        console.error('❌ Supabase upload error:', error);
         throw error;
       }
+
+      console.log('✅ Image uploaded successfully:', data.path);
 
       // Get public URL
       const { data: { publicUrl } } = supabase.storage
@@ -149,9 +168,10 @@ export default function AddProductForm({ farmerId, onSuccess, onCancel }: AddPro
         .getPublicUrl(data.path);
 
       return publicUrl;
-    } catch (error) {
-      console.error('Error uploading image:', error);
-      Alert.alert('Error', 'Failed to upload image');
+    } catch (error: any) {
+      console.error('❌ Error uploading image:', error);
+      const errorMessage = error?.message || 'Failed to upload image';
+      Alert.alert('Upload Error', errorMessage);
       return null;
     } finally {
       setUploadingImage(false);
@@ -162,44 +182,71 @@ export default function AddProductForm({ farmerId, onSuccess, onCancel }: AddPro
     try {
       setUploadingImage(true);
 
+      // Get file info to check size
+      const fileInfo = await FileSystem.getInfoAsync(imageUri);
+      const fileSize = (fileInfo as any).size || 0;
+
+      // Validate file size (10MB limit)
+      if (fileSize > 10 * 1024 * 1024) {
+        Alert.alert('File Too Large', 'Image size must be less than 10MB');
+        return null;
+      }
+
+      // Get session token
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        Alert.alert('Authentication Error', 'Please log in to upload images');
+        return null;
+      }
+
       // Create a unique filename
       const filename = `product_${Date.now()}_${Math.random().toString(36).substring(7)}.jpg`;
+
+      console.log('📤 Uploading product image:', filename, 'Size:', fileSize, 'bytes');
 
       // React Native: read file as base64
       const base64 = await FileSystem.readAsStringAsync(imageUri, {
         encoding: FileSystem.EncodingType.Base64,
       });
 
-      // Decode base64 to binary string, then convert to Blob
-      const byteCharacters = atob(base64);
-      const byteNumbers = new Array(byteCharacters.length);
-      for (let i = 0; i < byteCharacters.length; i++) {
-        byteNumbers[i] = byteCharacters.charCodeAt(i);
-      }
-      const byteArray = new Uint8Array(byteNumbers);
-      const blob = new Blob([byteArray], { type: 'image/jpeg' });
+      // Convert base64 to ArrayBuffer (React Native compatible)
+      const arrayBuffer = decode(base64);
 
-      // Upload to Supabase storage
-      const { data, error } = await supabase.storage
-        .from('product-images')
-        .upload(filename, blob, {
-          contentType: 'image/jpeg',
-          upsert: false
-        });
+      // Upload using fetch API (React Native compatible)
+      const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL || '';
+      const uploadUrl = `${supabaseUrl}/storage/v1/object/product-images/${filename}`;
 
-      if (error) {
-        throw error;
+      console.log('📡 Uploading to:', uploadUrl);
+
+      const response = await fetch(uploadUrl, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${session.access_token}`,
+          'Content-Type': 'image/jpeg',
+          'x-upsert': 'false',
+        },
+        body: arrayBuffer,
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('❌ Upload failed:', response.status, errorText);
+        throw new Error(`Upload failed: ${response.statusText}`);
       }
+
+      const uploadResult = await response.json();
+      console.log('✅ Image uploaded successfully:', uploadResult);
 
       // Get public URL
       const { data: { publicUrl } } = supabase.storage
         .from('product-images')
-        .getPublicUrl(data.path);
+        .getPublicUrl(filename);
 
       return publicUrl;
-    } catch (error) {
-      console.error('Error uploading image:', error);
-      Alert.alert('Error', 'Failed to upload image');
+    } catch (error: any) {
+      console.error('❌ Error uploading image:', error);
+      const errorMessage = error?.message || 'Failed to upload image';
+      Alert.alert('Upload Error', errorMessage);
       return null;
     } finally {
       setUploadingImage(false);

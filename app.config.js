@@ -49,7 +49,7 @@ export default {
       bundler: "metro"
     },
     plugins: [
-      "expo-dev-client",
+      // "expo-dev-client", // Temporarily disabled to debug map crash
       [
         "expo-notifications",
         {

@@ -106,26 +106,44 @@ export default function MapDirectionsModal({
       setMapError(null);
       devLog('Initializing map...');
 
-      // Get current location first
-      const location = await getCurrentLocation();
-      devLog('✅ Current location obtained:', location);
-
-      // Geocode delivery address
+      // Geocode delivery address first (we need the destination)
       devLog('📍 Geocoding address:', deliveryAddress);
-      await geocodeAddress(deliveryAddress);
 
-      setLoading(false);
-      devLog('✅ Map initialization complete');
+      // Inline geocoding to get destination immediately
+      const searchAddress = deliveryAddress.includes('Philippines') ? deliveryAddress : `${deliveryAddress}, Philippines`;
+      const encodedAddress = encodeURIComponent(searchAddress);
+      const nominatimUrl = `https://nominatim.openstreetmap.org/search?q=${encodedAddress}&format=json&limit=5&countrycodes=ph`;
+
+      const response = await fetch(nominatimUrl, {
+        headers: { 'User-Agent': 'Farm2Go App' }
+      });
+      const data = await response.json();
+
+      if (data && data.length > 0) {
+        const destLat = parseFloat(data[0].lat);
+        const destLon = parseFloat(data[0].lon);
+
+        devLog('✅ Destination found:', { latitude: destLat, longitude: destLon });
+
+        // BYPASS EMBEDDED MAP: Open Google Maps directly
+        devLog('🗺️ Opening Google Maps directly...');
+        const url = `https://www.google.com/maps/dir/?api=1&destination=${destLat},${destLon}`;
+        await Linking.openURL(url);
+
+        // Close the modal after opening Google Maps
+        setTimeout(() => {
+          onClose();
+        }, 500);
+
+        setLoading(false);
+        devLog('✅ Opened Google Maps');
+      } else {
+        throw new Error('Could not find address location');
+      }
     } catch (error) {
       devError('❌ Map initialization error:', error);
-      const errorMessage = error instanceof Error ? error.message : 'Failed to initialize map';
+      const errorMessage = error instanceof Error ? error.message : 'Failed to open Google Maps';
       setMapError(errorMessage);
-
-      // Log to error logger for production debugging
-      if (!__DEV__) {
-        errorLogger.logMapError(error instanceof Error ? error : new Error(errorMessage));
-      }
-
       setLoading(false);
     }
   };
@@ -243,16 +261,31 @@ export default function MapDirectionsModal({
 
         if (status === 'granted') {
           devLog('📱 Getting current position...');
-          const location = await Location.getCurrentPositionAsync({
-            accuracy: Location.Accuracy.Balanced,
-          });
-          devLog('✅ Native location obtained:', location.coords);
+          try {
+            // Try to get current location with a timeout
+            const location = await Promise.race([
+              Location.getCurrentPositionAsync({
+                accuracy: Location.Accuracy.Balanced,
+              }),
+              new Promise((_, reject) =>
+                setTimeout(() => reject(new Error('Location request timeout')), 10000)
+              ),
+            ]);
+            devLog('✅ Native location obtained:', (location as any).coords);
 
-          const loc = {
-            latitude: location.coords.latitude,
-            longitude: location.coords.longitude,
-          };
-          setCurrentLocation(loc);
+            const loc = {
+              latitude: (location as any).coords.latitude,
+              longitude: (location as any).coords.longitude,
+            };
+            setCurrentLocation(loc);
+          } catch (locError) {
+            devWarn('⚠️ Could not get current location, using default location');
+            // Fallback to default location if getCurrentPosition fails
+            setCurrentLocation({
+              latitude: 14.5995,
+              longitude: 120.9842,
+            });
+          }
         } else {
           devWarn('⚠️ Location permission denied, using default location');
           setCurrentLocation({
@@ -262,13 +295,13 @@ export default function MapDirectionsModal({
         }
       }
     } catch (error) {
-      devError('❌ Error getting location:', error);
+      devWarn('⚠️ Location services unavailable, using default location');
       const defaultLoc = {
         latitude: 14.5995,
         longitude: 120.9842,
       };
       setCurrentLocation(defaultLoc);
-      devLog('⚠️ Using default location:', defaultLoc);
+      devLog('📍 Using default location (Manila):', defaultLoc);
     }
   };
 
@@ -728,7 +761,20 @@ export default function MapDirectionsModal({
     devLog('🗺️ Using PROVIDER_GOOGLE for Android');
 
     // Calculate proper region to fit both markers and route
-    const allCoords = routeCoordinates.length > 0 ? routeCoordinates : [currentLocation, destinationLocation];
+    // Ensure we have valid coordinates before calculating
+    const allCoords = routeCoordinates.length > 0
+      ? routeCoordinates
+      : [currentLocation, destinationLocation].filter(coord => coord !== null);
+
+    if (allCoords.length === 0) {
+      devError('❌ No valid coordinates for map region');
+      return (
+        <View style={styles.loadingContainer}>
+          <Text style={styles.loadingText}>Unable to calculate map region</Text>
+        </View>
+      );
+    }
+
     const lats = allCoords.map(c => c.latitude);
     const lngs = allCoords.map(c => c.longitude);
 
@@ -742,9 +788,30 @@ export default function MapDirectionsModal({
     const latDelta = (maxLat - minLat) * 1.5 || 0.05; // Add 50% padding
     const lngDelta = (maxLng - minLng) * 1.5 || 0.05;
 
+    // Validate coordinates before rendering
+    if (!currentLocation || !destinationLocation ||
+        isNaN(currentLocation.latitude) || isNaN(currentLocation.longitude) ||
+        isNaN(destinationLocation.latitude) || isNaN(destinationLocation.longitude)) {
+      devError('❌ Invalid coordinates detected');
+      return (
+        <View style={styles.loadingContainer}>
+          <Text style={styles.loadingText}>Invalid map coordinates</Text>
+        </View>
+      );
+    }
+
     // Wrap MapView in try-catch for error handling
     try {
       devLog('🎨 Rendering MapView with style: flex: 1, width: 100%, height: 100%');
+
+      // Add a timeout to detect if MapView hangs
+      setTimeout(() => {
+        if (!mapReady && !mapError) {
+          devWarn('⚠️ MapView taking too long to load, offering fallback');
+          setMapError('Map is taking too long to load');
+        }
+      }, 5000);
+
       return (
         <View style={{ flex: 1, backgroundColor: '#e0e0e0' }}>
           <MapView
@@ -776,7 +843,7 @@ export default function MapDirectionsModal({
               }
             }}
             onError={(error) => {
-              const errorMsg = 'Google Maps failed to load. Please check your internet connection.';
+              const errorMsg = 'Google Maps failed to load';
               devError('❌ MapView Error:', error);
               setMapError(errorMsg);
 
@@ -824,11 +891,25 @@ export default function MapDirectionsModal({
     } catch (error) {
       devError('❌ FATAL: MapView crashed!', error);
       devError('❌ Error details:', JSON.stringify(error, null, 2));
+
+      // Automatically fallback to Google Maps
+      setMapError('Map rendering failed');
+
       return (
-        <View style={styles.loadingContainer}>
-          <Text style={styles.loadingText}>Map failed to load</Text>
-          <Text style={styles.loadingText}>Check logs for details</Text>
-          <Text style={styles.loadingText}>{String(error)}</Text>
+        <View style={styles.errorContainer}>
+          <Text style={styles.errorTitle}>Unable to Load Map</Text>
+          <Text style={styles.errorText}>The map viewer encountered an error</Text>
+          <TouchableOpacity
+            style={styles.openExternalButton}
+            onPress={() => {
+              if (destinationLocation) {
+                const url = `https://www.google.com/maps/dir/?api=1&destination=${destinationLocation.latitude},${destinationLocation.longitude}`;
+                Linking.openURL(url);
+              }
+            }}
+          >
+            <Text style={styles.openExternalButtonText}>Open in Google Maps</Text>
+          </TouchableOpacity>
         </View>
       );
     }
@@ -851,7 +932,17 @@ export default function MapDirectionsModal({
             <Text style={styles.headerTitle}>Directions</Text>
             <Text style={styles.headerSubtitle}>{deliveryAddress}</Text>
           </View>
-          <View style={styles.headerRight} />
+          <TouchableOpacity
+            style={styles.headerRight}
+            onPress={() => {
+              if (destinationLocation) {
+                const url = `https://www.google.com/maps/dir/?api=1&destination=${destinationLocation.latitude},${destinationLocation.longitude}`;
+                Linking.openURL(url);
+              }
+            }}
+          >
+            <Text style={{ color: '#059669', fontSize: 12, fontWeight: 'bold' }}>Open Maps</Text>
+          </TouchableOpacity>
         </View>
 
         {/* Map Content */}
