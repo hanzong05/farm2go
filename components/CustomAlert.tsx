@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import {
   Modal,
   View,
@@ -7,6 +7,7 @@ import {
   StyleSheet,
   Platform,
   Alert,
+  Pressable,
 } from 'react-native';
 
 interface AlertButton {
@@ -31,7 +32,24 @@ const WebAlert: React.FC<CustomAlertProps> = ({
   buttons,
   onRequestClose,
 }) => {
+  // Prevent body scroll when modal is visible on web
+  useEffect(() => {
+    if (Platform.OS === 'web' && visible) {
+      document.body.style.overflow = 'hidden';
+      return () => {
+        document.body.style.overflow = 'unset';
+      };
+    }
+  }, [visible]);
+
   if (!visible) return null;
+
+  const handleButtonPress = (button: AlertButton) => {
+    // Call button's onPress first
+    button.onPress?.();
+    // Then close the modal
+    onRequestClose?.();
+  };
 
   return (
     <Modal
@@ -42,8 +60,8 @@ const WebAlert: React.FC<CustomAlertProps> = ({
       presentationStyle="overFullScreen"
       statusBarTranslucent={true}
     >
-      <View style={styles.overlay}>
-        <View style={styles.alertContainer}>
+      <Pressable style={styles.overlay} onPress={onRequestClose}>
+        <Pressable style={styles.alertContainer} onPress={(e) => e.stopPropagation()}>
           <Text style={styles.title}>{title}</Text>
           <Text style={styles.message}>{message}</Text>
 
@@ -55,11 +73,10 @@ const WebAlert: React.FC<CustomAlertProps> = ({
                   styles.button,
                   button.style === 'destructive' && styles.destructiveButton,
                   button.style === 'cancel' && styles.cancelButton,
+                  buttons.length === 1 && styles.singleButton,
                 ]}
-                onPress={() => {
-                  button.onPress?.();
-                  onRequestClose?.();
-                }}
+                onPress={() => handleButtonPress(button)}
+                activeOpacity={0.7}
               >
                 <Text
                   style={[
@@ -73,8 +90,8 @@ const WebAlert: React.FC<CustomAlertProps> = ({
               </TouchableOpacity>
             ))}
           </View>
-        </View>
-      </View>
+        </Pressable>
+      </Pressable>
     </Modal>
   );
 };
@@ -176,29 +193,32 @@ const styles = StyleSheet.create({
   },
   alertContainer: {
     backgroundColor: '#ffffff',
-    borderRadius: 12,
-    padding: 20,
-    minWidth: 300,
-    maxWidth: 400,
+    borderRadius: 14,
+    padding: 24,
+    minWidth: Platform.OS === 'web' ? 320 : 300,
+    maxWidth: Platform.OS === 'web' ? 450 : 400,
     margin: 20,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.25,
-    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.3,
+    shadowRadius: 12,
     elevation: 100000,
     zIndex: 100000000,
+    ...(Platform.OS === 'web' && {
+      boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)',
+    }),
   },
   title: {
-    fontSize: 18,
+    fontSize: 20,
     fontWeight: 'bold',
     color: '#111827',
-    marginBottom: 8,
+    marginBottom: 12,
     textAlign: 'center',
   },
   message: {
-    fontSize: 16,
+    fontSize: 15,
     color: '#6b7280',
-    marginBottom: 20,
+    marginBottom: 24,
     textAlign: 'center',
     lineHeight: 22,
   },
@@ -209,14 +229,21 @@ const styles = StyleSheet.create({
   },
   button: {
     flex: 1,
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    borderRadius: 8,
-    backgroundColor: '#10b981',
+    paddingVertical: 14,
+    paddingHorizontal: 20,
+    borderRadius: 10,
+    backgroundColor: '#16a34a',
     alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 48,
+  },
+  singleButton: {
+    flex: 1,
   },
   cancelButton: {
     backgroundColor: '#f3f4f6',
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
   },
   destructiveButton: {
     backgroundColor: '#ef4444',

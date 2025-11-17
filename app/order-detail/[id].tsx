@@ -5,6 +5,7 @@ import {
     Alert,
     Dimensions,
     Image,
+    Platform,
     ScrollView,
     StyleSheet,
     Text,
@@ -12,7 +13,7 @@ import {
     View
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
-import * as FileSystem from 'expo-file-system';
+import * as FileSystem from 'expo-file-system/legacy';
 import { decode } from 'base64-arraybuffer';
 import Icon from 'react-native-vector-icons/FontAwesome5';
 import HeaderComponent from '../../components/HeaderComponent';
@@ -192,17 +193,33 @@ export default function OrderDetailScreen() {
             throw new Error('No session found');
           }
 
-          // Read file as base64
-          console.log('📖 Reading file as base64...');
-          const base64 = await FileSystem.readAsStringAsync(selectedProofImage.uri, {
-            encoding: 'base64',
-          });
+          let arrayBuffer: ArrayBuffer;
 
-          // Convert base64 to ArrayBuffer
-          const arrayBuffer = decode(base64);
-          console.log('✅ Converted to ArrayBuffer, size:', arrayBuffer.byteLength, 'bytes');
+          // Handle file reading differently for web vs mobile
+          if (Platform.OS === 'web') {
+            console.log('📖 Reading file for web...');
+            const response = await fetch(selectedProofImage.uri);
+            const blob = await response.blob();
+            arrayBuffer = await blob.arrayBuffer();
+            console.log('✅ Web file size:', (arrayBuffer.byteLength / (1024 * 1024)).toFixed(2) + 'MB');
+          } else {
+            console.log('📖 Reading file for mobile...');
+            // On mobile, use FileSystem
+            const fileInfo = await FileSystem.getInfoAsync(selectedProofImage.uri);
+            if (fileInfo.exists && 'size' in fileInfo) {
+              console.log('📁 Mobile file size:', (fileInfo.size / (1024 * 1024)).toFixed(2) + 'MB');
+            }
 
-          // Upload using fetch API
+            const base64 = await FileSystem.readAsStringAsync(selectedProofImage.uri, {
+              encoding: FileSystem.EncodingType.Base64,
+            });
+            arrayBuffer = decode(base64);
+          }
+
+          console.log('✅ ArrayBuffer size:', arrayBuffer.byteLength, 'bytes');
+          console.log('📤 Uploading to Supabase Storage...');
+
+          // Upload using fetch API with ArrayBuffer - direct upload method
           const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL || '';
           const uploadUrl = `${supabaseUrl}/storage/v1/object/proofs/${fileName}`;
 
@@ -218,7 +235,7 @@ export default function OrderDetailScreen() {
             body: arrayBuffer,
           });
 
-          console.log('📦 Upload response status:', response.status);
+          console.log('📡 Upload response status:', response.status);
 
           if (!response.ok) {
             const errorText = await response.text();
@@ -226,8 +243,7 @@ export default function OrderDetailScreen() {
             throw new Error(`Upload failed: ${response.status} ${response.statusText}`);
           }
 
-          const uploadData = await response.json();
-          console.log('✅ Upload successful! Data:', uploadData);
+          console.log('✅ Proof of payment uploaded successfully');
 
           // Get public URL from proofs bucket
           const { data: { publicUrl } } = supabase.storage
@@ -313,37 +329,63 @@ export default function OrderDetailScreen() {
 
   const handleSelectProof = async () => {
     try {
-      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (Platform.OS === 'web') {
+        // Web file selection
+        const input = document.createElement('input');
+        input.type = 'file';
+        input.accept = 'image/*';
+        input.onchange = (event) => {
+          const file = (event.target as HTMLInputElement).files?.[0];
+          if (file) {
+            if (file.size > 5 * 1024 * 1024) {
+              Alert.alert('Error', 'Image size must be less than 5MB');
+              return;
+            }
+            if (!file.type.startsWith('image/')) {
+              Alert.alert('Error', 'Please select a valid image file');
+              return;
+            }
+            const imageUrl = URL.createObjectURL(file);
+            const fileExt = file.name.split('.').pop()?.toLowerCase() || 'jpg';
+            console.log('📸 Selected image (web):', { uri: imageUrl, fileExt });
+            setSelectedProofImage({ uri: imageUrl, fileExt });
+          }
+        };
+        input.click();
+      } else {
+        // Mobile image picker
+        const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
 
-      if (status !== 'granted') {
-        Alert.alert('Permission Required', 'Please grant permission to access your photos');
-        return;
+        if (status !== 'granted') {
+          Alert.alert('Permission Required', 'Please grant permission to access your photos');
+          return;
+        }
+
+        const result = await ImagePicker.launchImageLibraryAsync({
+          mediaTypes: ImagePicker.MediaTypeOptions.Images,
+          allowsEditing: true,
+          aspect: [4, 3],
+          quality: 0.8,
+        });
+
+        if (result.canceled) return;
+
+        const uri = result.assets[0].uri;
+
+        // Extract file extension properly - get the last part before any query params or fragments
+        const uriWithoutParams = uri.split('?')[0].split('#')[0];
+        const parts = uriWithoutParams.split('.');
+        const fileExt = parts.length > 1 ? parts[parts.length - 1].toLowerCase() : 'jpg';
+
+        // Validate file extension
+        const validExtensions = ['jpg', 'jpeg', 'png', 'gif', 'webp'];
+        const finalExt = validExtensions.includes(fileExt) ? fileExt : 'jpg';
+
+        console.log('📸 Selected image (mobile):', { uri, fileExt: finalExt });
+
+        // Just store the selected image, don't upload yet
+        setSelectedProofImage({ uri, fileExt: finalExt });
       }
-
-      const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
-        allowsEditing: true,
-        aspect: [4, 3],
-        quality: 0.8,
-      });
-
-      if (result.canceled) return;
-
-      const uri = result.assets[0].uri;
-
-      // Extract file extension properly - get the last part before any query params or fragments
-      const uriWithoutParams = uri.split('?')[0].split('#')[0];
-      const parts = uriWithoutParams.split('.');
-      const fileExt = parts.length > 1 ? parts[parts.length - 1].toLowerCase() : 'jpg';
-
-      // Validate file extension
-      const validExtensions = ['jpg', 'jpeg', 'png', 'gif', 'webp'];
-      const finalExt = validExtensions.includes(fileExt) ? fileExt : 'jpg';
-
-      console.log('📸 Selected image:', { uri, fileExt: finalExt });
-
-      // Just store the selected image, don't upload yet
-      setSelectedProofImage({ uri, fileExt: finalExt });
     } catch (error: any) {
       console.error('Error selecting proof:', error);
       Alert.alert('Error', 'Failed to select image');

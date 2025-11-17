@@ -2,7 +2,6 @@ import { router } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   Dimensions,
   Modal,
   RefreshControl,
@@ -17,6 +16,7 @@ import ConfirmationModal from '../../components/ConfirmationModal';
 import MapDirectionsModal from '../../components/MapDirectionsModal';
 import FilterSidebar from '../../components/FilterSidebar';
 import HeaderComponent from '../../components/HeaderComponent';
+import { useCustomAlert } from '../../components/CustomAlert';
 import { supabase } from '../../lib/supabase';
 import { getUserWithProfile } from '../../services/auth';
 import { notifyOrderStatusChange } from '../../services/notifications';
@@ -124,6 +124,8 @@ const SORT_OPTIONS = [
 ];
 
 export default function FarmerOrdersScreen() {
+  const { showAlert, AlertComponent } = useCustomAlert();
+
   const [orders, setOrders] = useState<Order[]>([]);
   const [myOrders, setMyOrders] = useState<Order[]>([]);
   const [filteredOrders, setFilteredOrders] = useState<Order[]>([]);
@@ -239,7 +241,9 @@ export default function FarmerOrdersScreen() {
       ]);
     } catch (error) {
       console.error('Error loading data:', error);
-      Alert.alert('Error', 'Failed to load orders');
+      showAlert('Error', 'Failed to load orders', [
+        { text: 'OK', style: 'default' }
+      ]);
     } finally {
       setLoading(false);
     }
@@ -500,7 +504,9 @@ export default function FarmerOrdersScreen() {
       // Get order details before update for notifications
       const currentOrder = orders.find(o => o.id === orderId);
       if (!currentOrder) {
-        Alert.alert('Error', 'Order not found');
+        showAlert('Error', 'Order not found', [
+          { text: 'OK', style: 'default' }
+        ]);
         return;
       }
 
@@ -555,11 +561,15 @@ export default function FarmerOrdersScreen() {
         )
       );
 
-      Alert.alert('Success', 'Order status updated successfully');
+      showAlert('Success', 'Order status updated successfully', [
+        { text: 'OK', style: 'default' }
+      ]);
     } catch (error) {
       console.error('Error updating order status:', error);
       const errorMessage = error instanceof Error ? error.message : 'Failed to update order status';
-      Alert.alert('Error', errorMessage);
+      showAlert('Error', errorMessage, [
+        { text: 'OK', style: 'default' }
+      ]);
     }
   };
 
@@ -575,7 +585,9 @@ export default function FarmerOrdersScreen() {
 
   const handleShowDirections = (order: Order) => {
     if (!order.delivery_address) {
-      Alert.alert('No Address', 'This order does not have a delivery address.');
+      showAlert('No Address', 'This order does not have a delivery address.', [
+        { text: 'OK', style: 'default' }
+      ]);
       return;
     }
     setMapOrder(order);
@@ -1196,6 +1208,8 @@ export default function FarmerOrdersScreen() {
         onConfirm={confirmModal.onConfirm}
         onCancel={() => setConfirmModal(prev => ({ ...prev, visible: false }))}
       />
+
+      {AlertComponent}
     </View>
   );
 }

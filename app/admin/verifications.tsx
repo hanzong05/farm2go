@@ -2,7 +2,6 @@ import { router } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   Dimensions,
   Image,
   Modal,
@@ -16,6 +15,7 @@ import {
 } from 'react-native';
 import Icon from 'react-native-vector-icons/FontAwesome5';
 import ConfirmationModal from '../../components/ConfirmationModal';
+import { useCustomAlert } from '../../components/CustomAlert';
 import HeaderComponent from '../../components/HeaderComponent';
 import { supabase } from '../../lib/supabase';
 import { getUserWithProfile } from '../../services/auth';
@@ -86,6 +86,8 @@ export default function AdminVerificationsScreen() {
     onConfirm: () => {},
   });
 
+  const { showAlert, AlertComponent } = useCustomAlert();
+
   const STATUS_OPTIONS = [
     { key: 'all', label: 'All', color: '#6b7280' },
     { key: 'pending', label: 'Pending', color: '#f59e0b' },
@@ -113,7 +115,9 @@ export default function AdminVerificationsScreen() {
       await loadVerificationSubmissions(userData.profile);
     } catch (error) {
       console.error('Error loading data:', error);
-      Alert.alert('Error', 'Failed to load verification submissions');
+      showAlert('Error', 'Failed to load verification submissions', [
+        { text: 'OK', style: 'default' }
+      ]);
     } finally {
       setLoading(false);
     }
@@ -235,12 +239,16 @@ export default function AdminVerificationsScreen() {
         console.error('Error updating profile:', profileError);
       }
 
-      Alert.alert('Success', 'Verification updated successfully');
+      showAlert('Success', 'Verification updated successfully', [
+        { text: 'OK', style: 'default' }
+      ]);
       await loadVerificationSubmissions();
       closeEditModal();
     } catch (error) {
       console.error('Error updating verification:', error);
-      Alert.alert('Error', 'Failed to update verification');
+      showAlert('Error', 'Failed to update verification', [
+        { text: 'OK', style: 'default' }
+      ]);
     } finally {
       setProcessing(false);
     }
@@ -266,12 +274,16 @@ export default function AdminVerificationsScreen() {
 
           if (error) throw error;
 
-          Alert.alert('Success', 'Verification deleted successfully');
+          showAlert('Success', 'Verification deleted successfully', [
+            { text: 'OK', style: 'default' }
+          ]);
           await loadVerificationSubmissions();
           setConfirmModal(prev => ({ ...prev, visible: false }));
         } catch (error) {
           console.error('Error deleting verification:', error);
-          Alert.alert('Error', 'Failed to delete verification');
+          showAlert('Error', 'Failed to delete verification', [
+            { text: 'OK', style: 'default' }
+          ]);
         } finally {
           setProcessing(false);
         }
@@ -397,10 +409,10 @@ export default function AdminVerificationsScreen() {
         console.error('⚠️ Failed to send notifications:', notifError);
       }
 
-      Alert.alert(
+      showAlert(
         'Success!',
         `Verification ${action === 'approve' ? 'approved' : 'rejected'} successfully`,
-        [{ text: 'OK', onPress: () => closeReviewModal() }]
+        [{ text: 'OK', style: 'default', onPress: () => closeReviewModal() }]
       );
 
       await loadVerificationSubmissions();
@@ -416,7 +428,9 @@ export default function AdminVerificationsScreen() {
         }
       }
 
-      Alert.alert('Error', errorMessage);
+      showAlert('Error', errorMessage, [
+        { text: 'OK', style: 'default' }
+      ]);
     } finally {
       setProcessing(false);
     }
@@ -681,17 +695,35 @@ export default function AdminVerificationsScreen() {
 
                   <Text style={styles.documentsTitle}>Documents</Text>
                   <View style={styles.modalDocuments}>
-                    <TouchableOpacity onPress={() => openImageViewer(selectedSubmission.id_document_url, 'ID Document')}>
+                    <TouchableOpacity onPress={() => {
+                      const idDocUrl = supabase.storage
+                        .from('verification-documents')
+                        .getPublicUrl(selectedSubmission.id_document_url).data.publicUrl;
+                      openImageViewer(idDocUrl, 'ID Document');
+                    }}>
                       <Image
-                        source={{ uri: selectedSubmission.id_document_url }}
+                        source={{
+                          uri: supabase.storage
+                            .from('verification-documents')
+                            .getPublicUrl(selectedSubmission.id_document_url).data.publicUrl
+                        }}
                         style={styles.modalDocImage}
                         resizeMode="cover"
                       />
                       <Text style={styles.modalImageLabel}>ID Document (Tap to enlarge)</Text>
                     </TouchableOpacity>
-                    <TouchableOpacity onPress={() => openImageViewer(selectedSubmission.face_photo_url, 'Face Photo')}>
+                    <TouchableOpacity onPress={() => {
+                      const facePhotoUrl = supabase.storage
+                        .from('verification-documents')
+                        .getPublicUrl(selectedSubmission.face_photo_url).data.publicUrl;
+                      openImageViewer(facePhotoUrl, 'Face Photo');
+                    }}>
                       <Image
-                        source={{ uri: selectedSubmission.face_photo_url }}
+                        source={{
+                          uri: supabase.storage
+                            .from('verification-documents')
+                            .getPublicUrl(selectedSubmission.face_photo_url).data.publicUrl
+                        }}
                         style={styles.modalDocImage}
                         resizeMode="cover"
                       />
@@ -902,6 +934,8 @@ export default function AdminVerificationsScreen() {
         onConfirm={confirmModal.onConfirm}
         onCancel={() => setConfirmModal(prev => ({ ...prev, visible: false }))}
       />
+
+      {AlertComponent}
     </View>
   );
 }

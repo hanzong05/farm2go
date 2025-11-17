@@ -11,6 +11,8 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import Icon from 'react-native-vector-icons/FontAwesome5';
+import { router } from 'expo-router';
 import { decode } from 'base64-arraybuffer';
 import { supabase } from '../lib/supabase';
 import { Database } from '../types/database';
@@ -194,125 +196,10 @@ const VerificationUpload: React.FC<VerificationUploadProps> = ({
   };
 
   const uploadImageToSupabase = async (uri: string, fileName: string, bucket: string = 'verification-documents'): Promise<string> => {
-    const controller = new AbortController();
-    const timeoutDuration = 60000; // 60 seconds timeout
-    const maxRetries = 3;
-    let retryCount = 0;
-
-    // Set up timeout
-    const timeoutId = setTimeout(() => {
-      controller.abort();
-    }, timeoutDuration);
-
     try {
-      console.log(`Starting upload attempt ${retryCount + 1}/${maxRetries + 1} for:`, fileName);
+      console.log('📤 Starting upload for:', fileName);
       console.log('Platform:', Platform.OS);
-      console.log('Legacy FileSystem available:', fileSystemAvailable);
-      console.log('URI format:', uri.substring(0, 50) + '...');
-
-      // Check user authentication
-      const { data: { user }, error: authError } = await supabase.auth.getUser();
-      if (authError || !user) {
-        throw new Error('User not authenticated. Please log in again.');
-      }
-      console.log('✅ User authenticated:', user.id);
-
-      let fileData: ArrayBuffer;
-      let mimeType = 'image/jpeg';
-
-      // Handle different platforms and URI formats
-      if (Platform.OS === 'web') {
-        // Web platform - use fetch
-        const response = await fetch(uri, { signal: controller.signal });
-        if (!response.ok) {
-          throw new Error(`Failed to fetch image: ${response.status} ${response.statusText}`);
-        }
-
-        const blob = await response.blob();
-        fileData = await blob.arrayBuffer();
-        mimeType = blob.type || 'image/jpeg';
-        console.log('Web: Created ArrayBuffer, size:', fileData.byteLength);
-
-      } else {
-        // React Native platform - use Legacy FileSystem for reliable operation
-        if (fileSystemAvailable) {
-          try {
-            let fileUri = uri;
-
-            // Handle content:// URIs by copying to cache first
-            if (uri.startsWith('content://') || uri.startsWith('ph://')) {
-              console.log('Converting content/photo URI to file URI...');
-              const tempFileName = `temp_${Date.now()}.jpg`;
-              const tempUri = `${LegacyFileSystem.cacheDirectory}${tempFileName}`;
-
-              await LegacyFileSystem.copyAsync({
-                from: uri,
-                to: tempUri
-              });
-
-              fileUri = tempUri;
-              console.log('Copied to temp file:', fileUri);
-            }
-
-            console.log('Reading file as base64 using legacy API...');
-
-            // Use legacy FileSystem API for stable operation
-            const base64String = await LegacyFileSystem.readAsStringAsync(fileUri, {
-              encoding: LegacyFileSystem.EncodingType.Base64,
-            });
-
-            console.log('Read file as base64, length:', base64String.length);
-
-            if (!base64String || base64String.length === 0) {
-              throw new Error('File is empty or could not be read');
-            }
-
-            // Convert base64 to ArrayBuffer using decode (React Native compatible)
-            fileData = decode(base64String);
-            console.log('Legacy FileSystem: Created ArrayBuffer, size:', fileData.byteLength);
-
-            // Clean up temp file if we created one
-            if (fileUri !== uri && fileUri.includes('temp_')) {
-              try {
-                await LegacyFileSystem.deleteAsync(fileUri, { idempotent: true });
-              } catch (deleteError) {
-                console.warn('Failed to delete temp file:', deleteError);
-              }
-            }
-
-          } catch (fileError: unknown) {
-            console.error('Legacy FileSystem error:', fileError);
-            // const errorMessage = fileError instanceof Error ? fileError.message : 'Unknown file system error';
-
-            // Try fetch fallback for any FileSystem errors
-            console.log('FileSystem failed, trying fetch fallback...');
-            throw fileError; // This will trigger the fetch fallback below
-          }
-        } else {
-          // FileSystem not available - use fetch as fallback
-          console.log('FileSystem not available, using fetch fallback...');
-          try {
-            // For Android content:// URIs, we need a different approach
-            if (Platform.OS === 'android' && uri.startsWith('content://')) {
-              throw new Error('Android content URIs require FileSystem API. Please restart the app.');
-            } else {
-              // Use fetch for other platforms or http/https URIs
-              const response = await fetch(uri, { signal: controller.signal });
-              if (!response.ok) {
-                throw new Error(`Fetch failed: ${response.status} ${response.statusText}`);
-              }
-              const blob = await response.blob();
-              fileData = await blob.arrayBuffer();
-              console.log('Fetch fallback successful, size:', fileData.byteLength);
-            }
-          } catch (fetchError: unknown) {
-            const fetchErrorMessage = fetchError instanceof Error ? fetchError.message : 'Unknown fetch error';
-            throw new Error(`Cannot read file - FileSystem unavailable and fetch failed: ${fetchErrorMessage}`);
-          }
-        }
-      }
-
-      clearTimeout(timeoutId);
+      console.log('URI:', uri.substring(0, 50) + '...');
 
       // Get session for authentication
       const { data: { session } } = await supabase.auth.getSession();
@@ -320,16 +207,36 @@ const VerificationUpload: React.FC<VerificationUploadProps> = ({
         throw new Error('Session expired. Please log in again.');
       }
 
-      // Generate unique file ID for the actual file
-      const fileId = Math.random().toString(36).substring(2) + Date.now().toString(36);
+      const contentType = 'image/jpeg';
+      let arrayBuffer: ArrayBuffer;
 
-      // Create nested folder structure: userId/documentType_timestamp.app/fileId
-      const userFileName = `${user.id}/${fileName}.app/${fileId}`;
+      // Handle file reading differently for web vs mobile
+      if (Platform.OS === 'web') {
+        console.log('📖 Reading file for web...');
+        const response = await fetch(uri);
+        const blob = await response.blob();
+        arrayBuffer = await blob.arrayBuffer();
+        console.log('✅ Web file size:', (arrayBuffer.byteLength / (1024 * 1024)).toFixed(2) + 'MB');
+      } else {
+        console.log('📖 Reading file for mobile...');
+        // On mobile, use FileSystem
+        const fileInfo = await LegacyFileSystem.getInfoAsync(uri);
+        if (fileInfo.exists && 'size' in fileInfo) {
+          console.log('📁 Mobile file size:', (fileInfo.size / (1024 * 1024)).toFixed(2) + 'MB');
+        }
 
-      // Upload to Supabase using fetch API (React Native compatible)
-      console.log(`Uploading to Supabase: ${userFileName}`);
+        const base64 = await LegacyFileSystem.readAsStringAsync(uri, {
+          encoding: LegacyFileSystem.EncodingType.Base64,
+        });
+        arrayBuffer = decode(base64);
+      }
+
+      console.log('✅ ArrayBuffer size:', arrayBuffer.byteLength, 'bytes');
+      console.log('📤 Uploading to Supabase Storage...');
+
+      // Upload using fetch API with ArrayBuffer - direct upload method
       const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL || '';
-      const uploadUrl = `${supabaseUrl}/storage/v1/object/${bucket}/${userFileName}`;
+      const uploadUrl = `${supabaseUrl}/storage/v1/object/${bucket}/${fileName}`;
 
       console.log('📡 Upload URL:', uploadUrl);
 
@@ -337,79 +244,26 @@ const VerificationUpload: React.FC<VerificationUploadProps> = ({
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${session.access_token}`,
-          'Content-Type': mimeType,
-          'x-upsert': 'true',
+          'Content-Type': contentType,
+          'x-upsert': 'false',
         },
-        body: fileData,
+        body: arrayBuffer,
       });
+
+      console.log('📡 Upload response:', response.status);
 
       if (!response.ok) {
         const errorText = await response.text();
-        console.error('❌ Upload failed:', response.status, errorText);
-
-        // If RLS error, try uploading to avatars bucket as fallback
-        if (response.status === 403 || errorText.includes('policy')) {
-          console.log('🔄 RLS policy error, trying avatars bucket...');
-
-          const alternativeFileName = `temp_verifications/${user.id}/${fileName}`;
-          const altUploadUrl = `${supabaseUrl}/storage/v1/object/avatars/${alternativeFileName}`;
-
-          const altResponse = await fetch(altUploadUrl, {
-            method: 'POST',
-            headers: {
-              'Authorization': `Bearer ${session.access_token}`,
-              'Content-Type': mimeType,
-              'x-upsert': 'true',
-            },
-            body: fileData,
-          });
-
-          if (!altResponse.ok) {
-            const altErrorText = await altResponse.text();
-            console.error('❌ Alternative upload failed:', altResponse.status, altErrorText);
-            throw new Error(`Upload failed: Unable to upload to storage. Please contact support.`);
-          }
-
-          console.log('✅ Alternative upload successful');
-          return alternativeFileName;
-        }
-
-        throw new Error(`Upload failed: ${response.statusText}`);
+        console.error('❌ Upload failed:', errorText);
+        throw new Error(`Upload failed: ${response.status}`);
       }
 
-      const uploadResult = await response.json();
-      console.log('✅ Upload successful:', uploadResult);
-      return userFileName;
+      console.log('✅ Verification document uploaded successfully');
 
-    } catch (error: unknown) {
-      clearTimeout(timeoutId);
-      const errorMessage = error instanceof Error ? error.message : 'Unknown upload error';
-
-      // Handle specific error cases
-      if (errorMessage.includes('aborted')) {
-        throw new Error('Upload timeout. Please check your connection and try again.');
-      }
-
-      // Retry logic for certain errors
-      if (retryCount < maxRetries &&
-          (errorMessage.includes('network') ||
-           errorMessage.includes('timeout') ||
-           errorMessage.includes('ENOTFOUND'))) {
-
-        retryCount++;
-        console.log(`Retrying upload (${retryCount}/${maxRetries})...`);
-        await new Promise(resolve => setTimeout(resolve, Math.pow(2, retryCount) * 1000));
-        return uploadImageToSupabase(uri, fileName, bucket);
-      }
-
-      console.error('Upload process error:', errorMessage);
-
-      // Check for app restart requirement
-      if (errorMessage.includes('deprecated') || errorMessage.includes('FileSystem')) {
-        throw new Error('App restart required. Please close and reopen the app, then try again.');
-      }
-
-      throw new Error(`Upload failed: ${errorMessage}`);
+      return fileName;
+    } catch (error: any) {
+      console.error('Upload error:', error);
+      throw new Error(error.message || 'Failed to upload image');
     }
   };
 
@@ -437,7 +291,7 @@ const VerificationUpload: React.FC<VerificationUploadProps> = ({
       setUploadProgress(prev => ({ ...prev, id: 0 }));
       console.log('Starting ID document upload');
 
-      const idFileName = `id_document_${userId}_${Date.now()}`;
+      const idFileName = `id_document_${userId}_${Date.now()}.jpg`;
       const idPath = await uploadImageToSupabase(
         verificationData.idDocument.uri,
         idFileName
@@ -448,7 +302,7 @@ const VerificationUpload: React.FC<VerificationUploadProps> = ({
       setUploadProgress(prev => ({ ...prev, face: 0 }));
       console.log('Starting face photo upload');
 
-      const faceFileName = `face_photo_${userId}_${Date.now()}`;
+      const faceFileName = `face_photo_${userId}_${Date.now()}.jpg`;
       const facePath = await uploadImageToSupabase(
         verificationData.facePhoto.uri,
         faceFileName
@@ -534,6 +388,15 @@ const VerificationUpload: React.FC<VerificationUploadProps> = ({
 
   return (
     <ScrollView style={styles.container}>
+      <TouchableOpacity
+        style={styles.backButton}
+        onPress={() => router.back()}
+        activeOpacity={0.7}
+      >
+        <Icon name="arrow-left" size={20} color="#10b981" />
+        <Text style={styles.backButtonText}>Back</Text>
+      </TouchableOpacity>
+
       <View style={styles.header}>
         <Text style={styles.title}>Account Verification</Text>
         <Text style={styles.subtitle}>
@@ -619,8 +482,22 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#f8fafc',
   },
+  backButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingTop: 16,
+    paddingBottom: 8,
+    gap: 8,
+  },
+  backButtonText: {
+    fontSize: 16,
+    color: '#10b981',
+    fontWeight: '600',
+  },
   header: {
     padding: 24,
+    paddingTop: 12,
     alignItems: 'center',
   },
   title: {

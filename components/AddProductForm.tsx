@@ -182,15 +182,8 @@ export default function AddProductForm({ farmerId, onSuccess, onCancel }: AddPro
     try {
       setUploadingImage(true);
 
-      // Get file info to check size
-      const fileInfo = await FileSystem.getInfoAsync(imageUri);
-      const fileSize = (fileInfo as any).size || 0;
-
-      // Validate file size (10MB limit)
-      if (fileSize > 10 * 1024 * 1024) {
-        Alert.alert('File Too Large', 'Image size must be less than 10MB');
-        return null;
-      }
+      let arrayBuffer: ArrayBuffer;
+      let fileSize = 0;
 
       // Get session token
       const { data: { session } } = await supabase.auth.getSession();
@@ -202,15 +195,38 @@ export default function AddProductForm({ farmerId, onSuccess, onCancel }: AddPro
       // Create a unique filename
       const filename = `product_${Date.now()}_${Math.random().toString(36).substring(7)}.jpg`;
 
+      // Handle file reading differently for web vs mobile
+      if (Platform.OS === 'web') {
+        console.log('📖 Reading file for web...');
+        // On web, fetch the blob directly
+        const response = await fetch(imageUri);
+        const blob = await response.blob();
+        fileSize = blob.size;
+        arrayBuffer = await blob.arrayBuffer();
+      } else {
+        console.log('📖 Reading file for mobile...');
+        // On mobile, use FileSystem
+        const fileInfo = await FileSystem.getInfoAsync(imageUri);
+        if (fileInfo.exists && 'size' in fileInfo) {
+          fileSize = fileInfo.size;
+        }
+
+        // React Native: read file as base64
+        const base64 = await FileSystem.readAsStringAsync(imageUri, {
+          encoding: FileSystem.EncodingType.Base64,
+        });
+
+        // Convert base64 to ArrayBuffer (React Native compatible)
+        arrayBuffer = decode(base64);
+      }
+
+      // Validate file size (10MB limit)
+      if (fileSize > 10 * 1024 * 1024) {
+        Alert.alert('File Too Large', 'Image size must be less than 10MB');
+        return null;
+      }
+
       console.log('📤 Uploading product image:', filename, 'Size:', fileSize, 'bytes');
-
-      // React Native: read file as base64
-      const base64 = await FileSystem.readAsStringAsync(imageUri, {
-        encoding: FileSystem.EncodingType.Base64,
-      });
-
-      // Convert base64 to ArrayBuffer (React Native compatible)
-      const arrayBuffer = decode(base64);
 
       // Upload using fetch API (React Native compatible)
       const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL || '';

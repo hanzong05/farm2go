@@ -16,7 +16,9 @@ import {
 import { router, useLocalSearchParams } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
 import * as FileSystem from 'expo-file-system/legacy';
+import { decode } from 'base64-arraybuffer';
 import ConfirmationModal from '../../../../components/ConfirmationModal';
+import { useCustomAlert } from '../../../../components/CustomAlert';
 import HeaderComponent from '../../../../components/HeaderComponent';
 import VerificationGuard from '../../../../components/VerificationGuard';
 import { supabase } from '../../../../lib/supabase';
@@ -62,6 +64,8 @@ interface Product {
 }
 
 export default function EditProductScreen() {
+  const { showAlert, AlertComponent } = useCustomAlert();
+
   const { id } = useLocalSearchParams<{ id: string }>();
   const [profile, setProfile] = useState<Profile | null>(null);
   const [product, setProduct] = useState<Product | null>(null);
@@ -78,6 +82,7 @@ export default function EditProductScreen() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [focusedInput, setFocusedInput] = useState<string | null>(null);
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
+  const [webImageFile, setWebImageFile] = useState<File | null>(null);
   const [uploadingImage, setUploadingImage] = useState(false);
   const [imageChanged, setImageChanged] = useState(false);
   const [confirmModal, setConfirmModal] = useState<{
@@ -230,104 +235,107 @@ export default function EditProductScreen() {
   const uploadImage = async (imageUri: string): Promise<string | null> => {
     try {
       setUploadingImage(true);
+      console.log('📤 Uploading product image...');
 
       // Check authentication
-      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-      if (sessionError || !session) {
-        console.error('Authentication error:', sessionError);
-        Alert.alert('Error', 'You must be logged in to upload images');
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        showAlert('Error', 'You must be logged in to upload images', [
+          { text: 'OK', style: 'default' }
+        ]);
         return null;
       }
 
       // Get file extension
-      const fileExt = imageUri.split('.').pop()?.toLowerCase() || 'jpg';
-      const filename = `${Date.now()}_${Math.random().toString(36).substring(7)}.${fileExt}`;
+      const uriWithoutParams = imageUri.split('?')[0].split('#')[0];
+      const parts = uriWithoutParams.split('.');
+      const fileExt = parts.length > 1 ? parts[parts.length - 1].toLowerCase() : 'jpg';
+      const validExtensions = ['jpg', 'jpeg', 'png', 'gif', 'webp'];
+      const finalExt = validExtensions.includes(fileExt) ? fileExt : 'jpg';
+
+      const filename = `${Date.now()}_${Math.random().toString(36).substring(7)}.${finalExt}`;
       const filePath = `products/${filename}`;
 
       const mimeTypes: { [key: string]: string } = {
         'jpg': 'image/jpeg',
         'jpeg': 'image/jpeg',
         'png': 'image/png',
+        'gif': 'image/gif',
         'webp': 'image/webp',
       };
-      const mimeType = mimeTypes[fileExt] || 'image/jpeg';
+      const contentType = mimeTypes[finalExt] || 'image/jpeg';
 
+      let arrayBuffer: ArrayBuffer;
+
+      // Handle file reading differently for web vs mobile
       if (Platform.OS === 'web') {
-        // Web upload
-        const webFile = (setSelectedImage as any).webFile;
-        let fileData;
-        if (webFile) {
-          fileData = webFile;
+        console.log('📖 Reading file for web...');
+        // Use stored web file if available
+        if (webImageFile) {
+          arrayBuffer = await webImageFile.arrayBuffer();
         } else {
+          // Fallback to fetch the blob URL
           const response = await fetch(imageUri);
-          fileData = await response.blob();
+          const blob = await response.blob();
+          arrayBuffer = await blob.arrayBuffer();
         }
-
-        const { data, error } = await supabase.storage
-          .from('product-images')
-          .upload(filePath, fileData, {
-            contentType: mimeType,
-            upsert: false,
-            cacheControl: '3600'
-          });
-
-        if (error) throw error;
-
-        const { data: { publicUrl } } = supabase.storage
-          .from('product-images')
-          .getPublicUrl(data.path);
-
-        return publicUrl;
+        console.log('✅ Web file size:', (arrayBuffer.byteLength / (1024 * 1024)).toFixed(2) + 'MB');
       } else {
-        // React Native upload
-        console.log('📤 Uploading product image...');
-
-        // Get file info
+        console.log('📖 Reading file for mobile...');
+        // On mobile, use FileSystem
         const fileInfo = await FileSystem.getInfoAsync(imageUri);
-        console.log('📁 File size:', fileInfo.size ? (fileInfo.size / (1024 * 1024)).toFixed(2) + 'MB' : 'unknown');
-
-        // Create FormData
-        const formData = new FormData();
-        formData.append('file', {
-          uri: imageUri,
-          type: mimeType,
-          name: filename
-        } as any);
-
-        // Upload directly to Supabase Storage
-        const uploadUrl = `https://lipviwhsjgvcmdggecqn.supabase.co/storage/v1/object/product-images/${filePath}`;
-
-        const uploadResponse = await fetch(uploadUrl, {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${session.access_token}`,
-            'apikey': process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || '',
-          },
-          body: formData,
-        });
-
-        console.log('📡 Upload response:', uploadResponse.status);
-
-        if (!uploadResponse.ok) {
-          const errorText = await uploadResponse.text();
-          console.error('❌ Upload failed:', errorText);
-          throw new Error(`Upload failed with status ${uploadResponse.status}`);
+        if (fileInfo.exists && 'size' in fileInfo) {
+          console.log('📁 Mobile file size:', (fileInfo.size / (1024 * 1024)).toFixed(2) + 'MB');
         }
 
-        console.log('✅ Upload successful');
-
-        // Get public URL
-        const { data: { publicUrl } } = supabase.storage
-          .from('product-images')
-          .getPublicUrl(filePath);
-
-        console.log('🔗 Public URL:', publicUrl);
-
-        return publicUrl;
+        const base64 = await FileSystem.readAsStringAsync(imageUri, {
+          encoding: FileSystem.EncodingType.Base64,
+        });
+        arrayBuffer = decode(base64);
       }
+
+      console.log('✅ ArrayBuffer size:', arrayBuffer.byteLength, 'bytes');
+      console.log('📤 Uploading to Supabase Storage...');
+
+      // Upload using fetch API with ArrayBuffer
+      const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL || '';
+      const uploadUrl = `${supabaseUrl}/storage/v1/object/product-images/${filePath}`;
+
+      const uploadResponse = await fetch(uploadUrl, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${session.access_token}`,
+          'Content-Type': contentType,
+          'x-upsert': 'false',
+        },
+        body: arrayBuffer,
+      });
+
+      console.log('📡 Upload response:', uploadResponse.status);
+
+      if (!uploadResponse.ok) {
+        const errorText = await uploadResponse.text();
+        console.error('❌ Upload failed:', errorText);
+        showAlert('Upload Error', `Failed to upload image (${uploadResponse.status})`, [
+          { text: 'OK', style: 'default' }
+        ]);
+        return null;
+      }
+
+      console.log('✅ Product image uploaded successfully');
+
+      // Get public URL
+      const { data: { publicUrl } } = supabase.storage
+        .from('product-images')
+        .getPublicUrl(filePath);
+
+      console.log('🔗 Public URL:', publicUrl);
+      return publicUrl;
     } catch (error: any) {
       console.error('Error uploading image:', error);
-      Alert.alert('Error', error.message || 'Failed to upload image');
+      showAlert('Error', error.message || 'Failed to upload image', [
+        { text: 'OK', style: 'default' }
+      ]);
       return null;
     } finally {
       setUploadingImage(false);
@@ -352,8 +360,8 @@ export default function EditProductScreen() {
           }
           const imageUrl = URL.createObjectURL(file);
           setSelectedImage(imageUrl);
+          setWebImageFile(file);
           setImageChanged(true);
-          (setSelectedImage as any).webFile = file;
         }
       };
       input.click();
@@ -449,14 +457,16 @@ export default function EditProductScreen() {
         // Don't fail the update if notifications fail
       }
 
-      Alert.alert(
+      showAlert(
         'Success',
         'Product updated successfully!',
-        [{ text: 'OK', onPress: () => router.back() }]
+        [{ text: 'OK', style: 'default', onPress: () => router.back() }]
       );
     } catch (error) {
       console.error('Error updating product:', error);
-      Alert.alert('Error', 'Failed to update product. Please try again.');
+      showAlert('Error', 'Failed to update product. Please try again.', [
+        { text: 'OK', style: 'default' }
+      ]);
     } finally {
       setIsSubmitting(false);
     }
@@ -712,6 +722,8 @@ export default function EditProductScreen() {
           onConfirm={confirmModal.onConfirm}
           onCancel={() => setConfirmModal(prev => ({ ...prev, visible: false }))}
         />
+
+        {AlertComponent}
       </KeyboardAvoidingView>
     </VerificationGuard>
   );

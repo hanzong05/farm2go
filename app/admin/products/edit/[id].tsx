@@ -14,6 +14,8 @@ import {
 } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
+import * as FileSystem from 'expo-file-system/legacy';
+import { decode } from 'base64-arraybuffer';
 import ConfirmationModal from '../../../../components/ConfirmationModal';
 import { useCustomAlert } from '../../../../components/CustomAlert';
 import HeaderComponent from '../../../../components/HeaderComponent';
@@ -77,6 +79,7 @@ export default function AdminEditProductScreen() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [focusedInput, setFocusedInput] = useState<string | null>(null);
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
+  const [webImageFile, setWebImageFile] = useState<File | null>(null);
   const [uploadingImage, setUploadingImage] = useState(false);
   const [imageChanged, setImageChanged] = useState(false);
   const [confirmModal, setConfirmModal] = useState<{
@@ -247,43 +250,84 @@ export default function AdminEditProductScreen() {
   const uploadImage = async (imageUri: string): Promise<string | null> => {
     try {
       setUploadingImage(true);
-      const filename = `product_${Date.now()}_${Math.random().toString(36).substring(7)}.jpg`;
 
-      let fileData: any;
-      let mimeType = 'image/jpeg';
-
-      if (Platform.OS === 'web') {
-        const webFile = (setSelectedImage as any).webFile;
-        if (webFile) {
-          fileData = webFile;
-          mimeType = webFile.type;
-        } else {
-          const response = await fetch(imageUri);
-          fileData = await response.blob();
-        }
-      } else {
-        const response = await fetch(imageUri);
-        const arrayBuffer = await response.arrayBuffer();
-        fileData = new Uint8Array(arrayBuffer);
+      // Get session for authentication
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        showAlert('Error', 'You must be logged in to upload images', [
+          { text: 'OK', style: 'default' }
+        ]);
+        return null;
       }
 
-      const { data, error } = await supabase.storage
-        .from('product-images')
-        .upload(filename, fileData, {
-          contentType: mimeType,
-          upsert: false
+      const filename = `product_${Date.now()}_${Math.random().toString(36).substring(7)}.jpg`;
+      const contentType = 'image/jpeg';
+
+      let arrayBuffer: ArrayBuffer;
+
+      // Handle file reading differently for web vs mobile
+      if (Platform.OS === 'web') {
+        if (webImageFile) {
+          // Use stored File object
+          console.log('📁 Web file size:', (webImageFile.size / (1024 * 1024)).toFixed(2) + 'MB');
+          arrayBuffer = await webImageFile.arrayBuffer();
+        } else {
+          // Fallback to fetching blob URL
+          const response = await fetch(imageUri);
+          const blob = await response.blob();
+          console.log('📁 Web blob size:', (blob.size / (1024 * 1024)).toFixed(2) + 'MB');
+          arrayBuffer = await blob.arrayBuffer();
+        }
+      } else {
+        // Mobile: Use FileSystem to read as base64, then convert to ArrayBuffer
+        const fileInfo = await FileSystem.getInfoAsync(imageUri);
+        if (fileInfo.exists && 'size' in fileInfo) {
+          console.log('📁 Mobile file size:', (fileInfo.size / (1024 * 1024)).toFixed(2) + 'MB');
+        }
+        const base64 = await FileSystem.readAsStringAsync(imageUri, {
+          encoding: FileSystem.EncodingType.Base64,
         });
+        arrayBuffer = decode(base64);
+      }
 
-      if (error) throw error;
+      console.log('✅ ArrayBuffer size:', arrayBuffer.byteLength, 'bytes');
+      console.log('📤 Uploading to Supabase Storage...');
 
+      // Upload using fetch API with ArrayBuffer - direct upload method
+      const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL || '';
+      const uploadUrl = `${supabaseUrl}/storage/v1/object/product-images/${filename}`;
+
+      const uploadResponse = await fetch(uploadUrl, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${session.access_token}`,
+          'Content-Type': contentType,
+          'x-upsert': 'false',
+        },
+        body: arrayBuffer,
+      });
+
+      console.log('📡 Upload response:', uploadResponse.status);
+
+      if (!uploadResponse.ok) {
+        const errorText = await uploadResponse.text();
+        console.error('❌ Upload failed:', errorText);
+        throw new Error(`Upload failed: ${uploadResponse.status}`);
+      }
+
+      console.log('✅ Product image uploaded successfully');
+
+      // Get public URL
       const { data: { publicUrl } } = supabase.storage
         .from('product-images')
-        .getPublicUrl(data.path);
+        .getPublicUrl(filename);
+
+      console.log('🔗 Product image URL:', publicUrl);
 
       return publicUrl;
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error uploading image:', error);
-      showAlert('Error', 'Failed to upload image', [
+      showAlert('Error', error.message || 'Failed to upload image', [
         { text: 'OK', style: 'default' }
       ]);
       return null;
@@ -314,8 +358,8 @@ export default function AdminEditProductScreen() {
           }
           const imageUrl = URL.createObjectURL(file);
           setSelectedImage(imageUrl);
+          setWebImageFile(file);
           setImageChanged(true);
-          (setSelectedImage as any).webFile = file;
         }
       };
       input.click();
@@ -423,7 +467,7 @@ export default function AdminEditProductScreen() {
       showAlert(
         'Success',
         'Product updated successfully!',
-        [{ text: 'OK', onPress: () => router.back() }]
+        [{ text: 'OK', style: 'default', onPress: () => router.back() }]
       );
     } catch (error) {
       console.error('Error updating product:', error);

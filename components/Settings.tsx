@@ -10,12 +10,13 @@ import {
   Switch,
   RefreshControl,
   Image,
-  Alert,
   Animated,
   Modal,
+  Platform,
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import * as FileSystem from 'expo-file-system/legacy';
+import { decode } from 'base64-arraybuffer';
 import { router } from 'expo-router';
 import { supabase } from '../lib/supabase';
 import { getUserWithProfile, logoutUser } from '../services/auth';
@@ -119,7 +120,9 @@ export default function Settings({ userType, currentRoute, onNavigateBack }: Set
       }
     } catch (error) {
       console.error('Error loading profile:', error);
-      Alert.alert('Error', 'Failed to load profile');
+      showAlert('Error', 'Failed to load profile', [
+        { text: 'OK', style: 'default' }
+      ]);
     } finally {
       setLoading(false);
     }
@@ -129,7 +132,9 @@ export default function Settings({ userType, currentRoute, onNavigateBack }: Set
     try {
       const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (status !== 'granted') {
-        Alert.alert('Permission Required', 'Please grant permission to access your photos');
+        showAlert('Permission Required', 'Please grant permission to access your photos', [
+          { text: 'OK', style: 'default' }
+        ]);
         return;
       }
 
@@ -145,7 +150,9 @@ export default function Settings({ userType, currentRoute, onNavigateBack }: Set
       await uploadProfilePicture(result.assets[0].uri);
     } catch (error: any) {
       console.error('Error selecting profile picture:', error);
-      Alert.alert('Error', 'Failed to select image');
+      showAlert('Error', 'Failed to select image', [
+        { text: 'OK', style: 'default' }
+      ]);
     }
   };
 
@@ -178,34 +185,51 @@ export default function Settings({ userType, currentRoute, onNavigateBack }: Set
       // Get session for auth
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) {
-        Alert.alert('Error', 'You must be logged in to upload photos');
+        showAlert('Error', 'You must be logged in to upload photos', [
+          { text: 'OK', style: 'default' }
+        ]);
         return;
       }
 
-      // Get file info
-      const fileInfo = await FileSystem.getInfoAsync(uri);
-      console.log('📁 Avatar file size:', fileInfo.size ? (fileInfo.size / (1024 * 1024)).toFixed(2) + 'MB' : 'unknown');
+      let arrayBuffer: ArrayBuffer;
 
-      // Create FormData
-      const formData = new FormData();
-      formData.append('file', {
-        uri: uri,
-        type: contentType,
-        name: fileName
-      } as any);
+      // Handle file reading differently for web vs mobile
+      if (Platform.OS === 'web') {
+        console.log('📖 Reading file for web...');
+        // On web, fetch the blob directly
+        const response = await fetch(uri);
+        const blob = await response.blob();
+        arrayBuffer = await blob.arrayBuffer();
+        console.log('✅ Web file size:', (arrayBuffer.byteLength / (1024 * 1024)).toFixed(2) + 'MB');
+      } else {
+        console.log('📖 Reading file for mobile...');
+        // On mobile, use FileSystem
+        const fileInfo = await FileSystem.getInfoAsync(uri);
+        if (fileInfo.exists && 'size' in fileInfo) {
+          console.log('📁 Mobile file size:', (fileInfo.size / (1024 * 1024)).toFixed(2) + 'MB');
+        }
 
+        const base64 = await FileSystem.readAsStringAsync(uri, {
+          encoding: FileSystem.EncodingType.Base64,
+        });
+        arrayBuffer = decode(base64);
+      }
+
+      console.log('✅ ArrayBuffer size:', arrayBuffer.byteLength, 'bytes');
       console.log('📤 Uploading to Supabase Storage...');
 
-      // Upload using fetch directly
-      const uploadUrl = `https://lipviwhsjgvcmdggecqn.supabase.co/storage/v1/object/avatars/${filePath}`;
+      // Upload using fetch API with ArrayBuffer
+      const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL || '';
+      const uploadUrl = `${supabaseUrl}/storage/v1/object/avatars/${filePath}`;
 
       const uploadResponse = await fetch(uploadUrl, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${session.access_token}`,
-          'apikey': process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || '',
+          'Content-Type': contentType,
+          'x-upsert': 'false',
         },
-        body: formData,
+        body: arrayBuffer,
       });
 
       console.log('📡 Upload response:', uploadResponse.status);
@@ -213,7 +237,9 @@ export default function Settings({ userType, currentRoute, onNavigateBack }: Set
       if (!uploadResponse.ok) {
         const errorText = await uploadResponse.text();
         console.error('❌ Upload failed:', errorText);
-        Alert.alert('Upload Error', `Failed to upload image (${uploadResponse.status})`);
+        showAlert('Upload Error', `Failed to upload image (${uploadResponse.status})`, [
+          { text: 'OK', style: 'default' }
+        ]);
         return;
       }
 
@@ -234,15 +260,21 @@ export default function Settings({ userType, currentRoute, onNavigateBack }: Set
 
       if (updateError) {
         console.error('❌ Profile update error:', updateError);
-        Alert.alert('Error', 'Failed to update profile: ' + updateError.message);
+        showAlert('Error', 'Failed to update profile: ' + updateError.message, [
+          { text: 'OK', style: 'default' }
+        ]);
         return;
       }
 
       setAvatarUrl(publicUrl);
-      Alert.alert('Success', 'Profile picture updated successfully');
+      showAlert('Success', 'Profile picture updated successfully', [
+        { text: 'OK', style: 'default' }
+      ]);
     } catch (error: any) {
       console.error('Error uploading profile picture:', error);
-      Alert.alert('Error', error.message || 'Failed to upload profile picture');
+      showAlert('Error', error.message || 'Failed to upload profile picture', [
+        { text: 'OK', style: 'default' }
+      ]);
     } finally {
       setUploadingImage(false);
     }
@@ -271,12 +303,16 @@ export default function Settings({ userType, currentRoute, onNavigateBack }: Set
 
       if (error) throw error;
 
-      Alert.alert('Success', 'Profile updated successfully');
+      showAlert('Success', 'Profile updated successfully', [
+        { text: 'OK', style: 'default' }
+      ]);
       setIsEditing(false);
       await loadProfile();
     } catch (error) {
       console.error('Error updating profile:', error);
-      Alert.alert('Error', 'Failed to update profile');
+      showAlert('Error', 'Failed to update profile', [
+        { text: 'OK', style: 'default' }
+      ]);
     } finally {
       setSaving(false);
     }

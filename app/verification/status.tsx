@@ -12,6 +12,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import Icon from 'react-native-vector-icons/FontAwesome5';
 import HeaderComponent from '../../components/HeaderComponent';
 import VerificationStatus from '../../components/VerificationStatus';
 import { supabase } from '../../lib/supabase';
@@ -83,7 +84,12 @@ export default function VerificationStatusScreen() {
 
       if (data && data.length > 0) {
         const submission = data[0];
-        // Map verification_submissions fields to the expected format
+
+        // The database already stores the full path including user_id and nested structure
+        // Example: {user_id}/id_document_{user_id}_{timestamp}.jpg
+        // Or old format: {user_id}/filename.app/{randomid}
+        // We just need to use these paths directly with getPublicUrl()
+
         setVerificationData({
           verification_status: submission.status,
           verification_submitted_at: submission.submitted_at,
@@ -193,6 +199,15 @@ export default function VerificationStatusScreen() {
         }
         showsVerticalScrollIndicator={false}
       >
+        <TouchableOpacity
+          style={styles.backButton}
+          onPress={() => router.back()}
+          activeOpacity={0.7}
+        >
+          <Icon name="arrow-left" size={20} color="#10b981" />
+          <Text style={styles.backButtonText}>Back</Text>
+        </TouchableOpacity>
+
         <View style={styles.header}>
           <Text style={styles.title}>Verification Status</Text>
           <Text style={styles.subtitle}>
@@ -281,7 +296,11 @@ export default function VerificationStatusScreen() {
                 {verificationData.id_document_url && (
                   <View style={styles.documentPreview}>
                     <Image
-                      source={{ uri: verificationData.id_document_url }}
+                      source={{
+                        uri: supabase.storage
+                          .from('verification-documents')
+                          .getPublicUrl(verificationData.id_document_url).data.publicUrl
+                      }}
                       style={styles.documentImage}
                     />
                     <Text style={styles.documentLabel}>ID Document</Text>
@@ -290,7 +309,11 @@ export default function VerificationStatusScreen() {
                 {verificationData.face_photo_url && (
                   <View style={styles.documentPreview}>
                     <Image
-                      source={{ uri: verificationData.face_photo_url }}
+                      source={{
+                        uri: supabase.storage
+                          .from('verification-documents')
+                          .getPublicUrl(verificationData.face_photo_url).data.publicUrl
+                      }}
                       style={styles.faceImage}
                     />
                     <Text style={styles.documentLabel}>Face Photo</Text>
@@ -353,6 +376,18 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#f8fafc',
+  },
+  backButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    gap: 8,
+  },
+  backButtonText: {
+    fontSize: 16,
+    color: '#10b981',
+    fontWeight: '600',
   },
   loadingContainer: {
     flex: 1,
