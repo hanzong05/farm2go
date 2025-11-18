@@ -6,6 +6,7 @@ import {
     Dimensions,
     Image,
     Platform,
+    SafeAreaView,
     ScrollView,
     StyleSheet,
     Text,
@@ -461,7 +462,7 @@ export default function OrderDetailScreen() {
                          (userType === 'farmer' && order.status === 'pending');
 
   return (
-    <View style={styles.container}>
+    <SafeAreaView style={styles.container}>
       <HeaderComponent
         profile={userProfile}
         userType={userType || undefined}
@@ -694,7 +695,7 @@ export default function OrderDetailScreen() {
           </View>
         )}
       </ScrollView>
-    </View>
+    </SafeAreaView>
   );
 }
 

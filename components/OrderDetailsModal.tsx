@@ -45,6 +45,9 @@ export default function OrderDetailsModal({
   onClose,
   order,
 }: OrderDetailsModalProps) {
+  console.log('🔍 OrderDetailsModal render - visible:', visible);
+  console.log('🔍 OrderDetailsModal render - order:', order);
+
   const getTrackingSteps = () => {
     const steps = [
       {
@@ -116,28 +119,30 @@ export default function OrderDetailsModal({
   return (
     <Modal
       visible={visible}
-      animationKeyframesType="slide"
+      animationType="slide"
       transparent={true}
       onRequestClose={onClose}
     >
       <View style={styles.overlay}>
         <View style={styles.container}>
-          <View style={styles.header}>
-            <Text style={styles.title}>Order Details</Text>
-            <TouchableOpacity
-              style={styles.closeButton}
-              onPress={onClose}
-              activeOpacity={0.8}
-            >
-              <Text style={styles.closeButtonText}>✕</Text>
-            </TouchableOpacity>
-          </View>
+          {/* Close Button */}
+          <TouchableOpacity
+            style={styles.closeButton}
+            onPress={onClose}
+            activeOpacity={0.8}
+          >
+            <Text style={styles.closeButtonText}>✕</Text>
+          </TouchableOpacity>
 
           <ScrollView
-            style={styles.scrollView}
             contentContainerStyle={styles.scrollContent}
             showsVerticalScrollIndicator={false}
           >
+            {/* Header */}
+            <View style={styles.header}>
+              <Text style={styles.title}>Order Details</Text>
+            </View>
+
             {/* Order Summary */}
             <View style={styles.section}>
               <Text style={styles.sectionTitle}>Order Summary</Text>
@@ -302,46 +307,48 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   container: {
-    width: width * 0.95,
-    maxHeight: height * 0.9,
+    width: width * 0.9,
+    maxHeight: height * 0.85,
     backgroundColor: '#ffffff',
-    borderRadius: 16,
-    overflow: 'hidden',
+    borderRadius: 20,
+    position: 'relative',
   },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingVertical: 16,
-    backgroundColor: '#f8fafc',
-    borderBottomWidth: 1,
-    borderBottomColor: '#e2e8f0',
-  },
-  title: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#1f2937',
+  scrollContent: {
+    padding: 24,
+    paddingTop: 60,
+    paddingBottom: 40,
+    backgroundColor: '#ffffff',
   },
   closeButton: {
+    position: 'absolute',
+    top: 16,
+    right: 16,
     width: 32,
     height: 32,
     borderRadius: 16,
-    backgroundColor: '#f1f5f9',
+    backgroundColor: '#f3f4f6',
     justifyContent: 'center',
     alignItems: 'center',
+    zIndex: 10,
   },
   closeButtonText: {
     fontSize: 16,
     color: '#6b7280',
     fontWeight: 'bold',
   },
-  scrollView: {
-    flex: 1,
+
+  // Header
+  header: {
+    alignItems: 'center',
+    marginBottom: 24,
   },
-  scrollContent: {
-    padding: 20,
+  title: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#111827',
+    textAlign: 'center',
   },
+
   section: {
     marginBottom: 24,
   },
@@ -426,15 +433,6 @@ const styles = StyleSheet.create({
   productImage: {
     width: '100%',
     height: '100%',
-  },
-  productIcon: {
-    width: 48,
-    height: 48,
-    borderRadius: 8,
-    backgroundColor: '#ecfdf5',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 12,
   },
   productIconText: {
     fontSize: 24,

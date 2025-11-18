@@ -1,9 +1,9 @@
-import React, { useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, Dimensions } from 'react-native';
-import { Link, router } from 'expo-router';
-import { supabase } from '../../lib/supabase';
 import { Ionicons } from '@expo/vector-icons';
+import { Link, router } from 'expo-router';
+import React, { useState } from 'react';
+import { Dimensions, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { useCustomAlert } from '../../components/CustomAlert';
+import { supabase } from '../../lib/supabase';
 
 const { width } = Dimensions.get('window');
 

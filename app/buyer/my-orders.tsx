@@ -540,6 +540,8 @@ export default function BuyerMyOrdersScreen() {
   };
 
   const handleShowOrderDetails = (order: OrderWithDetails) => {
+    console.log('📋 Opening order details for:', order);
+    console.log('📋 Order data:', JSON.stringify(order, null, 2));
     setSelectedOrder(order);
     setShowDetailsModal(true);
   };
@@ -563,7 +565,7 @@ export default function BuyerMyOrdersScreen() {
     setSelectedOrder(null);
   };
 
-  const renderOrderTracker = (currentStatus: string) => {
+  const renderOrderTracker = (currentStatus: string, createdAt: string, updatedAt: string) => {
     const steps = [
       { key: 'pending', label: 'Order Placed', icon: '📋' },
       { key: 'confirmed', label: 'Confirmed', icon: '✅' },
@@ -579,6 +581,7 @@ export default function BuyerMyOrdersScreen() {
           <View style={styles.cancelledTracker}>
             <Text style={styles.cancelledIcon}>❌</Text>
             <Text style={styles.cancelledText}>Order Cancelled</Text>
+            <Text style={styles.cancelledDate}>{formatDate(updatedAt)}</Text>
           </View>
         </View>
       );
@@ -586,12 +589,33 @@ export default function BuyerMyOrdersScreen() {
 
     const currentIndex = steps.findIndex(step => step.key === currentStatus);
 
+    // Format timestamp for display
+    const formatTimestamp = (dateString: string) => {
+      const date = new Date(dateString);
+      return date.toLocaleDateString('en-US', {
+        month: 'short',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+      });
+    };
+
     return (
       <View style={styles.trackerContainer}>
         <View style={styles.tracker}>
           {steps.map((step, index) => {
             const isActive = index <= currentIndex;
             const isCurrent = index === currentIndex;
+
+            // Show timestamp for active steps
+            let timestamp = '';
+            if (isActive) {
+              if (step.key === 'pending') {
+                timestamp = formatTimestamp(createdAt);
+              } else if (isCurrent) {
+                timestamp = formatTimestamp(updatedAt);
+              }
+            }
 
             return (
               <View key={step.key} style={styles.stepContainer}>
@@ -622,6 +646,15 @@ export default function BuyerMyOrdersScreen() {
                 ]}>
                   {step.label}
                 </Text>
+
+                {timestamp && (
+                  <Text style={[
+                    styles.stepTimestamp,
+                    isCurrent ? styles.stepTimestampCurrent : styles.stepTimestampActive
+                  ]}>
+                    {timestamp}
+                  </Text>
+                )}
               </View>
             );
           })}
@@ -679,7 +712,7 @@ export default function BuyerMyOrdersScreen() {
         </View>
 
         {/* Order Progress Tracker */}
-        {renderOrderTracker(order.status)}
+        {renderOrderTracker(order.status, order.created_at, order.updated_at)}
 
         {/* Product Info */}
         <View style={styles.productSection}>
@@ -918,7 +951,18 @@ export default function BuyerMyOrdersScreen() {
         <OrderDetailsModal
           visible={showDetailsModal}
           onClose={handleCloseDetailsModal}
-          order={selectedOrder as any}
+          order={{
+            ...selectedOrder,
+            order_items: selectedOrder.product ? [{
+              product: {
+                name: selectedOrder.product.name,
+                unit: selectedOrder.product.unit,
+                image_url: selectedOrder.product.image_url,
+              },
+              quantity: selectedOrder.quantity,
+              unit_price: selectedOrder.product.price,
+            }] : []
+          } as any}
         />
       )}
 
@@ -1581,21 +1625,40 @@ const styles = StyleSheet.create({
     color: '#94a3b8',
     fontWeight: '400',
   },
+  stepTimestamp: {
+    fontSize: 10,
+    textAlign: 'center',
+    marginTop: 2,
+  },
+  stepTimestampCurrent: {
+    color: '#10b981',
+    fontWeight: '600',
+  },
+  stepTimestampActive: {
+    color: '#64748b',
+    fontWeight: '500',
+  },
 
   // Cancelled Order Tracker
   cancelledTracker: {
-    flexDirection: 'row',
+    flexDirection: 'column',
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: 12,
   },
   cancelledIcon: {
     fontSize: 20,
-    marginRight: 8,
+    marginBottom: 4,
   },
   cancelledText: {
     fontSize: 16,
     color: '#dc2626',
     fontWeight: '600',
+    marginBottom: 4,
+  },
+  cancelledDate: {
+    fontSize: 12,
+    color: '#6b7280',
+    fontWeight: '500',
   },
 });
