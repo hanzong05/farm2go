@@ -888,6 +888,17 @@ export default function HeaderComponent({
             </View>
           )}
 
+          {/* Analytics Button */}
+          {profile && (
+            <TouchableOpacity
+              style={styles.iconButton}
+              onPress={() => router.push('/analytics' as any)}
+              activeOpacity={0.8}
+            >
+              <Icon name="chart-bar" size={16} color={colors.white} />
+            </TouchableOpacity>
+          )}
+
           {/* Add Button */}
           {showAddButton && !isMobile && (
             <TouchableOpacity
@@ -1134,6 +1145,20 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '600',
     color: colors.primary,
+  },
+
+  iconButton: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginHorizontal: 4,
+  },
+
+  iconButtonText: {
+    fontSize: 18,
   },
 
   downloadButton: {

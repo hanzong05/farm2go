@@ -41,7 +41,8 @@
       "Bash(else echo \"ANDROID_HOME=$ANDROID_HOME\")",
       "Bash(fi)",
       "Read(//c/Users/**)",
-      "Bash(nul)"
+      "Bash(nul)",
+      "Bash(git restore:*)"
     ],
     "deny": [],
     "ask": []
