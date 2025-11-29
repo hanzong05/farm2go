@@ -1,5 +1,5 @@
-import React from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import React, { useState } from 'react';
+import { LayoutChangeEvent, StyleSheet, Text, View } from 'react-native';
 import Svg, { Circle, G, Path, Text as SvgText } from 'react-native-svg';
 
 interface PieChartData {
@@ -14,7 +14,14 @@ interface PieChartProps {
   showLegend?: boolean;
 }
 
-export default function PieChart({ data, size = 200, showLegend = true }: PieChartProps) {
+export default function PieChart({ data, size, showLegend = true }: PieChartProps) {
+  const [containerWidth, setContainerWidth] = useState(300);
+  const chartSize = size || Math.min(containerWidth - 40, 240);
+
+  const handleLayout = (event: LayoutChangeEvent) => {
+    const { width } = event.nativeEvent.layout;
+    setContainerWidth(width);
+  };
   const total = data.reduce((sum, item) => sum + item.value, 0);
 
   if (total === 0) {
@@ -25,7 +32,7 @@ export default function PieChart({ data, size = 200, showLegend = true }: PieCha
     );
   }
 
-  const radius = size / 2;
+  const radius = chartSize / 2;
   const innerRadius = radius * 0.6; // Donut chart
   let currentAngle = -90; // Start from top
 
@@ -52,9 +59,9 @@ export default function PieChart({ data, size = 200, showLegend = true }: PieCha
   };
 
   return (
-    <View style={styles.container}>
+    <View style={styles.container} onLayout={handleLayout}>
       <View style={styles.chartWrapper}>
-        <Svg width={size} height={size}>
+        <Svg width={chartSize + 32} height={chartSize + 32} viewBox={`-16 -16 ${chartSize + 32} ${chartSize + 32}`}>
           <G>
             {data.map((item, index) => {
               const percentage = (item.value / total) * 100;
@@ -80,6 +87,7 @@ export default function PieChart({ data, size = 200, showLegend = true }: PieCha
                       fontSize="14"
                       fontWeight="700"
                       textAnchor="middle"
+                      alignmentBaseline="middle"
                     >
                       {percentage.toFixed(0)}%
                     </SvgText>

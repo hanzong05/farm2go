@@ -1,8 +1,6 @@
-import React from 'react';
-import { Dimensions, StyleSheet, Text, View } from 'react-native';
-import Svg, { Circle, Line, Path, Polyline } from 'react-native-svg';
-
-const { width: screenWidth } = Dimensions.get('window');
+import React, { useState } from 'react';
+import { LayoutChangeEvent, StyleSheet, Text, View } from 'react-native';
+import Svg, { Circle, Line, Path } from 'react-native-svg';
 
 interface LineChartData {
   label: string;
@@ -24,6 +22,12 @@ export default function LineChart({
   showDots = true,
   showGrid = true,
 }: LineChartProps) {
+  const [containerWidth, setContainerWidth] = useState(300);
+
+  const handleLayout = (event: LayoutChangeEvent) => {
+    const { width } = event.nativeEvent.layout;
+    setContainerWidth(width);
+  };
   if (data.length === 0) {
     return (
       <View style={styles.emptyContainer}>
@@ -32,7 +36,7 @@ export default function LineChart({
     );
   }
 
-  const chartWidth = screenWidth - 80;
+  const chartWidth = containerWidth - 32;
   const chartHeight = height - 60;
   const maxValue = Math.max(...data.map(d => d.value), 1);
   const minValue = Math.min(...data.map(d => d.value), 0);
@@ -59,7 +63,7 @@ export default function LineChart({
   const areaPath = `${pathData} L ${chartWidth} ${chartHeight} L 0 ${chartHeight} Z`;
 
   return (
-    <View style={styles.container}>
+    <View style={styles.container} onLayout={handleLayout}>
       <Svg width={chartWidth} height={chartHeight + 10}>
         {/* Grid lines */}
         {showGrid && (

@@ -1,7 +1,5 @@
-import React from 'react';
-import { Dimensions, StyleSheet, Text, View } from 'react-native';
-
-const { width: screenWidth } = Dimensions.get('window');
+import React, { useState } from 'react';
+import { LayoutChangeEvent, StyleSheet, Text, View } from 'react-native';
 
 interface BarChartData {
   label: string;
@@ -24,14 +22,19 @@ export default function BarChart({
   showValues = true,
   horizontal = false,
 }: BarChartProps) {
+  const [containerWidth, setContainerWidth] = useState(300);
   const max = maxValue || Math.max(...data.map(d => d.value), 1);
-  const chartWidth = screenWidth - 80;
+
+  const handleLayout = (event: LayoutChangeEvent) => {
+    const { width } = event.nativeEvent.layout;
+    setContainerWidth(width);
+  };
 
   if (horizontal) {
     return (
-      <View style={[styles.container, { height }]}>
+      <View style={[styles.container, { height }]} onLayout={handleLayout}>
         {data.map((item, index) => {
-          const barWidth = (item.value / max) * (chartWidth - 100);
+          const barWidth = (item.value / max) * (containerWidth - 120);
           const percentage = (item.value / max) * 100;
 
           return (
@@ -61,10 +64,10 @@ export default function BarChart({
   }
 
   // Vertical bar chart
-  const barWidth = (chartWidth - (data.length - 1) * 12) / data.length;
+  const barWidth = (containerWidth - (data.length - 1) * 12 - 32) / data.length;
 
   return (
-    <View style={styles.container}>
+    <View style={styles.container} onLayout={handleLayout}>
       <View style={[styles.chartArea, { height }]}>
         {data.map((item, index) => {
           const barHeight = (item.value / max) * (height - 40);
