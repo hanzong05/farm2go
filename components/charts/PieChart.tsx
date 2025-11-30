@@ -16,7 +16,7 @@ interface PieChartProps {
 
 export default function PieChart({ data, size, showLegend = true }: PieChartProps) {
   const [containerWidth, setContainerWidth] = useState(300);
-  const chartSize = size || Math.min(containerWidth - 40, 240);
+  const chartSize = size || Math.min(containerWidth * 0.7, 200);
 
   const handleLayout = (event: LayoutChangeEvent) => {
     const { width } = event.nativeEvent.layout;
@@ -120,9 +120,10 @@ const styles = StyleSheet.create({
   container: {
     width: '100%',
     alignItems: 'center',
+    paddingHorizontal: 8,
   },
   chartWrapper: {
-    marginBottom: 24,
+    marginBottom: 16,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -138,15 +139,15 @@ const styles = StyleSheet.create({
   },
   legend: {
     width: '100%',
-    gap: 12,
+    gap: 8,
   },
   legendItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 12,
-    paddingHorizontal: 16,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
     backgroundColor: '#ffffff',
-    borderRadius: 10,
+    borderRadius: 8,
     borderWidth: 1,
     borderColor: '#e2e8f0',
     shadowColor: '#000',
@@ -156,23 +157,23 @@ const styles = StyleSheet.create({
     elevation: 1,
   },
   legendColor: {
-    width: 16,
-    height: 16,
-    borderRadius: 4,
-    marginRight: 14,
+    width: 14,
+    height: 14,
+    borderRadius: 3,
+    marginRight: 10,
   },
   legendLabel: {
     flex: 1,
-    fontSize: 15,
+    fontSize: 13,
     color: '#1e293b',
     fontWeight: '500',
     textTransform: 'capitalize',
   },
   legendValue: {
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: '700',
     color: '#0f172a',
-    minWidth: 36,
+    minWidth: 32,
     textAlign: 'right',
   },
 });

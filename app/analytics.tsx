@@ -20,12 +20,17 @@ import { Database } from '../types/database';
 type Profile = Database['public']['Tables']['profiles']['Row'];
 
 export default function AnalyticsScreen() {
-  const { user } = useAuth();
+  const { user, loading: authLoading } = useAuth();
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Check if user is logged in
+    // Don't redirect if auth is still loading
+    if (authLoading) {
+      return;
+    }
+
+    // Check if user is logged in after auth has finished loading
     if (!user) {
       console.log('⚠️ No user logged in, redirecting to marketplace');
       // Use setTimeout to ensure router is ready
@@ -35,7 +40,7 @@ export default function AnalyticsScreen() {
       return () => clearTimeout(timer);
     }
     loadProfile();
-  }, [user]);
+  }, [user, authLoading]);
 
   const loadProfile = async () => {
     if (!user) {
@@ -65,24 +70,7 @@ export default function AnalyticsScreen() {
     }
   };
 
-  const getHomeRoute = () => {
-    if (!profile) return '/';
-
-    switch (profile.user_type) {
-      case 'buyer':
-        return '/';
-      case 'farmer':
-        return '/farmer/dashboard';
-      case 'admin':
-        return '/admin/dashboard';
-      case 'super-admin':
-        return '/super-admin/dashboard';
-      default:
-        return '/';
-    }
-  };
-
-  if (loading) {
+  if (loading || authLoading) {
     return (
       <SafeAreaView style={styles.loadingContainer}>
         <ActivityIndicator size="large" color="#10b981" />
@@ -114,17 +102,6 @@ export default function AnalyticsScreen() {
         showMessages={true}
         showNotifications={true}
       />
-
-      {/* Back Navigation */}
-      <View style={styles.backNav}>
-        <TouchableOpacity
-          style={styles.backNavButton}
-          onPress={() => router.push(getHomeRoute())}
-          activeOpacity={0.8}
-        >
-          <Text style={styles.backNavText}>← Back to Dashboard</Text>
-        </TouchableOpacity>
-      </View>
 
       <AnalyticsDashboard
         userType={profile.user_type as any}
@@ -175,22 +152,6 @@ const styles = StyleSheet.create({
   backButtonText: {
     color: '#ffffff',
     fontSize: 16,
-    fontWeight: '600',
-  },
-  backNav: {
-    backgroundColor: '#ffffff',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#e5e7eb',
-  },
-  backNavButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  backNavText: {
-    fontSize: 16,
-    color: '#10b981',
     fontWeight: '600',
   },
 });

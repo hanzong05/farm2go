@@ -41,6 +41,7 @@ const Icon = ({ name, size = 24, color = '#000' }: { name: string; size?: number
 
 const { width } = Dimensions.get('window');
 const isDesktop = width >= 1024;
+const isMobile = width < 768;
 
 interface AnalyticsDashboardProps {
   userType: 'buyer' | 'farmer' | 'admin' | 'super-admin';
@@ -48,9 +49,9 @@ interface AnalyticsDashboardProps {
   barangay?: string;
 }
 
-const GRID_COLS = isDesktop ? 4 : 2;
-const GAP = 20;
-const CARD_WIDTH = (width - (GRID_COLS + 1) * GAP - (isDesktop ? 96 : 56)) / GRID_COLS;
+const GRID_COLS = isDesktop ? 4 : isMobile ? 1 : 2;
+const GAP = isMobile ? 16 : 20;
+const CARD_WIDTH = (width - (GRID_COLS + 1) * GAP - (isDesktop ? 96 : isMobile ? 32 : 56)) / GRID_COLS;
 
 export default function AnalyticsDashboard({
   userType,
@@ -160,17 +161,21 @@ export default function AnalyticsDashboard({
     subtitle?: string;
     trend?: { direction: 'up' | 'down'; percentage: number };
     span?: number;
-  }) => (
-    <View
-      style={[
-        styles.card,
-        {
-          width: span === 2 ? CARD_WIDTH * 2 + GAP : CARD_WIDTH,
-          minHeight: 160,
-        },
-        styles.statWidget,
-      ]}
-    >
+  }) => {
+    // On mobile, all cards take full width regardless of span
+    const cardWidth = isMobile ? CARD_WIDTH : (span === 2 ? CARD_WIDTH * 2 + GAP : CARD_WIDTH);
+
+    return (
+      <View
+        style={[
+          styles.card,
+          {
+            width: cardWidth,
+            minHeight: 160,
+          },
+          styles.statWidget,
+        ]}
+      >
       <View style={styles.cardHeader}>
         <View style={[styles.iconBadge, { backgroundColor: color + '20' }]}>
           <Icon name={iconName} size={24} color={color} />
@@ -194,7 +199,8 @@ export default function AnalyticsDashboard({
       <Text style={[styles.statValue, { color }]}>{value}</Text>
       {subtitle && <Text style={styles.statSubtitle}>{subtitle}</Text>}
     </View>
-  );
+    );
+  };
 
   const ChartCard = ({
     title,
@@ -206,27 +212,34 @@ export default function AnalyticsDashboard({
     children: React.ReactNode;
     span?: number;
     height?: number;
-  }) => (
-    <View
-      style={[
-        styles.card,
-        {
-          width: span === 2 ? CARD_WIDTH * 2 + GAP : span === 3 ? CARD_WIDTH * 3 + GAP * 2 : CARD_WIDTH,
-          minHeight: height + 100,
-        },
-      ]}
-    >
+  }) => {
+    // On mobile, all cards take full width regardless of span
+    const cardWidth = isMobile
+      ? CARD_WIDTH
+      : (span === 2 ? CARD_WIDTH * 2 + GAP : span === 3 ? CARD_WIDTH * 3 + GAP * 2 : CARD_WIDTH);
+
+    return (
+      <View
+        style={[
+          styles.card,
+          {
+            width: cardWidth,
+            minHeight: height + 100,
+          },
+        ]}
+      >
       <View style={styles.cardHeaderTop}>
         <Text style={styles.cardTitle}>{title}</Text>
         <TouchableOpacity style={styles.moreButton}>
           <Text style={styles.moreText}>⋯</Text>
         </TouchableOpacity>
       </View>
-      <View style={[styles.chartContentContainer, { height }]}>
+      <View style={[styles.chartContentContainer, { height, width: '100%' }]}>
         {children}
       </View>
     </View>
-  );
+    );
+  };
 
   const ListCard = ({
     title,
@@ -236,16 +249,20 @@ export default function AnalyticsDashboard({
     title: string;
     items: Array<{ rank: number; name: string; value: string; amount: string }>;
     span?: number;
-  }) => (
-    <View
-      style={[
-        styles.card,
-        {
-          width: span === 2 ? CARD_WIDTH * 2 + GAP : CARD_WIDTH,
-          minHeight: 320,
-        },
-      ]}
-    >
+  }) => {
+    // On mobile, all cards take full width regardless of span
+    const cardWidth = isMobile ? CARD_WIDTH : (span === 2 ? CARD_WIDTH * 2 + GAP : CARD_WIDTH);
+
+    return (
+      <View
+        style={[
+          styles.card,
+          {
+            width: cardWidth,
+            minHeight: 320,
+          },
+        ]}
+      >
       <View style={styles.cardHeaderTop}>
         <Text style={styles.cardTitle}>{title}</Text>
         <TouchableOpacity style={styles.moreButton}>
@@ -267,7 +284,8 @@ export default function AnalyticsDashboard({
         ))}
       </View>
     </View>
-  );
+    );
+  };
 
   const ProgressCard = ({
     title,
@@ -275,8 +293,12 @@ export default function AnalyticsDashboard({
   }: {
     title: string;
     items: Array<{ label: string; value: number; color: string }>;
-  }) => (
-    <View style={[styles.card, { width: CARD_WIDTH * 2 + GAP, minHeight: 280 }]}>
+  }) => {
+    // On mobile, all cards take full width
+    const cardWidth = isMobile ? CARD_WIDTH : CARD_WIDTH * 2 + GAP;
+
+    return (
+      <View style={[styles.card, { width: cardWidth, minHeight: 280 }]}>
       <View style={styles.cardHeaderTop}>
         <Text style={styles.cardTitle}>{title}</Text>
       </View>
@@ -299,7 +321,8 @@ export default function AnalyticsDashboard({
         ))}
       </View>
     </View>
-  );
+    );
+  };
 
   const renderBuyerDashboard = () => {
     if (!data?.buyer) return null;
@@ -729,22 +752,6 @@ export default function AnalyticsDashboard({
             height={200}
           />
         </ChartCard>
-
-        <ProgressCard
-          title="Verification Status"
-          items={[
-            {
-              label: 'Verified Users',
-              value: Math.round((data.superAdmin.verifiedUsers / data.superAdmin.totalUsers) * 100),
-              color: '#059669',
-            },
-            {
-              label: 'Pending',
-              value: Math.round((data.superAdmin.pendingVerifications / data.superAdmin.totalUsers) * 100),
-              color: '#f59e0b',
-            },
-          ]}
-        />
       </View>
     );
   };
@@ -829,7 +836,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#f9fafb',
   },
   contentContainer: {
-    padding: isDesktop ? 48 : 28,
+    padding: isDesktop ? 48 : isMobile ? 20 : 28,
     paddingBottom: 100,
   },
   loadingContainer: {
@@ -952,8 +959,8 @@ const styles = StyleSheet.create({
   chartContentContainer: {
     justifyContent: 'center',
     alignItems: 'center',
-    paddingVertical: 16,
-    paddingHorizontal: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 8,
     overflow: 'hidden',
   },
   listContainer: {

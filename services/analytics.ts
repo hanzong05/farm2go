@@ -529,23 +529,27 @@ async function getSuperAdminAnalytics() {
     // Get all users
     const { data: users, error: usersError } = await supabase
       .from('profiles')
-      .select('id, user_type, barangay, verification_status');
+      .select('id, user_type, barangay');
 
-    if (usersError) throw usersError;
+    if (usersError) {
+      console.error('❌ Super Admin Analytics - Users query error:', usersError);
+      throw usersError;
+    }
 
     const totalUsers = users?.length || 0;
     const farmers = users?.filter(u => u.user_type === 'farmer').length || 0;
     const buyers = users?.filter(u => u.user_type === 'buyer').length || 0;
     const admins = users?.filter(u => u.user_type === 'admin').length || 0;
-    const verifiedUsers = users?.filter(u => u.verification_status === 'verified').length || 0;
-    const pendingVerifications = users?.filter(u => u.verification_status === 'pending').length || 0;
 
     // Get all products
     const { data: products, error: productsError } = await supabase
       .from('products')
       .select('id, status, category, name');
 
-    if (productsError) throw productsError;
+    if (productsError) {
+      console.error('❌ Super Admin Analytics - Products query error:', productsError);
+      throw productsError;
+    }
 
     const totalProducts = products?.length || 0;
     const activeProducts = products?.filter(p => p.status === 'approved').length || 0;
@@ -564,7 +568,10 @@ async function getSuperAdminAnalytics() {
         farmer:profiles!orders_farmer_id_fkey(first_name, last_name)
       `);
 
-    if (ordersError) throw ordersError;
+    if (ordersError) {
+      console.error('❌ Super Admin Analytics - Orders query error:', ordersError);
+      throw ordersError;
+    }
 
     const totalOrders = orders?.length || 0;
     const completedOrders = orders?.filter(o => o.status === 'delivered').length || 0;
@@ -655,7 +662,7 @@ async function getSuperAdminAnalytics() {
       ? Object.values(cropStats).sort((a, b) => b.quantity - a.quantity)[0]
       : null;
 
-    return {
+    const result = {
       totalUsers,
       farmers,
       buyers,
@@ -665,16 +672,27 @@ async function getSuperAdminAnalytics() {
       totalProducts,
       activeProducts,
       totalRevenue,
-      verifiedUsers,
-      pendingVerifications,
+      verifiedUsers: 0, // Not tracking verification status
+      pendingVerifications: 0, // Not tracking verification status
       ordersByStatus,
       barangayStats,
       topProducts,
       topCropThisMonth,
       highestCropBought,
     };
+
+    console.log('✅ Super Admin Analytics loaded successfully:', {
+      totalUsers,
+      farmers,
+      buyers,
+      admins,
+      totalOrders,
+      totalProducts,
+    });
+
+    return result;
   } catch (error) {
-    console.error('Error fetching super admin analytics:', error);
+    console.error('❌ Error fetching super admin analytics:', error);
     throw error;
   }
 }

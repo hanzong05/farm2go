@@ -36,7 +36,7 @@ export default function LineChart({
     );
   }
 
-  const chartWidth = containerWidth - 32;
+  const chartWidth = Math.max(containerWidth - 24, 100);
   const chartHeight = height - 60;
   const maxValue = Math.max(...data.map(d => d.value), 1);
   const minValue = Math.min(...data.map(d => d.value), 0);
@@ -142,7 +142,8 @@ export default function LineChart({
 const styles = StyleSheet.create({
   container: {
     width: '100%',
-    paddingVertical: 16,
+    paddingVertical: 8,
+    paddingHorizontal: 8,
   },
   emptyContainer: {
     height: 200,
@@ -159,17 +160,17 @@ const styles = StyleSheet.create({
     marginTop: 8,
   },
   label: {
-    fontSize: 10,
+    fontSize: 9,
     color: '#6b7280',
   },
   valueIndicators: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginTop: 12,
-    paddingHorizontal: 8,
+    marginTop: 8,
+    paddingHorizontal: 4,
   },
   valueText: {
-    fontSize: 12,
+    fontSize: 11,
     color: '#6b7280',
   },
   valueBold: {

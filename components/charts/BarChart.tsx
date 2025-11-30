@@ -64,7 +64,9 @@ export default function BarChart({
   }
 
   // Vertical bar chart
-  const barWidth = (containerWidth - (data.length - 1) * 12 - 32) / data.length;
+  const spacing = data.length > 6 ? 4 : 8;
+  const totalSpacing = (data.length - 1) * spacing + 16;
+  const barWidth = Math.max((containerWidth - totalSpacing) / data.length, 20);
 
   return (
     <View style={styles.container} onLayout={handleLayout}>
@@ -100,18 +102,19 @@ export default function BarChart({
 const styles = StyleSheet.create({
   container: {
     width: '100%',
-    paddingVertical: 16,
+    paddingVertical: 8,
+    paddingHorizontal: 4,
   },
   chartArea: {
     flexDirection: 'row',
     alignItems: 'flex-end',
     justifyContent: 'space-around',
-    paddingHorizontal: 8,
+    paddingHorizontal: 4,
   },
   barWrapper: {
     alignItems: 'center',
     justifyContent: 'flex-end',
-    marginHorizontal: 4,
+    marginHorizontal: 2,
   },
   bar: {
     width: '100%',
@@ -119,17 +122,16 @@ const styles = StyleSheet.create({
     minHeight: 4,
   },
   labelText: {
-    fontSize: 10,
+    fontSize: 9,
     color: '#6b7280',
-    marginTop: 8,
+    marginTop: 6,
     textAlign: 'center',
-    maxWidth: 80,
   },
   valueText: {
-    fontSize: 12,
+    fontSize: 10,
     fontWeight: '600',
     color: '#374151',
-    marginBottom: 4,
+    marginBottom: 2,
   },
   horizontalBarContainer: {
     marginBottom: 16,
