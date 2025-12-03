@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { LayoutChangeEvent, StyleSheet, Text, View } from 'react-native';
+import { LayoutChangeEvent, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 interface BarChartData {
   label: string;
@@ -32,16 +32,22 @@ export default function BarChart({
 
   if (horizontal) {
     return (
-      <View style={[styles.container, { height }]} onLayout={handleLayout}>
+      <ScrollView
+        style={[styles.container, { height }]}
+        onLayout={handleLayout}
+        showsVerticalScrollIndicator={true}
+      >
         {data.map((item, index) => {
-          const barWidth = (item.value / max) * (containerWidth - 120);
+          const barWidth = (item.value / max) * (containerWidth - 150);
           const percentage = (item.value / max) * 100;
 
           return (
             <View key={index} style={styles.horizontalBarContainer}>
-              <Text style={styles.horizontalLabel} numberOfLines={1}>
-                {item.label}
-              </Text>
+              <View style={styles.horizontalLabelContainer}>
+                <Text style={styles.horizontalLabel} numberOfLines={2}>
+                  {item.label}
+                </Text>
+              </View>
               <View style={styles.horizontalBarWrapper}>
                 <View
                   style={[
@@ -59,7 +65,7 @@ export default function BarChart({
             </View>
           );
         })}
-      </View>
+      </ScrollView>
     );
   }
 
@@ -134,14 +140,17 @@ const styles = StyleSheet.create({
     marginBottom: 2,
   },
   horizontalBarContainer: {
-    marginBottom: 16,
+    marginBottom: 20,
+  },
+  horizontalLabelContainer: {
+    minWidth: 130,
+    maxWidth: 130,
+    marginBottom: 6,
   },
   horizontalLabel: {
     fontSize: 12,
     fontWeight: '600',
     color: '#374151',
-    marginBottom: 6,
-    maxWidth: 100,
   },
   horizontalBarWrapper: {
     flexDirection: 'row',

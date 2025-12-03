@@ -69,6 +69,8 @@ export default function AnalyticsDashboard({
   const [users, setUsers] = useState<Array<{ id: string; name: string; type: string }>>([]);
   const [loadingProduct, setLoadingProduct] = useState(false);
   const [loadingUser, setLoadingUser] = useState(false);
+  const [expandedBarangay, setExpandedBarangay] = useState<string | null>(null);
+  const [barangayFarmers, setBarangayFarmers] = useState<Record<string, Array<{ name: string; revenue: number }>>>({});
 
   useEffect(() => {
     loadAnalytics();
@@ -142,6 +144,62 @@ export default function AnalyticsDashboard({
       style: 'currency',
       currency: 'PHP',
     }).format(amount);
+  };
+
+  const loadBarangayFarmers = async (barangayName: string) => {
+    try {
+      // Get farmers in this barangay
+      const { data: farmersData, error: farmersError } = await supabase
+        .from('profiles')
+        .select('id, first_name, last_name')
+        .eq('barangay', barangayName)
+        .eq('user_type', 'farmer');
+
+      if (farmersError) throw farmersError;
+
+      const farmerIds = (farmersData as any)?.map((f: any) => f.id) || [];
+
+      // Get orders for these farmers
+      const { data: orders, error: ordersError } = await supabase
+        .from('orders')
+        .select('farmer_id, total_price')
+        .in('farmer_id', farmerIds);
+
+      if (ordersError) throw ordersError;
+
+      // Calculate revenue per farmer
+      const farmerRevenue: Record<string, { name: string; revenue: number }> = {};
+      (orders as any)?.forEach((order: any) => {
+        const farmer = (farmersData as any)?.find((f: any) => f.id === order.farmer_id);
+        if (farmer) {
+          const farmerName = `${farmer.first_name} ${farmer.last_name}`;
+          if (!farmerRevenue[order.farmer_id]) {
+            farmerRevenue[order.farmer_id] = { name: farmerName, revenue: 0 };
+          }
+          farmerRevenue[order.farmer_id].revenue += order.total_price || 0;
+        }
+      });
+
+      // Get top 3 farmers by revenue
+      const topFarmers = Object.values(farmerRevenue)
+        .sort((a, b) => b.revenue - a.revenue)
+        .slice(0, 3);
+
+      setBarangayFarmers(prev => ({ ...prev, [barangayName]: topFarmers }));
+    } catch (err) {
+      console.error('Error loading barangay farmers:', err);
+    }
+  };
+
+  const toggleBarangay = async (barangayName: string) => {
+    if (expandedBarangay === barangayName) {
+      setExpandedBarangay(null);
+    } else {
+      setExpandedBarangay(barangayName);
+      if (!barangayFarmers[barangayName]) {
+        await loadBarangayFarmers(barangayName);
+      }
+    }
   };
 
   // Card Components
@@ -245,10 +303,18 @@ export default function AnalyticsDashboard({
     title,
     items,
     span = 1,
+    enableAccordion = false,
+    onItemPress,
+    expandedItem,
+    subItems,
   }: {
     title: string;
     items: Array<{ rank: number; name: string; value: string; amount: string }>;
     span?: number;
+    enableAccordion?: boolean;
+    onItemPress?: (name: string) => void;
+    expandedItem?: string | null;
+    subItems?: Record<string, Array<{ name: string; revenue: number }>>;
   }) => {
     // On mobile, all cards take full width regardless of span
     const cardWidth = isMobile ? CARD_WIDTH : (span === 2 ? CARD_WIDTH * 2 + GAP : CARD_WIDTH);
@@ -271,15 +337,44 @@ export default function AnalyticsDashboard({
       </View>
       <View style={styles.listContainer}>
         {items.slice(0, 5).map((item, idx) => (
-          <View key={idx} style={styles.listItem}>
-            <View style={styles.rankBadge}>
-              <Text style={styles.rankText}>{item.rank}</Text>
-            </View>
-            <View style={styles.listInfo}>
-              <Text style={styles.listName}>{item.name}</Text>
-              <Text style={styles.listValue}>{item.value}</Text>
-            </View>
-            <Text style={styles.listAmount}>{item.amount}</Text>
+          <View key={idx}>
+            <TouchableOpacity
+              style={styles.listItem}
+              onPress={() => enableAccordion && onItemPress && onItemPress(item.name)}
+              activeOpacity={enableAccordion ? 0.7 : 1}
+            >
+              <View style={styles.rankBadge}>
+                <Text style={styles.rankText}>{item.rank}</Text>
+              </View>
+              <View style={styles.listInfo}>
+                <Text style={styles.listName}>{item.name}</Text>
+                <Text style={styles.listValue}>{item.value}</Text>
+              </View>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <Text style={styles.listAmount}>{item.amount}</Text>
+                {enableAccordion && (
+                  <Text style={{ fontSize: 16, color: '#6b7280' }}>
+                    {expandedItem === item.name ? '▼' : '▶'}
+                  </Text>
+                )}
+              </View>
+            </TouchableOpacity>
+
+            {/* Accordion content */}
+            {enableAccordion && expandedItem === item.name && subItems && subItems[item.name] && (
+              <View style={styles.accordionContent}>
+                <Text style={styles.accordionTitle}>Top 3 Farmers</Text>
+                {subItems[item.name].map((farmer, farmerIdx) => (
+                  <View key={farmerIdx} style={styles.accordionItem}>
+                    <View style={styles.accordionRank}>
+                      <Text style={styles.accordionRankText}>{farmerIdx + 1}</Text>
+                    </View>
+                    <Text style={styles.accordionName}>{farmer.name}</Text>
+                    <Text style={styles.accordionRevenue}>{formatCurrency(farmer.revenue)}</Text>
+                  </View>
+                ))}
+              </View>
+            )}
           </View>
         ))}
       </View>
@@ -721,7 +816,7 @@ export default function AnalyticsDashboard({
         <ChartCard title="Barangay Performance" span={2} height={240}>
           <BarChart
             data={data.superAdmin.barangayStats.slice(0, 6).map(barangay => ({
-              label: barangay.name.substring(0, 8),
+              label: barangay.name,
               value: barangay.revenue,
               color: '#f59e0b',
             }))}
@@ -739,6 +834,10 @@ export default function AnalyticsDashboard({
             value: `${b.farmers} farmers`,
             amount: formatCurrency(b.revenue),
           }))}
+          enableAccordion={true}
+          onItemPress={toggleBarangay}
+          expandedItem={expandedBarangay}
+          subItems={barangayFarmers}
         />
 
         {/* Row 3: Products & Stats */}
@@ -1035,5 +1134,51 @@ const styles = StyleSheet.create({
   progressBar: {
     height: '100%',
     borderRadius: 4,
+  },
+  accordionContent: {
+    backgroundColor: '#f9fafb',
+    padding: 16,
+    marginTop: 8,
+    marginBottom: 8,
+    borderRadius: 8,
+    marginHorizontal: 12,
+  },
+  accordionTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#374151',
+    marginBottom: 12,
+  },
+  accordionItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: '#e5e7eb',
+  },
+  accordionRank: {
+    width: 28,
+    height: 28,
+    borderRadius: 8,
+    backgroundColor: '#10b981',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  accordionRankText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#ffffff',
+  },
+  accordionName: {
+    flex: 1,
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#1f2937',
+  },
+  accordionRevenue: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#059669',
   },
 });

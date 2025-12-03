@@ -501,6 +501,26 @@ export default function SuperAdminUsers() {
                   : 'Create your first admin user to get started'}
               </Text>
             </View>
+          ) : width >= 1024 ? (
+            <View style={styles.tableInnerContainer}>
+              {/* Table Header */}
+              <View style={styles.tableHeader}>
+                <Text style={[styles.tableHeaderCell, styles.nameCell]}>Name</Text>
+                <Text style={[styles.tableHeaderCell, styles.emailCell]}>Email</Text>
+                <Text style={[styles.tableHeaderCell, styles.phoneCell]}>Phone</Text>
+                <Text style={[styles.tableHeaderCell, styles.barangayCell]}>Barangay</Text>
+                <Text style={[styles.tableHeaderCell, styles.dateCell]}>Created</Text>
+                <Text style={[styles.tableHeaderCell, styles.actionsCell]}>Actions</Text>
+              </View>
+
+              {/* Table Body */}
+              <FlatList
+                data={filteredUsers}
+                renderItem={renderTableRow}
+                keyExtractor={(item) => item.id}
+                scrollEnabled={false}
+              />
+            </View>
           ) : (
             <ScrollView
               horizontal
@@ -969,6 +989,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     borderBottomWidth: 2,
     borderBottomColor: colors.primaryDark,
+    width: width >= 1024 ? '100%' : undefined,
   },
   tableHeaderCell: {
     fontSize: 13,
@@ -984,6 +1005,7 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: colors.border,
     alignItems: 'center',
+    width: width >= 1024 ? '100%' : undefined,
   },
   tableRowEven: {
     backgroundColor: colors.gray50,
@@ -992,30 +1014,37 @@ const styles = StyleSheet.create({
     width: '100%',
   },
   tableInnerContainer: {
-    minWidth: 900,
+    minWidth: width >= 1024 ? '100%' : 900,
+    width: width >= 1024 ? '100%' : undefined,
   },
   tableCell: {
     fontSize: 14,
     color: colors.text,
   },
   nameCell: {
-    width: 180,
+    width: width >= 1024 ? undefined : 180,
+    flex: width >= 1024 ? 2 : undefined,
     fontWeight: '600',
   },
   emailCell: {
-    width: 220,
+    width: width >= 1024 ? undefined : 220,
+    flex: width >= 1024 ? 2.5 : undefined,
   },
   phoneCell: {
-    width: 140,
+    width: width >= 1024 ? undefined : 140,
+    flex: width >= 1024 ? 1.5 : undefined,
   },
   barangayCell: {
-    width: 140,
+    width: width >= 1024 ? undefined : 140,
+    flex: width >= 1024 ? 1.5 : undefined,
   },
   dateCell: {
-    width: 120,
+    width: width >= 1024 ? undefined : 120,
+    flex: width >= 1024 ? 1.2 : undefined,
   },
   actionsCell: {
-    width: 100,
+    width: width >= 1024 ? undefined : 100,
+    flex: width >= 1024 ? 1 : undefined,
     flexDirection: 'row',
     gap: 8,
     justifyContent: 'flex-end',
