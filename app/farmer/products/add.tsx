@@ -16,6 +16,7 @@ import {
 import { router } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
 import * as FileSystem from 'expo-file-system/legacy';
+import { decode } from 'base64-arraybuffer';
 import ConfirmationModal from '../../../components/ConfirmationModal';
 import HeaderComponent from '../../../components/HeaderComponent';
 import VerificationGuard from '../../../components/VerificationGuard';
@@ -103,6 +104,18 @@ export default function AddProductScreen() {
     onConfirm: () => {},
   });
 
+  const [successModal, setSuccessModal] = useState<{
+    visible: boolean;
+    title: string;
+    message: string;
+    onConfirm: () => void;
+  }>({
+    visible: false,
+    title: '',
+    message: '',
+    onConfirm: () => {},
+  });
+
   const validateForm = () => {
     const newErrors: {[key: string]: string} = {};
 
@@ -176,27 +189,50 @@ export default function AddProductScreen() {
   const uploadImageWeb = async (file: File): Promise<string | null> => {
     try {
       setUploadingImage(true);
+      console.log('📤 Starting web upload for product image');
+
+      // Get session for authentication
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        throw new Error('Session expired. Please log in again.');
+      }
 
       // Create a unique filename
       const fileExt = file.name.split('.').pop();
       const filename = `product_${Date.now()}_${Math.random().toString(36).substring(7)}.${fileExt}`;
 
-      // Upload file directly
-      const { data, error } = await supabase.storage
-        .from('product-images')
-        .upload(filename, file, {
-          contentType: file.type,
-          upsert: false
-        });
+      // Read file as ArrayBuffer
+      const arrayBuffer = await file.arrayBuffer();
+      console.log('✅ Web file size:', (arrayBuffer.byteLength / (1024 * 1024)).toFixed(2) + 'MB');
 
-      if (error) {
-        throw error;
+      // Upload using fetch API with ArrayBuffer
+      const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL || '';
+      const uploadUrl = `${supabaseUrl}/storage/v1/object/product-images/${filename}`;
+
+      const response = await fetch(uploadUrl, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${session.access_token}`,
+          'Content-Type': file.type,
+          'x-upsert': 'false',
+        },
+        body: arrayBuffer,
+      });
+
+      console.log('📡 Upload response:', response.status);
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('❌ Upload failed:', errorText);
+        throw new Error(`Upload failed: ${response.status}`);
       }
+
+      console.log('✅ Product image uploaded successfully');
 
       // Get public URL
       const { data: { publicUrl } } = supabase.storage
         .from('product-images')
-        .getPublicUrl(data.path);
+        .getPublicUrl(filename);
 
       return publicUrl;
     } catch (error) {
@@ -211,40 +247,75 @@ export default function AddProductScreen() {
   const uploadImage = async (imageUri: string): Promise<string | null> => {
     try {
       setUploadingImage(true);
+      console.log('📤 Starting upload for product image');
+      console.log('Platform:', Platform.OS);
+      console.log('URI:', imageUri.substring(0, 50) + '...');
+
+      // Get session for authentication
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        throw new Error('Session expired. Please log in again.');
+      }
 
       // Create a unique filename
       const filename = `product_${Date.now()}_${Math.random().toString(36).substring(7)}.jpg`;
+      const contentType = 'image/jpeg';
+      let arrayBuffer: ArrayBuffer;
 
-      // React Native: read file as base64
-      const base64 = await FileSystem.readAsStringAsync(imageUri, {
-        encoding: FileSystem.EncodingType.Base64,
+      // Handle file reading differently for web vs mobile
+      if (Platform.OS === 'web') {
+        console.log('📖 Reading file for web...');
+        const response = await fetch(imageUri);
+        const blob = await response.blob();
+        arrayBuffer = await blob.arrayBuffer();
+        console.log('✅ Web file size:', (arrayBuffer.byteLength / (1024 * 1024)).toFixed(2) + 'MB');
+      } else {
+        console.log('📖 Reading file for mobile...');
+        // On mobile, use FileSystem
+        const fileInfo = await FileSystem.getInfoAsync(imageUri);
+        if (fileInfo.exists && 'size' in fileInfo) {
+          console.log('📁 Mobile file size:', (fileInfo.size / (1024 * 1024)).toFixed(2) + 'MB');
+        }
+
+        const base64 = await FileSystem.readAsStringAsync(imageUri, {
+          encoding: FileSystem.EncodingType.Base64,
+        });
+        arrayBuffer = decode(base64);
+      }
+
+      console.log('✅ ArrayBuffer size:', arrayBuffer.byteLength, 'bytes');
+      console.log('📤 Uploading to Supabase Storage...');
+
+      // Upload using fetch API with ArrayBuffer - direct upload method
+      const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL || '';
+      const uploadUrl = `${supabaseUrl}/storage/v1/object/product-images/${filename}`;
+
+      console.log('📡 Upload URL:', uploadUrl);
+
+      const response = await fetch(uploadUrl, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${session.access_token}`,
+          'Content-Type': contentType,
+          'x-upsert': 'false',
+        },
+        body: arrayBuffer,
       });
 
-      // Decode base64 to binary string, then convert to Blob
-      const byteCharacters = atob(base64);
-      const byteNumbers = new Array(byteCharacters.length);
-      for (let i = 0; i < byteCharacters.length; i++) {
-        byteNumbers[i] = byteCharacters.charCodeAt(i);
-      }
-      const byteArray = new Uint8Array(byteNumbers);
-      const blob = new Blob([byteArray], { type: 'image/jpeg' });
+      console.log('📡 Upload response:', response.status);
 
-      // Upload to Supabase storage
-      const { data, error } = await supabase.storage
-        .from('product-images')
-        .upload(filename, blob, {
-          contentType: 'image/jpeg',
-          upsert: false
-        });
-
-      if (error) {
-        throw error;
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('❌ Upload failed:', errorText);
+        throw new Error(`Upload failed: ${response.status}`);
       }
+
+      console.log('✅ Product image uploaded successfully');
 
       // Get public URL
       const { data: { publicUrl } } = supabase.storage
         .from('product-images')
-        .getPublicUrl(data.path);
+        .getPublicUrl(filename);
 
       return publicUrl;
     } catch (error) {
@@ -396,16 +467,15 @@ export default function AddProductScreen() {
         // Don't fail the product creation if notifications fail
       }
 
-      Alert.alert(
-        'Success',
-        'Product added successfully! You will be notified once it is reviewed.',
-        [
-          {
-            text: 'OK',
-            onPress: () => router.back(),
-          },
-        ]
-      );
+      setSuccessModal({
+        visible: true,
+        title: 'Success!',
+        message: 'Product added successfully! You will be notified once it is reviewed.',
+        onConfirm: () => {
+          setSuccessModal(prev => ({ ...prev, visible: false }));
+          router.back();
+        }
+      });
     } catch (error) {
       console.error('Error adding product:', error);
       Alert.alert('Error', 'Failed to add product. Please try again.');
@@ -653,6 +723,16 @@ export default function AddProductScreen() {
         isDestructive={confirmModal.isDestructive}
         onConfirm={confirmModal.onConfirm}
         onCancel={() => setConfirmModal(prev => ({ ...prev, visible: false }))}
+      />
+
+      <ConfirmationModal
+        visible={successModal.visible}
+        title={successModal.title}
+        message={successModal.message}
+        confirmText="OK"
+        isDestructive={false}
+        onConfirm={successModal.onConfirm}
+        onCancel={successModal.onConfirm}
       />
     </KeyboardAvoidingView>
     </VerificationGuard>
