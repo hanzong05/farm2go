@@ -5,6 +5,7 @@ import {
   Text,
   View,
 } from 'react-native';
+import { router } from 'expo-router';
 import { supabase } from '../lib/supabase';
 import { showError } from '../utils/alert';
 import VerificationStatus from './VerificationStatus';
@@ -60,6 +61,12 @@ export default function VerificationGuard({
   const handleVerificationPressed = () => {
     if (verificationStatus === 'not_submitted' || verificationStatus === 'rejected') {
       setShowUpload(true);
+    } else if (verificationStatus === 'pending') {
+      // Navigate to verification status page for pending submissions
+      router.push('/verification/status');
+    } else if (verificationStatus === 'approved') {
+      // Navigate to verification certificate/status page for approved users
+      router.push('/verification/status');
     }
 
     if (onVerificationRequired) {

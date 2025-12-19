@@ -90,6 +90,12 @@ export default function VerificationStatusScreen() {
         // Or old format: {user_id}/filename.app/{randomid}
         // We just need to use these paths directly with getPublicUrl()
 
+        console.log('📄 Verification submission data:', {
+          id_document_url: submission.id_document_url,
+          face_photo_url: submission.face_photo_url,
+          status: submission.status,
+        });
+
         setVerificationData({
           verification_status: submission.status,
           verification_submitted_at: submission.submitted_at,
@@ -293,32 +299,40 @@ export default function VerificationStatusScreen() {
             <Text style={styles.sectionTitle}>Submitted Documents</Text>
             <View style={styles.documentsCard}>
               <View style={styles.documentsRow}>
-                {verificationData.id_document_url && (
-                  <View style={styles.documentPreview}>
-                    <Image
-                      source={{
-                        uri: supabase.storage
-                          .from('verification-documents')
-                          .getPublicUrl(verificationData.id_document_url).data.publicUrl
-                      }}
-                      style={styles.documentImage}
-                    />
-                    <Text style={styles.documentLabel}>ID Document</Text>
-                  </View>
-                )}
-                {verificationData.face_photo_url && (
-                  <View style={styles.documentPreview}>
-                    <Image
-                      source={{
-                        uri: supabase.storage
-                          .from('verification-documents')
-                          .getPublicUrl(verificationData.face_photo_url).data.publicUrl
-                      }}
-                      style={styles.faceImage}
-                    />
-                    <Text style={styles.documentLabel}>Face Photo</Text>
-                  </View>
-                )}
+                {verificationData.id_document_url && (() => {
+                  const publicUrl = supabase.storage
+                    .from('verification-documents')
+                    .getPublicUrl(verificationData.id_document_url).data.publicUrl;
+                  console.log('🖼️ ID Document URL:', publicUrl);
+                  return (
+                    <View style={styles.documentPreview}>
+                      <Image
+                        source={{ uri: publicUrl }}
+                        style={styles.documentImage}
+                        onError={(e) => console.error('❌ ID Image load error:', e.nativeEvent.error)}
+                        onLoad={() => console.log('✅ ID Image loaded successfully')}
+                      />
+                      <Text style={styles.documentLabel}>ID Document</Text>
+                    </View>
+                  );
+                })()}
+                {verificationData.face_photo_url && (() => {
+                  const publicUrl = supabase.storage
+                    .from('verification-documents')
+                    .getPublicUrl(verificationData.face_photo_url).data.publicUrl;
+                  console.log('🖼️ Face Photo URL:', publicUrl);
+                  return (
+                    <View style={styles.documentPreview}>
+                      <Image
+                        source={{ uri: publicUrl }}
+                        style={styles.faceImage}
+                        onError={(e) => console.error('❌ Face Image load error:', e.nativeEvent.error)}
+                        onLoad={() => console.log('✅ Face Image loaded successfully')}
+                      />
+                      <Text style={styles.documentLabel}>Face Photo</Text>
+                    </View>
+                  );
+                })()}
               </View>
             </View>
           </View>

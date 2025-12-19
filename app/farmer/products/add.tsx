@@ -271,16 +271,28 @@ export default function AddProductScreen() {
         console.log('✅ Web file size:', (arrayBuffer.byteLength / (1024 * 1024)).toFixed(2) + 'MB');
       } else {
         console.log('📖 Reading file for mobile...');
-        // On mobile, use FileSystem
-        const fileInfo = await FileSystem.getInfoAsync(imageUri);
-        if (fileInfo.exists && 'size' in fileInfo) {
-          console.log('📁 Mobile file size:', (fileInfo.size / (1024 * 1024)).toFixed(2) + 'MB');
-        }
+        try {
+          // On mobile, use FileSystem
+          const fileInfo = await FileSystem.getInfoAsync(imageUri);
+          console.log('📁 File info:', fileInfo);
 
-        const base64 = await FileSystem.readAsStringAsync(imageUri, {
-          encoding: FileSystem.EncodingType.Base64,
-        });
-        arrayBuffer = decode(base64);
+          if (fileInfo.exists && 'size' in fileInfo) {
+            console.log('📁 Mobile file size:', (fileInfo.size / (1024 * 1024)).toFixed(2) + 'MB');
+          }
+
+          console.log('📖 Reading file as base64...');
+          const base64 = await FileSystem.readAsStringAsync(imageUri, {
+            encoding: FileSystem.EncodingType.Base64,
+          });
+          console.log('✅ Base64 length:', base64.length);
+
+          console.log('🔄 Decoding base64 to ArrayBuffer...');
+          arrayBuffer = decode(base64);
+          console.log('✅ ArrayBuffer created, size:', arrayBuffer.byteLength);
+        } catch (fileError) {
+          console.error('❌ File reading error:', fileError);
+          throw new Error(`Failed to read image file: ${fileError instanceof Error ? fileError.message : 'Unknown error'}`);
+        }
       }
 
       console.log('✅ ArrayBuffer size:', arrayBuffer.byteLength, 'bytes');
@@ -302,12 +314,15 @@ export default function AddProductScreen() {
         body: arrayBuffer,
       });
 
-      console.log('📡 Upload response:', response.status);
+      console.log('📡 Upload response status:', response.status);
+      console.log('📡 Upload response ok:', response.ok);
 
       if (!response.ok) {
         const errorText = await response.text();
-        console.error('❌ Upload failed:', errorText);
-        throw new Error(`Upload failed: ${response.status}`);
+        console.error('❌ Upload failed with status:', response.status);
+        console.error('❌ Upload error details:', errorText);
+        Alert.alert('Upload Error', `Failed to upload image: ${response.status}. ${errorText}`);
+        throw new Error(`Upload failed: ${response.status} - ${errorText}`);
       }
 
       console.log('✅ Product image uploaded successfully');
@@ -319,8 +334,10 @@ export default function AddProductScreen() {
 
       return publicUrl;
     } catch (error) {
-      console.error('Error uploading image:', error);
-      Alert.alert('Error', 'Failed to upload image');
+      console.error('❌ Error uploading image:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+      console.error('❌ Error details:', errorMessage);
+      Alert.alert('Upload Failed', `Failed to upload image: ${errorMessage}`);
       return null;
     } finally {
       setUploadingImage(false);
