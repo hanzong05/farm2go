@@ -42,7 +42,8 @@
       "Bash(fi)",
       "Read(//c/Users/**)",
       "Bash(nul)",
-      "Bash(git restore:*)"
+      "Bash(git restore:*)",
+      "Bash(eas build:configure:*)"
     ],
     "deny": [],
     "ask": []

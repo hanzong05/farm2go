@@ -207,7 +207,13 @@ export default function VerificationStatusScreen() {
       >
         <TouchableOpacity
           style={styles.backButton}
-          onPress={() => router.back()}
+          onPress={() => {
+            if (router.canGoBack()) {
+              router.back();
+            } else {
+              router.replace('/(tabs)/dashboard');
+            }
+          }}
           activeOpacity={0.7}
         >
           <Icon name="arrow-left" size={20} color="#10b981" />
