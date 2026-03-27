@@ -11,6 +11,20 @@ import {
   canAdvanceOrderStatus
 } from '../types/orders';
 
+// Helper to fetch transactions for a list of order IDs (avoids missing FK join issue)
+const fetchTransactionsForOrders = async (orderIds: string[]): Promise<Record<string, Transaction>> => {
+  if (orderIds.length === 0) return {};
+  const { data } = await supabase
+    .from('transactions')
+    .select('id, order_id, amount, status, payment_method, created_at, updated_at')
+    .in('order_id', orderIds);
+  const map: Record<string, Transaction> = {};
+  for (const t of data || []) {
+    map[(t as any).order_id] = t as Transaction;
+  }
+  return map;
+};
+
 // Order management functions
 export const createOrder = async (buyerId: string, orderData: CreateOrderData): Promise<{ order: Order; transaction: Transaction }> => {
   try {
@@ -171,14 +185,6 @@ export const getBuyerOrders = async (buyerId: string): Promise<OrderWithDetails[
           last_name,
           farm_name,
           barangay
-        ),
-        transactions (
-          id,
-          amount,
-          status,
-          payment_method,
-          created_at,
-          updated_at
         )
       `)
       .eq('buyer_id', buyerId)
@@ -196,11 +202,14 @@ export const getBuyerOrders = async (buyerId: string): Promise<OrderWithDetails[
       console.log('✅ Sample order structure:', JSON.stringify(data[0], null, 2));
     }
 
+    const orderIds = (data || []).map((o: any) => o.id);
+    const transactionMap = await fetchTransactionsForOrders(orderIds);
+
     const mappedOrders = (data || []).map((order: any) => ({
       ...order,
       product: order.products,
       farmer_profile: order.profiles,
-      transaction: order.transactions?.[0], // Get the first/main transaction
+      transaction: transactionMap[order.id] ?? null,
       // Create order_items array for the modal to consume
       order_items: order.products ? [{
         order_id: order.id,
@@ -246,14 +255,6 @@ export const getFarmerOrders = async (farmerId: string): Promise<OrderWithDetail
           first_name,
           last_name,
           barangay
-        ),
-        transactions (
-          id,
-          amount,
-          status,
-          payment_method,
-          created_at,
-          updated_at
         )
       `)
       .eq('farmer_id', farmerId)
@@ -263,11 +264,14 @@ export const getFarmerOrders = async (farmerId: string): Promise<OrderWithDetail
       throw error;
     }
 
+    const orderIds = (data || []).map((o: any) => o.id);
+    const transactionMap = await fetchTransactionsForOrders(orderIds);
+
     return (data || []).map((order: any) => ({
       ...order,
       product: order.products,
-      farmer_profile: order.profiles, // This will be the buyer profile
-      transaction: order.transactions?.[0],
+      farmer_profile: order.profiles,
+      transaction: transactionMap[order.id] ?? null,
       // Create order_items array for the modal to consume
       order_items: order.products ? [{
         order_id: order.id,
@@ -292,10 +296,7 @@ export const updateOrderStatus = async (orderId: string, newStatus: OrderStatus)
     // Get current order and transaction status
     const { data: orderData, error: fetchError } = await supabase
       .from('orders')
-      .select(`
-        *,
-        transactions (status)
-      `)
+      .select('*')
       .eq('id', orderId)
       .single();
 
@@ -303,7 +304,13 @@ export const updateOrderStatus = async (orderId: string, newStatus: OrderStatus)
       throw new Error('Order not found');
     }
 
-    const transactionStatus = (orderData as any).transactions?.[0]?.status as TransactionStatus;
+    const { data: txData } = await supabase
+      .from('transactions')
+      .select('status')
+      .eq('order_id', orderId)
+      .maybeSingle();
+
+    const transactionStatus = (txData as any)?.status as TransactionStatus | undefined;
 
     // Validate status advancement
     if (!canAdvanceOrderStatus((orderData as any).status as OrderStatus, transactionStatus)) {
@@ -408,14 +415,6 @@ export const getOrderById = async (orderId: string): Promise<OrderWithDetails | 
           first_name,
           last_name,
           barangay
-        ),
-        transactions (
-          id,
-          amount,
-          status,
-          payment_method,
-          created_at,
-          updated_at
         )
       `)
       .eq('id', orderId)
@@ -425,12 +424,14 @@ export const getOrderById = async (orderId: string): Promise<OrderWithDetails | 
       throw error;
     }
 
+    const txMap = await fetchTransactionsForOrders([orderId]);
+
     const order = data as any;
     return {
       ...order,
       product: order.products,
       farmer_profile: order.farmer_profile,
-      transaction: order.transactions?.[0],
+      transaction: txMap[orderId] ?? null,
       // Create order_items array for the modal to consume
       order_items: order.products ? [{
         order_id: order.id,
