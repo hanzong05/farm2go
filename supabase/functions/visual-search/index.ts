@@ -1,8 +1,7 @@
 // Supabase Edge Function for Visual Search
 // This proxies requests to Clarifai API to avoid CORS issues
 
-import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -73,7 +72,7 @@ serve(async (req) => {
     }
 
     const response = await fetch(
-      `https://api.clarifai.com/v2/models/${CLARIFAI_MODEL_ID}/outputs`,
+      `https://api.clarifai.com/v2/users/clarifai/apps/main/models/${CLARIFAI_MODEL_ID}/outputs`,
       {
         method: 'POST',
         headers: {
