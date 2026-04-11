@@ -19,49 +19,48 @@ export default function ForgotPasswordScreen() {
   const { showAlert, AlertComponent } = useCustomAlert();
 
   const handleCheckEmail = async () => {
-    if (!email) {
-      showAlert('Error', 'Please enter your email address', [
+  if (!email) {
+    showAlert('Error', 'Please enter your email address', [
+      { text: 'OK', style: 'default' }
+    ]);
+    return;
+  }
+
+  if (!email.includes('@')) {
+    showAlert('Error', 'Please enter a valid email address', [
+      { text: 'OK', style: 'default' }
+    ]);
+    return;
+  }
+
+  setIsLoading(true);
+
+  try {
+    const { error } = await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: 'yourapp://reset-password',
+    });
+
+    if (error) {
+      showAlert('Error', error.message || 'Failed to send reset email', [
         { text: 'OK', style: 'default' }
       ]);
       return;
     }
 
-    if (!email.includes('@')) {
-      showAlert('Error', 'Please enter a valid email address', [
-        { text: 'OK', style: 'default' }
-      ]);
-      return;
-    }
-
-    setIsLoading(true);
-
-    try {
-      // Check if user exists with this email
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('id, email')
-        .eq('email', email)
-        .single();
-
-      if (error || !data) {
-        showAlert('Error', 'No account found with this email address', [
-          { text: 'OK', style: 'default' }
-        ]);
-        setIsLoading(false);
-        return;
-      }
-
-      // Move to password reset step
-      setStep('password');
-    } catch (error: any) {
-      console.error('Email check error:', error);
-      showAlert('Error', 'Failed to verify email. Please try again.', [
-        { text: 'OK', style: 'default' }
-      ]);
-    } finally {
-      setIsLoading(false);
-    }
-  };
+    showAlert(
+      'Check your email',
+      'We sent a password reset link to your email address.',
+      [{ text: 'OK', style: 'default' }]
+    );
+  } catch (error: any) {
+    console.error('Reset email error:', error);
+    showAlert('Error', 'Failed to send reset email. Please try again.', [
+      { text: 'OK', style: 'default' }
+    ]);
+  } finally {
+    setIsLoading(false);
+  }
+};
 
   const handleResetPassword = async () => {
     if (!newPassword || !confirmPassword) {
