@@ -131,7 +131,7 @@ export default function RegisterScreen() {
             }
           }
         }
-        return false; 
+        return false;
       } catch (error) {
         console.error('❌ OAuth check error:', error);
         return false;
@@ -207,7 +207,7 @@ export default function RegisterScreen() {
         console.log('🚀 OAuth completion detected, stopping polling');
         clearInterval(oauthPolling);
       }
-    }, 1500); 
+    }, 1500);
     checkTimeout = setTimeout(() => {
       console.log('🛑 OAuth check timeout reached, stopping polling');
       clearInterval(oauthPolling);
@@ -236,9 +236,15 @@ export default function RegisterScreen() {
   });
 
   const handleInputChange = (field: string, value: string) => {
+    if (field === 'phone') {
+      const cleaned = value.replace(/[^0-9]/g, ''); // only numbers
+      const limited = cleaned.slice(0, 11); // max 11 chars
+      setFormData(prev => ({ ...prev, [field]: limited }));
+      return;
+    }
+
     setFormData(prev => ({ ...prev, [field]: value }));
   };
-
   const getPasswordStrength = (password: string) => {
     if (password.length < 4) return { strength: 'weak', color: colors.danger, width: 0.25 };
     if (password.length < 8) return { strength: 'medium', color: colors.warning, width: 0.65 };
@@ -256,7 +262,12 @@ export default function RegisterScreen() {
       setShowErrorModal(true);
       return;
     }
-
+    if (!/^09\d{9}$/.test(formData.phone)) {
+      setErrorTitle('Invalid Phone');
+      setErrorMessage('Phone number must be 11 digits and start with 09');
+      setShowErrorModal(true);
+      return;
+    }
     if (!formData.firstName || !formData.lastName || !formData.email || !formData.phone || !formData.password || !formData.barangay) {
       setErrorTitle('Required Fields');
       setErrorMessage('Please fill in all required fields');
@@ -277,7 +288,7 @@ export default function RegisterScreen() {
       setShowErrorModal(true);
       return;
     }
-      
+
     if (userType === 'farmer') {
       if (!formData.farmName) {
         setErrorTitle('Required Fields');
@@ -309,13 +320,13 @@ export default function RegisterScreen() {
 
     } catch (error: any) {
       console.error('Registration error:', error);
-      
+
       if (error.message && error.message.includes('you can only request this after')) {
         const match = error.message.match(/after (\d+) seconds/);
         const seconds = match ? parseInt(match[1]) : 60;
-        
+
         setRateLimitCooldown(seconds);
-        
+
         const countdown = setInterval(() => {
           setRateLimitCooldown(prev => {
             if (prev <= 1) {
@@ -325,18 +336,18 @@ export default function RegisterScreen() {
             return prev - 1;
           });
         }, 1000);
-        
+
         setErrorTitle('Rate Limit Exceeded');
         setErrorMessage(`Please wait ${seconds} seconds before attempting registration again.`);
         setShowErrorModal(true);
       } else {
         let errorMessage = 'Please try again.';
-        
+
         if (error.message) {
           if (error.message.includes('Email already registered') ||
-              error.message.includes('User already registered') ||
-              error.message.includes('duplicate key') ||
-              error.code === '23505') {
+            error.message.includes('User already registered') ||
+            error.message.includes('duplicate key') ||
+            error.code === '23505') {
             errorMessage = 'This phone number is already registered. Please sign in instead.';
           } else if (error.message.includes('Invalid phone')) {
             errorMessage = 'Please enter a valid phone number.';
@@ -346,7 +357,7 @@ export default function RegisterScreen() {
             errorMessage = error.message;
           }
         }
-        
+
         setErrorTitle('Registration Failed');
         setErrorMessage(errorMessage);
         setShowErrorModal(true);
@@ -456,12 +467,12 @@ export default function RegisterScreen() {
   const renderProgressBar = () => {
     const totalSteps = userType ? 2 : 1;
     const progress = currentStep / totalSteps;
-    
+
     return (
       <View style={styles.progressContainer}>
         <View style={styles.progressBarBg}>
           <View style={[
-            styles.progressBar, 
+            styles.progressBar,
             { width: `${progress * 100}%` }
           ]} />
         </View>
@@ -487,7 +498,7 @@ export default function RegisterScreen() {
         </View>
         <Text style={styles.brandName}>Farm2Go</Text>
       </View>
-      
+
       <View style={styles.welcomeSection}>
         <Text style={styles.welcomeTitle}>Create Account</Text>
         <Text style={styles.welcomeSubtitle}>
@@ -626,10 +637,10 @@ export default function RegisterScreen() {
           hasValue && styles.inputWrapperFilled,
           options.multiline && styles.textAreaWrapper
         ]}>
-          <Icon 
-            name={iconName} 
-            size={16} 
-            color={isFocused ? colors.primary : colors.gray400} 
+          <Icon
+            name={iconName}
+            size={16}
+            color={isFocused ? colors.primary : colors.gray400}
             style={styles.inputIcon}
           />
           <TextInput
@@ -646,7 +657,7 @@ export default function RegisterScreen() {
             secureTextEntry={isPassword ? !showPassword : isConfirmPassword ? !showConfirmPassword : options.secureTextEntry}
           />
           {(isPassword || isConfirmPassword) && (
-            <TouchableOpacity 
+            <TouchableOpacity
               onPress={() => {
                 if (isPassword) setShowPassword(!showPassword);
                 if (isConfirmPassword) setShowConfirmPassword(!showConfirmPassword);
@@ -669,10 +680,10 @@ export default function RegisterScreen() {
           <View style={styles.passwordStrength}>
             <View style={styles.strengthBarContainer}>
               <View style={[
-                styles.strengthBar, 
-                { 
-                  backgroundColor: passwordStrength?.color || colors.gray200, 
-                  width: `${((passwordStrength?.width || 0) * 100)}%` 
+                styles.strengthBar,
+                {
+                  backgroundColor: passwordStrength?.color || colors.gray200,
+                  width: `${((passwordStrength?.width || 0) * 100)}%`
                 }
               ]} />
             </View>
@@ -689,7 +700,7 @@ export default function RegisterScreen() {
     <View style={styles.contentContainer}>
       <View style={styles.formCard}>
         <View style={styles.formHeader}>
-          <TouchableOpacity 
+          <TouchableOpacity
             style={styles.backButton}
             onPress={() => {
               setUserType(null);
@@ -700,10 +711,10 @@ export default function RegisterScreen() {
             <Text style={styles.backButtonText}>Back</Text>
           </TouchableOpacity>
           <View style={styles.userTypeBadge}>
-            <Icon 
-              name={userType === 'farmer' ? 'seedling' : 'shopping-cart'} 
-              size={14} 
-              color={colors.white} 
+            <Icon
+              name={userType === 'farmer' ? 'seedling' : 'shopping-cart'}
+              size={14}
+              color={colors.white}
             />
             <Text style={styles.userTypeBadgeText}>
               {userType === 'farmer' ? 'Farmer Account' : 'Business Account'}
@@ -711,7 +722,7 @@ export default function RegisterScreen() {
           </View>
         </View>
 
-        <ScrollView 
+        <ScrollView
           showsVerticalScrollIndicator={false}
           bounces={false}
           keyboardShouldPersistTaps="handled"
@@ -841,11 +852,11 @@ export default function RegisterScreen() {
 
   return (
     <>
-      <KeyboardAvoidingView 
+      <KeyboardAvoidingView
         style={styles.container}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       >
-        <ScrollView 
+        <ScrollView
           style={styles.scrollView}
           showsVerticalScrollIndicator={false}
           bounces={false}
