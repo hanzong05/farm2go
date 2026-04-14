@@ -230,27 +230,13 @@ export default function RegisterScreen() {
     password: '',
     confirmPassword: '',
 
-    street: '',
-    barangay: '',
-    city: '',
-    province: '',
+    barangay: '', // ✅ ONLY THIS
 
     farmName: '',
     farmSize: '',
     cropTypes: '',
   });
-  const handleAddressSelect = (location: {
-    barangay: string;
-    city: string;
-    province: string;
-  }) => {
-    setFormData(prev => ({
-      ...prev,
-      barangay: location.barangay,
-      city: location.city,
-      province: location.province,
-    }));
-  };
+
   const handleInputChange = (field: string, value: string) => {
     if (field === 'phone') {
       const cleaned = value.replace(/[^0-9]/g, ''); // only numbers
@@ -279,9 +265,9 @@ export default function RegisterScreen() {
       return;
     }
 
-    if (!formData.street || !formData.barangay || !formData.city || !formData.province) {
-      setErrorTitle('Address Required');
-      setErrorMessage('Please complete your full address');
+    if (!formData.barangay) {
+      setErrorTitle('Location Required');
+      setErrorMessage('Please select your barangay');
       setShowErrorModal(true);
       return;
     }
@@ -341,17 +327,13 @@ export default function RegisterScreen() {
         middleName: formData.middleName,
         lastName: formData.lastName,
 
-        street: formData.street,
-        barangay: formData.barangay,
-        city: formData.city,
-        province: formData.province,
+        barangay: formData.barangay, // ✅ ONLY
 
         userType,
         farmName: formData.farmName,
         farmSize: formData.farmSize,
         cropTypes: formData.cropTypes,
       };
-
       await registerUser(registrationData);
       setShowSuccessModal(true);
 
@@ -798,41 +780,19 @@ export default function RegisterScreen() {
           </View>
 
           <View style={styles.formSection}>
-            <Text style={styles.sectionTitle}>Address Information</Text>
-
-            {renderFormInput(
-              'street',
-              'Street / House No.',
-              'Enter house no. / street / purok',
-              'map-marker-alt',
-              { required: true }
-            )}
+            <Text style={styles.sectionTitle}>Location</Text>
 
             <LocationPicker
-              onLocationSelect={handleAddressSelect}
+              onLocationSelect={(barangay) => {
+                setFormData(prev => ({
+                  ...prev,
+                  barangay
+                }));
+              }}
               initialBarangay={formData.barangay}
               focusedInput={focusedInput}
               setFocusedInput={setFocusedInput}
             />
-
-            {renderFormInput(
-              'city',
-              'City / Municipality',
-              'Auto-filled city',
-              'city',
-              { required: true }
-            )}
-
-            {renderFormInput(
-              'province',
-              'Province',
-              'Auto-filled province',
-              'map',
-              {
-                required: true,
-                editable: false
-              }
-            )}
           </View>
           {/* Account Specific Information */}
           {userType === 'farmer' && (
