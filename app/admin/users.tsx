@@ -2223,7 +2223,7 @@ export default function AdminUsers() {
                       icon: 'times',
                       label: 'Cancel',
                       color: colors.danger,
-                      show: (order) => !['delivered', 'cancelled'].includes(order.status),
+                      show: (order) => order.status === 'pending',
                       onPress: (order) => handleOrderStatusUpdate(order.id, 'cancelled')
                     },
                   ]}
@@ -2407,7 +2407,7 @@ export default function AdminUsers() {
                       icon: 'times',
                       label: 'Cancel',
                       color: colors.danger,
-                      show: (order) => !['delivered', 'cancelled'].includes(order.status),
+                      show: (order) => order.status === 'pending',
                       onPress: (order) => handleOrderStatusUpdate(order.id, 'cancelled')
                     },
                   ]}

@@ -150,7 +150,7 @@ export default function FarmerOrdersScreen() {
     message: '',
     isDestructive: false,
     confirmText: '',
-    onConfirm: () => {},
+    onConfirm: () => { },
   });
 
   const [selectedStatus, setSelectedStatus] = useState('all');
@@ -252,7 +252,7 @@ export default function FarmerOrdersScreen() {
   const loadOrders = async (farmerId: string) => {
     try {
       // Get orders directly for this farmer with product and buyer information
-      const { data: ordersData, error: ordersError} = await supabase
+      const { data: ordersData, error: ordersError } = await supabase
         .from('orders')
         .select(`
           id,
@@ -413,10 +413,10 @@ export default function FarmerOrdersScreen() {
           const notes = order.notes?.toLowerCase() || '';
 
           return orderId.includes(searchLower) ||
-                 buyerName.includes(searchLower) ||
-                 phone.includes(searchLower) ||
-                 address.includes(searchLower) ||
-                 notes.includes(searchLower);
+            buyerName.includes(searchLower) ||
+            phone.includes(searchLower) ||
+            address.includes(searchLower) ||
+            notes.includes(searchLower);
         } else {
           // For placed orders, search by farmer name and product names
           const farmerName = (`${order.farmer_profile?.first_name || ''} ${order.farmer_profile?.last_name || ''}`.trim() ||
@@ -426,10 +426,10 @@ export default function FarmerOrdersScreen() {
           const notes = order.notes?.toLowerCase() || '';
 
           return orderId.includes(searchLower) ||
-                 farmerName.includes(searchLower) ||
-                 productNames.includes(searchLower) ||
-                 address.includes(searchLower) ||
-                 notes.includes(searchLower);
+            farmerName.includes(searchLower) ||
+            productNames.includes(searchLower) ||
+            address.includes(searchLower) ||
+            notes.includes(searchLower);
         }
       });
     }
@@ -665,10 +665,10 @@ export default function FarmerOrdersScreen() {
           count: category.key === 'all'
             ? sourceOrders.length
             : sourceOrders.filter(o => {
-                // Since farmer orders don't have product categories in the current structure,
-                // we'll use a placeholder count
-                return true;
-              }).length
+              // Since farmer orders don't have product categories in the current structure,
+              // we'll use a placeholder count
+              return true;
+            }).length
         }))
       },
       {
@@ -732,10 +732,10 @@ export default function FarmerOrdersScreen() {
           <View style={[styles.statusBadge, { backgroundColor: statusColor }]}>
             <Text style={styles.statusText}>
               {order.status === 'pending' ? 'NEW' :
-               order.status === 'confirmed' ? 'CONFIRMED' :
-               order.status === 'processing' ? 'PROCESSING' :
-               order.status === 'ready' ? 'READY' :
-               order.status === 'delivered' ? 'DELIVERED' : 'CANCELLED'}
+                order.status === 'confirmed' ? 'CONFIRMED' :
+                  order.status === 'processing' ? 'PROCESSING' :
+                    order.status === 'ready' ? 'READY' :
+                      order.status === 'delivered' ? 'DELIVERED' : 'CANCELLED'}
             </Text>
           </View>
         </View>
@@ -754,12 +754,12 @@ export default function FarmerOrdersScreen() {
                 styles.buyerName,
                 isCompact && styles.buyerNameCompact
               ]}>
-{`${order.buyer_profile?.first_name || ''} ${order.buyer_profile?.last_name || ''}`.trim() ||
-                 'Unknown Buyer'}
+                {`${order.buyer_profile?.first_name || ''} ${order.buyer_profile?.last_name || ''}`.trim() ||
+                  'Unknown Buyer'}
               </Text>
               {order.buyer_profile?.phone && (
                 <View style={styles.buyerPhoneContainer}>
-                  <Icon name="phone" size={12} color="#64748b" style={{marginRight: 6}} />
+                  <Icon name="phone" size={12} color="#64748b" style={{ marginRight: 6 }} />
                   <Text style={[
                     styles.buyerPhone,
                     isCompact && styles.buyerPhoneCompact
@@ -777,13 +777,13 @@ export default function FarmerOrdersScreen() {
                 styles.buyerName,
                 isCompact && styles.buyerNameCompact
               ]}>
-{order.farmer_profile?.farm_name ||
-                 `${order.farmer_profile?.first_name || ''} ${order.farmer_profile?.last_name || ''}`.trim() ||
-                 'Unknown Farmer'}
+                {order.farmer_profile?.farm_name ||
+                  `${order.farmer_profile?.first_name || ''} ${order.farmer_profile?.last_name || ''}`.trim() ||
+                  'Unknown Farmer'}
               </Text>
               {order.farmer_profile?.phone && (
                 <View style={styles.buyerPhoneContainer}>
-                  <Icon name="phone" size={12} color="#64748b" style={{marginRight: 6}} />
+                  <Icon name="phone" size={12} color="#64748b" style={{ marginRight: 6 }} />
                   <Text style={[
                     styles.buyerPhone,
                     isCompact && styles.buyerPhoneCompact
@@ -856,7 +856,7 @@ export default function FarmerOrdersScreen() {
                   activeOpacity={0.8}
                 >
                   <View style={styles.actionButtonContent}>
-                    <Icon name="check" size={14} color="#ffffff" style={{marginRight: 6}} />
+                    <Icon name="check" size={14} color="#ffffff" style={{ marginRight: 6 }} />
                     <Text style={styles.actionButtonText}>Accept</Text>
                   </View>
                 </TouchableOpacity>
@@ -866,7 +866,7 @@ export default function FarmerOrdersScreen() {
                   activeOpacity={0.8}
                 >
                   <View style={styles.actionButtonContent}>
-                    <Icon name="times" size={14} color="#ffffff" style={{marginRight: 6}} />
+                    <Icon name="times" size={14} color="#ffffff" style={{ marginRight: 6 }} />
                     <Text style={styles.actionButtonText}>Decline</Text>
                   </View>
                 </TouchableOpacity>
@@ -880,7 +880,7 @@ export default function FarmerOrdersScreen() {
                 activeOpacity={0.8}
               >
                 <View style={styles.actionButtonContent}>
-                  <Icon name="utensils" size={14} color="#ffffff" style={{marginRight: 6}} />
+                  <Icon name="utensils" size={14} color="#ffffff" style={{ marginRight: 6 }} />
                   <Text style={styles.actionButtonText}>Start Preparing</Text>
                 </View>
               </TouchableOpacity>
@@ -893,7 +893,7 @@ export default function FarmerOrdersScreen() {
                 activeOpacity={0.8}
               >
                 <View style={styles.actionButtonContent}>
-                  <Icon name="check-circle" size={14} color="#ffffff" style={{marginRight: 6}} />
+                  <Icon name="check-circle" size={14} color="#ffffff" style={{ marginRight: 6 }} />
                   <Text style={styles.actionButtonText}>Mark Ready</Text>
                 </View>
               </TouchableOpacity>
@@ -916,7 +916,7 @@ export default function FarmerOrdersScreen() {
               onPress={() => handleShowDirections(order)}
               activeOpacity={0.8}
             >
-              <Icon name="directions" size={14} color="#ffffff" style={{marginRight: 6}} />
+              <Icon name="directions" size={14} color="#ffffff" style={{ marginRight: 6 }} />
               <Text style={styles.directionsButtonText}>Get Directions</Text>
             </TouchableOpacity>
           </View>
@@ -950,7 +950,7 @@ export default function FarmerOrdersScreen() {
 
       <Text style={styles.emptyTitle}>No Orders Found</Text>
       <Text style={styles.emptyDescription}>
-{activeTab === 'received' ? (
+        {activeTab === 'received' ? (
           selectedStatus === 'all'
             ? 'You haven\'t received any orders yet. Keep your products updated to attract buyers!'
             : `No ${selectedStatus} orders received at the moment.`
@@ -978,7 +978,7 @@ export default function FarmerOrdersScreen() {
     if (!selectedOrder) return null;
 
     const canConfirm = selectedOrder.status === 'pending';
-    const canCancel = selectedOrder.status === 'pending' || selectedOrder.status === 'confirmed';
+    const canCancel = selectedOrder.status === 'pending';
     const canSetReady = selectedOrder.status === 'confirmed';
 
     return (
@@ -1007,7 +1007,7 @@ export default function FarmerOrdersScreen() {
                     onPress={() => handleOrderAction('confirm')}
                     activeOpacity={0.8}
                   >
-                    <Icon name="check" size={16} color="#ffffff" style={{marginRight: 8}} />
+                    <Icon name="check" size={16} color="#ffffff" style={{ marginRight: 8 }} />
                     <Text style={styles.modalButtonText}>Confirm Order</Text>
                   </TouchableOpacity>
                 )}
@@ -1018,7 +1018,7 @@ export default function FarmerOrdersScreen() {
                     onPress={() => handleOrderAction('ready')}
                     activeOpacity={0.8}
                   >
-                    <Icon name="check-circle" size={16} color="#ffffff" style={{marginRight: 8}} />
+                    <Icon name="check-circle" size={16} color="#ffffff" style={{ marginRight: 8 }} />
                     <Text style={styles.modalButtonText}>Mark Ready</Text>
                   </TouchableOpacity>
                 )}
@@ -1029,7 +1029,7 @@ export default function FarmerOrdersScreen() {
                     onPress={() => handleOrderAction('cancel')}
                     activeOpacity={0.8}
                   >
-                    <Icon name="times" size={16} color="#ffffff" style={{marginRight: 8}} />
+                    <Icon name="times" size={16} color="#ffffff" style={{ marginRight: 8 }} />
                     <Text style={styles.modalButtonText}>Cancel Order</Text>
                   </TouchableOpacity>
                 )}
