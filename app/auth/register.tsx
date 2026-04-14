@@ -229,12 +229,28 @@ export default function RegisterScreen() {
     phone: '',
     password: '',
     confirmPassword: '',
+
+    street: '',
     barangay: '',
+    city: '',
+    province: '',
+
     farmName: '',
     farmSize: '',
     cropTypes: '',
   });
-
+  const handleAddressSelect = (location: {
+    barangay: string;
+    city: string;
+    province: string;
+  }) => {
+    setFormData(prev => ({
+      ...prev,
+      barangay: location.barangay,
+      city: location.city,
+      province: location.province,
+    }));
+  };
   const handleInputChange = (field: string, value: string) => {
     if (field === 'phone') {
       const cleaned = value.replace(/[^0-9]/g, ''); // only numbers
@@ -262,19 +278,35 @@ export default function RegisterScreen() {
       setShowErrorModal(true);
       return;
     }
+
+    if (!formData.street || !formData.barangay || !formData.city || !formData.province) {
+      setErrorTitle('Address Required');
+      setErrorMessage('Please complete your full address');
+      setShowErrorModal(true);
+      return;
+    }
     if (!/^09\d{9}$/.test(formData.phone)) {
       setErrorTitle('Invalid Phone');
       setErrorMessage('Phone number must be 11 digits and start with 09');
       setShowErrorModal(true);
       return;
     }
-    if (!formData.firstName || !formData.lastName || !formData.email || !formData.phone || !formData.password || !formData.barangay) {
+    if (
+      !formData.firstName ||
+      !formData.lastName ||
+      !formData.email ||
+      !formData.phone ||
+      !formData.password ||
+      !formData.street ||
+      !formData.barangay ||
+      !formData.city ||
+      !formData.province
+    ) {
       setErrorTitle('Required Fields');
       setErrorMessage('Please fill in all required fields');
       setShowErrorModal(true);
       return;
     }
-
     if (formData.password !== formData.confirmPassword) {
       setErrorTitle('Password Mismatch');
       setErrorMessage('Passwords do not match');
@@ -308,7 +340,12 @@ export default function RegisterScreen() {
         firstName: formData.firstName,
         middleName: formData.middleName,
         lastName: formData.lastName,
+
+        street: formData.street,
         barangay: formData.barangay,
+        city: formData.city,
+        province: formData.province,
+
         userType,
         farmName: formData.farmName,
         farmSize: formData.farmSize,
@@ -618,6 +655,7 @@ export default function RegisterScreen() {
       secureTextEntry?: boolean;
       multiline?: boolean;
       autoCapitalize?: any;
+      editable?: boolean;
     } = {}
   ) => {
     const isFocused = focusedInput === field;
@@ -644,6 +682,7 @@ export default function RegisterScreen() {
             style={styles.inputIcon}
           />
           <TextInput
+            editable={options.editable !== false}
             style={[styles.input, options.multiline && styles.textArea]}
             value={formData[field as keyof typeof formData]}
             onChangeText={(value) => handleInputChange(field, value)}
@@ -758,19 +797,43 @@ export default function RegisterScreen() {
             })}
           </View>
 
-          {/* Address Information */}
           <View style={styles.formSection}>
             <Text style={styles.sectionTitle}>Address Information</Text>
+
+            {renderFormInput(
+              'street',
+              'Street / House No.',
+              'Enter house no. / street / purok',
+              'map-marker-alt',
+              { required: true }
+            )}
+
             <LocationPicker
-              onLocationSelect={(barangay) => {
-                handleInputChange('barangay', barangay);
-              }}
+              onLocationSelect={handleAddressSelect}
               initialBarangay={formData.barangay}
               focusedInput={focusedInput}
               setFocusedInput={setFocusedInput}
             />
-          </View>
 
+            {renderFormInput(
+              'city',
+              'City / Municipality',
+              'Auto-filled city',
+              'city',
+              { required: true }
+            )}
+
+            {renderFormInput(
+              'province',
+              'Province',
+              'Auto-filled province',
+              'map',
+              {
+                required: true,
+                editable: false
+              }
+            )}
+          </View>
           {/* Account Specific Information */}
           {userType === 'farmer' && (
             <View style={styles.formSection}>
