@@ -210,7 +210,7 @@ export default function AdminUsers() {
       }
     }
   });
-  
+
   // Create User Modal states
   const [createUserModalVisible, setCreateUserModalVisible] = useState(false);
   const [createUserLoading, setCreateUserLoading] = useState(false);
@@ -398,7 +398,7 @@ export default function AdminUsers() {
     const endDate = new Date();
     const startDate = new Date();
     startDate.setDate(endDate.getDate() - 7); // Last 7 days
-    
+
     const current = new Date(startDate);
     while (current <= endDate) {
       dates.push(current.toLocaleDateString('en-US', {
@@ -407,7 +407,7 @@ export default function AdminUsers() {
       }));
       current.setDate(current.getDate() + 1);
     }
-    
+
     return dates;
   };
 
@@ -690,7 +690,7 @@ export default function AdminUsers() {
         if (!user.salesData) return true;
         // Only skip if we have meaningful sales data
         return (user.salesData.totalSales === 0 && user.salesData.totalLifetime === 0 &&
-                (!user.salesData.chartData || user.salesData.chartData.length === 0));
+          (!user.salesData.chartData || user.salesData.chartData.length === 0));
       });
 
       console.log('📊 Users needing sales data:', usersNeedingData.length, 'out of', usersData.length);
@@ -984,74 +984,74 @@ export default function AdminUsers() {
         'Delete Product',
         `Are you sure you want to delete "${productName}"? This action cannot be undone and will notify the farmer.`,
         async () => {
-            try {
-              // Get product details before deletion for notification
-              const { data: productData, error: fetchError } = await supabase
-                .from('products')
-                .select('name, farmer_id')
-                .eq('id', productId)
-                .single();
+          try {
+            // Get product details before deletion for notification
+            const { data: productData, error: fetchError } = await supabase
+              .from('products')
+              .select('name, farmer_id')
+              .eq('id', productId)
+              .single();
 
-              if (fetchError || !productData) {
-                console.error('Error fetching product data:', fetchError);
-                Alert.alert('Error', 'Failed to get product information');
-                return;
-              }
-
-              const { error } = await supabase
-                .from('products')
-                .delete()
-                .eq('id', productId);
-
-              if (error) {
-                Alert.alert('Error', 'Failed to delete product');
-                return;
-              }
-
-              // Send notifications
-              try {
-                // Notify the farmer whose product was deleted
-                await notifyUserAction(
-                  productData.farmer_id,
-                  'deleted',
-                  'product',
-                  productData.name,
-                  profile?.id || '',
-                  'Product removed by administrator'
-                );
-
-                // Notify all other admins about the product deletion
-                await notifyAllAdmins(
-                  'Product Deleted',
-                  `Admin ${profile?.first_name} ${profile?.last_name} deleted the product "${productData.name}"`,
-                  profile?.id || '',
-                  {
-                    action: 'product_deleted',
-                    productName: productData.name,
-                    farmerId: productData.farmer_id
-                  }
-                );
-
-                console.log('✅ Notifications sent for product deletion');
-              } catch (notifError) {
-                console.error('⚠️ Failed to send notifications:', notifError);
-              }
-
-              // Refresh farmer data
-              if (selectedFarmer) {
-                await loadFarmerData(selectedFarmer.id);
-              }
-
-              // Show success message
-              Alert.alert(
-                'Success!',
-                `Product "${productData.name}" has been deleted successfully and the farmer has been notified.`,
-                [{ text: 'OK' }]
-              );
-            } catch (error) {
-              console.error('Error deleting product:', error);
-              Alert.alert('Error', 'Failed to delete product');
+            if (fetchError || !productData) {
+              console.error('Error fetching product data:', fetchError);
+              Alert.alert('Error', 'Failed to get product information');
+              return;
             }
+
+            const { error } = await supabase
+              .from('products')
+              .delete()
+              .eq('id', productId);
+
+            if (error) {
+              Alert.alert('Error', 'Failed to delete product');
+              return;
+            }
+
+            // Send notifications
+            try {
+              // Notify the farmer whose product was deleted
+              await notifyUserAction(
+                productData.farmer_id,
+                'deleted',
+                'product',
+                productData.name,
+                profile?.id || '',
+                'Product removed by administrator'
+              );
+
+              // Notify all other admins about the product deletion
+              await notifyAllAdmins(
+                'Product Deleted',
+                `Admin ${profile?.first_name} ${profile?.last_name} deleted the product "${productData.name}"`,
+                profile?.id || '',
+                {
+                  action: 'product_deleted',
+                  productName: productData.name,
+                  farmerId: productData.farmer_id
+                }
+              );
+
+              console.log('✅ Notifications sent for product deletion');
+            } catch (notifError) {
+              console.error('⚠️ Failed to send notifications:', notifError);
+            }
+
+            // Refresh farmer data
+            if (selectedFarmer) {
+              await loadFarmerData(selectedFarmer.id);
+            }
+
+            // Show success message
+            Alert.alert(
+              'Success!',
+              `Product "${productData.name}" has been deleted successfully and the farmer has been notified.`,
+              [{ text: 'OK' }]
+            );
+          } catch (error) {
+            console.error('Error deleting product:', error);
+            Alert.alert('Error', 'Failed to delete product');
+          }
         },
         true, // isDestructive
         'Delete Product',
@@ -1197,11 +1197,11 @@ export default function AdminUsers() {
     if (!createUserForm.last_name.trim()) return 'Last name is required';
     if (!createUserForm.user_type) return 'User type is required';
     if (!createUserForm.barangay.trim()) return 'Barangay is required';
-    
+
     // Email validation
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(createUserForm.email)) return 'Please enter a valid email address';
-    
+
     // Phone validation (if provided)
     if (createUserForm.phone.trim() && !/^[\+]?[0-9\-\(\)\s]{10,}$/.test(createUserForm.phone)) {
       return 'Please enter a valid phone number';
@@ -1218,7 +1218,7 @@ export default function AdminUsers() {
     }
 
     setCreateUserLoading(true);
-    
+
     try {
       console.log('🚀 Creating user via Edge Function (no auto-login)');
 
@@ -1516,10 +1516,10 @@ export default function AdminUsers() {
         <View style={styles.userHeader}>
           <View style={styles.userAvatarContainer}>
             <View style={[styles.userAvatar, { backgroundColor: getUserTypeColor(item.profiles?.user_type || '') }]}>
-              <Icon 
-                name={getUserTypeIcon(item.profiles?.user_type || '')} 
-                size={16} 
-                color={colors.white} 
+              <Icon
+                name={getUserTypeIcon(item.profiles?.user_type || '')}
+                size={16}
+                color={colors.white}
               />
             </View>
             <View style={styles.userInfo}>
@@ -1546,7 +1546,7 @@ export default function AdminUsers() {
               <Text style={styles.userEmail} numberOfLines={1}>{item.email}</Text>
             </View>
           </View>
-          
+
           <TouchableOpacity style={styles.moreButton}>
             <Icon name="ellipsis-v" size={14} color={colors.textLight} />
           </TouchableOpacity>
@@ -1628,8 +1628,8 @@ export default function AdminUsers() {
           <View style={styles.detailRow}>
             <Icon name="calendar" size={10} color={colors.textLight} />
             <Text style={styles.userDate} numberOfLines={1}>
-              {new Date(item.created_at).toLocaleDateString('en-US', { 
-                month: 'short', 
+              {new Date(item.created_at).toLocaleDateString('en-US', {
+                month: 'short',
                 day: 'numeric',
                 year: '2-digit'
               })}
@@ -1757,8 +1757,8 @@ export default function AdminUsers() {
               </View>
               <Text style={styles.emptyTitle}>No {activeTab}s found</Text>
               <Text style={styles.emptySubtitle}>
-                {searchQuery 
-                  ? `Try adjusting your search terms` 
+                {searchQuery
+                  ? `Try adjusting your search terms`
                   : `No ${activeTab}s registered in this area yet`
                 }
               </Text>
@@ -1818,7 +1818,7 @@ export default function AdminUsers() {
             contentContainerStyle={{ paddingBottom: Platform.OS === 'ios' ? 100 : 80 }}
           >
             <View style={styles.formContainer}>
-              
+
               {/* User Type Selection */}
               <View style={styles.formGroup}>
                 <Text style={styles.formLabel}>User Type *</Text>
@@ -1830,10 +1830,10 @@ export default function AdminUsers() {
                     ]}
                     onPress={() => updateCreateUserForm('user_type', 'farmer')}
                   >
-                    <Icon 
-                      name="seedling" 
-                      size={16} 
-                      color={createUserForm.user_type === 'farmer' ? colors.white : colors.textSecondary} 
+                    <Icon
+                      name="seedling"
+                      size={16}
+                      color={createUserForm.user_type === 'farmer' ? colors.white : colors.textSecondary}
                     />
                     <Text style={[
                       styles.userTypeOptionText,
@@ -1849,10 +1849,10 @@ export default function AdminUsers() {
                     ]}
                     onPress={() => updateCreateUserForm('user_type', 'buyer')}
                   >
-                    <Icon 
-                      name="shopping-cart" 
-                      size={16} 
-                      color={createUserForm.user_type === 'buyer' ? colors.white : colors.textSecondary} 
+                    <Icon
+                      name="shopping-cart"
+                      size={16}
+                      color={createUserForm.user_type === 'buyer' ? colors.white : colors.textSecondary}
                     />
                     <Text style={[
                       styles.userTypeOptionText,
@@ -1869,10 +1869,10 @@ export default function AdminUsers() {
                       ]}
                       onPress={() => updateCreateUserForm('user_type', 'admin')}
                     >
-                      <Icon 
-                        name="user-shield" 
-                        size={16} 
-                        color={createUserForm.user_type === 'admin' ? colors.white : colors.textSecondary} 
+                      <Icon
+                        name="user-shield"
+                        size={16}
+                        color={createUserForm.user_type === 'admin' ? colors.white : colors.textSecondary}
                       />
                       <Text style={[
                         styles.userTypeOptionText,
@@ -1888,7 +1888,7 @@ export default function AdminUsers() {
               {/* Personal Information */}
               <View style={styles.formSection}>
                 <Text style={styles.formSectionTitle}>Personal Information</Text>
-                
+
                 <View style={styles.formRow}>
                   <View style={[styles.formGroup, styles.formGroupHalf]}>
                     <Text style={styles.formLabel}>First Name *</Text>
@@ -1900,7 +1900,7 @@ export default function AdminUsers() {
                       placeholderTextColor={colors.textLight}
                     />
                   </View>
-                  
+
                   <View style={[styles.formGroup, styles.formGroupHalf]}>
                     <Text style={styles.formLabel}>Last Name *</Text>
                     <TextInput
@@ -1918,7 +1918,11 @@ export default function AdminUsers() {
                   <TextInput
                     style={styles.formInput}
                     value={createUserForm.phone}
-                    onChangeText={(text) => updateCreateUserForm('phone', text)}
+                    onChangeText={(text) => {
+                      const cleaned = text.replace(/[^0-9]/g, ''); // only numbers
+                      updateCreateUserForm('phone', cleaned);
+                    }}
+                    maxLength={11}
                     placeholder="Enter phone number"
                     placeholderTextColor={colors.textLight}
                     keyboardType="phone-pad"
@@ -1929,7 +1933,7 @@ export default function AdminUsers() {
               {/* Account Information */}
               <View style={styles.formSection}>
                 <Text style={styles.formSectionTitle}>Account Information</Text>
-                
+
                 <View style={styles.formGroup}>
                   <Text style={styles.formLabel}>Email Address *</Text>
                   <TextInput
@@ -1959,7 +1963,7 @@ export default function AdminUsers() {
               {/* Location Information */}
               <View style={styles.formSection}>
                 <Text style={styles.formSectionTitle}>Location</Text>
-                
+
                 <View style={styles.formGroup}>
                   <Text style={styles.formLabel}>Barangay *</Text>
                   <TextInput
@@ -1976,7 +1980,7 @@ export default function AdminUsers() {
               {createUserForm.user_type === 'farmer' && (
                 <View style={styles.formSection}>
                   <Text style={styles.formSectionTitle}>Farm Information</Text>
-                  
+
                   <View style={styles.formGroup}>
                     <Text style={styles.formLabel}>Farm Name</Text>
                     <TextInput
@@ -2100,11 +2104,11 @@ export default function AdminUsers() {
                         render: (value) => (
                           <View style={[styles.statusBadge, {
                             backgroundColor: value === 'approved' ? colors.success + '20' :
-                                           value === 'pending' ? colors.warning + '20' : colors.danger + '20'
+                              value === 'pending' ? colors.warning + '20' : colors.danger + '20'
                           }]}>
                             <Text style={{
                               color: value === 'approved' ? colors.success :
-                                     value === 'pending' ? colors.warning : colors.danger,
+                                value === 'pending' ? colors.warning : colors.danger,
                               fontSize: 12,
                               fontWeight: '600'
                             }}>{value.toUpperCase()}</Text>
@@ -2176,13 +2180,13 @@ export default function AdminUsers() {
                       render: (value) => (
                         <View style={[styles.statusBadge, {
                           backgroundColor: value === 'delivered' ? colors.success + '20' :
-                                         value === 'cancelled' ? colors.danger + '20' :
-                                         value === 'ready' ? colors.primary + '20' : colors.warning + '20'
+                            value === 'cancelled' ? colors.danger + '20' :
+                              value === 'ready' ? colors.primary + '20' : colors.warning + '20'
                         }]}>
                           <Text style={{
                             color: value === 'delivered' ? colors.success :
-                                   value === 'cancelled' ? colors.danger :
-                                   value === 'ready' ? colors.primary : colors.warning,
+                              value === 'cancelled' ? colors.danger :
+                                value === 'ready' ? colors.primary : colors.warning,
                             fontSize: 12,
                             fontWeight: '600'
                           }}>{value.toUpperCase()}</Text>
@@ -2373,13 +2377,13 @@ export default function AdminUsers() {
                       render: (value) => (
                         <View style={[styles.statusBadge, {
                           backgroundColor: value === 'delivered' ? colors.success + '20' :
-                                         value === 'cancelled' ? colors.danger + '20' :
-                                         value === 'ready' ? colors.primary + '20' : colors.warning + '20'
+                            value === 'cancelled' ? colors.danger + '20' :
+                              value === 'ready' ? colors.primary + '20' : colors.warning + '20'
                         }]}>
                           <Text style={{
                             color: value === 'delivered' ? colors.success :
-                                   value === 'cancelled' ? colors.danger :
-                                   value === 'ready' ? colors.primary : colors.warning,
+                              value === 'cancelled' ? colors.danger :
+                                value === 'ready' ? colors.primary : colors.warning,
                             fontSize: 12,
                             fontWeight: '600'
                           }}>{value.toUpperCase()}</Text>
@@ -2441,13 +2445,13 @@ export default function AdminUsers() {
                       render: (value) => (
                         <View style={[styles.statusBadge, {
                           backgroundColor: value === 'delivered' ? colors.success + '20' :
-                                         value === 'cancelled' ? colors.danger + '20' :
-                                         value === 'ready' ? colors.primary + '20' : colors.warning + '20'
+                            value === 'cancelled' ? colors.danger + '20' :
+                              value === 'ready' ? colors.primary + '20' : colors.warning + '20'
                         }]}>
                           <Text style={{
                             color: value === 'delivered' ? colors.success :
-                                   value === 'cancelled' ? colors.danger :
-                                   value === 'ready' ? colors.primary : colors.warning,
+                              value === 'cancelled' ? colors.danger :
+                                value === 'ready' ? colors.primary : colors.warning,
                             fontSize: 12,
                             fontWeight: '600'
                           }}>{value.toUpperCase()}</Text>
