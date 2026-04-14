@@ -1,17 +1,17 @@
 import { router, useLocalSearchParams } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import {
-    ActivityIndicator,
-    Alert,
-    Dimensions,
-    Image,
-    Platform,
-    SafeAreaView,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    View
+  ActivityIndicator,
+  Alert,
+  Dimensions,
+  Image,
+  Platform,
+  SafeAreaView,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import * as FileSystem from 'expo-file-system/legacy';
@@ -81,7 +81,7 @@ export default function OrderDetailScreen() {
   const [userType, setUserType] = useState<string | null>(null);
   const [userProfile, setUserProfile] = useState<any>(null);
   const [uploadingProof, setUploadingProof] = useState(false);
-  const [selectedProofImage, setSelectedProofImage] = useState<{uri: string, fileExt: string} | null>(null);
+  const [selectedProofImage, setSelectedProofImage] = useState<{ uri: string, fileExt: string } | null>(null);
   const { showConfirmation } = useConfirmationModal();
 
   useEffect(() => {
@@ -459,7 +459,7 @@ export default function OrderDetailScreen() {
   }
 
   const canUpdateStatus = userType === 'admin' || userType === 'super-admin' ||
-                         (userType === 'farmer' && order.status === 'pending');
+    (userType === 'farmer' && order.status === 'pending');
 
   return (
     <SafeAreaView style={styles.container}>
@@ -682,7 +682,7 @@ export default function OrderDetailScreen() {
                   <Text style={styles.actionButtonText}>Mark as Delivered</Text>
                 </TouchableOpacity>
               )}
-              {order.status !== 'cancelled' && (
+              {['pending', 'ready'].includes(order.status) && (
                 <TouchableOpacity
                   style={[styles.actionButton, { backgroundColor: colors.danger }]}
                   onPress={() => handleStatusUpdate('cancelled')}
