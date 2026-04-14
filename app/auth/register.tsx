@@ -283,10 +283,8 @@ export default function RegisterScreen() {
       !formData.email ||
       !formData.phone ||
       !formData.password ||
-      !formData.street ||
-      !formData.barangay ||
-      !formData.city ||
-      !formData.province
+      !formData.confirmPassword ||
+      !formData.barangay
     ) {
       setErrorTitle('Required Fields');
       setErrorMessage('Please fill in all required fields');
