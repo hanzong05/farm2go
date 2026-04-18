@@ -1,8 +1,7 @@
-import { router, useLocalSearchParams } from 'expo-router';
-import React, { useEffect, useState } from 'react';
+import { router, useLocalSearchParams } from "expo-router";
+import React, { useEffect, useState } from "react";
 import {
   ActivityIndicator,
-  Alert,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
@@ -11,15 +10,18 @@ import {
   TextInput,
   TouchableOpacity,
   View,
-} from 'react-native';
-import ConfirmationModal from '../../components/ConfirmationModal';
-import PurchaseSuccessModal from '../../components/PurchaseSuccessModal';
-import VerificationGuard from '../../components/VerificationGuard';
-import { useAuth } from '../../contexts/AuthContext';
-import { supabase } from '../../lib/supabase';
-import { notifyOrderCreated, notifyLowStock } from '../../services/notifications';
-import { generateUniquePurchaseCode } from '../../utils/purchaseCode';
-import { showError, showSuccess } from '../../utils/alert';
+} from "react-native";
+import ConfirmationModal from "../../components/ConfirmationModal";
+import PurchaseSuccessModal from "../../components/PurchaseSuccessModal";
+import VerificationGuard from "../../components/VerificationGuard";
+import { useAuth } from "../../contexts/AuthContext";
+import { supabase } from "../../lib/supabase";
+import {
+  notifyLowStock,
+  notifyOrderCreated,
+} from "../../services/notifications";
+import { showError } from "../../utils/alert";
+import { generateUniquePurchaseCode } from "../../utils/purchaseCode";
 
 interface Product {
   id: string;
@@ -40,13 +42,16 @@ interface Product {
 
 interface Profile {
   id: string;
-  user_type: 'buyer' | 'farmer' | 'admin' | 'super-admin';
+  user_type: "buyer" | "farmer" | "admin" | "super-admin";
   first_name: string | null;
   last_name: string | null;
 }
 
 export default function OrderProductScreen() {
-  const { id, quantity } = useLocalSearchParams<{ id: string; quantity: string }>();
+  const { id, quantity } = useLocalSearchParams<{
+    id: string;
+    quantity: string;
+  }>();
   const { user } = useAuth();
   const [product, setProduct] = useState<Product | null>(null);
   const [userProfile, setUserProfile] = useState<Profile | null>(null);
@@ -54,7 +59,7 @@ export default function OrderProductScreen() {
   const [ordering, setOrdering] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showSuccessModal, setShowSuccessModal] = useState(false);
-  const [purchaseCode, setPurchaseCode] = useState<string>('');
+  const [purchaseCode, setPurchaseCode] = useState<string>("");
   const [confirmModal, setConfirmModal] = useState<{
     visible: boolean;
     title: string;
@@ -64,15 +69,15 @@ export default function OrderProductScreen() {
     onConfirm: () => void;
   }>({
     visible: false,
-    title: '',
-    message: '',
+    title: "",
+    message: "",
     isDestructive: false,
-    confirmText: '',
+    confirmText: "",
     onConfirm: () => {},
   });
 
   const [orderData, setOrderData] = useState({
-    notes: '',
+    notes: "",
   });
 
   useEffect(() => {
@@ -87,19 +92,19 @@ export default function OrderProductScreen() {
 
     try {
       const { data, error } = await supabase
-        .from('profiles')
-        .select('id, user_type, first_name, last_name')
-        .eq('id', user.id)
+        .from("profiles")
+        .select("id, user_type, first_name, last_name")
+        .eq("id", user.id)
         .single();
 
       if (error) {
-        console.error('Error fetching user profile:', error);
+        console.error("Error fetching user profile:", error);
         return;
       }
 
       setUserProfile(data);
     } catch (err) {
-      console.error('User profile fetch error:', err);
+      console.error("User profile fetch error:", err);
     }
   };
 
@@ -109,49 +114,49 @@ export default function OrderProductScreen() {
 
       // First fetch the product
       const { data: productData, error: productError } = await supabase
-        .from('products')
-        .select('*')
-        .eq('id', id)
-        .eq('status', 'approved')
+        .from("products")
+        .select("*")
+        .eq("id", id)
+        .eq("status", "approved")
         .single();
 
       if (productError) {
-        console.error('Error fetching product:', productError);
-        setError('Failed to load product');
+        console.error("Error fetching product:", productError);
+        setError("Failed to load product");
         return;
       }
 
       if (!productData) {
-        setError('Product not found');
+        setError("Product not found");
         return;
       }
 
       // Prevent users from ordering their own products
       if (user && productData.farmer_id === user.id) {
-        setError('You cannot order your own products');
+        setError("You cannot order your own products");
         return;
       }
 
       // Then fetch the farmer profile
       const { data: profileData, error: profileError } = await supabase
-        .from('profiles')
-        .select('first_name, last_name, farm_name, barangay')
-        .eq('id', productData.farmer_id)
+        .from("profiles")
+        .select("first_name, last_name, farm_name, barangay")
+        .eq("id", productData.farmer_id)
         .single();
 
       if (profileError) {
-        console.error('Error fetching farmer profile:', profileError);
+        console.error("Error fetching farmer profile:", profileError);
         // Continue without profile data
       }
 
       // Combine the data
       setProduct({
         ...productData,
-        profiles: profileData || undefined
+        profiles: profileData || undefined,
       });
     } catch (err) {
-      console.error('Product fetch error:', err);
-      setError('An error occurred while loading the product');
+      console.error("Product fetch error:", err);
+      setError("An error occurred while loading the product");
     } finally {
       setLoading(false);
     }
@@ -164,42 +169,49 @@ export default function OrderProductScreen() {
   };
 
   const handleOrder = async () => {
-    console.log('🔵 PLACE ORDER BUTTON TAPPED!');
-    console.log('Product:', !!product, 'User:', !!user, 'Profile:', !!userProfile);
+    console.log("🔵 PLACE ORDER BUTTON TAPPED!");
+    console.log(
+      "Product:",
+      !!product,
+      "User:",
+      !!user,
+      "Profile:",
+      !!userProfile,
+    );
 
     if (!product || !user || !userProfile) {
-      console.log('❌ Missing data, returning early');
+      console.log("❌ Missing data, returning early");
       return;
     }
 
     const orderQuantity = parseInt(quantity);
-    console.log('📦 Order quantity:', orderQuantity);
+    console.log("📦 Order quantity:", orderQuantity);
 
     if (isNaN(orderQuantity) || orderQuantity <= 0) {
-      console.log('❌ Invalid quantity');
-      showError('Invalid quantity');
+      console.log("❌ Invalid quantity");
+      showError("Invalid quantity");
       return;
     }
 
     if (orderQuantity > product.quantity_available) {
-      console.log('❌ Quantity exceeds stock');
-      showError('Requested quantity exceeds available stock');
+      console.log("❌ Quantity exceeds stock");
+      showError("Requested quantity exceeds available stock");
       return;
     }
 
     // Show confirmation modal
-    console.log('✅ All checks passed, showing confirmation modal');
+    console.log("✅ All checks passed, showing confirmation modal");
     const totalAmount = calculateTotal();
     setConfirmModal({
       visible: true,
-      title: 'Confirm Order?',
+      title: "Confirm Order?",
       message: `Are you sure you want to place this order for ${orderQuantity} ${product.unit} of ${product.name} at ₱${totalAmount.toLocaleString()}?`,
       isDestructive: false,
-      confirmText: 'Yes, Place Order',
+      confirmText: "Yes, Place Order",
       onConfirm: () => {
         processOrder();
-        setConfirmModal(prev => ({ ...prev, visible: false }));
-      }
+        setConfirmModal((prev) => ({ ...prev, visible: false }));
+      },
     });
   };
 
@@ -216,67 +228,76 @@ export default function OrderProductScreen() {
 
       // Create order record with purchase code
       const { data: newOrder, error: orderError } = await (supabase as any)
-        .from('orders')
+        .from("orders")
         .insert({
           buyer_id: user.id,
           farmer_id: product.farmer_id,
           product_id: product.id,
           quantity: orderQuantity,
           total_price: calculateTotal(),
-          delivery_address: product.profiles?.barangay || 'Delivery location not available',
+          delivery_address:
+            product.profiles?.barangay || "Delivery location not available",
           notes: orderData.notes,
-          status: 'pending',
+          status: "pending",
           purchase_code: uniquePurchaseCode,
         })
         .select()
         .single();
 
       if (orderError) {
-        console.error('Error creating order:', orderError);
-        console.error('Error details:', JSON.stringify(orderError, null, 2));
-        showError(`Failed to create order: ${orderError.message || 'Please try again.'}`);
+        console.error("Error creating order:", orderError);
+        console.error("Error details:", JSON.stringify(orderError, null, 2));
+        showError(
+          `Failed to create order: ${orderError.message || "Please try again."}`,
+        );
         return;
       }
 
       // Send notifications about order creation
       try {
-        await notifyOrderCreated(
-          newOrder.id,
-          user.id,
-          product.farmer_id,
-          {
-            totalAmount: calculateTotal(),
-            itemCount: 1, // Single product order
-            buyerName: userProfile ? `${userProfile.first_name} ${userProfile.last_name}` : undefined,
-            farmerName: product.profiles ? `${product.profiles.first_name} ${product.profiles.last_name}` : undefined,
-            productName: product.name,
-            farmerBarangay: product.profiles?.barangay || undefined
-          }
-        );
+        await notifyOrderCreated(newOrder.id, user.id, product.farmer_id, {
+          totalAmount: calculateTotal(),
+          itemCount: 1, // Single product order
+          buyerName: userProfile
+            ? `${userProfile.first_name} ${userProfile.last_name}`
+            : undefined,
+          farmerName: product.profiles
+            ? `${product.profiles.first_name} ${product.profiles.last_name}`
+            : undefined,
+          productName: product.name,
+          farmerBarangay: product.profiles?.barangay || undefined,
+        });
 
-        console.log('✅ Order creation notification sent');
+        console.log("✅ Order creation notification sent");
       } catch (notifError) {
-        console.error('⚠️ Failed to send order notification:', notifError);
+        console.error("⚠️ Failed to send order notification:", notifError);
         // Don't fail the order creation if notifications fail
       }
 
       // Update product quantity
-      console.log(`📦 Attempting to decrease stock for product ${product.id}: ${product.quantity_available} (ordered: ${orderQuantity})`);
+      console.log(
+        `📦 Attempting to decrease stock for product ${product.id}: ${product.quantity_available} (ordered: ${orderQuantity})`,
+      );
 
-      const newQuantity = Math.max(0, product.quantity_available - orderQuantity);
+      const newQuantity = Math.max(
+        0,
+        product.quantity_available - orderQuantity,
+      );
 
       const { error: updateError } = await (supabase as any)
-        .from('products')
+        .from("products")
         .update({ quantity_available: newQuantity })
-        .eq('id', product.id);
+        .eq("id", product.id);
 
       if (updateError) {
-        console.error('❌ Error updating product quantity:', updateError);
-        console.error('❌ This means RLS is blocking the update. You need to:');
-        console.error('1. Run fix_products_stock_update_policy.sql in Supabase');
-        console.error('2. Or temporarily disable RLS on products table');
+        console.error("❌ Error updating product quantity:", updateError);
+        console.error("❌ This means RLS is blocking the update. You need to:");
+        console.error(
+          "1. Run fix_products_stock_update_policy.sql in Supabase",
+        );
+        console.error("2. Or temporarily disable RLS on products table");
       } else {
-        console.log('✅ Product stock decreased successfully');
+        console.log("✅ Product stock decreased successfully");
         console.log(`✅ New stock: ${newQuantity}`);
 
         // Check for low stock and notify farmer
@@ -287,44 +308,49 @@ export default function OrderProductScreen() {
               product.farmer_id,
               product.name,
               newQuantity,
-              lowStockThreshold
+              lowStockThreshold,
             );
-            console.log('✅ Low stock notification sent');
+            console.log("✅ Low stock notification sent");
           } catch (stockNotifError) {
-            console.error('⚠️ Failed to send low stock notification:', stockNotifError);
+            console.error(
+              "⚠️ Failed to send low stock notification:",
+              stockNotifError,
+            );
           }
         }
       }
 
       // Set purchase code and show success modal immediately
-      console.log('✅ Order placed successfully!');
-      console.log('🎫 Purchase code:', uniquePurchaseCode);
+      console.log("✅ Order placed successfully!");
+      console.log("🎫 Purchase code:", uniquePurchaseCode);
       setPurchaseCode(uniquePurchaseCode);
       setShowSuccessModal(true);
-      console.log('📱 PurchaseSuccessModal should now be visible with purchase code and QR code!');
+      console.log(
+        "📱 PurchaseSuccessModal should now be visible with purchase code and QR code!",
+      );
     } catch (err) {
-      console.error('Order error:', err);
-      showError('An error occurred while placing the order');
+      console.error("Order error:", err);
+      showError("An error occurred while placing the order");
     } finally {
       setOrdering(false);
     }
   };
 
   const getMyOrdersRoute = () => {
-    if (!userProfile) return '/';
+    if (!userProfile) return "/";
 
     switch (userProfile.user_type) {
-      case 'buyer':
-        return '/buyer/my-orders';
-      case 'farmer':
-        return '/farmer/my-orders';
+      case "buyer":
+        return "/buyer/my-orders";
+      case "farmer":
+        return "/farmer/my-orders";
       default:
-        return '/';
+        return "/";
     }
   };
 
   const getUserTypeForVerification = () => {
-    return userProfile?.user_type === 'farmer' ? 'farmer' : 'buyer';
+    return userProfile?.user_type === "farmer" ? "farmer" : "buyer";
   };
 
   if (loading) {
@@ -339,8 +365,11 @@ export default function OrderProductScreen() {
   if (error || !product) {
     return (
       <View style={styles.errorContainer}>
-        <Text style={styles.errorText}>{error || 'Product not found'}</Text>
-        <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
+        <Text style={styles.errorText}>{error || "Product not found"}</Text>
+        <TouchableOpacity
+          style={styles.backButton}
+          onPress={() => router.back()}
+        >
           <Text style={styles.backButtonText}>Go Back</Text>
         </TouchableOpacity>
       </View>
@@ -364,131 +393,153 @@ export default function OrderProductScreen() {
     >
       <KeyboardAvoidingView
         style={styles.container}
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
       >
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-          <Text style={styles.backButtonText}>← Back</Text>
-        </TouchableOpacity>
-        <Text style={styles.title}>Place Order</Text>
-      </View>
+        <View style={styles.header}>
+          <TouchableOpacity
+            onPress={() => router.back()}
+            style={styles.backButton}
+          >
+            <Text style={styles.backButtonText}>← Back</Text>
+          </TouchableOpacity>
+          <Text style={styles.title}>Place Order</Text>
+        </View>
 
-      <ScrollView style={styles.content}>
-        {/* Product Summary */}
-        <View style={styles.productSummary}>
-          <Text style={styles.sectionTitle}>Product Summary</Text>
-          <Text style={styles.productName}>{product.name}</Text>
-          <Text style={styles.productPrice}>₱{product.price.toLocaleString()} per {product.unit}</Text>
-          <Text style={styles.availableStock}>Available: {product.quantity_available} {product.unit}(s)</Text>
-
-          {product.profiles && (
-            <Text style={styles.farmerName}>
-              by {product.profiles.first_name} {product.profiles.last_name}
+        <ScrollView style={styles.content}>
+          {/* Product Summary */}
+          <View style={styles.productSummary}>
+            <Text style={styles.sectionTitle}>Product Summary</Text>
+            <Text style={styles.productName}>{product.name}</Text>
+            <Text style={styles.productPrice}>
+              ₱{product.price.toLocaleString()} per {product.unit}
             </Text>
-          )}
-        </View>
+            <Text style={styles.availableStock}>
+              Available: {product.quantity_available} {product.unit}(s)
+            </Text>
 
-        {/* Order Form */}
-        <View style={styles.formSection}>
-          <Text style={styles.sectionTitle}>Order Details</Text>
-
-          <View style={styles.inputGroup}>
-            <Text style={styles.label}>Quantity ({product.unit})</Text>
-            <View style={styles.quantityDisplay}>
-              <Text style={styles.quantityValue}>{quantity || '0'} {product.unit}(s)</Text>
-            </View>
-          </View>
-
-          <View style={styles.inputGroup}>
-            <Text style={styles.label}>Delivery Location</Text>
-            <View style={styles.deliveryLocationDisplay}>
-              <Text style={styles.deliveryLocationText}>
-                📍 {product.profiles?.barangay || 'Delivery location not available'}
+            {product.profiles && (
+              <Text style={styles.farmerName}>
+                by {product.profiles.first_name} {product.profiles.last_name}
               </Text>
-              <Text style={styles.deliveryLocationNote}>
-                Delivery will be arranged within the farmer's barangay
-              </Text>
+            )}
+          </View>
+
+          {/* Order Form */}
+          <View style={styles.formSection}>
+            <Text style={styles.sectionTitle}>Order Details</Text>
+
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>Quantity ({product.unit})</Text>
+              <View style={styles.quantityDisplay}>
+                <Text style={styles.quantityValue}>
+                  {quantity || "0"} {product.unit}(s)
+                </Text>
+              </View>
+            </View>
+
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>Delivery Location</Text>
+              <View style={styles.deliveryLocationDisplay}>
+                <Text style={styles.deliveryLocationText}>
+                  📍{" "}
+                  {product.profiles?.barangay ||
+                    "Delivery location not available"}
+                </Text>
+                <Text style={styles.deliveryLocationNote}>
+                  Delivery will be arranged within the farmer's barangay
+                </Text>
+              </View>
+            </View>
+
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>Notes (Optional)</Text>
+              <TextInput
+                style={[styles.input, styles.textArea]}
+                value={orderData.notes}
+                onChangeText={(text) =>
+                  setOrderData({ ...orderData, notes: text })
+                }
+                placeholder="Any special instructions or notes"
+                placeholderTextColor="#9ca3af"
+                multiline
+                numberOfLines={3}
+              />
+            </View>
+
+            {/* Order Total */}
+            <View style={styles.totalSection}>
+              <View style={styles.totalRow}>
+                <Text style={styles.totalLabel}>Quantity:</Text>
+                <Text style={styles.totalValue}>
+                  {quantity || 0} {product.unit}(s)
+                </Text>
+              </View>
+              <View style={styles.totalRow}>
+                <Text style={styles.totalLabel}>Price per unit:</Text>
+                <Text style={styles.totalValue}>
+                  ₱{product.price.toLocaleString()}
+                </Text>
+              </View>
+              <View style={[styles.totalRow, styles.grandTotalRow]}>
+                <Text style={styles.grandTotalLabel}>Total Amount:</Text>
+                <Text style={styles.grandTotalValue}>
+                  ₱{calculateTotal().toLocaleString()}
+                </Text>
+              </View>
             </View>
           </View>
 
-          <View style={styles.inputGroup}>
-            <Text style={styles.label}>Notes (Optional)</Text>
-            <TextInput
-              style={[styles.input, styles.textArea]}
-              value={orderData.notes}
-              onChangeText={(text) => setOrderData({ ...orderData, notes: text })}
-              placeholder="Any special instructions or notes"
-              placeholderTextColor="#9ca3af"
-              multiline
-              numberOfLines={3}
-            />
-          </View>
+          <TouchableOpacity
+            style={[styles.orderButton, ordering && styles.orderButtonDisabled]}
+            onPress={handleOrder}
+            disabled={ordering}
+          >
+            <Text style={styles.orderButtonText}>
+              {ordering ? "Placing Order..." : "Place Order"}
+            </Text>
+          </TouchableOpacity>
+        </ScrollView>
 
-          {/* Order Total */}
-          <View style={styles.totalSection}>
-            <View style={styles.totalRow}>
-              <Text style={styles.totalLabel}>Quantity:</Text>
-              <Text style={styles.totalValue}>{quantity || 0} {product.unit}(s)</Text>
-            </View>
-            <View style={styles.totalRow}>
-              <Text style={styles.totalLabel}>Price per unit:</Text>
-              <Text style={styles.totalValue}>₱{product.price.toLocaleString()}</Text>
-            </View>
-            <View style={[styles.totalRow, styles.grandTotalRow]}>
-              <Text style={styles.grandTotalLabel}>Total Amount:</Text>
-              <Text style={styles.grandTotalValue}>₱{calculateTotal().toLocaleString()}</Text>
-            </View>
-          </View>
-        </View>
+        {/* Purchase Success Modal */}
+        {product && (
+          <PurchaseSuccessModal
+            visible={showSuccessModal}
+            onClose={() => setShowSuccessModal(false)}
+            purchaseCode={purchaseCode}
+            orderDetails={{
+              farmName:
+                product.profiles?.farm_name ||
+                `${product.profiles?.first_name || ""} ${product.profiles?.last_name || ""}`.trim() ||
+                "Unknown Farm",
+              totalAmount: calculateTotal(),
+              purchaseDate: new Date().toISOString(),
+              productName: product.name,
+              quantity: parseInt(quantity) || 0,
+              unit: product.unit,
+            }}
+            onViewOrders={() => {
+              setShowSuccessModal(false);
+              router.push(getMyOrdersRoute());
+            }}
+            onBackToMarketplace={() => {
+              setShowSuccessModal(false);
+              router.push("/");
+            }}
+          />
+        )}
 
-        <TouchableOpacity
-          style={[styles.orderButton, ordering && styles.orderButtonDisabled]}
-          onPress={handleOrder}
-          disabled={ordering}
-        >
-          <Text style={styles.orderButtonText}>
-            {ordering ? 'Placing Order...' : 'Place Order'}
-          </Text>
-        </TouchableOpacity>
-      </ScrollView>
-
-      {/* Purchase Success Modal */}
-      {product && (
-        <PurchaseSuccessModal
-          visible={showSuccessModal}
-          onClose={() => setShowSuccessModal(false)}
-          purchaseCode={purchaseCode}
-          orderDetails={{
-            farmName: product.profiles?.farm_name ||
-                     `${product.profiles?.first_name || ''} ${product.profiles?.last_name || ''}`.trim() ||
-                     'Unknown Farm',
-            totalAmount: calculateTotal(),
-            purchaseDate: new Date().toISOString(),
-            productName: product.name,
-            quantity: parseInt(quantity) || 0,
-            unit: product.unit,
-          }}
-          onViewOrders={() => {
-            setShowSuccessModal(false);
-            router.push(getMyOrdersRoute());
-          }}
-          onBackToMarketplace={() => {
-            setShowSuccessModal(false);
-            router.push('/');
-          }}
+        <ConfirmationModal
+          visible={confirmModal.visible}
+          title={confirmModal.title}
+          message={confirmModal.message}
+          confirmText={confirmModal.confirmText}
+          isDestructive={confirmModal.isDestructive}
+          onConfirm={confirmModal.onConfirm}
+          onCancel={() =>
+            setConfirmModal((prev) => ({ ...prev, visible: false }))
+          }
         />
-      )}
-
-      <ConfirmationModal
-        visible={confirmModal.visible}
-        title={confirmModal.title}
-        message={confirmModal.message}
-        confirmText={confirmModal.confirmText}
-        isDestructive={confirmModal.isDestructive}
-        onConfirm={confirmModal.onConfirm}
-        onCancel={() => setConfirmModal(prev => ({ ...prev, visible: false }))}
-      />
-    </KeyboardAvoidingView>
+      </KeyboardAvoidingView>
     </VerificationGuard>
   );
 }
@@ -496,207 +547,207 @@ export default function OrderProductScreen() {
 const styles = StyleSheet.create({
   loadingContainer: {
     flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: '#f8fafc',
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: "#f8fafc",
   },
   loadingText: {
     marginTop: 16,
     fontSize: 16,
-    color: '#6b7280',
-    fontWeight: '500',
+    color: "#6b7280",
+    fontWeight: "500",
   },
   container: {
     flex: 1,
-    backgroundColor: '#f8fafc',
+    backgroundColor: "#f8fafc",
   },
   errorContainer: {
     flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: '#f8fafc',
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: "#f8fafc",
     padding: 24,
   },
   errorText: {
     fontSize: 16,
-    color: '#dc2626',
-    textAlign: 'center',
+    color: "#dc2626",
+    textAlign: "center",
     marginBottom: 24,
   },
   header: {
-    backgroundColor: '#ffffff',
+    backgroundColor: "#ffffff",
     padding: 16,
     borderBottomWidth: 1,
-    borderBottomColor: '#e5e7eb',
-    flexDirection: 'row',
-    alignItems: 'center',
+    borderBottomColor: "#e5e7eb",
+    flexDirection: "row",
+    alignItems: "center",
   },
   backButton: {
     marginRight: 16,
   },
   backButtonText: {
-    color: '#10b981',
+    color: "#10b981",
     fontSize: 16,
-    fontWeight: '600',
+    fontWeight: "600",
   },
   title: {
     fontSize: 20,
-    fontWeight: '600',
-    color: '#111827',
+    fontWeight: "600",
+    color: "#111827",
   },
   content: {
     flex: 1,
     padding: 16,
   },
   productSummary: {
-    backgroundColor: '#ffffff',
+    backgroundColor: "#ffffff",
     borderRadius: 12,
     padding: 20,
     marginBottom: 20,
     borderWidth: 1,
-    borderColor: '#e5e7eb',
+    borderColor: "#e5e7eb",
   },
   sectionTitle: {
     fontSize: 18,
-    fontWeight: '600',
-    color: '#111827',
+    fontWeight: "600",
+    color: "#111827",
     marginBottom: 16,
   },
   productName: {
     fontSize: 20,
-    fontWeight: '700',
-    color: '#111827',
+    fontWeight: "700",
+    color: "#111827",
     marginBottom: 8,
   },
   productPrice: {
     fontSize: 16,
-    color: '#10b981',
-    fontWeight: '600',
+    color: "#10b981",
+    fontWeight: "600",
     marginBottom: 4,
   },
   availableStock: {
     fontSize: 14,
-    color: '#6b7280',
+    color: "#6b7280",
     marginBottom: 8,
   },
   farmerName: {
     fontSize: 14,
-    color: '#374151',
-    fontStyle: 'italic',
+    color: "#374151",
+    fontStyle: "italic",
   },
   formSection: {
-    backgroundColor: '#ffffff',
+    backgroundColor: "#ffffff",
     borderRadius: 12,
     padding: 20,
     marginBottom: 20,
     borderWidth: 1,
-    borderColor: '#e5e7eb',
+    borderColor: "#e5e7eb",
   },
   inputGroup: {
     marginBottom: 20,
   },
   label: {
     fontSize: 16,
-    fontWeight: '600',
-    color: '#374151',
+    fontWeight: "600",
+    color: "#374151",
     marginBottom: 8,
   },
   required: {
-    color: '#dc2626',
+    color: "#dc2626",
   },
   input: {
     borderWidth: 1,
-    borderColor: '#d1d5db',
+    borderColor: "#d1d5db",
     borderRadius: 8,
     paddingHorizontal: 16,
     paddingVertical: 12,
     fontSize: 16,
-    color: '#111827',
-    backgroundColor: '#ffffff',
+    color: "#111827",
+    backgroundColor: "#ffffff",
   },
   textArea: {
     height: 80,
-    textAlignVertical: 'top',
+    textAlignVertical: "top",
   },
   deliveryLocationDisplay: {
-    backgroundColor: '#f9fafb',
+    backgroundColor: "#f9fafb",
     borderRadius: 8,
     padding: 16,
     borderWidth: 1,
-    borderColor: '#e5e7eb',
+    borderColor: "#e5e7eb",
   },
   deliveryLocationText: {
     fontSize: 16,
-    fontWeight: '600',
-    color: '#059669',
+    fontWeight: "600",
+    color: "#059669",
     marginBottom: 4,
   },
   deliveryLocationNote: {
     fontSize: 14,
-    color: '#6b7280',
-    fontStyle: 'italic',
+    color: "#6b7280",
+    fontStyle: "italic",
   },
   quantityDisplay: {
-    backgroundColor: '#f0fdf4',
+    backgroundColor: "#f0fdf4",
     borderRadius: 8,
     padding: 16,
     borderWidth: 2,
-    borderColor: '#10b981',
+    borderColor: "#10b981",
   },
   quantityValue: {
     fontSize: 18,
-    fontWeight: '700',
-    color: '#059669',
-    textAlign: 'center',
+    fontWeight: "700",
+    color: "#059669",
+    textAlign: "center",
   },
   totalSection: {
     borderTopWidth: 1,
-    borderTopColor: '#e5e7eb',
+    borderTopColor: "#e5e7eb",
     paddingTop: 16,
     marginTop: 16,
   },
   totalRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
+    flexDirection: "row",
+    justifyContent: "space-between",
     marginBottom: 8,
   },
   totalLabel: {
     fontSize: 16,
-    color: '#374151',
+    color: "#374151",
   },
   totalValue: {
     fontSize: 16,
-    color: '#111827',
+    color: "#111827",
   },
   grandTotalRow: {
     borderTopWidth: 1,
-    borderTopColor: '#e5e7eb',
+    borderTopColor: "#e5e7eb",
     paddingTop: 12,
     marginTop: 8,
   },
   grandTotalLabel: {
     fontSize: 18,
-    fontWeight: '600',
-    color: '#111827',
+    fontWeight: "600",
+    color: "#111827",
   },
   grandTotalValue: {
     fontSize: 18,
-    fontWeight: '700',
-    color: '#10b981',
+    fontWeight: "700",
+    color: "#10b981",
   },
   orderButton: {
-    backgroundColor: '#10b981',
+    backgroundColor: "#10b981",
     borderRadius: 8,
     paddingVertical: 16,
-    alignItems: 'center',
+    alignItems: "center",
     marginBottom: 24,
   },
   orderButtonDisabled: {
-    backgroundColor: '#9ca3af',
+    backgroundColor: "#9ca3af",
   },
   orderButtonText: {
-    color: '#ffffff',
+    color: "#ffffff",
     fontSize: 16,
-    fontWeight: '600',
+    fontWeight: "600",
   },
 });

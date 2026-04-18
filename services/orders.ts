@@ -1,14 +1,12 @@
 import { supabase } from '../lib/supabase';
 import {
-  Order,
-  Transaction,
-  OrderWithDetails,
+  canAdvanceOrderStatus,
   CreateOrderData,
-  CreateTransactionData,
+  Order,
   OrderStatus,
-  TransactionStatus,
-  validateOrderAmount,
-  canAdvanceOrderStatus
+  OrderWithDetails,
+  Transaction,
+  TransactionStatus
 } from '../types/orders';
 
 // Helper to fetch transactions for a list of order IDs (avoids missing FK join issue)
@@ -612,4 +610,23 @@ export const subscribeToOrder = (
     .subscribe((status) => {
       console.log(`📋 Order ${orderId} subscription status:`, status);
     });
+};// Submit product rating (updates orders.ratings integer column)
+// Submit product rating (updates orders.ratings integer column)
+export const submitProductRating = async (
+  orderId: string,
+  rating: number,   // 1–5
+  _comment: string  // no comment column in DB, kept for API compatibility
+): Promise<void> => {
+  const { error } = await supabase
+    .from('orders')
+    .update({ ratings: rating })
+    .eq('id', orderId);
+
+  if (error) {
+    console.error('❌ Error submitting rating:', error);
+    throw error;
+  }
+
+  console.log(`✅ Rating ${rating} submitted for order ${orderId}`);
 };
+

@@ -1,5 +1,8 @@
-import { router, useLocalSearchParams } from 'expo-router';
-import React, { useEffect, useState } from 'react';
+import { decode } from "base64-arraybuffer";
+import * as FileSystem from "expo-file-system/legacy";
+import * as ImagePicker from "expo-image-picker";
+import { router, useLocalSearchParams } from "expo-router";
+import React, { useEffect, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -11,33 +14,33 @@ import {
   StyleSheet,
   Text,
   TouchableOpacity,
-  View
-} from 'react-native';
-import * as ImagePicker from 'expo-image-picker';
-import * as FileSystem from 'expo-file-system/legacy';
-import { decode } from 'base64-arraybuffer';
-import Icon from 'react-native-vector-icons/FontAwesome5';
-import HeaderComponent from '../../components/HeaderComponent';
-import { useConfirmationModal } from '../../contexts/ConfirmationModalContext';
-import { supabase } from '../../lib/supabase';
-import { getUserWithProfile } from '../../services/auth';
-import { notifyAllAdmins, notifyOrderStatusChange } from '../../services/notifications';
+  View,
+} from "react-native";
+import Icon from "react-native-vector-icons/FontAwesome5";
+import HeaderComponent from "../../components/HeaderComponent";
+import { useConfirmationModal } from "../../contexts/ConfirmationModalContext";
+import { supabase } from "../../lib/supabase";
+import { getUserWithProfile } from "../../services/auth";
+import {
+  notifyAllAdmins,
+  notifyOrderStatusChange,
+} from "../../services/notifications";
 
-const { width: screenWidth } = Dimensions.get('window');
+const { width: screenWidth } = Dimensions.get("window");
 
 const colors = {
-  primary: '#059669',
-  secondary: '#10b981',
-  danger: '#ef4444',
-  warning: '#f59e0b',
-  success: '#22c55e',
-  text: '#0f172a',
-  textSecondary: '#64748b',
-  textLight: '#94a3b8',
-  background: '#f8fafc',
-  white: '#ffffff',
-  border: '#e2e8f0',
-  shadow: '#000000',
+  primary: "#059669",
+  secondary: "#10b981",
+  danger: "#ef4444",
+  warning: "#f59e0b",
+  success: "#22c55e",
+  text: "#0f172a",
+  textSecondary: "#64748b",
+  textLight: "#94a3b8",
+  background: "#f8fafc",
+  white: "#ffffff",
+  border: "#e2e8f0",
+  shadow: "#000000",
 };
 
 interface OrderDetail {
@@ -81,7 +84,10 @@ export default function OrderDetailScreen() {
   const [userType, setUserType] = useState<string | null>(null);
   const [userProfile, setUserProfile] = useState<any>(null);
   const [uploadingProof, setUploadingProof] = useState(false);
-  const [selectedProofImage, setSelectedProofImage] = useState<{ uri: string, fileExt: string } | null>(null);
+  const [selectedProofImage, setSelectedProofImage] = useState<{
+    uri: string;
+    fileExt: string;
+  } | null>(null);
   const { showConfirmation } = useConfirmationModal();
 
   useEffect(() => {
@@ -99,12 +105,12 @@ export default function OrderDetailScreen() {
 
   const loadOrderDetail = async () => {
     if (!id) return;
-
     try {
       setLoading(true);
       const { data, error } = await supabase
-        .from('orders')
-        .select(`
+        .from("orders")
+        .select(
+          `
           *,
           products (
             name,
@@ -125,26 +131,29 @@ export default function OrderDetailScreen() {
             farm_name,
             barangay
           )
-        `)
-        .eq('id', id)
+        `,
+        )
+        .eq("id", id)
         .single();
-
       if (error) throw error;
       setOrder(data as OrderDetail);
     } catch (error: any) {
-      console.error('Error loading order:', error);
-      Alert.alert('Error', 'Failed to load order details');
+      console.error("Error loading order:", error);
+      Alert.alert("Error", "Failed to load order details");
     } finally {
       setLoading(false);
     }
   };
 
   const handleStatusUpdate = async (newStatus: string) => {
-    // Check if trying to mark as delivered without proof of payment
-    if (newStatus === 'delivered' && !order?.proof_of_payment && !selectedProofImage) {
+    if (
+      newStatus === "delivered" &&
+      !order?.proof_of_payment &&
+      !selectedProofImage
+    ) {
       Alert.alert(
-        'Proof of Payment Required',
-        'Please select proof of payment before marking this order as delivered.'
+        "Proof of Payment Required",
+        "Please select proof of payment before marking this order as delivered.",
       );
       return;
     }
@@ -152,177 +161,133 @@ export default function OrderDetailScreen() {
     const statusText = newStatus.charAt(0).toUpperCase() + newStatus.slice(1);
     const confirmed = await showConfirmation(
       `${statusText} Order`,
-      `Are you sure you want to mark this order as ${newStatus}?`
+      `Are you sure you want to mark this order as ${newStatus}?`,
     );
-
     if (!confirmed) return;
 
     try {
       setUploadingProof(true);
-
       let proofUrl = order?.proof_of_payment;
 
-      console.log('🔄 Status update started:', { newStatus, hasProof: !!order?.proof_of_payment, hasSelectedImage: !!selectedProofImage });
-
-      // If marking as delivered and there's a selected proof image, upload it first
-      if (newStatus === 'delivered' && selectedProofImage) {
-        console.log('✅ Entering upload block - will upload proof');
-        // Clean the order ID to remove any special characters
-        const cleanOrderId = id.replace(/[^a-zA-Z0-9-]/g, '_');
+      if (newStatus === "delivered" && selectedProofImage) {
+        const cleanOrderId = id.replace(/[^a-zA-Z0-9-]/g, "_");
         const timestamp = Date.now();
         const fileName = `${cleanOrderId}_${timestamp}.${selectedProofImage.fileExt}`;
-
-        // Get proper mime type
         const mimeTypes: { [key: string]: string } = {
-          'jpg': 'image/jpeg',
-          'jpeg': 'image/jpeg',
-          'png': 'image/png',
-          'gif': 'image/gif',
-          'webp': 'image/webp',
+          jpg: "image/jpeg",
+          jpeg: "image/jpeg",
+          png: "image/png",
+          gif: "image/gif",
+          webp: "image/webp",
         };
-        const contentType = mimeTypes[selectedProofImage.fileExt] || 'image/jpeg';
-
-        console.log('📤 Uploading proof of payment...');
-        console.log('📁 File name:', fileName);
-        console.log('🔐 Content type:', contentType);
+        const contentType =
+          mimeTypes[selectedProofImage.fileExt] || "image/jpeg";
 
         try {
-          // Get session for authentication
-          const { data: { session } } = await supabase.auth.getSession();
-          if (!session) {
-            Alert.alert('Authentication Error', 'Please log in to upload proof of payment');
-            throw new Error('No session found');
-          }
+          const {
+            data: { session },
+          } = await supabase.auth.getSession();
+          if (!session) throw new Error("No session found");
 
           let arrayBuffer: ArrayBuffer;
-
-          // Handle file reading differently for web vs mobile
-          if (Platform.OS === 'web') {
-            console.log('📖 Reading file for web...');
+          if (Platform.OS === "web") {
             const response = await fetch(selectedProofImage.uri);
             const blob = await response.blob();
             arrayBuffer = await blob.arrayBuffer();
-            console.log('✅ Web file size:', (arrayBuffer.byteLength / (1024 * 1024)).toFixed(2) + 'MB');
           } else {
-            console.log('📖 Reading file for mobile...');
-            // On mobile, use FileSystem
-            const fileInfo = await FileSystem.getInfoAsync(selectedProofImage.uri);
-            if (fileInfo.exists && 'size' in fileInfo) {
-              console.log('📁 Mobile file size:', (fileInfo.size / (1024 * 1024)).toFixed(2) + 'MB');
-            }
-
-            const base64 = await FileSystem.readAsStringAsync(selectedProofImage.uri, {
-              encoding: FileSystem.EncodingType.Base64,
-            });
+            const base64 = await FileSystem.readAsStringAsync(
+              selectedProofImage.uri,
+              {
+                encoding: FileSystem.EncodingType.Base64,
+              },
+            );
             arrayBuffer = decode(base64);
           }
 
-          console.log('✅ ArrayBuffer size:', arrayBuffer.byteLength, 'bytes');
-          console.log('📤 Uploading to Supabase Storage...');
-
-          // Upload using fetch API with ArrayBuffer - direct upload method
-          const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL || '';
-          const uploadUrl = `${supabaseUrl}/storage/v1/object/proofs/${fileName}`;
-
-          console.log('🚀 Starting upload to:', uploadUrl);
-
-          const response = await fetch(uploadUrl, {
-            method: 'POST',
-            headers: {
-              'Authorization': `Bearer ${session.access_token}`,
-              'Content-Type': contentType,
-              'x-upsert': 'false',
+          const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL || "";
+          const response = await fetch(
+            `${supabaseUrl}/storage/v1/object/proofs/${fileName}`,
+            {
+              method: "POST",
+              headers: {
+                Authorization: `Bearer ${session.access_token}`,
+                "Content-Type": contentType,
+                "x-upsert": "false",
+              },
+              body: arrayBuffer,
             },
-            body: arrayBuffer,
-          });
-
-          console.log('📡 Upload response status:', response.status);
+          );
 
           if (!response.ok) {
             const errorText = await response.text();
-            console.error('❌ Upload failed:', errorText);
-            throw new Error(`Upload failed: ${response.status} ${response.statusText}`);
+            throw new Error(
+              `Upload failed: ${response.status} ${response.statusText}`,
+            );
           }
 
-          console.log('✅ Proof of payment uploaded successfully');
-
-          // Get public URL from proofs bucket
-          const { data: { publicUrl } } = supabase.storage
-            .from('proofs')
-            .getPublicUrl(fileName);
-
-          console.log('🔗 Public URL:', publicUrl);
+          const {
+            data: { publicUrl },
+          } = supabase.storage.from("proofs").getPublicUrl(fileName);
           proofUrl = publicUrl;
-
         } catch (uploadErr: any) {
-          console.error('❌ Upload exception:', uploadErr);
-          console.error('❌ Error details:', JSON.stringify(uploadErr, null, 2));
-          Alert.alert('Upload Failed', uploadErr.message || 'Failed to upload proof of payment');
+          Alert.alert(
+            "Upload Failed",
+            uploadErr.message || "Failed to upload proof of payment",
+          );
           throw uploadErr;
         }
       }
 
-      // Update order status and proof
       const updateData: any = { status: newStatus };
-      if (proofUrl && newStatus === 'delivered') {
+      if (proofUrl && newStatus === "delivered") {
         updateData.proof_of_payment = proofUrl;
       }
 
       const { error } = await supabase
-        .from('orders')
+        .from("orders")
         .update(updateData)
-        .eq('id', id);
-
+        .eq("id", id);
       if (error) throw error;
 
-      // Send notifications
       if (order) {
         try {
-          const productName = order.products?.name || 'Product';
           const { user } = await getUserWithProfile();
-          const currentUserId = user?.id || '';
-
-          // Prepare order details for notification
+          const currentUserId = user?.id || "";
           const orderDetails = {
             totalAmount: order.total_price,
             itemCount: order.quantity,
-            farmerName: `${order.farmer_profile?.first_name || ''} ${order.farmer_profile?.last_name || ''}`.trim(),
-            buyerName: `${order.buyer_profile?.first_name || ''} ${order.buyer_profile?.last_name || ''}`.trim(),
+            farmerName:
+              `${order.farmer_profile?.first_name || ""} ${order.farmer_profile?.last_name || ""}`.trim(),
+            buyerName:
+              `${order.buyer_profile?.first_name || ""} ${order.buyer_profile?.last_name || ""}`.trim(),
           };
-
-          // Notify about order status change
           await notifyOrderStatusChange(
             order.id,
             newStatus,
             order.buyer_id,
             order.farmer_id,
             orderDetails,
-            currentUserId
+            currentUserId,
           );
-
-          // Notify all admins if action was taken by farmer/buyer
-          if (userType !== 'admin' && userType !== 'super-admin') {
+          if (userType !== "admin" && userType !== "super-admin") {
             await notifyAllAdmins(
               `Order ${statusText}`,
-              `${userType === 'farmer' ? 'Farmer' : 'Buyer'} ${userProfile?.first_name} ${userProfile?.last_name} ${newStatus} order #${order.id.substring(0, 8)}`,
-              userProfile?.id || '',
-              {
-                action: `order_${newStatus}`,
-                orderId: order.id
-              }
+              `${userType === "farmer" ? "Farmer" : "Buyer"} ${userProfile?.first_name} ${userProfile?.last_name} ${newStatus} order #${order.id.substring(0, 8)}`,
+              userProfile?.id || "",
+              { action: `order_${newStatus}`, orderId: order.id },
             );
           }
         } catch (notifError) {
-          console.error('Failed to send notifications:', notifError);
+          console.error("Failed to send notifications:", notifError);
         }
       }
 
-      Alert.alert('Success', `Order ${newStatus} successfully`);
+      Alert.alert("Success", `Order ${newStatus} successfully`);
       setSelectedProofImage(null);
       await loadOrderDetail();
     } catch (error) {
-      console.error('Error updating order:', error);
-      Alert.alert('Error', 'Failed to update order status');
+      console.error("Error updating order:", error);
+      Alert.alert("Error", "Failed to update order status");
     } finally {
       setUploadingProof(false);
     }
@@ -330,93 +295,84 @@ export default function OrderDetailScreen() {
 
   const handleSelectProof = async () => {
     try {
-      if (Platform.OS === 'web') {
-        // Web file selection
-        const input = document.createElement('input');
-        input.type = 'file';
-        input.accept = 'image/*';
+      if (Platform.OS === "web") {
+        const input = document.createElement("input");
+        input.type = "file";
+        input.accept = "image/*";
         input.onchange = (event) => {
           const file = (event.target as HTMLInputElement).files?.[0];
           if (file) {
             if (file.size > 5 * 1024 * 1024) {
-              Alert.alert('Error', 'Image size must be less than 5MB');
+              Alert.alert("Error", "Image size must be less than 5MB");
               return;
             }
-            if (!file.type.startsWith('image/')) {
-              Alert.alert('Error', 'Please select a valid image file');
+            if (!file.type.startsWith("image/")) {
+              Alert.alert("Error", "Please select a valid image file");
               return;
             }
             const imageUrl = URL.createObjectURL(file);
-            const fileExt = file.name.split('.').pop()?.toLowerCase() || 'jpg';
-            console.log('📸 Selected image (web):', { uri: imageUrl, fileExt });
+            const fileExt = file.name.split(".").pop()?.toLowerCase() || "jpg";
             setSelectedProofImage({ uri: imageUrl, fileExt });
           }
         };
         input.click();
       } else {
-        // Mobile image picker
-        const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-
-        if (status !== 'granted') {
-          Alert.alert('Permission Required', 'Please grant permission to access your photos');
+        const { status } =
+          await ImagePicker.requestMediaLibraryPermissionsAsync();
+        if (status !== "granted") {
+          Alert.alert(
+            "Permission Required",
+            "Please grant permission to access your photos",
+          );
           return;
         }
-
         const result = await ImagePicker.launchImageLibraryAsync({
           mediaTypes: ImagePicker.MediaTypeOptions.Images,
           allowsEditing: true,
           aspect: [4, 3],
           quality: 0.8,
         });
-
         if (result.canceled) return;
-
         const uri = result.assets[0].uri;
-
-        // Extract file extension properly - get the last part before any query params or fragments
-        const uriWithoutParams = uri.split('?')[0].split('#')[0];
-        const parts = uriWithoutParams.split('.');
-        const fileExt = parts.length > 1 ? parts[parts.length - 1].toLowerCase() : 'jpg';
-
-        // Validate file extension
-        const validExtensions = ['jpg', 'jpeg', 'png', 'gif', 'webp'];
-        const finalExt = validExtensions.includes(fileExt) ? fileExt : 'jpg';
-
-        console.log('📸 Selected image (mobile):', { uri, fileExt: finalExt });
-
-        // Just store the selected image, don't upload yet
+        const uriWithoutParams = uri.split("?")[0].split("#")[0];
+        const parts = uriWithoutParams.split(".");
+        const fileExt =
+          parts.length > 1 ? parts[parts.length - 1].toLowerCase() : "jpg";
+        const validExtensions = ["jpg", "jpeg", "png", "gif", "webp"];
+        const finalExt = validExtensions.includes(fileExt) ? fileExt : "jpg";
         setSelectedProofImage({ uri, fileExt: finalExt });
       }
     } catch (error: any) {
-      console.error('Error selecting proof:', error);
-      Alert.alert('Error', 'Failed to select image');
+      Alert.alert("Error", "Failed to select image");
     }
   };
 
   const getStatusColor = (status: string) => {
     switch (status) {
-      case 'delivered': return colors.success;
-      case 'cancelled': return colors.danger;
-      case 'ready': return colors.primary;
-      case 'confirmed': return colors.secondary;
-      default: return colors.warning;
+      case "delivered":
+        return colors.success;
+      case "cancelled":
+        return colors.danger;
+      case "ready":
+        return colors.primary;
+      case "confirmed":
+        return colors.secondary;
+      default:
+        return colors.warning;
     }
   };
 
-  const formatCurrency = (amount: number) => {
-    return `₱${amount.toFixed(2)}`;
-  };
+  const formatCurrency = (amount: number) => `₱${amount.toFixed(2)}`;
 
-  const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleString('en-US', {
-      month: 'short',
-      day: 'numeric',
-      year: 'numeric',
-      hour: 'numeric',
-      minute: '2-digit',
-      hour12: true
+  const formatDate = (dateString: string) =>
+    new Date(dateString).toLocaleString("en-US", {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+      hour: "numeric",
+      minute: "2-digit",
+      hour12: true,
     });
-  };
 
   if (loading) {
     return (
@@ -425,8 +381,8 @@ export default function OrderDetailScreen() {
           profile={userProfile}
           userType={userType || undefined}
           currentRoute="/order-detail"
-          showMessages={true}
-          showNotifications={true}
+          showMessages
+          showNotifications
         />
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={colors.primary} />
@@ -443,14 +399,19 @@ export default function OrderDetailScreen() {
           profile={userProfile}
           userType={userType || undefined}
           currentRoute="/order-detail"
-          showMessages={true}
-          showNotifications={true}
+          showMessages
+          showNotifications
         />
         <View style={styles.errorContainer}>
           <Icon name="exclamation-circle" size={64} color={colors.danger} />
           <Text style={styles.errorTitle}>Order Not Found</Text>
-          <Text style={styles.errorText}>The order you're looking for doesn't exist.</Text>
-          <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
+          <Text style={styles.errorText}>
+            The order you're looking for doesn't exist.
+          </Text>
+          <TouchableOpacity
+            style={styles.backButton}
+            onPress={() => router.back()}
+          >
             <Text style={styles.backButtonText}>Go Back</Text>
           </TouchableOpacity>
         </View>
@@ -458,8 +419,10 @@ export default function OrderDetailScreen() {
     );
   }
 
-  const canUpdateStatus = userType === 'admin' || userType === 'super-admin' ||
-    (userType === 'farmer' && order.status === 'pending');
+  const canUpdateStatus =
+    userType === "admin" ||
+    userType === "super-admin" ||
+    (userType === "farmer" && order.status === "pending");
 
   return (
     <SafeAreaView style={styles.container}>
@@ -467,25 +430,44 @@ export default function OrderDetailScreen() {
         profile={userProfile}
         userType={userType || undefined}
         currentRoute="/order-detail"
-        showMessages={true}
-        showNotifications={true}
+        showMessages
+        showNotifications
       />
-      <ScrollView style={styles.content} contentContainerStyle={styles.contentContainer}>
+      <ScrollView
+        style={styles.content}
+        contentContainerStyle={styles.contentContainer}
+      >
         {/* Header */}
         <View style={styles.header}>
-          <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
+          <TouchableOpacity
+            style={styles.backBtn}
+            onPress={() => router.back()}
+          >
             <Icon name="arrow-left" size={20} color={colors.primary} />
           </TouchableOpacity>
           <View style={styles.headerTextContainer}>
             <Text style={styles.title}>Order Details</Text>
-            <Text style={styles.orderId}>#{order.id.substring(0, 8).toUpperCase()}</Text>
+            <Text style={styles.orderId}>
+              #{order.id.substring(0, 8).toUpperCase()}
+            </Text>
           </View>
         </View>
 
         {/* Status Badge */}
-        <View style={[styles.statusBadge, { backgroundColor: getStatusColor(order.status) + '20' }]}>
-          <Icon name="info-circle" size={16} color={getStatusColor(order.status)} />
-          <Text style={[styles.statusText, { color: getStatusColor(order.status) }]}>
+        <View
+          style={[
+            styles.statusBadge,
+            { backgroundColor: getStatusColor(order.status) + "20" },
+          ]}
+        >
+          <Icon
+            name="info-circle"
+            size={16}
+            color={getStatusColor(order.status)}
+          />
+          <Text
+            style={[styles.statusText, { color: getStatusColor(order.status) }]}
+          >
             {order.status.toUpperCase()}
           </Text>
         </View>
@@ -504,27 +486,37 @@ export default function OrderDetailScreen() {
           <View style={styles.infoRow}>
             <Icon name="box" size={16} color={colors.textSecondary} />
             <Text style={styles.infoLabel}>Product:</Text>
-            <Text style={styles.infoValue}>{order.products?.name || 'N/A'}</Text>
+            <Text style={styles.infoValue}>
+              {order.products?.name || "N/A"}
+            </Text>
           </View>
           <View style={styles.infoRow}>
             <Icon name="layer-group" size={16} color={colors.textSecondary} />
             <Text style={styles.infoLabel}>Category:</Text>
-            <Text style={styles.infoValue}>{order.products?.category || 'N/A'}</Text>
+            <Text style={styles.infoValue}>
+              {order.products?.category || "N/A"}
+            </Text>
           </View>
           <View style={styles.infoRow}>
             <Icon name="balance-scale" size={16} color={colors.textSecondary} />
             <Text style={styles.infoLabel}>Quantity:</Text>
-            <Text style={styles.infoValue}>{order.quantity} {order.products?.unit}</Text>
+            <Text style={styles.infoValue}>
+              {order.quantity} {order.products?.unit}
+            </Text>
           </View>
           <View style={styles.infoRow}>
             <Icon name="dollar-sign" size={16} color={colors.textSecondary} />
             <Text style={styles.infoLabel}>Unit Price:</Text>
-            <Text style={styles.infoValue}>{formatCurrency(order.products?.price || 0)}</Text>
+            <Text style={styles.infoValue}>
+              {formatCurrency(order.products?.price || 0)}
+            </Text>
           </View>
           <View style={[styles.infoRow, styles.totalRow]}>
             <Icon name="receipt" size={16} color={colors.primary} />
             <Text style={styles.totalLabel}>Total Amount:</Text>
-            <Text style={styles.totalValue}>{formatCurrency(order.total_price)}</Text>
+            <Text style={styles.totalValue}>
+              {formatCurrency(order.total_price)}
+            </Text>
           </View>
         </View>
 
@@ -541,12 +533,20 @@ export default function OrderDetailScreen() {
           <View style={styles.infoRow}>
             <Icon name="phone" size={16} color={colors.textSecondary} />
             <Text style={styles.infoLabel}>Phone:</Text>
-            <Text style={styles.infoValue}>{order.buyer_profile?.phone || 'N/A'}</Text>
+            <Text style={styles.infoValue}>
+              {order.buyer_profile?.phone || "N/A"}
+            </Text>
           </View>
           <View style={styles.infoRow}>
-            <Icon name="map-marker-alt" size={16} color={colors.textSecondary} />
+            <Icon
+              name="map-marker-alt"
+              size={16}
+              color={colors.textSecondary}
+            />
             <Text style={styles.infoLabel}>Barangay:</Text>
-            <Text style={styles.infoValue}>{order.buyer_profile?.barangay || 'N/A'}</Text>
+            <Text style={styles.infoValue}>
+              {order.buyer_profile?.barangay || "N/A"}
+            </Text>
           </View>
           <View style={styles.infoRow}>
             <Icon name="home" size={16} color={colors.textSecondary} />
@@ -562,23 +562,34 @@ export default function OrderDetailScreen() {
             <Icon name="user-tie" size={16} color={colors.textSecondary} />
             <Text style={styles.infoLabel}>Name:</Text>
             <Text style={styles.infoValue}>
-              {order.farmer_profile?.first_name} {order.farmer_profile?.last_name}
+              {order.farmer_profile?.first_name}{" "}
+              {order.farmer_profile?.last_name}
             </Text>
           </View>
           <View style={styles.infoRow}>
             <Icon name="tractor" size={16} color={colors.textSecondary} />
             <Text style={styles.infoLabel}>Farm:</Text>
-            <Text style={styles.infoValue}>{order.farmer_profile?.farm_name || 'N/A'}</Text>
+            <Text style={styles.infoValue}>
+              {order.farmer_profile?.farm_name || "N/A"}
+            </Text>
           </View>
           <View style={styles.infoRow}>
             <Icon name="phone" size={16} color={colors.textSecondary} />
             <Text style={styles.infoLabel}>Phone:</Text>
-            <Text style={styles.infoValue}>{order.farmer_profile?.phone || 'N/A'}</Text>
+            <Text style={styles.infoValue}>
+              {order.farmer_profile?.phone || "N/A"}
+            </Text>
           </View>
           <View style={styles.infoRow}>
-            <Icon name="map-marker-alt" size={16} color={colors.textSecondary} />
+            <Icon
+              name="map-marker-alt"
+              size={16}
+              color={colors.textSecondary}
+            />
             <Text style={styles.infoLabel}>Barangay:</Text>
-            <Text style={styles.infoValue}>{order.farmer_profile?.barangay || 'N/A'}</Text>
+            <Text style={styles.infoValue}>
+              {order.farmer_profile?.barangay || "N/A"}
+            </Text>
           </View>
         </View>
 
@@ -602,7 +613,8 @@ export default function OrderDetailScreen() {
                   resizeMode="contain"
                 />
                 <Text style={styles.proofUploadedText}>
-                  <Icon name="check-circle" size={14} color={colors.success} /> Proof uploaded
+                  <Icon name="check-circle" size={14} color={colors.success} />{" "}
+                  Proof uploaded
                 </Text>
               </View>
             ) : selectedProofImage ? (
@@ -613,7 +625,8 @@ export default function OrderDetailScreen() {
                   resizeMode="contain"
                 />
                 <Text style={styles.proofSelectedText}>
-                  <Icon name="image" size={14} color={colors.primary} /> Image selected - will upload when marking as delivered
+                  <Icon name="image" size={14} color={colors.primary} /> Image
+                  selected - will upload when marking as delivered
                 </Text>
                 <TouchableOpacity
                   style={styles.changeImageButton}
@@ -626,14 +639,21 @@ export default function OrderDetailScreen() {
             ) : (
               <View>
                 <Text style={styles.proofRequiredText}>
-                  <Icon name="exclamation-circle" size={14} color={colors.warning} /> Proof of payment is required before delivery
+                  <Icon
+                    name="exclamation-circle"
+                    size={14}
+                    color={colors.warning}
+                  />{" "}
+                  Proof of payment is required before delivery
                 </Text>
                 <TouchableOpacity
                   style={styles.uploadProofButton}
                   onPress={handleSelectProof}
                 >
                   <Icon name="image" size={16} color={colors.white} />
-                  <Text style={styles.uploadProofButtonText}>Select Proof of Payment</Text>
+                  <Text style={styles.uploadProofButtonText}>
+                    Select Proof of Payment
+                  </Text>
                 </TouchableOpacity>
               </View>
             )}
@@ -651,79 +671,89 @@ export default function OrderDetailScreen() {
         </View>
 
         {/* Action Buttons */}
-        {canUpdateStatus && order.status !== 'delivered' && order.status !== 'cancelled' && (
-          <View style={styles.actionsCard}>
-            <Text style={styles.cardTitle}>Quick Actions</Text>
-            <View style={styles.actionsContainer}>
-              {order.status === 'pending' && (
-                <TouchableOpacity
-                  style={[styles.actionButton, { backgroundColor: colors.success }]}
-                  onPress={() => handleStatusUpdate('confirmed')}
-                >
-                  <Icon name="check" size={16} color={colors.white} />
-                  <Text style={styles.actionButtonText}>Confirm Order</Text>
-                </TouchableOpacity>
-              )}
-              {order.status === 'confirmed' && (
-                <TouchableOpacity
-                  style={[styles.actionButton, { backgroundColor: colors.primary }]}
-                  onPress={() => handleStatusUpdate('ready')}
-                >
-                  <Icon name="box" size={16} color={colors.white} />
-                  <Text style={styles.actionButtonText}>Mark as Ready</Text>
-                </TouchableOpacity>
-              )}
-              {order.status === 'ready' && (
-                <TouchableOpacity
-                  style={[styles.actionButton, { backgroundColor: colors.success }]}
-                  onPress={() => handleStatusUpdate('delivered')}
-                >
-                  <Icon name="check-circle" size={16} color={colors.white} />
-                  <Text style={styles.actionButtonText}>Mark as Delivered</Text>
-                </TouchableOpacity>
-              )}
-              {['pending', 'ready'].includes(order.status) && (
-                <TouchableOpacity
-                  style={[styles.actionButton, { backgroundColor: colors.danger }]}
-                  onPress={() => handleStatusUpdate('cancelled')}
-                >
-                  <Icon name="times" size={16} color={colors.white} />
-                  <Text style={styles.actionButtonText}>Cancel Order</Text>
-                </TouchableOpacity>
-              )}
+        {canUpdateStatus &&
+          order.status !== "delivered" &&
+          order.status !== "cancelled" && (
+            <View style={styles.actionsCard}>
+              <Text style={styles.cardTitle}>Quick Actions</Text>
+              <View style={styles.actionsContainer}>
+                {order.status === "pending" && (
+                  <TouchableOpacity
+                    style={[
+                      styles.actionButton,
+                      { backgroundColor: colors.success },
+                    ]}
+                    onPress={() => handleStatusUpdate("confirmed")}
+                  >
+                    <Icon name="check" size={16} color={colors.white} />
+                    <Text style={styles.actionButtonText}>Confirm Order</Text>
+                  </TouchableOpacity>
+                )}
+                {order.status === "confirmed" && (
+                  <TouchableOpacity
+                    style={[
+                      styles.actionButton,
+                      { backgroundColor: colors.primary },
+                    ]}
+                    onPress={() => handleStatusUpdate("ready")}
+                  >
+                    <Icon name="box" size={16} color={colors.white} />
+                    <Text style={styles.actionButtonText}>Mark as Ready</Text>
+                  </TouchableOpacity>
+                )}
+                {order.status === "ready" && (
+                  <TouchableOpacity
+                    style={[
+                      styles.actionButton,
+                      { backgroundColor: colors.success },
+                    ]}
+                    onPress={() => handleStatusUpdate("delivered")}
+                  >
+                    <Icon name="check-circle" size={16} color={colors.white} />
+                    <Text style={styles.actionButtonText}>
+                      Mark as Delivered
+                    </Text>
+                  </TouchableOpacity>
+                )}
+                {/* Cancel only available on pending */}
+                {order.status === "pending" && (
+                  <TouchableOpacity
+                    style={[
+                      styles.actionButton,
+                      { backgroundColor: colors.danger },
+                    ]}
+                    onPress={() => handleStatusUpdate("cancelled")}
+                  >
+                    <Icon name="times" size={16} color={colors.white} />
+                    <Text style={styles.actionButtonText}>Cancel Order</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
             </View>
-          </View>
-        )}
+          )}
       </ScrollView>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: colors.background,
-  },
+  container: { flex: 1, backgroundColor: colors.background },
   loadingContainer: {
     flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
+    justifyContent: "center",
+    alignItems: "center",
     padding: 20,
   },
-  loadingText: {
-    marginTop: 16,
-    fontSize: 16,
-    color: colors.textSecondary,
-  },
+  loadingText: { marginTop: 16, fontSize: 16, color: colors.textSecondary },
   errorContainer: {
     flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
+    justifyContent: "center",
+    alignItems: "center",
     padding: 20,
   },
   errorTitle: {
     fontSize: 24,
-    fontWeight: '700',
+    fontWeight: "700",
     color: colors.text,
     marginTop: 16,
     marginBottom: 8,
@@ -731,7 +761,7 @@ const styles = StyleSheet.create({
   errorText: {
     fontSize: 16,
     color: colors.textSecondary,
-    textAlign: 'center',
+    textAlign: "center",
     marginBottom: 24,
   },
   backButton: {
@@ -740,23 +770,17 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     borderRadius: 8,
   },
-  backButtonText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: colors.white,
-  },
-  content: {
-    flex: 1,
-  },
+  backButtonText: { fontSize: 16, fontWeight: "600", color: colors.white },
+  content: { flex: 1 },
   contentContainer: {
     padding: screenWidth < 768 ? 16 : 24,
     maxWidth: 900,
-    width: '100%',
-    alignSelf: 'center',
+    width: "100%",
+    alignSelf: "center",
   },
   header: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     marginBottom: 24,
     gap: 12,
   },
@@ -765,39 +789,26 @@ const styles = StyleSheet.create({
     height: 40,
     borderRadius: 20,
     backgroundColor: colors.white,
-    justifyContent: 'center',
-    alignItems: 'center',
+    justifyContent: "center",
+    alignItems: "center",
     shadowColor: colors.shadow,
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 4,
     elevation: 2,
   },
-  headerTextContainer: {
-    flex: 1,
-  },
-  title: {
-    fontSize: 24,
-    fontWeight: '700',
-    color: colors.text,
-  },
-  orderId: {
-    fontSize: 14,
-    color: colors.textSecondary,
-    marginTop: 4,
-  },
+  headerTextContainer: { flex: 1 },
+  title: { fontSize: 24, fontWeight: "700", color: colors.text },
+  orderId: { fontSize: 14, color: colors.textSecondary, marginTop: 4 },
   statusBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 8,
     padding: 16,
     borderRadius: 12,
     marginBottom: 16,
   },
-  statusText: {
-    fontSize: 16,
-    fontWeight: '700',
-  },
+  statusText: { fontSize: 16, fontWeight: "700" },
   card: {
     backgroundColor: colors.white,
     borderRadius: 12,
@@ -811,34 +822,30 @@ const styles = StyleSheet.create({
   },
   cardTitle: {
     fontSize: 18,
-    fontWeight: '700',
+    fontWeight: "700",
     color: colors.text,
     marginBottom: 16,
   },
   purchaseCode: {
     fontSize: 28,
-    fontWeight: '700',
+    fontWeight: "700",
     color: colors.primary,
-    textAlign: 'center',
+    textAlign: "center",
     letterSpacing: 2,
   },
   infoRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 8,
     marginBottom: 12,
   },
   infoLabel: {
     fontSize: 14,
     color: colors.textSecondary,
-    fontWeight: '500',
+    fontWeight: "500",
     width: 100,
   },
-  infoValue: {
-    fontSize: 14,
-    color: colors.text,
-    flex: 1,
-  },
+  infoValue: { fontSize: 14, color: colors.text, flex: 1 },
   totalRow: {
     marginTop: 8,
     paddingTop: 16,
@@ -848,20 +855,16 @@ const styles = StyleSheet.create({
   totalLabel: {
     fontSize: 16,
     color: colors.text,
-    fontWeight: '700',
+    fontWeight: "700",
     width: 120,
   },
   totalValue: {
     fontSize: 20,
     color: colors.primary,
-    fontWeight: '700',
+    fontWeight: "700",
     flex: 1,
   },
-  notesText: {
-    fontSize: 14,
-    color: colors.text,
-    lineHeight: 20,
-  },
+  notesText: { fontSize: 14, color: colors.text, lineHeight: 20 },
   actionsCard: {
     backgroundColor: colors.white,
     borderRadius: 12,
@@ -873,24 +876,18 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 2,
   },
-  actionsContainer: {
-    gap: 12,
-  },
+  actionsContainer: { gap: 12 },
   actionButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
     gap: 8,
     padding: 16,
     borderRadius: 8,
   },
-  actionButtonText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: colors.white,
-  },
+  actionButtonText: { fontSize: 16, fontWeight: "600", color: colors.white },
   proofImage: {
-    width: '100%',
+    width: "100%",
     height: 300,
     borderRadius: 8,
     marginBottom: 12,
@@ -899,20 +896,20 @@ const styles = StyleSheet.create({
   proofUploadedText: {
     fontSize: 14,
     color: colors.success,
-    fontWeight: '600',
-    textAlign: 'center',
+    fontWeight: "600",
+    textAlign: "center",
   },
   proofRequiredText: {
     fontSize: 14,
     color: colors.warning,
-    fontWeight: '500',
+    fontWeight: "500",
     marginBottom: 16,
-    textAlign: 'center',
+    textAlign: "center",
   },
   uploadProofButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
     gap: 8,
     backgroundColor: colors.primary,
     padding: 16,
@@ -920,32 +917,20 @@ const styles = StyleSheet.create({
   },
   uploadProofButtonText: {
     fontSize: 16,
-    fontWeight: '600',
+    fontWeight: "600",
     color: colors.white,
-  },
-  uploadingContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    marginTop: 8,
-  },
-  uploadingText: {
-    fontSize: 14,
-    color: colors.primary,
-    fontWeight: '500',
   },
   proofSelectedText: {
     fontSize: 14,
     color: colors.primary,
-    fontWeight: '500',
-    textAlign: 'center',
+    fontWeight: "500",
+    textAlign: "center",
     marginBottom: 12,
   },
   changeImageButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
     gap: 8,
     backgroundColor: colors.white,
     borderWidth: 1,
@@ -955,7 +940,7 @@ const styles = StyleSheet.create({
   },
   changeImageButtonText: {
     fontSize: 14,
-    fontWeight: '600',
+    fontWeight: "600",
     color: colors.primary,
   },
 });
