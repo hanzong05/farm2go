@@ -1,76 +1,105 @@
-import React, { useState, useEffect } from 'react';
+import { Ionicons } from "@expo/vector-icons";
+import { decode } from "base64-arraybuffer";
+import * as FileSystem from "expo-file-system/legacy";
+import * as ImagePicker from "expo-image-picker";
+import { router } from "expo-router";
+import React, { useEffect, useState } from "react";
 import {
-  View,
-  Text,
-  StyleSheet,
-  ScrollView,
-  TouchableOpacity,
-  TextInput,
   ActivityIndicator,
-  Switch,
-  RefreshControl,
-  Image,
   Animated,
+  Image,
   Modal,
   Platform,
-} from 'react-native';
-import * as ImagePicker from 'expo-image-picker';
-import * as FileSystem from 'expo-file-system/legacy';
-import { decode } from 'base64-arraybuffer';
-import { router } from 'expo-router';
-import { supabase } from '../lib/supabase';
-import { getUserWithProfile, logoutUser } from '../services/auth';
-import { Database } from '../types/database';
-import HeaderComponent from './HeaderComponent';
-import { useCustomAlert } from './CustomAlert';
-import { LinearGradient } from 'expo-linear-gradient';
-import { Ionicons, MaterialIcons, FontAwesome5 } from '@expo/vector-icons';
+  RefreshControl,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
+} from "react-native";
+import { supabase } from "../lib/supabase";
+import { getUserWithProfile, logoutUser } from "../services/auth";
+import { Database } from "../types/database";
+import { useCustomAlert } from "./CustomAlert";
+import HeaderComponent from "./HeaderComponent";
 
-type Profile = Database['public']['Tables']['profiles']['Row'];
+type Profile = Database["public"]["Tables"]["profiles"]["Row"];
 
 interface FieldConfig {
   key: string;
   label: string;
   placeholder: string;
-  keyboardType?: 'default' | 'phone-pad' | 'email-address';
+  keyboardType?: "default" | "phone-pad" | "email-address";
   multiline?: boolean;
 }
 
 interface SettingsProps {
-  userType: 'farmer' | 'buyer' | 'admin';
+  userType: "farmer" | "buyer" | "admin";
   currentRoute: string;
   onNavigateBack?: () => void;
 }
 
 const FIELD_CONFIGS: Record<string, FieldConfig[]> = {
   farmer: [
-    { key: 'first_name', label: 'First Name', placeholder: 'Enter first name' },
-    { key: 'last_name', label: 'Last Name', placeholder: 'Enter last name' },
-    { key: 'phone', label: 'Phone Number', placeholder: 'Enter phone number', keyboardType: 'phone-pad' },
-    { key: 'barangay', label: 'Barangay', placeholder: 'Enter barangay' },
-    { key: 'farm_name', label: 'Farm Name', placeholder: 'Enter farm name' },
-    { key: 'farm_size', label: 'Farm Size', placeholder: 'e.g., 5 hectares' },
+    { key: "first_name", label: "First Name", placeholder: "Enter first name" },
+    { key: "last_name", label: "Last Name", placeholder: "Enter last name" },
+    {
+      key: "phone",
+      label: "Phone Number",
+      placeholder: "Enter phone number",
+      keyboardType: "phone-pad",
+    },
+    { key: "barangay", label: "Barangay", placeholder: "Enter barangay" },
+    {
+      key: "full_address",
+      label: "Full Address",
+      placeholder:
+        "e.g., Blk 3 Lot 12, Sampaguita St., Brgy. San Jose, Tarlac City",
+    }, // ✅ ADD
+    { key: "farm_name", label: "Farm Name", placeholder: "Enter farm name" },
+    { key: "farm_size", label: "Farm Size", placeholder: "e.g., 5 hectares" },
   ],
   buyer: [
-    { key: 'first_name', label: 'First Name', placeholder: 'Enter first name' },
-    { key: 'last_name', label: 'Last Name', placeholder: 'Enter last name' },
-    { key: 'phone', label: 'Phone Number', placeholder: 'Enter phone number', keyboardType: 'phone-pad' },
-    { key: 'barangay', label: 'Barangay', placeholder: 'Enter barangay' },
+    { key: "first_name", label: "First Name", placeholder: "Enter first name" },
+    { key: "last_name", label: "Last Name", placeholder: "Enter last name" },
+    {
+      key: "phone",
+      label: "Phone Number",
+      placeholder: "Enter phone number",
+      keyboardType: "phone-pad",
+    },
+    { key: "barangay", label: "Barangay", placeholder: "Enter barangay" },
+    {
+      key: "full_address",
+      label: "Full Address",
+      placeholder:
+        "e.g., Blk 3 Lot 12, Sampaguita St., Brgy. San Jose, Tarlac City",
+    }, // ✅ ADD
   ],
   admin: [
-    { key: 'first_name', label: 'First Name', placeholder: 'Enter first name' },
-    { key: 'last_name', label: 'Last Name', placeholder: 'Enter last name' },
-    { key: 'phone', label: 'Phone Number', placeholder: 'Enter phone number', keyboardType: 'phone-pad' },
+    { key: "first_name", label: "First Name", placeholder: "Enter first name" },
+    { key: "last_name", label: "Last Name", placeholder: "Enter last name" },
+    {
+      key: "phone",
+      label: "Phone Number",
+      placeholder: "Enter phone number",
+      keyboardType: "phone-pad",
+    },
   ],
 };
 
 const SECTION_TITLES: Record<string, string> = {
-  farmer: 'Farm Profile',
-  buyer: 'Business Profile',
-  admin: 'Admin Profile',
+  farmer: "Farm Profile",
+  buyer: "Business Profile",
+  admin: "Admin Profile",
 };
 
-export default function Settings({ userType, currentRoute, onNavigateBack }: SettingsProps) {
+export default function Settings({
+  userType,
+  currentRoute,
+  onNavigateBack,
+}: SettingsProps) {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -83,18 +112,18 @@ export default function Settings({ userType, currentRoute, onNavigateBack }: Set
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
   const [fadeAnim] = useState(new Animated.Value(0));
   const [showPasswordModal, setShowPasswordModal] = useState(false);
-  const [currentPassword, setCurrentPassword] = useState('');
-  const [newPassword, setNewPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
   const [changingPassword, setChangingPassword] = useState(false);
   const [showCurrentPassword, setShowCurrentPassword] = useState(false);
   const [showNewPassword, setShowNewPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
-  const { showAlert, AlertComponent} = useCustomAlert();
+  const { showAlert, AlertComponent } = useCustomAlert();
 
   const fieldConfigs = FIELD_CONFIGS[userType] || FIELD_CONFIGS.farmer;
-  const sectionTitle = SECTION_TITLES[userType] || 'Profile';
+  const sectionTitle = SECTION_TITLES[userType] || "Profile";
 
   useEffect(() => {
     loadProfile();
@@ -113,15 +142,16 @@ export default function Settings({ userType, currentRoute, onNavigateBack }: Set
         setAvatarUrl(userData.profile.avatar_url || null);
 
         const initialFormData: Record<string, string> = {};
-        fieldConfigs.forEach(field => {
-          initialFormData[field.key] = (userData.profile as any)[field.key] || '';
+        fieldConfigs.forEach((field) => {
+          initialFormData[field.key] =
+            (userData.profile as any)[field.key] || "";
         });
         setFormData(initialFormData);
       }
     } catch (error) {
-      console.error('Error loading profile:', error);
-      showAlert('Error', 'Failed to load profile', [
-        { text: 'OK', style: 'default' }
+      console.error("Error loading profile:", error);
+      showAlert("Error", "Failed to load profile", [
+        { text: "OK", style: "default" },
       ]);
     } finally {
       setLoading(false);
@@ -130,16 +160,19 @@ export default function Settings({ userType, currentRoute, onNavigateBack }: Set
 
   const handleSelectProfilePicture = async () => {
     try {
-      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-      if (status !== 'granted') {
-        showAlert('Permission Required', 'Please grant permission to access your photos', [
-          { text: 'OK', style: 'default' }
-        ]);
+      const { status } =
+        await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (status !== "granted") {
+        showAlert(
+          "Permission Required",
+          "Please grant permission to access your photos",
+          [{ text: "OK", style: "default" }],
+        );
         return;
       }
 
       const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ['images'],
+        mediaTypes: ["images"],
         allowsEditing: true,
         aspect: [1, 1],
         quality: 0.8,
@@ -149,9 +182,9 @@ export default function Settings({ userType, currentRoute, onNavigateBack }: Set
 
       await uploadProfilePicture(result.assets[0].uri);
     } catch (error: any) {
-      console.error('Error selecting profile picture:', error);
-      showAlert('Error', 'Failed to select image', [
-        { text: 'OK', style: 'default' }
+      console.error("Error selecting profile picture:", error);
+      showAlert("Error", "Failed to select image", [
+        { text: "OK", style: "default" },
       ]);
     }
   };
@@ -161,32 +194,35 @@ export default function Settings({ userType, currentRoute, onNavigateBack }: Set
 
     setUploadingImage(true);
     try {
-      console.log('📤 Uploading avatar...');
+      console.log("📤 Uploading avatar...");
 
       // Get file extension
-      const uriWithoutParams = uri.split('?')[0].split('#')[0];
-      const parts = uriWithoutParams.split('.');
-      const fileExt = parts.length > 1 ? parts[parts.length - 1].toLowerCase() : 'jpg';
-      const validExtensions = ['jpg', 'jpeg', 'png', 'gif', 'webp'];
-      const finalExt = validExtensions.includes(fileExt) ? fileExt : 'jpg';
+      const uriWithoutParams = uri.split("?")[0].split("#")[0];
+      const parts = uriWithoutParams.split(".");
+      const fileExt =
+        parts.length > 1 ? parts[parts.length - 1].toLowerCase() : "jpg";
+      const validExtensions = ["jpg", "jpeg", "png", "gif", "webp"];
+      const finalExt = validExtensions.includes(fileExt) ? fileExt : "jpg";
 
       const fileName = `${profile.id}_${Date.now()}.${finalExt}`;
       const filePath = `${fileName}`;
 
       const mimeTypes: { [key: string]: string } = {
-        'jpg': 'image/jpeg',
-        'jpeg': 'image/jpeg',
-        'png': 'image/png',
-        'gif': 'image/gif',
-        'webp': 'image/webp',
+        jpg: "image/jpeg",
+        jpeg: "image/jpeg",
+        png: "image/png",
+        gif: "image/gif",
+        webp: "image/webp",
       };
-      const contentType = mimeTypes[finalExt] || 'image/jpeg';
+      const contentType = mimeTypes[finalExt] || "image/jpeg";
 
       // Get session for auth
-      const { data: { session } } = await supabase.auth.getSession();
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
       if (!session) {
-        showAlert('Error', 'You must be logged in to upload photos', [
-          { text: 'OK', style: 'default' }
+        showAlert("Error", "You must be logged in to upload photos", [
+          { text: "OK", style: "default" },
         ]);
         return;
       }
@@ -194,19 +230,25 @@ export default function Settings({ userType, currentRoute, onNavigateBack }: Set
       let arrayBuffer: ArrayBuffer;
 
       // Handle file reading differently for web vs mobile
-      if (Platform.OS === 'web') {
-        console.log('📖 Reading file for web...');
+      if (Platform.OS === "web") {
+        console.log("📖 Reading file for web...");
         // On web, fetch the blob directly
         const response = await fetch(uri);
         const blob = await response.blob();
         arrayBuffer = await blob.arrayBuffer();
-        console.log('✅ Web file size:', (arrayBuffer.byteLength / (1024 * 1024)).toFixed(2) + 'MB');
+        console.log(
+          "✅ Web file size:",
+          (arrayBuffer.byteLength / (1024 * 1024)).toFixed(2) + "MB",
+        );
       } else {
-        console.log('📖 Reading file for mobile...');
+        console.log("📖 Reading file for mobile...");
         // On mobile, use FileSystem
         const fileInfo = await FileSystem.getInfoAsync(uri);
-        if (fileInfo.exists && 'size' in fileInfo) {
-          console.log('📁 Mobile file size:', (fileInfo.size / (1024 * 1024)).toFixed(2) + 'MB');
+        if (fileInfo.exists && "size" in fileInfo) {
+          console.log(
+            "📁 Mobile file size:",
+            (fileInfo.size / (1024 * 1024)).toFixed(2) + "MB",
+          );
         }
 
         const base64 = await FileSystem.readAsStringAsync(uri, {
@@ -215,65 +257,67 @@ export default function Settings({ userType, currentRoute, onNavigateBack }: Set
         arrayBuffer = decode(base64);
       }
 
-      console.log('✅ ArrayBuffer size:', arrayBuffer.byteLength, 'bytes');
-      console.log('📤 Uploading to Supabase Storage...');
+      console.log("✅ ArrayBuffer size:", arrayBuffer.byteLength, "bytes");
+      console.log("📤 Uploading to Supabase Storage...");
 
       // Upload using fetch API with ArrayBuffer
-      const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL || '';
+      const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL || "";
       const uploadUrl = `${supabaseUrl}/storage/v1/object/avatars/${filePath}`;
 
       const uploadResponse = await fetch(uploadUrl, {
-        method: 'POST',
+        method: "POST",
         headers: {
-          'Authorization': `Bearer ${session.access_token}`,
-          'Content-Type': contentType,
-          'x-upsert': 'false',
+          Authorization: `Bearer ${session.access_token}`,
+          "Content-Type": contentType,
+          "x-upsert": "false",
         },
         body: arrayBuffer,
       });
 
-      console.log('📡 Upload response:', uploadResponse.status);
+      console.log("📡 Upload response:", uploadResponse.status);
 
       if (!uploadResponse.ok) {
         const errorText = await uploadResponse.text();
-        console.error('❌ Upload failed:', errorText);
-        showAlert('Upload Error', `Failed to upload image (${uploadResponse.status})`, [
-          { text: 'OK', style: 'default' }
-        ]);
+        console.error("❌ Upload failed:", errorText);
+        showAlert(
+          "Upload Error",
+          `Failed to upload image (${uploadResponse.status})`,
+          [{ text: "OK", style: "default" }],
+        );
         return;
       }
 
-      console.log('✅ Avatar uploaded successfully');
+      console.log("✅ Avatar uploaded successfully");
 
       // Get public URL
-      const { data: { publicUrl } } = supabase.storage
-        .from('avatars')
-        .getPublicUrl(filePath);
+      const {
+        data: { publicUrl },
+      } = supabase.storage.from("avatars").getPublicUrl(filePath);
 
-      console.log('🔗 Avatar URL:', publicUrl);
+      console.log("🔗 Avatar URL:", publicUrl);
 
       // Update profile
       const { error: updateError } = await supabase
-        .from('profiles')
+        .from("profiles")
         .update({ avatar_url: publicUrl })
-        .eq('id', profile.id);
+        .eq("id", profile.id);
 
       if (updateError) {
-        console.error('❌ Profile update error:', updateError);
-        showAlert('Error', 'Failed to update profile: ' + updateError.message, [
-          { text: 'OK', style: 'default' }
+        console.error("❌ Profile update error:", updateError);
+        showAlert("Error", "Failed to update profile: " + updateError.message, [
+          { text: "OK", style: "default" },
         ]);
         return;
       }
 
       setAvatarUrl(publicUrl);
-      showAlert('Success', 'Profile picture updated successfully', [
-        { text: 'OK', style: 'default' }
+      showAlert("Success", "Profile picture updated successfully", [
+        { text: "OK", style: "default" },
       ]);
     } catch (error: any) {
-      console.error('Error uploading profile picture:', error);
-      showAlert('Error', error.message || 'Failed to upload profile picture', [
-        { text: 'OK', style: 'default' }
+      console.error("Error uploading profile picture:", error);
+      showAlert("Error", error.message || "Failed to upload profile picture", [
+        { text: "OK", style: "default" },
       ]);
     } finally {
       setUploadingImage(false);
@@ -297,21 +341,21 @@ export default function Settings({ userType, currentRoute, onNavigateBack }: Set
       };
 
       const { error } = await (supabase as any)
-        .from('profiles')
+        .from("profiles")
         .update(updateData)
-        .eq('id', profile.id);
+        .eq("id", profile.id);
 
       if (error) throw error;
 
-      showAlert('Success', 'Profile updated successfully', [
-        { text: 'OK', style: 'default' }
+      showAlert("Success", "Profile updated successfully", [
+        { text: "OK", style: "default" },
       ]);
       setIsEditing(false);
       await loadProfile();
     } catch (error) {
-      console.error('Error updating profile:', error);
-      showAlert('Error', 'Failed to update profile', [
-        { text: 'OK', style: 'default' }
+      console.error("Error updating profile:", error);
+      showAlert("Error", "Failed to update profile", [
+        { text: "OK", style: "default" },
       ]);
     } finally {
       setSaving(false);
@@ -320,36 +364,36 @@ export default function Settings({ userType, currentRoute, onNavigateBack }: Set
 
   const handleChangePassword = () => {
     setShowPasswordModal(true);
-    setCurrentPassword('');
-    setNewPassword('');
-    setConfirmPassword('');
+    setCurrentPassword("");
+    setNewPassword("");
+    setConfirmPassword("");
   };
 
   const handlePasswordChange = async () => {
     if (!currentPassword || !newPassword || !confirmPassword) {
-      showAlert('Error', 'Please fill in all fields', [
-        { text: 'OK', style: 'default' }
+      showAlert("Error", "Please fill in all fields", [
+        { text: "OK", style: "default" },
       ]);
       return;
     }
 
     if (newPassword.length < 6) {
-      showAlert('Error', 'New password must be at least 6 characters', [
-        { text: 'OK', style: 'default' }
+      showAlert("Error", "New password must be at least 6 characters", [
+        { text: "OK", style: "default" },
       ]);
       return;
     }
 
     if (newPassword !== confirmPassword) {
-      showAlert('Error', 'New passwords do not match', [
-        { text: 'OK', style: 'default' }
+      showAlert("Error", "New passwords do not match", [
+        { text: "OK", style: "default" },
       ]);
       return;
     }
 
     if (!profile?.email) {
-      showAlert('Error', 'User email not found', [
-        { text: 'OK', style: 'default' }
+      showAlert("Error", "User email not found", [
+        { text: "OK", style: "default" },
       ]);
       return;
     }
@@ -364,8 +408,8 @@ export default function Settings({ userType, currentRoute, onNavigateBack }: Set
       });
 
       if (signInError) {
-        showAlert('Error', 'Current password is incorrect', [
-          { text: 'OK', style: 'default' }
+        showAlert("Error", "Current password is incorrect", [
+          { text: "OK", style: "default" },
         ]);
         setChangingPassword(false);
         return;
@@ -377,8 +421,8 @@ export default function Settings({ userType, currentRoute, onNavigateBack }: Set
       });
 
       if (updateError) {
-        showAlert('Error', updateError.message || 'Failed to update password', [
-          { text: 'OK', style: 'default' }
+        showAlert("Error", updateError.message || "Failed to update password", [
+          { text: "OK", style: "default" },
         ]);
         setChangingPassword(false);
         return;
@@ -386,79 +430,81 @@ export default function Settings({ userType, currentRoute, onNavigateBack }: Set
 
       // Success!
       setShowPasswordModal(false);
-      setCurrentPassword('');
-      setNewPassword('');
-      setConfirmPassword('');
+      setCurrentPassword("");
+      setNewPassword("");
+      setConfirmPassword("");
       setChangingPassword(false);
 
-      showAlert('Success', 'Password updated successfully! Please log in again with your new password.', [
-        {
-          text: 'OK',
-          style: 'default',
-          onPress: async () => {
-            try {
-              await logoutUser();
-              router.replace('/auth/login');
-            } catch (error) {
-              console.error('Logout error:', error);
-              router.replace('/auth/login');
-            }
-          }
-        }
-      ]);
+      showAlert(
+        "Success",
+        "Password updated successfully! Please log in again with your new password.",
+        [
+          {
+            text: "OK",
+            style: "default",
+            onPress: async () => {
+              try {
+                await logoutUser();
+                router.replace("/auth/login");
+              } catch (error) {
+                console.error("Logout error:", error);
+                router.replace("/auth/login");
+              }
+            },
+          },
+        ],
+      );
     } catch (error: any) {
-      console.error('Password change error:', error);
-      showAlert('Error', error.message || 'Failed to change password', [
-        { text: 'OK', style: 'default' }
+      console.error("Password change error:", error);
+      showAlert("Error", error.message || "Failed to change password", [
+        { text: "OK", style: "default" },
       ]);
       setChangingPassword(false);
     }
   };
 
   const handleLogout = async () => {
-    showAlert(
-      'Confirm Logout',
-      'Are you sure you want to logout?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Logout',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              await logoutUser();
-              router.replace('/auth/login');
-            } catch (error) {
-              console.error('Logout error:', error);
-            }
-          },
+    showAlert("Confirm Logout", "Are you sure you want to logout?", [
+      { text: "Cancel", style: "cancel" },
+      {
+        text: "Logout",
+        style: "destructive",
+        onPress: async () => {
+          try {
+            await logoutUser();
+            router.replace("/auth/login");
+          } catch (error) {
+            console.error("Logout error:", error);
+          }
         },
-      ]
-    );
+      },
+    ]);
   };
 
   const handleDeleteAccount = () => {
     showAlert(
-      'Delete Account',
-      'This action cannot be undone. Are you sure you want to delete your account?',
+      "Delete Account",
+      "This action cannot be undone. Are you sure you want to delete your account?",
       [
-        { text: 'Cancel', style: 'cancel' },
+        { text: "Cancel", style: "cancel" },
         {
-          text: 'Delete',
-          style: 'destructive',
+          text: "Delete",
+          style: "destructive",
           onPress: () => {
-            showAlert('Feature Coming Soon', 'Account deletion will be available in a future update.', [
-              { text: 'OK', style: 'default' }
-            ]);
+            showAlert(
+              "Feature Coming Soon",
+              "Account deletion will be available in a future update.",
+              [{ text: "OK", style: "default" }],
+            );
           },
         },
-      ]
+      ],
     );
   };
 
   const renderFormField = (field: FieldConfig, index: number) => {
-    if (field.key === 'first_name') {
-      const lastNameField = fieldConfigs.find(f => f.key === 'last_name');
+    if (field.key === "first_name") {
+      const lastNameField = fieldConfigs.find((f) => f.key === "last_name");
       if (!lastNameField) return null;
 
       return (
@@ -467,8 +513,10 @@ export default function Settings({ userType, currentRoute, onNavigateBack }: Set
             <Text style={styles.label}>{field.label}</Text>
             <TextInput
               style={[styles.input, !isEditing && styles.inputDisabled]}
-              value={formData[field.key] || ''}
-              onChangeText={(text) => setFormData(prev => ({ ...prev, [field.key]: text }))}
+              value={formData[field.key] || ""}
+              onChangeText={(text) =>
+                setFormData((prev) => ({ ...prev, [field.key]: text }))
+              }
               editable={isEditing}
               placeholder={field.placeholder}
               placeholderTextColor="#9ca3af"
@@ -478,8 +526,10 @@ export default function Settings({ userType, currentRoute, onNavigateBack }: Set
             <Text style={styles.label}>{lastNameField.label}</Text>
             <TextInput
               style={[styles.input, !isEditing && styles.inputDisabled]}
-              value={formData[lastNameField.key] || ''}
-              onChangeText={(text) => setFormData(prev => ({ ...prev, [lastNameField.key]: text }))}
+              value={formData[lastNameField.key] || ""}
+              onChangeText={(text) =>
+                setFormData((prev) => ({ ...prev, [lastNameField.key]: text }))
+              }
               editable={isEditing}
               placeholder={lastNameField.placeholder}
               placeholderTextColor="#9ca3af"
@@ -489,10 +539,10 @@ export default function Settings({ userType, currentRoute, onNavigateBack }: Set
       );
     }
 
-    if (field.key === 'last_name') return null;
+    if (field.key === "last_name") return null;
 
-    if (field.key === 'farm_size') {
-      const farmNameField = fieldConfigs.find(f => f.key === 'farm_name');
+    if (field.key === "farm_size") {
+      const farmNameField = fieldConfigs.find((f) => f.key === "farm_name");
       if (!farmNameField) return null;
 
       return (
@@ -501,8 +551,10 @@ export default function Settings({ userType, currentRoute, onNavigateBack }: Set
             <Text style={styles.label}>{farmNameField.label}</Text>
             <TextInput
               style={[styles.input, !isEditing && styles.inputDisabled]}
-              value={formData[farmNameField.key] || ''}
-              onChangeText={(text) => setFormData(prev => ({ ...prev, [farmNameField.key]: text }))}
+              value={formData[farmNameField.key] || ""}
+              onChangeText={(text) =>
+                setFormData((prev) => ({ ...prev, [farmNameField.key]: text }))
+              }
               editable={isEditing}
               placeholder={farmNameField.placeholder}
               placeholderTextColor="#9ca3af"
@@ -512,8 +564,10 @@ export default function Settings({ userType, currentRoute, onNavigateBack }: Set
             <Text style={styles.label}>{field.label}</Text>
             <TextInput
               style={[styles.input, !isEditing && styles.inputDisabled]}
-              value={formData[field.key] || ''}
-              onChangeText={(text) => setFormData(prev => ({ ...prev, [field.key]: text }))}
+              value={formData[field.key] || ""}
+              onChangeText={(text) =>
+                setFormData((prev) => ({ ...prev, [field.key]: text }))
+              }
               editable={isEditing}
               placeholder={field.placeholder}
               placeholderTextColor="#9ca3af"
@@ -523,15 +577,17 @@ export default function Settings({ userType, currentRoute, onNavigateBack }: Set
       );
     }
 
-    if (field.key === 'farm_name') return null;
+    if (field.key === "farm_name") return null;
 
     return (
       <View key={field.key} style={styles.inputContainer}>
         <Text style={styles.label}>{field.label}</Text>
         <TextInput
           style={[styles.input, !isEditing && styles.inputDisabled]}
-          value={formData[field.key] || ''}
-          onChangeText={(text) => setFormData(prev => ({ ...prev, [field.key]: text }))}
+          value={formData[field.key] || ""}
+          onChangeText={(text) =>
+            setFormData((prev) => ({ ...prev, [field.key]: text }))
+          }
           editable={isEditing}
           placeholder={field.placeholder}
           keyboardType={field.keyboardType}
@@ -566,7 +622,7 @@ export default function Settings({ userType, currentRoute, onNavigateBack }: Set
             refreshing={refreshing}
             onRefresh={onRefresh}
             tintColor="#16a34a"
-            colors={['#16a34a']}
+            colors={["#16a34a"]}
           />
         }
         showsVerticalScrollIndicator={false}
@@ -586,8 +642,8 @@ export default function Settings({ userType, currentRoute, onNavigateBack }: Set
                 ) : (
                   <View style={styles.avatarPlaceholder}>
                     <Text style={styles.avatarPlaceholderText}>
-                      {profile?.first_name?.charAt(0) || '?'}
-                      {profile?.last_name?.charAt(0) || ''}
+                      {profile?.first_name?.charAt(0) || "?"}
+                      {profile?.last_name?.charAt(0) || ""}
                     </Text>
                   </View>
                 )}
@@ -607,9 +663,13 @@ export default function Settings({ userType, currentRoute, onNavigateBack }: Set
                 activeOpacity={0.7}
               >
                 <View style={styles.changePhotoContent}>
-                  <Ionicons name={avatarUrl ? "camera" : "add-circle"} size={16} color="#ffffff" />
+                  <Ionicons
+                    name={avatarUrl ? "camera" : "add-circle"}
+                    size={16}
+                    color="#ffffff"
+                  />
                   <Text style={styles.changePhotoText}>
-                    {avatarUrl ? 'Change Photo' : 'Add Photo'}
+                    {avatarUrl ? "Change Photo" : "Add Photo"}
                   </Text>
                 </View>
               </TouchableOpacity>
@@ -627,28 +687,49 @@ export default function Settings({ userType, currentRoute, onNavigateBack }: Set
             <View style={styles.sectionHeader}>
               <View style={styles.sectionTitleContainer}>
                 <View style={styles.sectionIconContainer}>
-                  <Ionicons name="document-text-outline" size={22} color="#16a34a" />
+                  <Ionicons
+                    name="document-text-outline"
+                    size={22}
+                    color="#16a34a"
+                  />
                 </View>
                 <Text style={styles.sectionTitle}>{sectionTitle}</Text>
               </View>
               <TouchableOpacity
-                style={[styles.editButton, isEditing && styles.editButtonActive]}
+                style={[
+                  styles.editButton,
+                  isEditing && styles.editButtonActive,
+                ]}
                 onPress={() => setIsEditing(!isEditing)}
                 activeOpacity={0.7}
               >
-                <Ionicons name={isEditing ? "close" : "create-outline"} size={16} color={isEditing ? '#ef4444' : '#16a34a'} />
-                <Text style={[styles.editButtonText, isEditing && styles.editButtonTextActive]}>
-                  {isEditing ? 'Cancel' : 'Edit'}
+                <Ionicons
+                  name={isEditing ? "close" : "create-outline"}
+                  size={16}
+                  color={isEditing ? "#ef4444" : "#16a34a"}
+                />
+                <Text
+                  style={[
+                    styles.editButtonText,
+                    isEditing && styles.editButtonTextActive,
+                  ]}
+                >
+                  {isEditing ? "Cancel" : "Edit"}
                 </Text>
               </TouchableOpacity>
             </View>
 
             <View style={styles.formContainer}>
-              {fieldConfigs.map((field, index) => renderFormField(field, index))}
+              {fieldConfigs.map((field, index) =>
+                renderFormField(field, index),
+              )}
 
               {isEditing && (
                 <TouchableOpacity
-                  style={[styles.saveButton, saving && styles.saveButtonDisabled]}
+                  style={[
+                    styles.saveButton,
+                    saving && styles.saveButtonDisabled,
+                  ]}
                   onPress={handleSave}
                   disabled={saving}
                   activeOpacity={0.8}
@@ -698,7 +779,9 @@ export default function Settings({ userType, currentRoute, onNavigateBack }: Set
                 <View style={[styles.actionIconContainer, styles.logoutIconBg]}>
                   <Ionicons name="log-out-outline" size={20} color="#f59e0b" />
                 </View>
-                <Text style={[styles.actionText, styles.logoutText]}>Logout</Text>
+                <Text style={[styles.actionText, styles.logoutText]}>
+                  Logout
+                </Text>
               </View>
               <Ionicons name="chevron-forward" size={20} color="#9ca3af" />
             </TouchableOpacity>
@@ -712,7 +795,9 @@ export default function Settings({ userType, currentRoute, onNavigateBack }: Set
                 <View style={[styles.actionIconContainer, styles.deleteIconBg]}>
                   <Ionicons name="trash-outline" size={20} color="#ef4444" />
                 </View>
-                <Text style={[styles.actionText, styles.deleteText]}>Delete Account</Text>
+                <Text style={[styles.actionText, styles.deleteText]}>
+                  Delete Account
+                </Text>
               </View>
               <Ionicons name="chevron-forward" size={20} color="#9ca3af" />
             </TouchableOpacity>
@@ -757,7 +842,7 @@ export default function Settings({ userType, currentRoute, onNavigateBack }: Set
                   onPress={() => setShowCurrentPassword(!showCurrentPassword)}
                 >
                   <Ionicons
-                    name={showCurrentPassword ? 'eye-off' : 'eye'}
+                    name={showCurrentPassword ? "eye-off" : "eye"}
                     size={22}
                     color="#6b7280"
                   />
@@ -780,7 +865,7 @@ export default function Settings({ userType, currentRoute, onNavigateBack }: Set
                   onPress={() => setShowNewPassword(!showNewPassword)}
                 >
                   <Ionicons
-                    name={showNewPassword ? 'eye-off' : 'eye'}
+                    name={showNewPassword ? "eye-off" : "eye"}
                     size={22}
                     color="#6b7280"
                   />
@@ -803,7 +888,7 @@ export default function Settings({ userType, currentRoute, onNavigateBack }: Set
                   onPress={() => setShowConfirmPassword(!showConfirmPassword)}
                 >
                   <Ionicons
-                    name={showConfirmPassword ? 'eye-off' : 'eye'}
+                    name={showConfirmPassword ? "eye-off" : "eye"}
                     size={22}
                     color="#6b7280"
                   />
@@ -819,14 +904,20 @@ export default function Settings({ userType, currentRoute, onNavigateBack }: Set
                   <Text style={styles.cancelButtonText}>Cancel</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
-                  style={[styles.modalButton, styles.confirmButton, changingPassword && styles.disabledButton]}
+                  style={[
+                    styles.modalButton,
+                    styles.confirmButton,
+                    changingPassword && styles.disabledButton,
+                  ]}
                   onPress={handlePasswordChange}
                   disabled={changingPassword}
                 >
                   {changingPassword ? (
                     <ActivityIndicator size="small" color="#ffffff" />
                   ) : (
-                    <Text style={styles.confirmButtonText}>Change Password</Text>
+                    <Text style={styles.confirmButtonText}>
+                      Change Password
+                    </Text>
                   )}
                 </TouchableOpacity>
               </View>
@@ -841,47 +932,47 @@ export default function Settings({ userType, currentRoute, onNavigateBack }: Set
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f1f5f9',
+    backgroundColor: "#f1f5f9",
   },
   content: {
     flex: 1,
   },
   loadingContainer: {
     flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: '#f1f5f9',
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: "#f1f5f9",
   },
   loadingText: {
     marginTop: 16,
     fontSize: 16,
-    color: '#64748b',
-    fontWeight: '500',
+    color: "#64748b",
+    fontWeight: "500",
   },
 
   // Profile Header
   profileHeader: {
-    backgroundColor: '#ffffff',
+    backgroundColor: "#ffffff",
     marginBottom: 16,
     paddingBottom: 24,
-    position: 'relative',
-    overflow: 'hidden',
+    position: "relative",
+    overflow: "hidden",
   },
   gradientOverlay: {
-    position: 'absolute',
+    position: "absolute",
     top: 0,
     left: 0,
     right: 0,
     height: 120,
-    backgroundColor: '#16a34a',
+    backgroundColor: "#16a34a",
     opacity: 0.05,
   },
   profilePictureContainer: {
-    alignItems: 'center',
+    alignItems: "center",
     paddingTop: 24,
   },
   avatarContainer: {
-    position: 'relative',
+    position: "relative",
     marginBottom: 16,
   },
   avatar: {
@@ -889,8 +980,8 @@ const styles = StyleSheet.create({
     height: 120,
     borderRadius: 60,
     borderWidth: 4,
-    borderColor: '#ffffff',
-    shadowColor: '#000',
+    borderColor: "#ffffff",
+    shadowColor: "#000",
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.15,
     shadowRadius: 8,
@@ -900,12 +991,12 @@ const styles = StyleSheet.create({
     width: 120,
     height: 120,
     borderRadius: 60,
-    backgroundColor: '#16a34a',
-    alignItems: 'center',
-    justifyContent: 'center',
+    backgroundColor: "#16a34a",
+    alignItems: "center",
+    justifyContent: "center",
     borderWidth: 4,
-    borderColor: '#ffffff',
-    shadowColor: '#000',
+    borderColor: "#ffffff",
+    shadowColor: "#000",
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.15,
     shadowRadius: 8,
@@ -913,96 +1004,96 @@ const styles = StyleSheet.create({
   },
   avatarPlaceholderText: {
     fontSize: 42,
-    fontWeight: 'bold',
-    color: '#ffffff',
+    fontWeight: "bold",
+    color: "#ffffff",
   },
   avatarBadge: {
-    position: 'absolute',
+    position: "absolute",
     bottom: 4,
     right: 4,
     width: 32,
     height: 32,
     borderRadius: 16,
-    backgroundColor: '#16a34a',
+    backgroundColor: "#16a34a",
     borderWidth: 3,
-    borderColor: '#ffffff',
-    alignItems: 'center',
-    justifyContent: 'center',
+    borderColor: "#ffffff",
+    alignItems: "center",
+    justifyContent: "center",
   },
   avatarBadgeText: {
-    color: '#ffffff',
+    color: "#ffffff",
     fontSize: 16,
-    fontWeight: 'bold',
+    fontWeight: "bold",
   },
   uploadingOverlay: {
-    position: 'absolute',
+    position: "absolute",
     top: 0,
     left: 0,
     right: 0,
     bottom: 0,
     borderRadius: 60,
-    backgroundColor: 'rgba(0, 0, 0, 0.6)',
-    alignItems: 'center',
-    justifyContent: 'center',
+    backgroundColor: "rgba(0, 0, 0, 0.6)",
+    alignItems: "center",
+    justifyContent: "center",
   },
   changePhotoButton: {
     paddingHorizontal: 24,
     paddingVertical: 10,
     borderRadius: 20,
-    backgroundColor: '#16a34a',
-    shadowColor: '#16a34a',
+    backgroundColor: "#16a34a",
+    shadowColor: "#16a34a",
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.3,
     shadowRadius: 4,
     elevation: 3,
   },
   changePhotoContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 8,
   },
   changePhotoText: {
-    color: '#ffffff',
+    color: "#ffffff",
     fontSize: 14,
-    fontWeight: '600',
+    fontWeight: "600",
   },
   profileName: {
     fontSize: 24,
-    fontWeight: 'bold',
-    color: '#111827',
+    fontWeight: "bold",
+    color: "#111827",
     marginTop: 16,
   },
   profileType: {
     fontSize: 14,
-    color: '#16a34a',
-    fontWeight: '600',
+    color: "#16a34a",
+    fontWeight: "600",
     marginTop: 4,
-    textTransform: 'uppercase',
+    textTransform: "uppercase",
     letterSpacing: 0.5,
   },
 
   // Sections
   section: {
-    backgroundColor: '#ffffff',
+    backgroundColor: "#ffffff",
     marginHorizontal: 16,
     marginBottom: 16,
     borderRadius: 16,
     padding: 20,
-    shadowColor: '#000',
+    shadowColor: "#000",
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.08,
     shadowRadius: 8,
     elevation: 3,
   },
   sectionHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
     marginBottom: 20,
   },
   sectionTitleContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 8,
     marginBottom: 16,
   },
@@ -1010,37 +1101,37 @@ const styles = StyleSheet.create({
     width: 32,
     height: 32,
     borderRadius: 8,
-    backgroundColor: '#f0fdf4',
-    alignItems: 'center',
-    justifyContent: 'center',
+    backgroundColor: "#f0fdf4",
+    alignItems: "center",
+    justifyContent: "center",
   },
   sectionTitle: {
     fontSize: 20,
-    fontWeight: 'bold',
-    color: '#111827',
+    fontWeight: "bold",
+    color: "#111827",
   },
   editButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 6,
     paddingHorizontal: 16,
     paddingVertical: 8,
     borderRadius: 12,
-    backgroundColor: '#f0fdf4',
+    backgroundColor: "#f0fdf4",
     borderWidth: 1.5,
-    borderColor: '#16a34a',
+    borderColor: "#16a34a",
   },
   editButtonActive: {
-    backgroundColor: '#fee2e2',
-    borderColor: '#ef4444',
+    backgroundColor: "#fee2e2",
+    borderColor: "#ef4444",
   },
   editButtonText: {
-    color: '#16a34a',
-    fontWeight: '600',
+    color: "#16a34a",
+    fontWeight: "600",
     fontSize: 14,
   },
   editButtonTextActive: {
-    color: '#ef4444',
+    color: "#ef4444",
   },
 
   // Form
@@ -1048,7 +1139,7 @@ const styles = StyleSheet.create({
     gap: 16,
   },
   row: {
-    flexDirection: 'row',
+    flexDirection: "row",
     gap: 12,
   },
   inputContainer: {
@@ -1056,67 +1147,67 @@ const styles = StyleSheet.create({
   },
   label: {
     fontSize: 14,
-    fontWeight: '600',
-    color: '#374151',
+    fontWeight: "600",
+    color: "#374151",
     marginBottom: 8,
   },
   input: {
     borderWidth: 2,
-    borderColor: '#e5e7eb',
+    borderColor: "#e5e7eb",
     borderRadius: 12,
     paddingHorizontal: 16,
     paddingVertical: 14,
     fontSize: 16,
-    backgroundColor: '#ffffff',
-    color: '#111827',
+    backgroundColor: "#ffffff",
+    color: "#111827",
   },
   inputDisabled: {
-    backgroundColor: '#f9fafb',
-    color: '#6b7280',
-    borderColor: '#f3f4f6',
+    backgroundColor: "#f9fafb",
+    color: "#6b7280",
+    borderColor: "#f3f4f6",
   },
   saveButton: {
-    backgroundColor: '#16a34a',
+    backgroundColor: "#16a34a",
     paddingVertical: 16,
     borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
     marginTop: 8,
-    shadowColor: '#16a34a',
+    shadowColor: "#16a34a",
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
     shadowRadius: 8,
     elevation: 4,
   },
   saveButtonContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 8,
   },
   saveButtonDisabled: {
     opacity: 0.6,
   },
   saveButtonText: {
-    color: '#ffffff',
+    color: "#ffffff",
     fontSize: 16,
-    fontWeight: '700',
+    fontWeight: "700",
   },
 
   // Preferences
   preferenceItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     paddingVertical: 16,
     borderBottomWidth: 1,
-    borderBottomColor: '#f3f4f6',
+    borderBottomColor: "#f3f4f6",
   },
   preferenceIconContainer: {
     width: 44,
     height: 44,
     borderRadius: 12,
-    backgroundColor: '#f0fdf4',
-    alignItems: 'center',
-    justifyContent: 'center',
+    backgroundColor: "#f0fdf4",
+    alignItems: "center",
+    justifyContent: "center",
     marginRight: 12,
   },
   preferenceInfo: {
@@ -1124,56 +1215,56 @@ const styles = StyleSheet.create({
   },
   preferenceTitle: {
     fontSize: 16,
-    fontWeight: '600',
-    color: '#111827',
+    fontWeight: "600",
+    color: "#111827",
     marginBottom: 4,
   },
   preferenceDescription: {
     fontSize: 14,
-    color: '#6b7280',
+    color: "#6b7280",
   },
 
   // Account Actions
   actionItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
     paddingVertical: 16,
     borderBottomWidth: 1,
-    borderBottomColor: '#f3f4f6',
+    borderBottomColor: "#f3f4f6",
   },
   lastActionItem: {
     borderBottomWidth: 0,
   },
   actionLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
   },
   actionIconContainer: {
     width: 40,
     height: 40,
     borderRadius: 10,
-    backgroundColor: '#f0fdf4',
-    alignItems: 'center',
-    justifyContent: 'center',
+    backgroundColor: "#f0fdf4",
+    alignItems: "center",
+    justifyContent: "center",
     marginRight: 12,
   },
   logoutIconBg: {
-    backgroundColor: '#fef3c7',
+    backgroundColor: "#fef3c7",
   },
   deleteIconBg: {
-    backgroundColor: '#fee2e2',
+    backgroundColor: "#fee2e2",
   },
   actionText: {
     fontSize: 16,
-    fontWeight: '500',
-    color: '#111827',
+    fontWeight: "500",
+    color: "#111827",
   },
   logoutText: {
-    color: '#f59e0b',
+    color: "#f59e0b",
   },
   deleteText: {
-    color: '#ef4444',
+    color: "#ef4444",
   },
 
   bottomSpacing: {
@@ -1183,67 +1274,67 @@ const styles = StyleSheet.create({
   // Modal styles
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'center',
-    alignItems: 'center',
+    backgroundColor: "rgba(0, 0, 0, 0.5)",
+    justifyContent: "center",
+    alignItems: "center",
     padding: 20,
   },
   modalContent: {
-    backgroundColor: '#ffffff',
+    backgroundColor: "#ffffff",
     borderRadius: 16,
-    width: '100%',
+    width: "100%",
     maxWidth: 500,
-    shadowColor: '#000',
+    shadowColor: "#000",
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.15,
     shadowRadius: 12,
     elevation: 8,
   },
   modalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
     padding: 20,
     borderBottomWidth: 1,
-    borderBottomColor: '#e5e7eb',
+    borderBottomColor: "#e5e7eb",
   },
   modalTitle: {
     fontSize: 20,
-    fontWeight: 'bold',
-    color: '#111827',
+    fontWeight: "bold",
+    color: "#111827",
   },
   modalBody: {
     padding: 20,
   },
   modalLabel: {
     fontSize: 14,
-    fontWeight: '600',
-    color: '#374151',
+    fontWeight: "600",
+    color: "#374151",
     marginBottom: 8,
   },
   passwordInputContainer: {
-    position: 'relative',
+    position: "relative",
     marginBottom: 16,
   },
   modalInput: {
     borderWidth: 2,
-    borderColor: '#e5e7eb',
+    borderColor: "#e5e7eb",
     borderRadius: 12,
     paddingHorizontal: 16,
     paddingVertical: 14,
     paddingRight: 50,
     fontSize: 16,
-    backgroundColor: '#ffffff',
-    color: '#111827',
+    backgroundColor: "#ffffff",
+    color: "#111827",
   },
   eyeIconButton: {
-    position: 'absolute',
+    position: "absolute",
     right: 12,
     top: 12,
     padding: 4,
   },
   modalButtonRow: {
-    flexDirection: 'row',
+    flexDirection: "row",
     gap: 12,
     marginTop: 8,
   },
@@ -1251,22 +1342,22 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingVertical: 14,
     borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
   },
   cancelButton: {
-    backgroundColor: '#ffffff',
+    backgroundColor: "#ffffff",
     borderWidth: 2,
-    borderColor: '#e5e7eb',
+    borderColor: "#e5e7eb",
   },
   cancelButtonText: {
     fontSize: 16,
-    fontWeight: '600',
-    color: '#374151',
+    fontWeight: "600",
+    color: "#374151",
   },
   confirmButton: {
-    backgroundColor: '#16a34a',
-    shadowColor: '#16a34a',
+    backgroundColor: "#16a34a",
+    shadowColor: "#16a34a",
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.3,
     shadowRadius: 4,
@@ -1274,8 +1365,8 @@ const styles = StyleSheet.create({
   },
   confirmButtonText: {
     fontSize: 16,
-    fontWeight: '700',
-    color: '#ffffff',
+    fontWeight: "700",
+    color: "#ffffff",
   },
   disabledButton: {
     opacity: 0.6,

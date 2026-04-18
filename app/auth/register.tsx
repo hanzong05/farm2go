@@ -1,54 +1,69 @@
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Link, router } from 'expo-router';
-import React, { useEffect, useState } from 'react';
-import { Dimensions, KeyboardAvoidingView, Modal, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
-import Icon from 'react-native-vector-icons/FontAwesome5';
-import LocationPicker from '../../components/LocationPicker';
-import { supabase } from '../../lib/supabase';
-import { registerUser, signInWithGoogle, checkExistingUserProfile } from '../../services/auth';
-import { Database } from '../../types/database';
-import { safeLocalStorage } from '../../utils/platformUtils';
-import { sessionManager } from '../../services/sessionManager';
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { Link, router } from "expo-router";
+import React, { useEffect, useState } from "react";
+import {
+  Dimensions,
+  KeyboardAvoidingView,
+  Modal,
+  Platform,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
+} from "react-native";
+import Icon from "react-native-vector-icons/FontAwesome5";
+import LocationPicker from "../../components/LocationPicker";
+import { supabase } from "../../lib/supabase";
+import {
+  checkExistingUserProfile,
+  registerUser,
+  signInWithGoogle,
+} from "../../services/auth";
+import { sessionManager } from "../../services/sessionManager";
+import { Database } from "../../types/database";
+import { safeLocalStorage } from "../../utils/platformUtils";
 
-const { width, height } = Dimensions.get('window');
+const { width, height } = Dimensions.get("window");
 const isMobile = width < 768;
 const isTablet = width >= 768 && width < 1024;
 const isDesktop = width >= 1024;
 
 // Farm2Go color scheme
 const colors = {
-  primary: '#059669',
-  secondary: '#10b981',
-  success: '#10b981',
-  warning: '#f59e0b',
-  danger: '#ef4444',
-  white: '#ffffff',
-  black: '#000000',
-  gray50: '#f9fafb',
-  gray100: '#f3f4f6',
-  gray200: '#e5e7eb',
-  gray300: '#d1d5db',
-  gray400: '#9ca3af',
-  gray500: '#6b7280',
-  gray600: '#4b5563',
-  gray700: '#374151',
-  gray800: '#1f2937',
-  gray900: '#111827',
-  green50: '#f0f9f4',
-  green100: '#d1fae5',
-  green200: '#a7f3d0',
-  green500: '#10b981',
-  green600: '#059669',
-  green700: '#047857',
-  background: '#f0f9f4',
-  surface: '#ffffff',
-  text: '#0f172a',
-  textSecondary: '#6b7280',
-  border: '#d1fae5',
-  shadow: 'rgba(0,0,0,0.1)',
+  primary: "#059669",
+  secondary: "#10b981",
+  success: "#10b981",
+  warning: "#f59e0b",
+  danger: "#ef4444",
+  white: "#ffffff",
+  black: "#000000",
+  gray50: "#f9fafb",
+  gray100: "#f3f4f6",
+  gray200: "#e5e7eb",
+  gray300: "#d1d5db",
+  gray400: "#9ca3af",
+  gray500: "#6b7280",
+  gray600: "#4b5563",
+  gray700: "#374151",
+  gray800: "#1f2937",
+  gray900: "#111827",
+  green50: "#f0f9f4",
+  green100: "#d1fae5",
+  green200: "#a7f3d0",
+  green500: "#10b981",
+  green600: "#059669",
+  green700: "#047857",
+  background: "#f0f9f4",
+  surface: "#ffffff",
+  text: "#0f172a",
+  textSecondary: "#6b7280",
+  border: "#d1fae5",
+  shadow: "rgba(0,0,0,0.1)",
 };
 
-type UserType = 'farmer' | 'buyer' | null;
+type UserType = "farmer" | "buyer" | null;
 
 export default function RegisterScreen() {
   const [userType, setUserType] = useState<UserType>(null);
@@ -58,74 +73,95 @@ export default function RegisterScreen() {
   const [rateLimitCooldown, setRateLimitCooldown] = useState(0);
   const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [showErrorModal, setShowErrorModal] = useState(false);
-  const [errorMessage, setErrorMessage] = useState('');
-  const [errorTitle, setErrorTitle] = useState('');
+  const [errorMessage, setErrorMessage] = useState("");
+  const [errorTitle, setErrorTitle] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
   useEffect(() => {
-    console.log('🔍 Setting up React Native auth state listener...');
-    console.log('🔍 Platform:', Platform.OS);
+    console.log("🔍 Setting up React Native auth state listener...");
+    console.log("🔍 Platform:", Platform.OS);
 
     let oauthPolling: any;
     let checkTimeout: any;
 
     const checkOAuthCompletion = async () => {
       try {
-        const storedUserType = await AsyncStorage.getItem('oauth_user_type');
+        const storedUserType = await AsyncStorage.getItem("oauth_user_type");
 
         if (storedUserType) {
-          console.log('🔍 Found stored user type:', storedUserType);
+          console.log("🔍 Found stored user type:", storedUserType);
 
-          const { data: { user }, error } = await supabase.auth.getUser();
+          const {
+            data: { user },
+            error,
+          } = await supabase.auth.getUser();
 
           if (user && !error) {
-            console.log('✅ Found OAuth user:', user.email);
+            console.log("✅ Found OAuth user:", user.email);
 
-            const { data: existingProfile, error: profileError } = await supabase
-              .from('profiles')
-              .select('*')
-              .eq('id', user.id)
-              .single();
+            const { data: existingProfile, error: profileError } =
+              await supabase
+                .from("profiles")
+                .select("*")
+                .eq("id", user.id)
+                .single();
 
-            console.log('🔍 Existing profile check:', existingProfile);
-            console.log('🔍 Profile error:', profileError);
+            console.log("🔍 Existing profile check:", existingProfile);
+            console.log("🔍 Profile error:", profileError);
 
             if (!existingProfile || profileError) {
-              console.log('🚀 No profile found, redirecting to complete profile!');
-              router.replace('/auth/complete-profile');
+              console.log(
+                "🚀 No profile found, redirecting to complete profile!",
+              );
+              router.replace("/auth/complete-profile");
             } else {
-              console.log('✅ Profile exists, redirecting to dashboard');
-              await AsyncStorage.removeItem('oauth_user_type');
+              console.log("✅ Profile exists, redirecting to dashboard");
+              await AsyncStorage.removeItem("oauth_user_type");
 
-              const profile = existingProfile as Database['public']['Tables']['profiles']['Row'];
+              const profile =
+                existingProfile as Database["public"]["Tables"]["profiles"]["Row"];
               switch (profile.user_type) {
-                case 'farmer':
-                  router.replace('/');
+                case "farmer":
+                  router.replace("/");
                   break;
-                case 'buyer':
-                  router.replace('/');
+                case "buyer":
+                  router.replace("/");
                   break;
                 default:
-                  router.replace('/');
+                  router.replace("/");
               }
             }
             return true;
           } else {
-            console.log('🔍 No user session found yet, but checking for existing profile by email...');
+            console.log(
+              "🔍 No user session found yet, but checking for existing profile by email...",
+            );
 
-            if (typeof window !== 'undefined') {
+            if (typeof window !== "undefined") {
               const urlParams = new URLSearchParams(window.location.search);
-              const emailFromUrl = urlParams.get('email');
+              const emailFromUrl = urlParams.get("email");
 
               if (emailFromUrl) {
-                console.log('🔍 Checking for existing profile with email from URL:', emailFromUrl);
-                const existingProfile = await checkExistingUserProfile(emailFromUrl);
+                console.log(
+                  "🔍 Checking for existing profile with email from URL:",
+                  emailFromUrl,
+                );
+                const existingProfile =
+                  await checkExistingUserProfile(emailFromUrl);
 
                 if (existingProfile && existingProfile.user_type) {
-                  console.log('✅ Found existing profile, updating stored user type');
-                  await AsyncStorage.setItem('oauth_user_type', existingProfile.user_type);
-                  safeLocalStorage.setItem('oauth_user_type', existingProfile.user_type);
+                  console.log(
+                    "✅ Found existing profile, updating stored user type",
+                  );
+                  await AsyncStorage.setItem(
+                    "oauth_user_type",
+                    existingProfile.user_type,
+                  );
+                  safeLocalStorage.setItem(
+                    "oauth_user_type",
+                    existingProfile.user_type,
+                  );
                 }
               }
             }
@@ -133,88 +169,111 @@ export default function RegisterScreen() {
         }
         return false;
       } catch (error) {
-        console.error('❌ OAuth check error:', error);
+        console.error("❌ OAuth check error:", error);
         return false;
       }
     };
 
     checkOAuthCompletion();
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange(async (event, session) => {
       try {
         // Silently handle auth state changes
 
-        if (event === 'SIGNED_IN' && session?.user) {
+        if (event === "SIGNED_IN" && session?.user) {
           // User signed in via OAuth
-          let storedUserType = await AsyncStorage.getItem('oauth_user_type');
+          let storedUserType = await AsyncStorage.getItem("oauth_user_type");
           // Check stored user type
 
           if (!storedUserType && session.user.email) {
-            console.log('🔍 No stored user type, checking database for existing profile...');
-            const existingProfile = await checkExistingUserProfile(session.user.email);
+            console.log(
+              "🔍 No stored user type, checking database for existing profile...",
+            );
+            const existingProfile = await checkExistingUserProfile(
+              session.user.email,
+            );
 
             if (existingProfile && existingProfile.user_type) {
-              console.log('✅ Found existing profile with user type:', existingProfile.user_type);
+              console.log(
+                "✅ Found existing profile with user type:",
+                existingProfile.user_type,
+              );
               storedUserType = existingProfile.user_type;
 
-              await AsyncStorage.setItem('oauth_user_type', existingProfile.user_type);
-              if (typeof window !== 'undefined') {
-                safeLocalStorage.setItem('oauth_user_type', existingProfile.user_type);
+              await AsyncStorage.setItem(
+                "oauth_user_type",
+                existingProfile.user_type,
+              );
+              if (typeof window !== "undefined") {
+                safeLocalStorage.setItem(
+                  "oauth_user_type",
+                  existingProfile.user_type,
+                );
               }
             }
           }
 
           if (storedUserType) {
-            console.log('🔄 OAuth signup detected, checking for existing profile...');
-            const { data: existingProfile, error: profileError } = await supabase
-              .from('profiles')
-              .select('*')
-              .eq('id', session.user.id)
-              .single();
+            console.log(
+              "🔄 OAuth signup detected, checking for existing profile...",
+            );
+            const { data: existingProfile, error: profileError } =
+              await supabase
+                .from("profiles")
+                .select("*")
+                .eq("id", session.user.id)
+                .single();
 
-            console.log('🔍 Existing profile:', existingProfile);
-            console.log('🔍 Profile error:', profileError);
+            console.log("🔍 Existing profile:", existingProfile);
+            console.log("🔍 Profile error:", profileError);
 
             if (!existingProfile || profileError) {
-              console.log('🚀 No profile found, redirecting to complete profile!');
-              router.replace('/auth/complete-profile');
+              console.log(
+                "🚀 No profile found, redirecting to complete profile!",
+              );
+              router.replace("/auth/complete-profile");
             } else {
-              console.log('✅ Profile exists, cleaning up and redirecting to dashboard');
-              await AsyncStorage.removeItem('oauth_user_type');
-              const profile = existingProfile as Database['public']['Tables']['profiles']['Row'];
+              console.log(
+                "✅ Profile exists, cleaning up and redirecting to dashboard",
+              );
+              await AsyncStorage.removeItem("oauth_user_type");
+              const profile =
+                existingProfile as Database["public"]["Tables"]["profiles"]["Row"];
               switch (profile.user_type) {
-                case 'farmer':
-                  router.replace('/');
+                case "farmer":
+                  router.replace("/");
                   break;
-                case 'buyer':
-                  router.replace('/');
+                case "buyer":
+                  router.replace("/");
                   break;
                 default:
-                  router.replace('/');
+                  router.replace("/");
               }
             }
             return;
           }
         }
       } catch (error) {
-        console.error('❌ Auth state change error:', error);
+        console.error("❌ Auth state change error:", error);
       }
     });
 
     oauthPolling = setInterval(async () => {
       const found = await checkOAuthCompletion();
       if (found) {
-        console.log('🚀 OAuth completion detected, stopping polling');
+        console.log("🚀 OAuth completion detected, stopping polling");
         clearInterval(oauthPolling);
       }
     }, 1500);
     checkTimeout = setTimeout(() => {
-      console.log('🛑 OAuth check timeout reached, stopping polling');
+      console.log("🛑 OAuth check timeout reached, stopping polling");
       clearInterval(oauthPolling);
     }, 30000);
 
     return () => {
-      console.log('🧹 Cleaning up React Native auth listeners');
+      console.log("🧹 Cleaning up React Native auth listeners");
       subscription.unsubscribe();
       if (oauthPolling) clearInterval(oauthPolling);
       if (checkTimeout) clearTimeout(checkTimeout);
@@ -222,58 +281,69 @@ export default function RegisterScreen() {
   }, []);
 
   const [formData, setFormData] = useState({
-    firstName: '',
-    middleName: '',
-    lastName: '',
-    email: '',
-    phone: '',
-    password: '',
-    confirmPassword: '',
+    firstName: "",
+    middleName: "",
+    lastName: "",
+    email: "",
+    phone: "",
+    password: "",
+    confirmPassword: "",
 
-    barangay: '', // ✅ ONLY THIS
-
-    farmName: '',
-    farmSize: '',
-    cropTypes: '',
+    barangay: "",
+    houseNo: "",
+    streetName: "",
+    city: "",
+    farmName: "",
+    farmSize: "",
+    cropTypes: "",
   });
 
   const handleInputChange = (field: string, value: string) => {
-    if (field === 'phone') {
-      const cleaned = value.replace(/[^0-9]/g, ''); // only numbers
+    if (field === "phone") {
+      const cleaned = value.replace(/[^0-9]/g, ""); // only numbers
       const limited = cleaned.slice(0, 11); // max 11 chars
-      setFormData(prev => ({ ...prev, [field]: limited }));
+      setFormData((prev) => ({ ...prev, [field]: limited }));
       return;
     }
 
-    setFormData(prev => ({ ...prev, [field]: value }));
+    setFormData((prev) => ({ ...prev, [field]: value }));
   };
   const getPasswordStrength = (password: string) => {
-    if (password.length < 4) return { strength: 'weak', color: colors.danger, width: 0.25 };
-    if (password.length < 8) return { strength: 'medium', color: colors.warning, width: 0.65 };
-    return { strength: 'strong', color: colors.success, width: 1 };
+    if (password.length < 4)
+      return { strength: "weak", color: colors.danger, width: 0.25 };
+    if (password.length < 8)
+      return { strength: "medium", color: colors.warning, width: 0.65 };
+    return { strength: "strong", color: colors.success, width: 1 };
   };
-
+  const fullAddress = [
+    formData.houseNo,
+    formData.streetName,
+    formData.barangay,
+    "Tarlac City",
+  ]
+    .filter(Boolean)
+    .join(", ");
   const handleRegister = async () => {
     if (isRegistering || rateLimitCooldown > 0) {
       return;
     }
 
     if (!userType) {
-      setErrorTitle('Selection Required');
-      setErrorMessage('Please select your account type');
+      setErrorTitle("Selection Required");
+      setErrorMessage("Please select your account type");
       setShowErrorModal(true);
       return;
     }
 
     if (!formData.barangay) {
-      setErrorTitle('Location Required');
-      setErrorMessage('Please select your barangay');
+      setErrorTitle("Location Required");
+      setErrorMessage("Please select your barangay");
       setShowErrorModal(true);
       return;
     }
     if (!/^09\d{9}$/.test(formData.phone)) {
-      setErrorTitle('Invalid Phone');
-      setErrorMessage('Phone number must be 11 digits and start with 09');
+      setErrorTitle("Invalid Phone");
+      setErrorMessage("Phone number must be 11 digits and start with 09");
       setShowErrorModal(true);
       return;
     }
@@ -286,29 +356,29 @@ export default function RegisterScreen() {
       !formData.confirmPassword ||
       !formData.barangay
     ) {
-      setErrorTitle('Required Fields');
-      setErrorMessage('Please fill in all required fields');
+      setErrorTitle("Required Fields");
+      setErrorMessage("Please fill in all required fields");
       setShowErrorModal(true);
       return;
     }
     if (formData.password !== formData.confirmPassword) {
-      setErrorTitle('Password Mismatch');
-      setErrorMessage('Passwords do not match');
+      setErrorTitle("Password Mismatch");
+      setErrorMessage("Passwords do not match");
       setShowErrorModal(true);
       return;
     }
 
     if (formData.password.length < 6) {
-      setErrorTitle('Password Too Short');
-      setErrorMessage('Password must be at least 6 characters long');
+      setErrorTitle("Password Too Short");
+      setErrorMessage("Password must be at least 6 characters long");
       setShowErrorModal(true);
       return;
     }
 
-    if (userType === 'farmer') {
+    if (userType === "farmer") {
       if (!formData.farmName) {
-        setErrorTitle('Required Fields');
-        setErrorMessage('Please fill in all required farm information');
+        setErrorTitle("Required Fields");
+        setErrorMessage("Please fill in all required farm information");
         setShowErrorModal(true);
         return;
       }
@@ -326,7 +396,9 @@ export default function RegisterScreen() {
         lastName: formData.lastName,
 
         barangay: formData.barangay, // ✅ ONLY
-
+        address: fullAddress,
+        houseNo: formData.houseNo, // ✅ ADD
+        streetName: formData.streetName, // ✅ ADD
         userType,
         farmName: formData.farmName,
         farmSize: formData.farmSize,
@@ -334,18 +406,20 @@ export default function RegisterScreen() {
       };
       await registerUser(registrationData);
       setShowSuccessModal(true);
-
     } catch (error: any) {
-      console.error('Registration error:', error);
+      console.error("Registration error:", error);
 
-      if (error.message && error.message.includes('you can only request this after')) {
+      if (
+        error.message &&
+        error.message.includes("you can only request this after")
+      ) {
         const match = error.message.match(/after (\d+) seconds/);
         const seconds = match ? parseInt(match[1]) : 60;
 
         setRateLimitCooldown(seconds);
 
         const countdown = setInterval(() => {
-          setRateLimitCooldown(prev => {
+          setRateLimitCooldown((prev) => {
             if (prev <= 1) {
               clearInterval(countdown);
               return 0;
@@ -354,28 +428,33 @@ export default function RegisterScreen() {
           });
         }, 1000);
 
-        setErrorTitle('Rate Limit Exceeded');
-        setErrorMessage(`Please wait ${seconds} seconds before attempting registration again.`);
+        setErrorTitle("Rate Limit Exceeded");
+        setErrorMessage(
+          `Please wait ${seconds} seconds before attempting registration again.`,
+        );
         setShowErrorModal(true);
       } else {
-        let errorMessage = 'Please try again.';
+        let errorMessage = "Please try again.";
 
         if (error.message) {
-          if (error.message.includes('Email already registered') ||
-            error.message.includes('User already registered') ||
-            error.message.includes('duplicate key') ||
-            error.code === '23505') {
-            errorMessage = 'This phone number is already registered. Please sign in instead.';
-          } else if (error.message.includes('Invalid phone')) {
-            errorMessage = 'Please enter a valid phone number.';
-          } else if (error.message.includes('Password')) {
-            errorMessage = 'Password must be at least 6 characters long.';
+          if (
+            error.message.includes("Email already registered") ||
+            error.message.includes("User already registered") ||
+            error.message.includes("duplicate key") ||
+            error.code === "23505"
+          ) {
+            errorMessage =
+              "This phone number is already registered. Please sign in instead.";
+          } else if (error.message.includes("Invalid phone")) {
+            errorMessage = "Please enter a valid phone number.";
+          } else if (error.message.includes("Password")) {
+            errorMessage = "Password must be at least 6 characters long.";
           } else {
             errorMessage = error.message;
           }
         }
 
-        setErrorTitle('Registration Failed');
+        setErrorTitle("Registration Failed");
         setErrorMessage(errorMessage);
         setShowErrorModal(true);
       }
@@ -386,8 +465,8 @@ export default function RegisterScreen() {
 
   const handleSocialSignup = async () => {
     if (!userType) {
-      setErrorTitle('Selection Required');
-      setErrorMessage('Please select your account type first');
+      setErrorTitle("Selection Required");
+      setErrorMessage("Please select your account type first");
       setShowErrorModal(true);
       return;
     }
@@ -395,29 +474,30 @@ export default function RegisterScreen() {
     setIsRegistering(true);
 
     try {
-      console.log('🚀 Starting Google registration...');
-      console.log('🚀 User type selected:', userType);
+      console.log("🚀 Starting Google registration...");
+      console.log("🚀 User type selected:", userType);
 
       await sessionManager.storeOAuthState({
-        intent: 'registration',
+        intent: "registration",
         userType: userType,
-        source: 'register_page'
+        source: "register_page",
       });
-      console.log('💾 Stored OAuth state for registration:', userType);
+      console.log("💾 Stored OAuth state for registration:", userType);
 
-      console.log('🔄 Initiating Google OAuth...');
+      console.log("🔄 Initiating Google OAuth...");
       const result = await signInWithGoogle(true);
-      console.log('📤 Google OAuth result:', result);
+      console.log("📤 Google OAuth result:", result);
 
-      console.log('🔄 OAuth initiated, user should be redirected to provider...');
-
+      console.log(
+        "🔄 OAuth initiated, user should be redirected to provider...",
+      );
     } catch (error: any) {
-      console.error('❌ Google registration error:', error);
+      console.error("❌ Google registration error:", error);
 
       await sessionManager.clearOAuthState();
 
-      setErrorTitle('Google Registration Failed');
-      setErrorMessage(error.message || 'Please try again.');
+      setErrorTitle("Google Registration Failed");
+      setErrorMessage(error.message || "Please try again.");
       setShowErrorModal(true);
       setIsRegistering(false);
     }
@@ -437,14 +517,14 @@ export default function RegisterScreen() {
           </View>
           <Text style={styles.modalTitle}>Registration Successful</Text>
           <Text style={styles.modalMessage}>
-            Welcome to Farm2Go! Your account has been created successfully.
-            You can now sign in and start using the platform.
+            Welcome to Farm2Go! Your account has been created successfully. You
+            can now sign in and start using the platform.
           </Text>
           <TouchableOpacity
             style={styles.modalButton}
             onPress={() => {
               setShowSuccessModal(false);
-              router.replace('/auth/login');
+              router.replace("/auth/login");
             }}
           >
             <Text style={styles.modalButtonText}>Continue to Sign In</Text>
@@ -467,9 +547,7 @@ export default function RegisterScreen() {
             <Icon name="times" size={32} color={colors.white} />
           </View>
           <Text style={styles.modalTitle}>{errorTitle}</Text>
-          <Text style={styles.modalMessage}>
-            {errorMessage}
-          </Text>
+          <Text style={styles.modalMessage}>{errorMessage}</Text>
           <TouchableOpacity
             style={styles.errorModalButton}
             onPress={() => setShowErrorModal(false)}
@@ -488,10 +566,7 @@ export default function RegisterScreen() {
     return (
       <View style={styles.progressContainer}>
         <View style={styles.progressBarBg}>
-          <View style={[
-            styles.progressBar,
-            { width: `${progress * 100}%` }
-          ]} />
+          <View style={[styles.progressBar, { width: `${progress * 100}%` }]} />
         </View>
         <Text style={styles.progressText}>
           Step {currentStep} of {totalSteps}
@@ -536,42 +611,87 @@ export default function RegisterScreen() {
         </Text>
 
         <TouchableOpacity
-          style={[styles.userTypeOption, userType === 'farmer' && styles.selectedOption]}
+          style={[
+            styles.userTypeOption,
+            userType === "farmer" && styles.selectedOption,
+          ]}
           onPress={() => {
-            setUserType('farmer');
+            setUserType("farmer");
             setCurrentStep(2);
           }}
           activeOpacity={0.7}
         >
           <View style={styles.optionHeader}>
             <View style={styles.optionIconContainer}>
-              <Icon name="seedling" size={24} color={userType === 'farmer' ? colors.white : colors.primary} />
+              <Icon
+                name="seedling"
+                size={24}
+                color={userType === "farmer" ? colors.white : colors.primary}
+              />
             </View>
             <View style={styles.optionContent}>
-              <Text style={[styles.optionTitle, userType === 'farmer' && styles.selectedOptionTitle]}>
+              <Text
+                style={[
+                  styles.optionTitle,
+                  userType === "farmer" && styles.selectedOptionTitle,
+                ]}
+              >
                 Farmer/Producer
               </Text>
-              <Text style={[styles.optionDescription, userType === 'farmer' && styles.selectedOptionText]}>
-                Sell your agricultural products directly to buyers and distributors
+              <Text
+                style={[
+                  styles.optionDescription,
+                  userType === "farmer" && styles.selectedOptionText,
+                ]}
+              >
+                Sell your agricultural products directly to buyers and
+                distributors
               </Text>
             </View>
           </View>
           <View style={styles.optionFeatures}>
             <View style={styles.featureRow}>
-              <Icon name="check" size={12} color={userType === 'farmer' ? colors.green200 : colors.gray400} />
-              <Text style={[styles.featureText, userType === 'farmer' && styles.selectedFeatureText]}>
+              <Icon
+                name="check"
+                size={12}
+                color={userType === "farmer" ? colors.green200 : colors.gray400}
+              />
+              <Text
+                style={[
+                  styles.featureText,
+                  userType === "farmer" && styles.selectedFeatureText,
+                ]}
+              >
                 Direct sales platform
               </Text>
             </View>
             <View style={styles.featureRow}>
-              <Icon name="check" size={12} color={userType === 'farmer' ? colors.green200 : colors.gray400} />
-              <Text style={[styles.featureText, userType === 'farmer' && styles.selectedFeatureText]}>
+              <Icon
+                name="check"
+                size={12}
+                color={userType === "farmer" ? colors.green200 : colors.gray400}
+              />
+              <Text
+                style={[
+                  styles.featureText,
+                  userType === "farmer" && styles.selectedFeatureText,
+                ]}
+              >
                 Inventory management
               </Text>
             </View>
             <View style={styles.featureRow}>
-              <Icon name="check" size={12} color={userType === 'farmer' ? colors.green200 : colors.gray400} />
-              <Text style={[styles.featureText, userType === 'farmer' && styles.selectedFeatureText]}>
+              <Icon
+                name="check"
+                size={12}
+                color={userType === "farmer" ? colors.green200 : colors.gray400}
+              />
+              <Text
+                style={[
+                  styles.featureText,
+                  userType === "farmer" && styles.selectedFeatureText,
+                ]}
+              >
                 Order tracking system
               </Text>
             </View>
@@ -579,42 +699,87 @@ export default function RegisterScreen() {
         </TouchableOpacity>
 
         <TouchableOpacity
-          style={[styles.userTypeOption, userType === 'buyer' && styles.selectedOption]}
+          style={[
+            styles.userTypeOption,
+            userType === "buyer" && styles.selectedOption,
+          ]}
           onPress={() => {
-            setUserType('buyer');
+            setUserType("buyer");
             setCurrentStep(2);
           }}
           activeOpacity={0.7}
         >
           <View style={styles.optionHeader}>
             <View style={styles.optionIconContainer}>
-              <Icon name="shopping-cart" size={24} color={userType === 'buyer' ? colors.white : colors.primary} />
+              <Icon
+                name="shopping-cart"
+                size={24}
+                color={userType === "buyer" ? colors.white : colors.primary}
+              />
             </View>
             <View style={styles.optionContent}>
-              <Text style={[styles.optionTitle, userType === 'buyer' && styles.selectedOptionTitle]}>
+              <Text
+                style={[
+                  styles.optionTitle,
+                  userType === "buyer" && styles.selectedOptionTitle,
+                ]}
+              >
                 Buyer/Distributor
               </Text>
-              <Text style={[styles.optionDescription, userType === 'buyer' && styles.selectedOptionText]}>
-                Source fresh produce directly from verified agricultural producers
+              <Text
+                style={[
+                  styles.optionDescription,
+                  userType === "buyer" && styles.selectedOptionText,
+                ]}
+              >
+                Source fresh produce directly from verified agricultural
+                producers
               </Text>
             </View>
           </View>
           <View style={styles.optionFeatures}>
             <View style={styles.featureRow}>
-              <Icon name="check" size={12} color={userType === 'buyer' ? colors.green200 : colors.gray400} />
-              <Text style={[styles.featureText, userType === 'buyer' && styles.selectedFeatureText]}>
+              <Icon
+                name="check"
+                size={12}
+                color={userType === "buyer" ? colors.green200 : colors.gray400}
+              />
+              <Text
+                style={[
+                  styles.featureText,
+                  userType === "buyer" && styles.selectedFeatureText,
+                ]}
+              >
                 Direct farm sourcing
               </Text>
             </View>
             <View style={styles.featureRow}>
-              <Icon name="check" size={12} color={userType === 'buyer' ? colors.green200 : colors.gray400} />
-              <Text style={[styles.featureText, userType === 'buyer' && styles.selectedFeatureText]}>
+              <Icon
+                name="check"
+                size={12}
+                color={userType === "buyer" ? colors.green200 : colors.gray400}
+              />
+              <Text
+                style={[
+                  styles.featureText,
+                  userType === "buyer" && styles.selectedFeatureText,
+                ]}
+              >
                 Supplier verification
               </Text>
             </View>
             <View style={styles.featureRow}>
-              <Icon name="check" size={12} color={userType === 'buyer' ? colors.green200 : colors.gray400} />
-              <Text style={[styles.featureText, userType === 'buyer' && styles.selectedFeatureText]}>
+              <Icon
+                name="check"
+                size={12}
+                color={userType === "buyer" ? colors.green200 : colors.gray400}
+              />
+              <Text
+                style={[
+                  styles.featureText,
+                  userType === "buyer" && styles.selectedFeatureText,
+                ]}
+              >
                 Bulk order management
               </Text>
             </View>
@@ -636,25 +801,30 @@ export default function RegisterScreen() {
       multiline?: boolean;
       autoCapitalize?: any;
       editable?: boolean;
-    } = {}
+    } = {},
   ) => {
     const isFocused = focusedInput === field;
     const hasValue = formData[field as keyof typeof formData];
-    const isPassword = field === 'password';
-    const isConfirmPassword = field === 'confirmPassword';
-    const passwordStrength = isPassword && formData.password ? getPasswordStrength(formData.password) : null;
+    const isPassword = field === "password";
+    const isConfirmPassword = field === "confirmPassword";
+    const passwordStrength =
+      isPassword && formData.password
+        ? getPasswordStrength(formData.password)
+        : null;
 
     return (
       <View style={styles.inputContainer}>
         <Text style={styles.label}>
           {label} {options.required && <Text style={styles.required}>*</Text>}
         </Text>
-        <View style={[
-          styles.inputWrapper,
-          isFocused && styles.inputWrapperFocused,
-          hasValue && styles.inputWrapperFilled,
-          options.multiline && styles.textAreaWrapper
-        ]}>
+        <View
+          style={[
+            styles.inputWrapper,
+            isFocused && styles.inputWrapperFocused,
+            hasValue && styles.inputWrapperFilled,
+            options.multiline && styles.textAreaWrapper,
+          ]}
+        >
           <Icon
             name={iconName}
             size={16}
@@ -673,21 +843,32 @@ export default function RegisterScreen() {
             keyboardType={options.keyboardType}
             autoCapitalize={options.autoCapitalize}
             multiline={options.multiline}
-            secureTextEntry={isPassword ? !showPassword : isConfirmPassword ? !showConfirmPassword : options.secureTextEntry}
+            secureTextEntry={
+              isPassword
+                ? !showPassword
+                : isConfirmPassword
+                  ? !showConfirmPassword
+                  : options.secureTextEntry
+            }
           />
           {(isPassword || isConfirmPassword) && (
             <TouchableOpacity
               onPress={() => {
                 if (isPassword) setShowPassword(!showPassword);
-                if (isConfirmPassword) setShowConfirmPassword(!showConfirmPassword);
+                if (isConfirmPassword)
+                  setShowConfirmPassword(!showConfirmPassword);
               }}
               style={styles.passwordToggle}
             >
               <Icon
                 name={
                   isPassword
-                    ? (showPassword ? 'eye-slash' : 'eye')
-                    : (showConfirmPassword ? 'eye-slash' : 'eye')
+                    ? showPassword
+                      ? "eye-slash"
+                      : "eye"
+                    : showConfirmPassword
+                      ? "eye-slash"
+                      : "eye"
                 }
                 size={16}
                 color={colors.gray400}
@@ -698,16 +879,23 @@ export default function RegisterScreen() {
         {isPassword && formData.password && (
           <View style={styles.passwordStrength}>
             <View style={styles.strengthBarContainer}>
-              <View style={[
-                styles.strengthBar,
-                {
-                  backgroundColor: passwordStrength?.color || colors.gray200,
-                  width: `${((passwordStrength?.width || 0) * 100)}%`
-                }
-              ]} />
+              <View
+                style={[
+                  styles.strengthBar,
+                  {
+                    backgroundColor: passwordStrength?.color || colors.gray200,
+                    width: `${(passwordStrength?.width || 0) * 100}%`,
+                  },
+                ]}
+              />
             </View>
-            <Text style={[styles.strengthText, { color: passwordStrength?.color || colors.gray500 }]}>
-              {passwordStrength?.strength || 'weak'} password
+            <Text
+              style={[
+                styles.strengthText,
+                { color: passwordStrength?.color || colors.gray500 },
+              ]}
+            >
+              {passwordStrength?.strength || "weak"} password
             </Text>
           </View>
         )}
@@ -731,12 +919,12 @@ export default function RegisterScreen() {
           </TouchableOpacity>
           <View style={styles.userTypeBadge}>
             <Icon
-              name={userType === 'farmer' ? 'seedling' : 'shopping-cart'}
+              name={userType === "farmer" ? "seedling" : "shopping-cart"}
               size={14}
               color={colors.white}
             />
             <Text style={styles.userTypeBadgeText}>
-              {userType === 'farmer' ? 'Farmer Account' : 'Business Account'}
+              {userType === "farmer" ? "Farmer Account" : "Business Account"}
             </Text>
           </View>
         </View>
@@ -751,30 +939,65 @@ export default function RegisterScreen() {
             <Text style={styles.sectionTitle}>Personal Information</Text>
             <View style={styles.nameRow}>
               <View style={styles.nameInputHalf}>
-                {renderFormInput('firstName', 'First Name', 'Enter first name', 'user', { required: true })}
+                {renderFormInput(
+                  "firstName",
+                  "First Name",
+                  "Enter first name",
+                  "user",
+                  { required: true },
+                )}
               </View>
               <View style={styles.nameInputHalf}>
-                {renderFormInput('lastName', 'Last Name', 'Enter last name', 'user', { required: true })}
+                {renderFormInput(
+                  "lastName",
+                  "Last Name",
+                  "Enter last name",
+                  "user",
+                  { required: true },
+                )}
               </View>
             </View>
-            {renderFormInput('middleName', 'Middle Name', 'Enter middle name (optional)', 'user')}
-            {renderFormInput('email', 'Email Address', 'Enter email address', 'envelope', {
+            {renderFormInput(
+              "middleName",
+              "Middle Name",
+              "Enter middle name (optional)",
+              "user",
+            )}
+            {renderFormInput(
+              "email",
+              "Email Address",
+              "Enter email address",
+              "envelope",
+              {
+                required: true,
+                keyboardType: "email-address",
+                autoCapitalize: "none",
+              },
+            )}
+            {renderFormInput(
+              "phone",
+              "Phone Number",
+              "Enter phone number",
+              "phone",
+              {
+                required: true,
+                keyboardType: "phone-pad",
+              },
+            )}
+            {renderFormInput("password", "Password", "Enter password", "lock", {
               required: true,
-              keyboardType: 'email-address',
-              autoCapitalize: 'none'
+              secureTextEntry: true,
             })}
-            {renderFormInput('phone', 'Phone Number', 'Enter phone number', 'phone', {
-              required: true,
-              keyboardType: 'phone-pad'
-            })}
-            {renderFormInput('password', 'Password', 'Enter password', 'lock', {
-              required: true,
-              secureTextEntry: true
-            })}
-            {renderFormInput('confirmPassword', 'Confirm Password', 'Confirm password', 'lock', {
-              required: true,
-              secureTextEntry: true
-            })}
+            {renderFormInput(
+              "confirmPassword",
+              "Confirm Password",
+              "Confirm password",
+              "lock",
+              {
+                required: true,
+                secureTextEntry: true,
+              },
+            )}
           </View>
 
           <View style={styles.formSection}>
@@ -782,34 +1005,65 @@ export default function RegisterScreen() {
 
             <LocationPicker
               onLocationSelect={(barangay) => {
-                setFormData(prev => ({
+                setFormData((prev) => ({
                   ...prev,
-                  barangay
+                  barangay,
                 }));
               }}
               initialBarangay={formData.barangay}
               focusedInput={focusedInput}
               setFocusedInput={setFocusedInput}
             />
+            {renderFormInput(
+              "houseNo",
+              "Blk / House No.",
+              "e.g., Blk 3 Lot 12",
+              "home",
+              {},
+            )}
+            {renderFormInput(
+              "streetName",
+              "Street Name",
+              "e.g., Sampaguita St.",
+              "road",
+              {},
+            )}
           </View>
           {/* Account Specific Information */}
-          {userType === 'farmer' && (
+          {userType === "farmer" && (
             <View style={styles.formSection}>
               <Text style={styles.sectionTitle}>Farm Information</Text>
-              {renderFormInput('farmName', 'Farm Name', 'Enter farm name', 'seedling', { required: true })}
-              {renderFormInput('farmSize', 'Farm Size', 'e.g., 50 acres or 20 hectares', 'expand-arrows-alt')}
-              {renderFormInput('cropTypes', 'Primary Crop Types', 'e.g., Vegetables, Fruits, Grains', 'leaf', {
-                multiline: true
-              })}
+              {renderFormInput(
+                "farmName",
+                "Farm Name",
+                "Enter farm name",
+                "seedling",
+                { required: true },
+              )}
+              {renderFormInput(
+                "farmSize",
+                "Farm Size",
+                "e.g., 50 acres or 20 hectares",
+                "expand-arrows-alt",
+              )}
+              {renderFormInput(
+                "cropTypes",
+                "Primary Crop Types",
+                "e.g., Vegetables, Fruits, Grains",
+                "leaf",
+                {
+                  multiline: true,
+                },
+              )}
             </View>
           )}
-
 
           {/* Submit Button */}
           <TouchableOpacity
             style={[
               styles.registerButton,
-              (isRegistering || rateLimitCooldown > 0) && styles.registerButtonDisabled
+              (isRegistering || rateLimitCooldown > 0) &&
+                styles.registerButtonDisabled,
             ]}
             onPress={handleRegister}
             disabled={isRegistering || rateLimitCooldown > 0}
@@ -817,13 +1071,22 @@ export default function RegisterScreen() {
             {isRegistering ? (
               <View style={styles.loadingContainer}>
                 <View style={styles.loadingSpinner} />
-                <Text style={styles.registerButtonText}>Creating Account...</Text>
+                <Text style={styles.registerButtonText}>
+                  Creating Account...
+                </Text>
               </View>
             ) : rateLimitCooldown > 0 ? (
-              <Text style={styles.registerButtonText}>Wait {rateLimitCooldown}s</Text>
+              <Text style={styles.registerButtonText}>
+                Wait {rateLimitCooldown}s
+              </Text>
             ) : (
               <>
-                <Icon name="user-plus" size={16} color={colors.white} style={styles.buttonIcon} />
+                <Icon
+                  name="user-plus"
+                  size={16}
+                  color={colors.white}
+                  style={styles.buttonIcon}
+                />
                 <Text style={styles.registerButtonText}>Create Account</Text>
               </>
             )}
@@ -841,7 +1104,10 @@ export default function RegisterScreen() {
           {/* Social Login Buttons */}
           <View style={styles.socialButtonsContainer}>
             <TouchableOpacity
-              style={[styles.socialButton, isRegistering && styles.socialButtonDisabled]}
+              style={[
+                styles.socialButton,
+                isRegistering && styles.socialButtonDisabled,
+              ]}
               onPress={handleSocialSignup}
               disabled={isRegistering}
             >
@@ -854,8 +1120,8 @@ export default function RegisterScreen() {
 
           {/* Terms */}
           <Text style={styles.termsText}>
-            By creating an account, you agree to our{' '}
-            <Text style={styles.linkText}>Terms of Service</Text> and{' '}
+            By creating an account, you agree to our{" "}
+            <Text style={styles.linkText}>Terms of Service</Text> and{" "}
             <Text style={styles.linkText}>Privacy Policy</Text>
           </Text>
 
@@ -875,7 +1141,7 @@ export default function RegisterScreen() {
     <>
       <KeyboardAvoidingView
         style={styles.container}
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
       >
         <ScrollView
           style={styles.scrollView}
@@ -912,23 +1178,24 @@ const styles = StyleSheet.create({
   // Header Styles
   headerContainer: {
     backgroundColor: colors.primary,
-    paddingTop: Platform.OS === 'web' ? (isMobile ? 60 : 80) : (isMobile ? 80 : 100),
+    paddingTop:
+      Platform.OS === "web" ? (isMobile ? 60 : 80) : isMobile ? 80 : 100,
     paddingHorizontal: isMobile ? 24 : isTablet ? 32 : 40,
     paddingBottom: isMobile ? 40 : 60,
-    position: 'relative',
+    position: "relative",
   },
 
   backgroundPattern: {
-    position: 'absolute',
+    position: "absolute",
     top: 0,
     left: 0,
     right: 0,
     bottom: 0,
-    overflow: 'hidden',
+    overflow: "hidden",
   },
 
   patternCircle: {
-    position: 'absolute',
+    position: "absolute",
     borderRadius: 1000,
     backgroundColor: colors.green200,
     opacity: 0.2,
@@ -956,7 +1223,7 @@ const styles = StyleSheet.create({
   },
 
   logoContainer: {
-    alignItems: 'center',
+    alignItems: "center",
     marginBottom: isMobile ? 24 : 32,
     zIndex: 1,
   },
@@ -966,12 +1233,12 @@ const styles = StyleSheet.create({
     height: isMobile ? 56 : 72,
     borderRadius: isMobile ? 14 : 18,
     backgroundColor: colors.white,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
     marginBottom: 12,
     ...Platform.select({
       web: {
-        boxShadow: '0 8px 32px rgba(16, 185, 129, 0.3)',
+        boxShadow: "0 8px 32px rgba(16, 185, 129, 0.3)",
       },
       default: {
         elevation: 8,
@@ -985,60 +1252,60 @@ const styles = StyleSheet.create({
 
   logoText: {
     fontSize: isMobile ? 20 : 28,
-    fontWeight: 'bold',
+    fontWeight: "bold",
     color: colors.primary,
     letterSpacing: -1,
   },
 
   brandName: {
     fontSize: isMobile ? 24 : 32,
-    fontWeight: '700',
+    fontWeight: "700",
     color: colors.white,
     letterSpacing: -0.5,
   },
 
   welcomeSection: {
-    alignItems: 'center',
+    alignItems: "center",
     marginBottom: isMobile ? 16 : 24,
     zIndex: 1,
   },
 
   welcomeTitle: {
     fontSize: isMobile ? 20 : 28,
-    fontWeight: '600',
+    fontWeight: "600",
     color: colors.white,
     marginBottom: 8,
-    textAlign: 'center',
+    textAlign: "center",
   },
 
   welcomeSubtitle: {
     fontSize: isMobile ? 14 : 16,
     color: colors.green100,
-    textAlign: 'center',
+    textAlign: "center",
     lineHeight: isMobile ? 20 : 24,
     maxWidth: isMobile ? width * 0.85 : 400,
   },
 
   progressContainer: {
-    alignItems: 'center',
+    alignItems: "center",
     zIndex: 1,
   },
 
   progressBarBg: {
     width: isMobile ? width * 0.6 : 240,
     height: 4,
-    backgroundColor: 'rgba(255,255,255,0.2)',
+    backgroundColor: "rgba(255,255,255,0.2)",
     borderRadius: 2,
-    overflow: 'hidden',
+    overflow: "hidden",
   },
 
   progressBar: {
-    height: '100%',
+    height: "100%",
     backgroundColor: colors.white,
     borderRadius: 2,
     ...Platform.select({
       web: {
-        transition: 'width 0.3s ease-in-out',
+        transition: "width 0.3s ease-in-out",
       },
     }),
   },
@@ -1047,7 +1314,7 @@ const styles = StyleSheet.create({
     color: colors.green100,
     fontSize: 12,
     marginTop: 8,
-    fontWeight: '500',
+    fontWeight: "500",
   },
 
   // Content Styles
@@ -1056,7 +1323,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: isMobile ? 24 : isTablet ? 32 : 40,
     paddingTop: 32,
     paddingBottom: 32,
-    alignItems: 'center',
+    alignItems: "center",
   },
 
   // User Type Selection
@@ -1064,11 +1331,11 @@ const styles = StyleSheet.create({
     backgroundColor: colors.white,
     borderRadius: 20,
     padding: isMobile ? 24 : 32,
-    width: '100%',
+    width: "100%",
     maxWidth: isMobile ? undefined : 600,
     ...Platform.select({
       web: {
-        boxShadow: '0 20px 60px rgba(0, 0, 0, 0.1)',
+        boxShadow: "0 20px 60px rgba(0, 0, 0, 0.1)",
       },
       default: {
         elevation: 10,
@@ -1082,16 +1349,16 @@ const styles = StyleSheet.create({
 
   sectionTitle: {
     fontSize: isMobile ? 20 : 24,
-    fontWeight: '600',
+    fontWeight: "600",
     color: colors.gray800,
     marginBottom: 8,
-    textAlign: 'center',
+    textAlign: "center",
   },
 
   sectionSubtitle: {
     fontSize: isMobile ? 14 : 16,
     color: colors.gray600,
-    textAlign: 'center',
+    textAlign: "center",
     marginBottom: 32,
     lineHeight: isMobile ? 20 : 24,
   },
@@ -1105,7 +1372,7 @@ const styles = StyleSheet.create({
     padding: 20,
     ...Platform.select({
       web: {
-        transition: 'all 0.2s ease-in-out',
+        transition: "all 0.2s ease-in-out",
       },
     }),
   },
@@ -1115,7 +1382,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.primary,
     ...Platform.select({
       web: {
-        boxShadow: '0 8px 24px rgba(16, 185, 129, 0.3)',
+        boxShadow: "0 8px 24px rgba(16, 185, 129, 0.3)",
       },
       default: {
         elevation: 6,
@@ -1128,8 +1395,8 @@ const styles = StyleSheet.create({
   },
 
   optionHeader: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
+    flexDirection: "row",
+    alignItems: "flex-start",
     marginBottom: 16,
   },
 
@@ -1138,8 +1405,8 @@ const styles = StyleSheet.create({
     height: 48,
     borderRadius: 24,
     backgroundColor: colors.green100,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
     marginRight: 16,
   },
 
@@ -1149,7 +1416,7 @@ const styles = StyleSheet.create({
 
   optionTitle: {
     fontSize: isMobile ? 18 : 20,
-    fontWeight: '600',
+    fontWeight: "600",
     color: colors.gray800,
     marginBottom: 8,
   },
@@ -1173,15 +1440,15 @@ const styles = StyleSheet.create({
   },
 
   featureRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 8,
   },
 
   featureText: {
     fontSize: 13,
     color: colors.gray600,
-    fontWeight: '500',
+    fontWeight: "500",
   },
 
   selectedFeatureText: {
@@ -1193,11 +1460,11 @@ const styles = StyleSheet.create({
     backgroundColor: colors.white,
     borderRadius: 20,
     padding: isMobile ? 20 : 24,
-    width: '100%',
+    width: "100%",
     maxWidth: isMobile ? undefined : 600,
     ...Platform.select({
       web: {
-        boxShadow: '0 20px 60px rgba(0, 0, 0, 0.1)',
+        boxShadow: "0 20px 60px rgba(0, 0, 0, 0.1)",
       },
       default: {
         elevation: 10,
@@ -1210,9 +1477,9 @@ const styles = StyleSheet.create({
   },
 
   formHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
     marginBottom: 24,
     paddingBottom: 16,
     borderBottomWidth: 1,
@@ -1220,8 +1487,8 @@ const styles = StyleSheet.create({
   },
 
   backButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 8,
     padding: 8,
   },
@@ -1229,12 +1496,12 @@ const styles = StyleSheet.create({
   backButtonText: {
     fontSize: 14,
     color: colors.primary,
-    fontWeight: '600',
+    fontWeight: "600",
   },
 
   userTypeBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     backgroundColor: colors.primary,
     paddingHorizontal: 12,
     paddingVertical: 6,
@@ -1244,7 +1511,7 @@ const styles = StyleSheet.create({
 
   userTypeBadgeText: {
     fontSize: 12,
-    fontWeight: '600',
+    fontWeight: "600",
     color: colors.white,
   },
 
@@ -1253,7 +1520,7 @@ const styles = StyleSheet.create({
   },
 
   nameRow: {
-    flexDirection: isMobile ? 'column' : 'row',
+    flexDirection: isMobile ? "column" : "row",
     gap: 16,
   },
 
@@ -1267,7 +1534,7 @@ const styles = StyleSheet.create({
 
   label: {
     fontSize: 14,
-    fontWeight: '600',
+    fontWeight: "600",
     color: colors.gray700,
     marginBottom: 8,
   },
@@ -1277,8 +1544,8 @@ const styles = StyleSheet.create({
   },
 
   inputWrapper: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     borderWidth: 2,
     borderColor: colors.gray200,
     borderRadius: 12,
@@ -1287,7 +1554,7 @@ const styles = StyleSheet.create({
     minHeight: 48,
     ...Platform.select({
       web: {
-        transition: 'all 0.2s ease-in-out',
+        transition: "all 0.2s ease-in-out",
       },
     }),
   },
@@ -1297,7 +1564,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.white,
     ...Platform.select({
       web: {
-        boxShadow: '0 0 0 4px rgba(16, 185, 129, 0.1)',
+        boxShadow: "0 0 0 4px rgba(16, 185, 129, 0.1)",
       },
     }),
   },
@@ -1308,7 +1575,7 @@ const styles = StyleSheet.create({
   },
 
   textAreaWrapper: {
-    alignItems: 'flex-start',
+    alignItems: "flex-start",
     minHeight: 80,
   },
 
@@ -1326,7 +1593,7 @@ const styles = StyleSheet.create({
 
   textArea: {
     height: 60,
-    textAlignVertical: 'top',
+    textAlignVertical: "top",
     paddingTop: 16,
   },
 
@@ -1337,8 +1604,8 @@ const styles = StyleSheet.create({
 
   passwordStrength: {
     marginTop: 8,
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
   },
 
   strengthBarContainer: {
@@ -1347,23 +1614,23 @@ const styles = StyleSheet.create({
     backgroundColor: colors.gray200,
     borderRadius: 2,
     marginRight: 8,
-    overflow: 'hidden',
+    overflow: "hidden",
   },
 
   strengthBar: {
-    height: '100%',
+    height: "100%",
     borderRadius: 2,
     ...Platform.select({
       web: {
-        transition: 'all 0.3s ease-in-out',
+        transition: "all 0.3s ease-in-out",
       },
     }),
   },
 
   strengthText: {
     fontSize: 11,
-    fontWeight: '600',
-    textTransform: 'capitalize',
+    fontWeight: "600",
+    textTransform: "capitalize",
   },
 
   registerButton: {
@@ -1371,16 +1638,16 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     paddingVertical: 16,
     paddingHorizontal: 24,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
     marginTop: 16,
     marginBottom: 24,
     minHeight: 52,
-    flexDirection: 'row',
+    flexDirection: "row",
     ...Platform.select({
       web: {
-        transition: 'all 0.2s ease-in-out',
-        boxShadow: '0 4px 16px rgba(16, 185, 129, 0.3)',
+        transition: "all 0.2s ease-in-out",
+        boxShadow: "0 4px 16px rgba(16, 185, 129, 0.3)",
       },
       default: {
         elevation: 4,
@@ -1396,7 +1663,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.gray400,
     ...Platform.select({
       web: {
-        boxShadow: 'none',
+        boxShadow: "none",
       },
       default: {
         elevation: 0,
@@ -1407,7 +1674,7 @@ const styles = StyleSheet.create({
   registerButtonText: {
     color: colors.white,
     fontSize: 16,
-    fontWeight: '600',
+    fontWeight: "600",
   },
 
   buttonIcon: {
@@ -1415,8 +1682,8 @@ const styles = StyleSheet.create({
   },
 
   loadingContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
   },
 
   loadingSpinner: {
@@ -1424,19 +1691,19 @@ const styles = StyleSheet.create({
     height: 16,
     borderWidth: 2,
     borderColor: colors.white,
-    borderTopColor: 'transparent',
+    borderTopColor: "transparent",
     borderRadius: 8,
     marginRight: 8,
     ...Platform.select({
       web: {
-        animationKeyframes: 'spin 1s linear infinite',
+        animationKeyframes: "spin 1s linear infinite",
       },
     }),
   },
 
   dividerContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     marginBottom: 20,
   },
 
@@ -1454,7 +1721,7 @@ const styles = StyleSheet.create({
   dividerText: {
     fontSize: 14,
     color: colors.gray500,
-    fontWeight: '500',
+    fontWeight: "500",
   },
 
   socialButtonsContainer: {
@@ -1463,9 +1730,9 @@ const styles = StyleSheet.create({
   },
 
   socialButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
     paddingVertical: 14,
     paddingHorizontal: 16,
     borderRadius: 12,
@@ -1475,7 +1742,7 @@ const styles = StyleSheet.create({
     minHeight: 48,
     ...Platform.select({
       web: {
-        transition: 'all 0.2s ease-in-out',
+        transition: "all 0.2s ease-in-out",
       },
     }),
   },
@@ -1488,15 +1755,15 @@ const styles = StyleSheet.create({
     width: 24,
     height: 24,
     borderRadius: 12,
-    backgroundColor: '#db4437',
-    alignItems: 'center',
-    justifyContent: 'center',
+    backgroundColor: "#db4437",
+    alignItems: "center",
+    justifyContent: "center",
     marginRight: 12,
   },
 
   googleIconText: {
     fontSize: 14,
-    fontWeight: 'bold',
+    fontWeight: "bold",
     color: colors.white,
   },
 
@@ -1504,28 +1771,28 @@ const styles = StyleSheet.create({
     width: 24,
     height: 24,
     borderRadius: 12,
-    backgroundColor: '#4267b2',
-    alignItems: 'center',
-    justifyContent: 'center',
+    backgroundColor: "#4267b2",
+    alignItems: "center",
+    justifyContent: "center",
     marginRight: 12,
   },
 
   facebookIconText: {
     fontSize: 14,
-    fontWeight: 'bold',
+    fontWeight: "bold",
     color: colors.white,
   },
 
   socialButtonText: {
     fontSize: 15,
-    fontWeight: '600',
+    fontWeight: "600",
     color: colors.gray700,
   },
 
   termsText: {
     fontSize: 13,
     color: colors.gray600,
-    textAlign: 'center',
+    textAlign: "center",
     marginTop: 16,
     marginBottom: 20,
     lineHeight: 18,
@@ -1533,13 +1800,13 @@ const styles = StyleSheet.create({
 
   linkText: {
     color: colors.primary,
-    fontWeight: '600',
+    fontWeight: "600",
   },
 
   loginSection: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
+    flexDirection: "row",
+    justifyContent: "center",
+    alignItems: "center",
     paddingTop: 16,
     borderTopWidth: 1,
     borderTopColor: colors.gray200,
@@ -1553,15 +1820,15 @@ const styles = StyleSheet.create({
   loginLink: {
     fontSize: 14,
     color: colors.primary,
-    fontWeight: '600',
+    fontWeight: "600",
   },
 
   // Modal Styles
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.6)',
-    justifyContent: 'center',
-    alignItems: 'center',
+    backgroundColor: "rgba(0, 0, 0, 0.6)",
+    justifyContent: "center",
+    alignItems: "center",
     padding: 24,
   },
 
@@ -1569,12 +1836,12 @@ const styles = StyleSheet.create({
     backgroundColor: colors.white,
     borderRadius: 20,
     padding: 32,
-    alignItems: 'center',
+    alignItems: "center",
     maxWidth: 400,
-    width: '100%',
+    width: "100%",
     ...Platform.select({
       web: {
-        boxShadow: '0 20px 60px rgba(0, 0, 0, 0.3)',
+        boxShadow: "0 20px 60px rgba(0, 0, 0, 0.3)",
       },
       default: {
         elevation: 20,
@@ -1591,8 +1858,8 @@ const styles = StyleSheet.create({
     height: 64,
     borderRadius: 32,
     backgroundColor: colors.success,
-    justifyContent: 'center',
-    alignItems: 'center',
+    justifyContent: "center",
+    alignItems: "center",
     marginBottom: 24,
   },
 
@@ -1601,23 +1868,23 @@ const styles = StyleSheet.create({
     height: 64,
     borderRadius: 32,
     backgroundColor: colors.danger,
-    justifyContent: 'center',
-    alignItems: 'center',
+    justifyContent: "center",
+    alignItems: "center",
     marginBottom: 24,
   },
 
   modalTitle: {
     fontSize: 24,
-    fontWeight: '600',
+    fontWeight: "600",
     color: colors.gray800,
     marginBottom: 16,
-    textAlign: 'center',
+    textAlign: "center",
   },
 
   modalMessage: {
     fontSize: 16,
     color: colors.gray600,
-    textAlign: 'center',
+    textAlign: "center",
     lineHeight: 24,
     marginBottom: 32,
   },
@@ -1627,8 +1894,8 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     paddingHorizontal: 32,
     paddingVertical: 14,
-    alignItems: 'center',
-    width: '100%',
+    alignItems: "center",
+    width: "100%",
     minHeight: 48,
   },
 
@@ -1637,14 +1904,14 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     paddingHorizontal: 32,
     paddingVertical: 14,
-    alignItems: 'center',
-    width: '100%',
+    alignItems: "center",
+    width: "100%",
     minHeight: 48,
   },
 
   modalButtonText: {
     color: colors.white,
     fontSize: 16,
-    fontWeight: '600',
+    fontWeight: "600",
   },
 });

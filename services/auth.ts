@@ -1,7 +1,6 @@
 import { Linking, Platform } from 'react-native';
-import { supabase, signInWithGoogleOAuth } from '../lib/supabase';
+import { signInWithGoogleOAuth, supabase } from '../lib/supabase';
 import { Database } from '../types/database';
-import type { AuthResponse } from '@supabase/supabase-js';
 import { sessionManager } from './sessionManager';
 
 // Check if we're in demo mode
@@ -18,7 +17,7 @@ export interface RegisterData {
   lastName: string;
   barangay: string;
   userType: 'farmer' | 'buyer';
-  // Farmer specific
+  address?: string;   // ✅ ADD
   farmName?: string;
   farmSize?: string;
 }
@@ -60,6 +59,8 @@ export const registerUser = async (data: RegisterData) => {
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
         farm_name: data.farmName || null,
+        // AFTER farm_size line in mockProfile
+        full_address: data.address || null,   // ✅ ADD
         farm_size: data.farmSize || null,
       };
 
@@ -106,7 +107,7 @@ export const registerUser = async (data: RegisterData) => {
     console.log('📝 Creating user profile...');
 
     // Create user profile
-    const profileData: Database['public']['Tables']['profiles']['Insert'] = {
+    const profileData = {
       id: authData.user.id,
       email: data.email,
       phone: data.phone,
@@ -114,11 +115,11 @@ export const registerUser = async (data: RegisterData) => {
       middle_name: data.middleName || null,
       last_name: data.lastName,
       barangay: data.barangay,
+      full_address: data.address || null,  // ✅
       user_type: data.userType as 'farmer' | 'buyer',
-      // Farmer fields
       farm_name: data.farmName || null,
       farm_size: data.farmSize || null,
-    };
+    } as Database['public']['Tables']['profiles']['Insert'];  // cast here instead of annotating
 
     console.log('📝 Profile data:', {
       id: profileData.id,
@@ -564,84 +565,84 @@ export const getUserWithProfile = async (): Promise<{ user: any; profile: Profil
   getUserWithProfilePromise = (async () => {
     try {
 
-    // Try to get from session manager first with timeout
-    const sessionPromise = (async () => {
-      return sessionManager.getSessionState();
-    })();
+      // Try to get from session manager first with timeout
+      const sessionPromise = (async () => {
+        return sessionManager.getSessionState();
+      })();
 
-    const sessionTimeout = new Promise((_, reject) => {
-      setTimeout(() => reject(new Error('Session manager timeout')), 3000);
-    });
+      const sessionTimeout = new Promise((_, reject) => {
+        setTimeout(() => reject(new Error('Session manager timeout')), 3000);
+      });
 
-    let sessionState;
-    try {
-      sessionState = await Promise.race([sessionPromise, sessionTimeout]);
+      let sessionState;
+      try {
+        sessionState = await Promise.race([sessionPromise, sessionTimeout]);
 
-      if (sessionState.isAuthenticated && sessionState.user) {
-        cachedResult = {
-          user: sessionState.user,
-          profile: sessionState.profile
-        };
+        if (sessionState.isAuthenticated && sessionState.user) {
+          cachedResult = {
+            user: sessionState.user,
+            profile: sessionState.profile
+          };
+          return cachedResult;
+        }
+      } catch (error) {
+        // Session manager unavailable, continue with direct query
+      }
+
+      // Try to get session first (which includes user), then fallback to getUser
+
+      let user, userError;
+
+      try {
+        // First try to get from session (faster and more reliable during OAuth)
+        const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+
+        if (session?.user && !sessionError) {
+          user = session.user;
+          userError = null;
+        } else {
+          const userPromise = supabase.auth.getUser();
+          const userTimeout = new Promise((_, reject) => {
+            setTimeout(() => reject(new Error('User fetch timeout')), 15000);
+          });
+
+          const result = await Promise.race([userPromise, userTimeout]);
+          user = result.data?.user;
+          userError = result.error;
+        }
+      } catch (error) {
+        console.error('❌ Error fetching user:', error);
+        userError = error;
+      }
+
+      if (userError || !user) {
+        return null;
+      }
+
+      const profilePromise = supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', user.id)
+        .single();
+
+      const profileTimeout = new Promise((_, reject) => {
+        setTimeout(() => reject(new Error('Profile fetch timeout')), 15000);
+      });
+
+      try {
+        const { data: profile, error: profileError } = await Promise.race([profilePromise, profileTimeout]);
+
+        if (profileError && profileError.code !== 'PGRST116') { // PGRST116 = no rows returned
+          cachedResult = { user, profile: null };
+          return cachedResult;
+        }
+
+        cachedResult = { user, profile: profile || null };
         return cachedResult;
+      } catch (error) {
+        console.error('❌ Profile fetch timeout:', error);
+        return { user, profile: null };
       }
-    } catch (error) {
-      // Session manager unavailable, continue with direct query
-    }
-
-    // Try to get session first (which includes user), then fallback to getUser
-
-    let user, userError;
-
-    try {
-      // First try to get from session (faster and more reliable during OAuth)
-      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-
-      if (session?.user && !sessionError) {
-        user = session.user;
-        userError = null;
-      } else {
-        const userPromise = supabase.auth.getUser();
-        const userTimeout = new Promise((_, reject) => {
-          setTimeout(() => reject(new Error('User fetch timeout')), 15000);
-        });
-
-        const result = await Promise.race([userPromise, userTimeout]);
-        user = result.data?.user;
-        userError = result.error;
-      }
-    } catch (error) {
-      console.error('❌ Error fetching user:', error);
-      userError = error;
-    }
-
-    if (userError || !user) {
-      return null;
-    }
-
-    const profilePromise = supabase
-      .from('profiles')
-      .select('*')
-      .eq('id', user.id)
-      .single();
-
-    const profileTimeout = new Promise((_, reject) => {
-      setTimeout(() => reject(new Error('Profile fetch timeout')), 15000);
-    });
-
-    try {
-      const { data: profile, error: profileError } = await Promise.race([profilePromise, profileTimeout]);
-
-      if (profileError && profileError.code !== 'PGRST116') { // PGRST116 = no rows returned
-        cachedResult = { user, profile: null };
-        return cachedResult;
-      }
-
-      cachedResult = { user, profile: profile || null };
-      return cachedResult;
-    } catch (error) {
-      console.error('❌ Profile fetch timeout:', error);
-      return { user, profile: null };
-    }
 
     } catch (error) {
       console.error('❌ Get user with profile error:', error);
