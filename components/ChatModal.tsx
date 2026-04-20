@@ -193,7 +193,7 @@ export default function ChatModal({
             .from('profiles')
             .select('avatar_url')
             .eq('id', participant.id)
-            .single();
+            .maybeSingle();
 
           if (data && (data as any).avatar_url) {
             setParticipantAvatar((data as any).avatar_url);
@@ -206,7 +206,7 @@ export default function ChatModal({
             .from('profiles')
             .select('avatar_url')
             .eq('id', currentUserId)
-            .single();
+            .maybeSingle();
 
           if (data && (data as any).avatar_url) {
             setCurrentUserAvatar((data as any).avatar_url);
