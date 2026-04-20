@@ -109,7 +109,7 @@ class MessageService {
         .select('id')
         .eq('user1_id', userId1)
         .eq('user2_id', userId2)
-        .single();
+        .maybeSingle();
 
       if (findError && findError.code !== 'PGRST116') { // PGRST116 = no rows found
         console.error('❌ Error checking conversation:', findError);
@@ -149,7 +149,7 @@ class MessageService {
           user2_id: userId2,
         })
         .select('id')
-        .single();
+        .maybeSingle();
 
       if (createError) {
         console.error('❌ Error creating conversation:', createError);
@@ -287,7 +287,7 @@ class MessageService {
         .from('messages')
         .insert(insertData)
         .select('*')
-        .single();
+        .maybeSingle();
 
       console.log('📥 TWO-USER DEBUG: Database insert result:', {
         hasMessage: !!message,
@@ -890,7 +890,7 @@ class MessageService {
         .from('messages')
         .select('sender_id, receiver_id')
         .eq('id', messageId)
-        .single();
+        .maybeSingle();
 
       if (fetchError || !message) return false;
 
