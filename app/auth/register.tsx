@@ -361,6 +361,7 @@ export default function RegisterScreen() {
       setShowErrorModal(true);
       return;
     }
+
     if (formData.password !== formData.confirmPassword) {
       setErrorTitle("Password Mismatch");
       setErrorMessage("Passwords do not match");
@@ -436,22 +437,29 @@ export default function RegisterScreen() {
       } else {
         let errorMessage = "Please try again.";
 
-        if (error.message) {
-          if (
-            error.message.includes("Email already registered") ||
-            error.message.includes("User already registered") ||
-            error.message.includes("duplicate key") ||
-            error.code === "23505"
-          ) {
+        const rawMessage =
+          typeof error?.message === "string" ? error.message : "";
+        const msg = rawMessage.toLowerCase();
+
+        if (msg) {
+          if (msg.includes("user already registered")) {
             errorMessage =
-              "This phone number is already registered. Please sign in instead.";
-          } else if (error.message.includes("Invalid phone")) {
+              "This email is already registered. Please sign in instead.";
+          } else if (msg.includes("invalid phone")) {
             errorMessage = "Please enter a valid phone number.";
-          } else if (error.message.includes("Password")) {
+          } else if (msg.includes("email")) {
+            errorMessage = "This email is already registered.";
+          } else if (msg.includes("phone")) {
+            errorMessage = "This phone number is already registered.";
+          } else if (msg.includes("password")) {
             errorMessage = "Password must be at least 6 characters long.";
+          } else if (error?.code === "23505" || msg.includes("duplicate key")) {
+            errorMessage = "Duplicate data detected. Please check your inputs.";
           } else {
-            errorMessage = error.message;
+            errorMessage = rawMessage;
           }
+        } else {
+          errorMessage = "Please try again.";
         }
 
         setErrorTitle("Registration Failed");
