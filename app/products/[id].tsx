@@ -765,9 +765,18 @@ export default function ProductDetailScreen() {
             avatarUrl: null,
           }}
           messages={[]}
-          onSendMessage={(content: string) => {
-            console.log("Message sent:", content);
-          }}
+      onSendMessage={async (content: string) => {
+  if (!product?.farmer_id) return;
+
+  const result = await messageService.sendMessage({
+    receiverId: product.farmer_id,
+    content,
+  });
+
+  if (!result) {
+    Alert.alert("Error", "Failed to send message");
+  }
+}}
           currentUserId={profile?.id || ""}
           currentUserType={profile?.user_type || "buyer"}
           loading={processing}
