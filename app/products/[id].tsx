@@ -20,7 +20,7 @@ import ChatModal from "../../components/ChatModal";
 import { supabase } from "../../lib/supabase";
 import { getUserWithProfile } from "../../services/auth";
 import { showError } from "../../utils/alert";
-
+import ConfirmationModal from "../../components/ConfirmationModal";
 const { width } = Dimensions.get("window");
 
 interface Product {
