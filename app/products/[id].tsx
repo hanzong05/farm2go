@@ -742,7 +742,44 @@ const [showDeleteModal, setShowDeleteModal] = useState(false);
           </View>
         </View>
       </ScrollView>
+<ConfirmationModal
+  visible={showDeleteModal}
+  title="Delete Product?"
+  message={`Are you sure you want to delete "${product?.name}"?`}
+  confirmText="Delete"
+  cancelText="Cancel"
+  isDestructive
+  onCancel={() => setShowDeleteModal(false)}
+  onConfirm={async () => {
+    try {
+      setShowDeleteModal(false);
+      setProcessing(true);
 
+      const deleteQuery = supabase
+        .from("products")
+        .delete()
+        .eq("id", id);
+
+      if (!isAdmin) deleteQuery.eq("farmer_id", profile?.id);
+
+      const { error } = await deleteQuery;
+      if (error) throw error;
+
+      // Optional: success alert (or another modal)
+      Alert.alert("Success", "Product deleted");
+
+      if (router.canGoBack()) {
+        router.back();
+      } else {
+        router.replace("/" as any);
+      }
+    } catch (err) {
+      Alert.alert("Error", "Failed to delete product");
+    } finally {
+      setProcessing(false);
+    }
+  }}
+/>
       {product && !isOwner && !isAdmin && showContactWidget && (
         <ChatModal
           visible={showContactWidget}
@@ -1146,41 +1183,4 @@ const styles = StyleSheet.create({
   loginButtonText: { fontSize: 16, fontWeight: "600", color: colors.white },
 });
 
-<ConfirmationModal
-  visible={showDeleteModal}
-  title="Delete Product?"
-  message={`Are you sure you want to delete "${product?.name}"?`}
-  confirmText="Delete"
-  cancelText="Cancel"
-  isDestructive
-  onCancel={() => setShowDeleteModal(false)}
-  onConfirm={async () => {
-    try {
-      setShowDeleteModal(false);
-      setProcessing(true);
 
-      const deleteQuery = supabase
-        .from("products")
-        .delete()
-        .eq("id", id);
-
-      if (!isAdmin) deleteQuery.eq("farmer_id", profile?.id);
-
-      const { error } = await deleteQuery;
-      if (error) throw error;
-
-      // Optional: success alert (or another modal)
-      Alert.alert("Success", "Product deleted");
-
-      if (router.canGoBack()) {
-        router.back();
-      } else {
-        router.replace("/" as any);
-      }
-    } catch (err) {
-      Alert.alert("Error", "Failed to delete product");
-    } finally {
-      setProcessing(false);
-    }
-  }}
-/>
