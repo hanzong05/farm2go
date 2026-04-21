@@ -158,7 +158,7 @@ export default function ProductDetailScreen() {
   const [showContactWidget, setShowContactWidget] = useState(false);
   const [ratingStats, setRatingStats] = useState<RatingStats | null>(null);
   const [ratingsLoading, setRatingsLoading] = useState(false);
-
+const [showDeleteModal, setShowDeleteModal] = useState(false);
   useEffect(() => {
     if (id) loadData();
   }, [id]);
@@ -256,52 +256,41 @@ export default function ProductDetailScreen() {
     router.push(editRoute as any);
   };
 
-  const handleDelete = async () => {
-    if (!product || !profile) return;
+  const handleDelete = () => {
+  if (!product || !profile) return;
+  setShowDeleteModal(true);
+};
 
-    Alert.alert(
-      "Delete Product?",
-      `Are you sure you want to delete "${product.name}"?${isAdmin && !isOwner ? "\n\nNote: You are deleting this as an admin." : ""}`,
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Delete",
-          style: "destructive",
-          onPress: async () => {
-            try {
-              setProcessing(true);
-              const deleteQuery = supabase
-                .from("products")
-                .delete()
-                .eq("id", id);
-              if (!isAdmin) deleteQuery.eq("farmer_id", profile.id);
-              const { error } = await deleteQuery;
-              if (error) throw error;
-              Alert.alert("Success", "Product deleted", [
-                {
-                  text: "OK",
-                  onPress: () => {
-                    if (router.canGoBack()) {
-                      router.back();
-                    } else {
-                      if (isAdmin) router.replace("/admin/products" as any);
-                      else if (isFarmer)
-                        router.replace("/farmer/my-products" as any);
-                      else router.replace("/" as any);
-                    }
-                  },
-                },
-              ]);
-            } catch (err) {
-              Alert.alert("Error", "Failed to delete product");
-            } finally {
-              setProcessing(false);
-            }
-          },
-        },
-      ],
-    );
-  };
+  const confirmDeleteProduct = async () => {
+  if (!product || !profile) return;
+
+  try {
+    setShowDeleteModal(false);
+    setProcessing(true);
+
+    const deleteQuery = supabase
+      .from("products")
+      .delete()
+      .eq("id", id);
+
+    if (!isAdmin) {
+      deleteQuery.eq("farmer_id", profile.id);
+    }
+
+    const { error } = await deleteQuery;
+    if (error) throw error;
+
+    setResultTitle("Success");
+    setResultMessage("Product deleted");
+    setShowResultModal(true);
+  } catch (err) {
+    setResultTitle("Error");
+    setResultMessage("Failed to delete product");
+    setShowResultModal(true);
+  } finally {
+    setProcessing(false);
+  }
+};
 
   const handleApproveReject = async (action: "approved" | "rejected") => {
     if (!product) return;
@@ -1156,3 +1145,42 @@ const styles = StyleSheet.create({
   },
   loginButtonText: { fontSize: 16, fontWeight: "600", color: colors.white },
 });
+
+<ConfirmationModal
+  visible={showDeleteModal}
+  title="Delete Product?"
+  message={`Are you sure you want to delete "${product?.name}"?`}
+  confirmText="Delete"
+  cancelText="Cancel"
+  isDestructive
+  onCancel={() => setShowDeleteModal(false)}
+  onConfirm={async () => {
+    try {
+      setShowDeleteModal(false);
+      setProcessing(true);
+
+      const deleteQuery = supabase
+        .from("products")
+        .delete()
+        .eq("id", id);
+
+      if (!isAdmin) deleteQuery.eq("farmer_id", profile?.id);
+
+      const { error } = await deleteQuery;
+      if (error) throw error;
+
+      // Optional: success alert (or another modal)
+      Alert.alert("Success", "Product deleted");
+
+      if (router.canGoBack()) {
+        router.back();
+      } else {
+        router.replace("/" as any);
+      }
+    } catch (err) {
+      Alert.alert("Error", "Failed to delete product");
+    } finally {
+      setProcessing(false);
+    }
+  }}
+/>
