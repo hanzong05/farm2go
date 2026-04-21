@@ -15,6 +15,7 @@ import {
   View,
 } from "react-native";
 import Icon from "react-native-vector-icons/FontAwesome5";
+import { messageService } from "../../services/messageService";
 import ChatModal from "../../components/ChatModal";
 import { supabase } from "../../lib/supabase";
 import { getUserWithProfile } from "../../services/auth";
