@@ -1622,7 +1622,7 @@ export default function AdminUsers() {
           {item.profiles?.barangay && (
             <View style={styles.detailRow}>
               <Icon name="map-marker-alt" size={10} color={colors.textSecondary} />
-              <Text style={styles.userDetail} numberOfLines={1}>{item.profiles.barangay}</Text>
+              <Text style={styles.userDetail} numberOfLines={1}>{item.profiles.full_address}</Text>
             </View>
           )}
           <View style={styles.detailRow}>
