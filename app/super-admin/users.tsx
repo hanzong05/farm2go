@@ -86,7 +86,7 @@ export default function SuperAdminUsers() {
   const { showConfirmation } = useConfirmationModal();
 
   const showWebAlert = async (title: string, message: string) => {
-    await showConfirmation(title, message, undefined, false, 'Close', 'OK');
+    await showConfirmation(title, message, undefined, false, 'OK', 'Close');
   };
 
   const [profile, setProfile] = useState<Profile | null>(null);
@@ -140,8 +140,12 @@ export default function SuperAdminUsers() {
   const loadData = async () => {
     try {
       const userData = await getUserWithProfile();
+      console.log('🔍 Super Admin Page - User data:', userData);
+      console.log('🔍 Super Admin Page - Profile:', userData?.profile);
+      console.log('🔍 Super Admin Page - User type:', userData?.profile?.user_type);
 
       if (!userData?.profile || userData.profile.user_type !== 'super-admin') {
+        console.log('❌ Access denied - User type:', userData?.profile?.user_type);
         await showWebAlert(
           'Access Denied',
           `You do not have super admin privileges. Current user type: ${userData?.profile?.user_type || 'none'}`
@@ -162,6 +166,8 @@ export default function SuperAdminUsers() {
 
   const loadUsers = async () => {
     try {
+      console.log('📊 Loading admin users...');
+
       const { data, error } = await supabase
         .from('profiles')
         .select(`
@@ -189,7 +195,17 @@ export default function SuperAdminUsers() {
           created_at: string;
         }[]>();
 
-      if (error) throw error;
+      console.log('📊 Load users response:', {
+        success: !error,
+        count: data?.length || 0,
+        data: data,
+        error: error
+      });
+
+      if (error) {
+        console.error('❌ Error loading users:', error);
+        throw error;
+      }
 
       const usersData: User[] = data?.map(profile => ({
         id: profile.id,
@@ -205,6 +221,7 @@ export default function SuperAdminUsers() {
         },
       })) || [];
 
+      console.log('👥 Processed users data:', usersData);
       setUsers(usersData);
     } catch (error) {
       console.error('Error loading users:', error);
@@ -240,14 +257,27 @@ export default function SuperAdminUsers() {
         return;
       }
 
+      console.log('🚀 Creating auth user with email:', createForm.email.trim().toLowerCase());
+
       const { data: authData, error: authError } = await supabase.auth.signUp({
         email: createForm.email.trim().toLowerCase(),
         password: createForm.password,
       });
 
-      if (authError) throw authError;
+      console.log('📧 Auth signup response:', {
+        user: authData?.user ? 'User created' : 'No user',
+        userId: authData?.user?.id,
+        error: authError ? authError.message : 'No error'
+      });
+
+      if (authError) {
+        console.error('❌ Auth error:', authError);
+        throw authError;
+      }
 
       if (authData.user) {
+        console.log('👤 Creating profile for user:', authData.user.id);
+
         const untypedSupabase = createClient(
           process.env.EXPO_PUBLIC_SUPABASE_URL || 'https://demo.supabase.co',
           process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || 'demo-anon-key'
@@ -264,11 +294,37 @@ export default function SuperAdminUsers() {
           barangay: createForm.barangay || null,
         };
 
-        const { error: profileError } = await untypedSupabase
-          .from('profiles')
-          .insert(profileData);
+        console.log('📝 Profile data to insert:', profileData);
 
-        if (profileError) throw profileError;
+        const { data: insertedProfile, error: profileError } = await untypedSupabase
+          .from('profiles')
+          .insert(profileData)
+          .select()
+          .single();
+
+        console.log('📊 Profile insertion result:', {
+          success: !profileError,
+          profile: insertedProfile,
+          error: profileError
+        });
+
+        if (profileError) {
+          console.error('❌ Profile creation error:', profileError);
+          throw profileError;
+        }
+
+        console.log('🔍 Verifying profile creation...');
+        const { data: verifyProfile, error: verifyError } = await untypedSupabase
+          .from('profiles')
+          .select('*')
+          .eq('id', authData.user.id)
+          .single();
+
+        console.log('✅ Profile verification:', {
+          found: !verifyError,
+          profile: verifyProfile,
+          error: verifyError
+        });
 
         await showWebAlert('Success', `Admin user created successfully! User ID: ${authData.user.id}`);
         setShowCreateModal(false);
@@ -287,8 +343,8 @@ export default function SuperAdminUsers() {
       'Are you sure you want to delete this user? This action cannot be undone.',
       undefined,
       true,
-      'Cancel',
-      'Delete'
+      'Delete',
+      'Cancel'
     );
 
     if (!confirmed) return;
@@ -383,12 +439,22 @@ export default function SuperAdminUsers() {
 
   if (loading) {
     return (
-      <LinearGradient colors={[colors.background, colors.backgroundLight]} style={styles.container}>
+      <LinearGradient
+        colors={[colors.background, colors.backgroundLight]}
+        style={styles.container}
+      >
         <StatusBar barStyle="dark-content" backgroundColor={colors.background} />
-        <HeaderComponent profile={profile} userType="super-admin" currentRoute="/super-admin/users" />
+        <HeaderComponent
+          profile={profile}
+          userType="super-admin"
+          currentRoute="/super-admin/users"
+        />
         <View style={styles.loadingContainer}>
           <View style={styles.loadingCard}>
-            <LinearGradient colors={[colors.primary, colors.primaryLight]} style={styles.loadingSpinner}>
+            <LinearGradient
+              colors={[colors.primary, colors.primaryLight]}
+              style={styles.loadingSpinner}
+            >
               <ActivityIndicator size="large" color={colors.white} />
             </LinearGradient>
             <Text style={styles.loadingText}>Loading users...</Text>
@@ -399,7 +465,10 @@ export default function SuperAdminUsers() {
   }
 
   return (
-    <LinearGradient colors={[colors.background, colors.backgroundLight]} style={styles.container}>
+    <LinearGradient
+      colors={[colors.background, colors.backgroundLight]}
+      style={styles.container}
+    >
       <StatusBar barStyle="dark-content" backgroundColor={colors.background} />
       <HeaderComponent
         profile={profile}
@@ -412,14 +481,20 @@ export default function SuperAdminUsers() {
         searchPlaceholder="Search users..."
       />
 
-      <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+      <ScrollView
+        style={styles.scrollView}
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+      >
         <View style={styles.tableContainer}>
           {filteredUsers.length === 0 ? (
             <View style={styles.emptyContainer}>
               <Icon name="users" size={48} color={colors.textLight} />
               <Text style={styles.emptyTitle}>No Admins Found</Text>
               <Text style={styles.emptyText}>
-                {searchQuery ? 'No admins match your search criteria' : 'Create your first admin user to get started'}
+                {searchQuery
+                  ? 'No admins match your search criteria'
+                  : 'Create your first admin user to get started'}
               </Text>
             </View>
           ) : width >= 1024 ? (
@@ -432,10 +507,20 @@ export default function SuperAdminUsers() {
                 <Text style={[styles.tableHeaderCell, styles.dateCell]}>Created</Text>
                 <Text style={[styles.tableHeaderCell, styles.actionsCell]}>Actions</Text>
               </View>
-              <FlatList data={filteredUsers} renderItem={renderTableRow} keyExtractor={(item) => item.id} scrollEnabled={false} />
+
+              <FlatList
+                data={filteredUsers}
+                renderItem={renderTableRow}
+                keyExtractor={(item) => item.id}
+                scrollEnabled={false}
+              />
             </View>
           ) : (
-            <ScrollView horizontal showsHorizontalScrollIndicator={true} style={styles.tableScrollView}>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={true}
+              style={styles.tableScrollView}
+            >
               <View style={styles.tableInnerContainer}>
                 <View style={styles.tableHeader}>
                   <Text style={[styles.tableHeaderCell, styles.nameCell]}>Name</Text>
@@ -445,34 +530,64 @@ export default function SuperAdminUsers() {
                   <Text style={[styles.tableHeaderCell, styles.dateCell]}>Created</Text>
                   <Text style={[styles.tableHeaderCell, styles.actionsCell]}>Actions</Text>
                 </View>
-                <FlatList data={filteredUsers} renderItem={renderTableRow} keyExtractor={(item) => item.id} scrollEnabled={false} />
+
+                <FlatList
+                  data={filteredUsers}
+                  renderItem={renderTableRow}
+                  keyExtractor={(item) => item.id}
+                  scrollEnabled={false}
+                />
               </View>
             </ScrollView>
           )}
         </View>
       </ScrollView>
 
-      <TouchableOpacity style={styles.floatingButton} onPress={() => setShowCreateModal(true)}>
-        <LinearGradient colors={[colors.primary, colors.primaryLight]} style={styles.floatingButtonGradient}>
+      <TouchableOpacity
+        style={styles.floatingButton}
+        onPress={() => setShowCreateModal(true)}
+      >
+        <LinearGradient
+          colors={[colors.primary, colors.primaryLight]}
+          style={styles.floatingButtonGradient}
+        >
           <Icon name="plus" size={24} color={colors.white} />
         </LinearGradient>
       </TouchableOpacity>
 
-      <Modal visible={showCreateModal} animationType="slide" presentationStyle="pageSheet">
-        <LinearGradient colors={[colors.background, colors.white]} style={styles.modalContainer}>
+      <Modal
+        visible={showCreateModal}
+        animationType="slide"
+        presentationStyle="pageSheet"
+      >
+        <LinearGradient
+          colors={[colors.background, colors.white]}
+          style={styles.modalContainer}
+        >
           <BlurView intensity={10} style={styles.modalHeader}>
             <View style={styles.modalTitleContainer}>
-              <LinearGradient colors={[colors.primary, colors.primaryLight]} style={styles.modalTitleIcon}>
+              <LinearGradient
+                colors={[colors.primary, colors.primaryLight]}
+                style={styles.modalTitleIcon}
+              >
                 <Icon name="user-plus" size={20} color={colors.white} />
               </LinearGradient>
               <Text style={styles.modalTitle}>Create New Admin</Text>
             </View>
-            <TouchableOpacity onPress={() => setShowCreateModal(false)} style={styles.closeButton}>
+            <TouchableOpacity
+              onPress={() => setShowCreateModal(false)}
+              style={styles.closeButton}
+            >
               <Icon name="times" size={24} color={colors.textSecondary} />
             </TouchableOpacity>
           </BlurView>
 
-          <ScrollView style={styles.form} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled" contentContainerStyle={{ paddingBottom: 40 }}>
+          <ScrollView
+            style={styles.form}
+            showsVerticalScrollIndicator={false}
+            keyboardShouldPersistTaps="handled"
+            contentContainerStyle={{ paddingBottom: 40 }}
+          >
             <View style={styles.inputGroup}>
               <Text style={styles.inputLabel}>Email Address *</Text>
               <View style={[styles.inputContainer, emailError ? styles.inputError : null]}>
@@ -486,7 +601,9 @@ export default function SuperAdminUsers() {
                   autoCapitalize="none"
                 />
               </View>
-              {emailError ? <Text style={styles.errorText}>{emailError}</Text> : null}
+              {emailError ? (
+                <Text style={styles.errorText}>{emailError}</Text>
+              ) : null}
             </View>
 
             <View style={styles.inputGroup}>
@@ -533,7 +650,10 @@ export default function SuperAdminUsers() {
 
             <View style={styles.userTypeSelector}>
               <Text style={styles.inputLabel}>User Type</Text>
-              <LinearGradient colors={[colors.danger, colors.dangerLight]} style={styles.fixedUserType}>
+              <LinearGradient
+                colors={[colors.danger, colors.dangerLight]}
+                style={styles.fixedUserType}
+              >
                 <Icon name="shield-alt" size={16} color={colors.white} />
                 <Text style={styles.fixedUserTypeText}>Administrator</Text>
               </LinearGradient>
@@ -574,8 +694,14 @@ export default function SuperAdminUsers() {
                 <Text style={styles.cancelButtonText}>Cancel</Text>
               </TouchableOpacity>
 
-              <TouchableOpacity style={styles.createButtonContainer} onPress={createUser}>
-                <LinearGradient colors={[colors.primary, colors.primaryLight]} style={styles.createButton}>
+              <TouchableOpacity
+                style={styles.createButtonContainer}
+                onPress={createUser}
+              >
+                <LinearGradient
+                  colors={[colors.primary, colors.primaryLight]}
+                  style={styles.createButton}
+                >
                   <Icon name="user-plus" size={16} color={colors.white} />
                   <Text style={styles.createButtonText}>Create Admin</Text>
                 </LinearGradient>
@@ -585,11 +711,21 @@ export default function SuperAdminUsers() {
         </LinearGradient>
       </Modal>
 
-      <Modal visible={showEditModal} animationType="slide" presentationStyle="pageSheet">
-        <LinearGradient colors={[colors.background, colors.white]} style={styles.modalContainer}>
+      <Modal
+        visible={showEditModal}
+        animationType="slide"
+        presentationStyle="pageSheet"
+      >
+        <LinearGradient
+          colors={[colors.background, colors.white]}
+          style={styles.modalContainer}
+        >
           <BlurView intensity={10} style={styles.modalHeader}>
             <View style={styles.modalTitleContainer}>
-              <LinearGradient colors={[colors.warning, colors.warningLight]} style={styles.modalTitleIcon}>
+              <LinearGradient
+                colors={[colors.warning, colors.warningLight]}
+                style={styles.modalTitleIcon}
+              >
                 <Icon name="edit" size={20} color={colors.white} />
               </LinearGradient>
               <Text style={styles.modalTitle}>Edit Admin</Text>
@@ -606,7 +742,12 @@ export default function SuperAdminUsers() {
           </BlurView>
 
           {selectedUser && (
-            <ScrollView style={styles.form} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled" contentContainerStyle={{ paddingBottom: 40 }}>
+            <ScrollView
+              style={styles.form}
+              showsVerticalScrollIndicator={false}
+              keyboardShouldPersistTaps="handled"
+              contentContainerStyle={{ paddingBottom: 40 }}
+            >
               <View style={styles.inputGroup}>
                 <Text style={styles.inputLabel}>Email Address</Text>
                 <View style={[styles.inputContainer, { backgroundColor: colors.gray100 }]}>
@@ -615,7 +756,9 @@ export default function SuperAdminUsers() {
                     {selectedUser.email}
                   </Text>
                 </View>
-                <Text style={[styles.errorText, { color: colors.textSecondary }]}>Email cannot be changed</Text>
+                <Text style={[styles.errorText, { color: colors.textSecondary }]}>
+                  Email cannot be changed
+                </Text>
               </View>
 
               <View style={styles.nameRow}>
@@ -724,7 +867,10 @@ export default function SuperAdminUsers() {
                     }
                   }}
                 >
-                  <LinearGradient colors={[colors.warning, colors.warningLight]} style={styles.createButton}>
+                  <LinearGradient
+                    colors={[colors.warning, colors.warningLight]}
+                    style={styles.createButton}
+                  >
                     <Icon name="save" size={16} color={colors.white} />
                     <Text style={styles.createButtonText}>Save Changes</Text>
                   </LinearGradient>
@@ -739,10 +885,22 @@ export default function SuperAdminUsers() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1 },
-  scrollView: { flex: 1 },
-  scrollContent: { padding: 20, paddingBottom: 40 },
-  loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 40 },
+  container: {
+    flex: 1,
+  },
+  scrollView: {
+    flex: 1,
+  },
+  scrollContent: {
+    padding: 20,
+    paddingBottom: 40,
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 40,
+  },
   loadingCard: {
     alignItems: 'center',
     padding: 30,
@@ -755,7 +913,9 @@ const styles = StyleSheet.create({
         shadowOpacity: 0.1,
         shadowRadius: 12,
       },
-      android: { elevation: 8 },
+      android: {
+        elevation: 8,
+      },
     }),
   },
   loadingSpinner: {
@@ -766,7 +926,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 16,
   },
-  loadingText: { fontSize: 16, color: colors.textSecondary, fontWeight: '500' },
+  loadingText: {
+    fontSize: 16,
+    color: colors.textSecondary,
+    fontWeight: '500',
+  },
   floatingButton: {
     position: 'absolute',
     bottom: 24,
@@ -779,7 +943,9 @@ const styles = StyleSheet.create({
         shadowOpacity: 0.3,
         shadowRadius: 8,
       },
-      android: { elevation: 8 },
+      android: {
+        elevation: 8,
+      },
     }),
   },
   floatingButtonGradient: {
@@ -800,7 +966,9 @@ const styles = StyleSheet.create({
         shadowOpacity: 0.1,
         shadowRadius: 8,
       },
-      android: { elevation: 3 },
+      android: {
+        elevation: 3,
+      },
     }),
   },
   tableHeader: {
@@ -828,13 +996,20 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     width: width >= 1024 ? '100%' : undefined,
   },
-  tableRowEven: { backgroundColor: colors.gray50 },
-  tableScrollView: { width: '100%' },
+  tableRowEven: {
+    backgroundColor: colors.gray50,
+  },
+  tableScrollView: {
+    width: '100%',
+  },
   tableInnerContainer: {
     minWidth: width >= 1024 ? '100%' : 900,
     width: width >= 1024 ? '100%' : undefined,
   },
-  tableCell: { fontSize: 14, color: colors.text },
+  tableCell: {
+    fontSize: 14,
+    color: colors.text,
+  },
   nameCell: {
     width: width >= 1024 ? undefined : 180,
     flex: width >= 1024 ? 2 : undefined,
@@ -868,7 +1043,10 @@ const styles = StyleSheet.create({
     borderRadius: 6,
     backgroundColor: colors.gray100,
   },
-  emptyContainer: { padding: 60, alignItems: 'center' },
+  emptyContainer: {
+    padding: 60,
+    alignItems: 'center',
+  },
   emptyTitle: {
     fontSize: 18,
     fontWeight: '600',
@@ -882,7 +1060,9 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     lineHeight: 24,
   },
-  modalContainer: { flex: 1 },
+  modalContainer: {
+    flex: 1,
+  },
   modalHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -904,7 +1084,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginRight: 12,
   },
-  modalTitle: { fontSize: 20, fontWeight: 'bold', color: colors.text },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: colors.text,
+  },
   closeButton: {
     width: 40,
     height: 40,
@@ -913,8 +1097,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     backgroundColor: colors.gray100,
   },
-  form: { flex: 1, padding: 20 },
-  inputGroup: { marginBottom: 20 },
+  form: {
+    flex: 1,
+    padding: 20,
+  },
+  inputGroup: {
+    marginBottom: 20,
+  },
   inputLabel: {
     fontSize: 16,
     fontWeight: '600',
@@ -937,12 +1126,22 @@ const styles = StyleSheet.create({
         shadowOpacity: 0.1,
         shadowRadius: 4,
       },
-      android: { elevation: 2 },
+      android: {
+        elevation: 2,
+      },
     }),
   },
-  inputIcon: { marginRight: 12 },
-  input: { flex: 1, fontSize: 16, color: colors.text },
-  inputError: { borderColor: colors.danger },
+  inputIcon: {
+    marginRight: 12,
+  },
+  input: {
+    flex: 1,
+    fontSize: 16,
+    color: colors.text,
+  },
+  inputError: {
+    borderColor: colors.danger,
+  },
   errorText: {
     color: colors.danger,
     fontSize: 12,
@@ -950,8 +1149,12 @@ const styles = StyleSheet.create({
     marginTop: 4,
     marginLeft: 4,
   },
-  nameRow: { flexDirection: 'row' },
-  userTypeSelector: { marginBottom: 20 },
+  nameRow: {
+    flexDirection: 'row',
+  },
+  userTypeSelector: {
+    marginBottom: 20,
+  },
   fixedUserType: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -966,7 +1169,9 @@ const styles = StyleSheet.create({
         shadowOpacity: 0.2,
         shadowRadius: 4,
       },
-      android: { elevation: 4 },
+      android: {
+        elevation: 4,
+      },
     }),
   },
   fixedUserTypeText: {
@@ -1007,7 +1212,9 @@ const styles = StyleSheet.create({
         shadowOpacity: 0.3,
         shadowRadius: 8,
       },
-      android: { elevation: 6 },
+      android: {
+        elevation: 6,
+      },
     }),
   },
   createButton: {
