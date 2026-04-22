@@ -786,7 +786,7 @@ export default function Settings({
               <Ionicons name="chevron-forward" size={20} color="#9ca3af" />
             </TouchableOpacity>
 
-            <TouchableOpacity
+            {/* <TouchableOpacity
               style={[styles.actionItem, styles.lastActionItem]}
               onPress={handleDeleteAccount}
               activeOpacity={0.6}
@@ -801,7 +801,7 @@ export default function Settings({
               </View>
               <Ionicons name="chevron-forward" size={20} color="#9ca3af" />
             </TouchableOpacity>
-          </View>
+          </View> */}
 
           <View style={styles.bottomSpacing} />
         </Animated.View>
