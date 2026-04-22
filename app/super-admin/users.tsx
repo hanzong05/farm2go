@@ -85,8 +85,11 @@ const colors = {
 export default function SuperAdminUsers() {
   const { showConfirmation } = useConfirmationModal();
 
+  // NOTE:
+  // In your current app behavior, showConfirmation is acting like:
+  // showConfirmation(title, message, onConfirm, isDestructive, cancelText, confirmText)
   const showWebAlert = async (title: string, message: string) => {
-    await showConfirmation(title, message, undefined, false, 'OK', 'Close');
+    await showConfirmation(title, message, undefined, false, 'Close', 'OK');
   };
 
   const [profile, setProfile] = useState<Profile | null>(null);
@@ -343,8 +346,8 @@ export default function SuperAdminUsers() {
       'Are you sure you want to delete this user? This action cannot be undone.',
       undefined,
       true,
-      'Delete',
-      'Cancel'
+      'Cancel',
+      'Delete'
     );
 
     if (!confirmed) return;
