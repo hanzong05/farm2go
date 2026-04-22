@@ -89,6 +89,14 @@ export default function SuperAdminUsers() {
     await showConfirmation(title, message, undefined, false, 'OK', 'Close');
   };
 
+  const showWebAlertAboveCreateModal = (title: string, message: string) => {
+    setShowCreateModal(false);
+
+    setTimeout(() => {
+      showConfirmation(title, message, undefined, false, 'OK', 'Close');
+    }, 150);
+  };
+
   const [profile, setProfile] = useState<Profile | null>(null);
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
@@ -242,18 +250,40 @@ export default function SuperAdminUsers() {
 
   const createUser = async () => {
     try {
-      if (!createForm.email || !createForm.password || !createForm.first_name || !createForm.barangay) {
-        await showWebAlert('Error', 'Please fill in all required fields including barangay location');
+      if (
+        !createForm.email ||
+        !createForm.password ||
+        !createForm.first_name ||
+        !createForm.barangay
+      ) {
+        showWebAlertAboveCreateModal(
+          'Error',
+          'Please fill in all required fields including barangay location'
+        );
         return;
       }
 
       if (!validateEmail(createForm.email.trim())) {
-        await showWebAlert('Error', 'Please enter a valid email address');
+        showWebAlertAboveCreateModal(
+          'Error',
+          'Please enter a valid email address'
+        );
         return;
       }
 
       if (createForm.password.length < 6) {
-        await showWebAlert('Error', 'Password must be at least 6 characters long');
+        showWebAlertAboveCreateModal(
+          'Error',
+          'Password must be at least 6 characters long'
+        );
+        return;
+      }
+
+      if (createForm.phone && !/^09\d{9}$/.test(createForm.phone)) {
+        showWebAlertAboveCreateModal(
+          'Error',
+          'Phone number must be 11 digits and start with 09'
+        );
         return;
       }
 
@@ -274,16 +304,7 @@ export default function SuperAdminUsers() {
         console.error('❌ Auth error:', authError);
         throw authError;
       }
-      // Phone validation
-if (createForm.phone) {
-  if (!/^09\d{9}$/.test(createForm.phone)) {
-    await showWebAlert(
-      'Error',
-      'Phone number must be 11 digits and start with 09'
-    );
-    return;
-  }
-}
+
       if (authData.user) {
         console.log('👤 Creating profile for user:', authData.user.id);
 
@@ -299,7 +320,9 @@ if (createForm.phone) {
           last_name: createForm.last_name.trim() || null,
           user_type: createForm.user_type,
           phone: createForm.phone.trim() || null,
-          farm_name: createForm.user_type === 'farmer' ? (createForm.farm_name.trim() || null) : null,
+          farm_name: createForm.user_type === 'farmer'
+            ? (createForm.farm_name.trim() || null)
+            : null,
           barangay: createForm.barangay || null,
         };
 
@@ -335,14 +358,35 @@ if (createForm.phone) {
           error: verifyError
         });
 
-        await showWebAlert('Success', `Admin user created successfully! User ID: ${authData.user.id}`);
         setShowCreateModal(false);
         resetCreateForm();
         await loadUsers();
+
+        setTimeout(() => {
+          showConfirmation(
+            'Success',
+            `Admin user created successfully! User ID: ${authData.user.id}`,
+            undefined,
+            false,
+            'OK',
+            'Close'
+          );
+        }, 150);
       }
     } catch (error: any) {
       console.error('Error creating user:', error);
-      await showWebAlert('Error', error.message || 'Failed to create user');
+
+      setShowCreateModal(false);
+      setTimeout(() => {
+        showConfirmation(
+          'Error',
+          error.message || 'Failed to create user',
+          undefined,
+          false,
+          'OK',
+          'Close'
+        );
+      }, 150);
     }
   };
 
@@ -674,29 +718,25 @@ if (createForm.phone) {
                 <Icon name="phone" size={16} color={colors.textSecondary} style={styles.inputIcon} />
                 <TextInput
                   style={styles.input}
-                  placeholder="Phone number"
+                  placeholder="09XXXXXXXXX"
                   value={createForm.phone}
                   onChangeText={(text) => {
-  // remove non-numbers
-  let cleaned = text.replace(/[^0-9]/g, '');
+                    let cleaned = text.replace(/[^0-9]/g, '');
 
-  // force starting with 09
-  if (!cleaned.startsWith('09')) {
-    if (cleaned.length === 1 && cleaned === '0') {
-      cleaned = '0';
-    } else {
-      cleaned = '09' + cleaned.replace(/^0+/, '');
-    }
-  }
+                    if (!cleaned.startsWith('09')) {
+                      if (cleaned.length === 1 && cleaned === '0') {
+                        cleaned = '0';
+                      } else {
+                        cleaned = '09' + cleaned.replace(/^0+/, '');
+                      }
+                    }
 
-  // limit to 11 digits
-  cleaned = cleaned.slice(0, 11);
+                    cleaned = cleaned.slice(0, 11);
 
-  setCreateForm({ ...createForm, phone: cleaned });
-}}
-maxLength={11}
-keyboardType="number-pad"
-                  keyboardType="phone-pad"
+                    setCreateForm({ ...createForm, phone: cleaned });
+                  }}
+                  maxLength={11}
+                  keyboardType="number-pad"
                 />
               </View>
             </View>
@@ -829,13 +869,28 @@ keyboardType="number-pad"
                   <Icon name="phone" size={16} color={colors.textSecondary} style={styles.inputIcon} />
                   <TextInput
                     style={styles.input}
-                    placeholder="Phone number"
+                    placeholder="09XXXXXXXXX"
                     value={selectedUser.profiles?.phone || ''}
-                    onChangeText={(text) => setSelectedUser({
-                      ...selectedUser,
-                      profiles: { ...selectedUser.profiles!, phone: text }
-                    })}
-                    keyboardType="phone-pad"
+                    onChangeText={(text) => {
+                      let cleaned = text.replace(/[^0-9]/g, '');
+
+                      if (!cleaned.startsWith('09')) {
+                        if (cleaned.length === 1 && cleaned === '0') {
+                          cleaned = '0';
+                        } else {
+                          cleaned = '09' + cleaned.replace(/^0+/, '');
+                        }
+                      }
+
+                      cleaned = cleaned.slice(0, 11);
+
+                      setSelectedUser({
+                        ...selectedUser,
+                        profiles: { ...selectedUser.profiles!, phone: cleaned }
+                      });
+                    }}
+                    maxLength={11}
+                    keyboardType="number-pad"
                   />
                 </View>
               </View>
@@ -870,6 +925,17 @@ keyboardType="number-pad"
                     try {
                       if (!selectedUser.profiles?.first_name || !selectedUser.profiles?.barangay) {
                         await showWebAlert('Error', 'Please fill in all required fields');
+                        return;
+                      }
+
+                      if (
+                        selectedUser.profiles?.phone &&
+                        !/^09\d{9}$/.test(selectedUser.profiles.phone)
+                      ) {
+                        await showWebAlert(
+                          'Error',
+                          'Phone number must be 11 digits and start with 09'
+                        );
                         return;
                       }
 
