@@ -4,7 +4,9 @@ import { Database } from '../types/database';
 import { sessionManager } from './sessionManager';
 
 // Check if we're in demo mode
-const isDemoMode = !process.env.EXPO_PUBLIC_SUPABASE_URL || process.env.EXPO_PUBLIC_SUPABASE_URL === 'https://demo.supabase.co';
+const isDemoMode =
+  !process.env.EXPO_PUBLIC_SUPABASE_URL ||
+  process.env.EXPO_PUBLIC_SUPABASE_URL === 'https://demo.supabase.co';
 
 type Profile = Database['public']['Tables']['profiles']['Row'];
 
@@ -17,7 +19,7 @@ export interface RegisterData {
   lastName: string;
   barangay: string;
   userType: 'farmer' | 'buyer';
-  address?: string;   // ✅ ADD
+  address?: string;
   farmName?: string;
   farmSize?: string;
 }
@@ -39,7 +41,6 @@ export const registerUser = async (data: RegisterData) => {
     if (isDemoMode) {
       console.log('🚀 Demo mode: Simulating user registration');
 
-      // Return mock user data
       const mockUser = {
         id: `demo-${Date.now()}`,
         email: data.email,
@@ -59,20 +60,23 @@ export const registerUser = async (data: RegisterData) => {
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
         farm_name: data.farmName || null,
-        // AFTER farm_size line in mockProfile
-        full_address: data.address || null,   // ✅ ADD
+        full_address: data.address || null,
         farm_size: data.farmSize || null,
       };
 
-      // Simulate API delay
       await new Promise(resolve => setTimeout(resolve, 1000));
 
       return { user: mockUser, profile: mockProfile };
     }
 
+    console.log('💾 Saving current session before signup...');
+    const {
+      data: { session: previousSession },
+    } = await supabase.auth.getSession();
+
     console.log('📡 Creating Supabase auth user...');
 
-    // Create auth user using email with timeout
+    // Create auth user using email
     const authResult = await supabase.auth.signUp({
       email: data.email,
       password: data.password,
@@ -84,7 +88,9 @@ export const registerUser = async (data: RegisterData) => {
       user: authData?.user ? 'User created' : 'No user',
       session: authData?.session ? 'Session created' : 'No session',
       error: authError ? authError.message : 'No error',
-      userConfirmed: authData?.user?.email_confirmed_at ? 'Email confirmed' : 'Email not confirmed'
+      userConfirmed: authData?.user?.email_confirmed_at
+        ? 'Email confirmed'
+        : 'Email not confirmed',
     });
 
     if (authError) {
@@ -103,10 +109,8 @@ export const registerUser = async (data: RegisterData) => {
     }
 
     console.log('✅ Auth user created successfully:', authData.user.id);
-
     console.log('📝 Creating user profile...');
 
-    // Create user profile
     const profileData = {
       id: authData.user.id,
       email: data.email,
@@ -115,18 +119,18 @@ export const registerUser = async (data: RegisterData) => {
       middle_name: data.middleName || null,
       last_name: data.lastName,
       barangay: data.barangay,
-      full_address: data.address || null,  // ✅
+      full_address: data.address || null,
       user_type: data.userType as 'farmer' | 'buyer',
       farm_name: data.farmName || null,
       farm_size: data.farmSize || null,
-    } as Database['public']['Tables']['profiles']['Insert'];  // cast here instead of annotating
+    } as Database['public']['Tables']['profiles']['Insert'];
 
     console.log('📝 Profile data:', {
       id: profileData.id,
       user_type: profileData.user_type,
       first_name: profileData.first_name,
       last_name: profileData.last_name,
-      barangay: profileData.barangay
+      barangay: profileData.barangay,
     });
 
     try {
@@ -142,26 +146,44 @@ export const registerUser = async (data: RegisterData) => {
 
       console.log('✅ Profile created successfully');
     } catch (profileError: any) {
-      // Handle various database errors gracefully
       if (
-        // RLS policy errors
         profileError?.code === '42501' ||
         profileError?.message?.includes('row-level security') ||
         profileError?.message?.includes('401') ||
         profileError?.message?.includes('Unauthorized') ||
         profileError?.status === 401
       ) {
-        console.warn('⚠️ RLS policy or authorization blocked profile creation. User registered but profile creation failed.');
-        console.warn('📝 To fix this, run the RLS policy SQL commands in your Supabase database.');
+        console.warn(
+          '⚠️ RLS policy or authorization blocked profile creation. User registered but profile creation failed.'
+        );
+        console.warn(
+          '📝 To fix this, run the RLS policy SQL commands in your Supabase database.'
+        );
+
+        if (previousSession) {
+          console.log('🔁 Restoring previous session after signup...');
+          const { error: restoreError } = await supabase.auth.setSession({
+            access_token: previousSession.access_token,
+            refresh_token: previousSession.refresh_token,
+          });
+
+          if (restoreError) {
+            console.error('❌ Failed to restore previous session:', restoreError);
+          } else {
+            console.log('✅ Previous session restored');
+          }
+        }
+
         return { user: authData.user, profile: null };
       } else if (
-        // Duplicate key errors (user already exists)
         profileError?.code === '23505' ||
         profileError?.message?.includes('duplicate key') ||
         profileError?.message?.includes('already exists')
       ) {
-        console.warn('⚠️ Profile already exists for this user. This can happen if the user was created previously.');
-        // Try to fetch the existing profile instead
+        console.warn(
+          '⚠️ Profile already exists for this user. This can happen if the user was created previously.'
+        );
+
         try {
           const { data: existingProfile } = await supabase
             .from('profiles')
@@ -169,13 +191,55 @@ export const registerUser = async (data: RegisterData) => {
             .eq('id', authData.user.id)
             .single();
 
+          if (previousSession) {
+            console.log('🔁 Restoring previous session after signup...');
+            const { error: restoreError } = await supabase.auth.setSession({
+              access_token: previousSession.access_token,
+              refresh_token: previousSession.refresh_token,
+            });
+
+            if (restoreError) {
+              console.error('❌ Failed to restore previous session:', restoreError);
+            } else {
+              console.log('✅ Previous session restored');
+            }
+          }
+
           return { user: authData.user, profile: existingProfile };
         } catch {
+          if (previousSession) {
+            console.log('🔁 Restoring previous session after signup...');
+            const { error: restoreError } = await supabase.auth.setSession({
+              access_token: previousSession.access_token,
+              refresh_token: previousSession.refresh_token,
+            });
+
+            if (restoreError) {
+              console.error('❌ Failed to restore previous session:', restoreError);
+            } else {
+              console.log('✅ Previous session restored');
+            }
+          }
+
           return { user: authData.user, profile: null };
         }
       }
 
       throw profileError;
+    }
+
+    if (previousSession) {
+      console.log('🔁 Restoring previous session after signup...');
+      const { error: restoreError } = await supabase.auth.setSession({
+        access_token: previousSession.access_token,
+        refresh_token: previousSession.refresh_token,
+      });
+
+      if (restoreError) {
+        console.error('❌ Failed to restore previous session:', restoreError);
+      } else {
+        console.log('✅ Previous session restored');
+      }
     }
 
     console.log('🎉 Registration completed successfully!');
@@ -190,14 +254,11 @@ export const registerUser = async (data: RegisterData) => {
 // Login user
 export const loginUser = async (data: LoginData) => {
   try {
-    // If in demo mode, simulate successful login
     if (isDemoMode) {
       console.log('🚀 Demo mode: Simulating user login');
 
-      // Simulate API delay
       await new Promise(resolve => setTimeout(resolve, 800));
 
-      // Return mock session data
       const mockUser = {
         id: 'demo-user-123',
         email: data.email,
@@ -213,7 +274,7 @@ export const loginUser = async (data: LoginData) => {
           expires_in: 3600,
           expires_at: Date.now() + 3600000,
           user: mockUser,
-        }
+        },
       };
     }
 
@@ -238,21 +299,16 @@ export const logoutUser = async () => {
   try {
     console.log('🔄 Auth service: Starting logout...');
 
-    // Clear the user profile cache
     clearUserProfileCache();
-
-    // Use session manager for logout to ensure proper cleanup
     await sessionManager.clearSession();
 
     console.log('✅ Auth service: Logout completed successfully');
   } catch (error) {
     console.error('❌ Auth service: Logout error:', error);
 
-    // Fallback to direct Supabase logout
     try {
       console.log('🔄 Auth service: Attempting fallback logout...');
 
-      // Clear cache even on fallback
       clearUserProfileCache();
 
       await supabase.auth.signOut();
@@ -283,7 +339,10 @@ export const resetPassword = async (email: string) => {
 // Get current session
 export const getCurrentSession = async () => {
   try {
-    const { data: { session }, error } = await supabase.auth.getSession();
+    const {
+      data: { session },
+      error,
+    } = await supabase.auth.getSession();
     if (error) {
       throw error;
     }
@@ -295,7 +354,9 @@ export const getCurrentSession = async () => {
 };
 
 // Helper function to check for existing user profile by email
-export const checkExistingUserProfile = async (email: string): Promise<Profile | null> => {
+export const checkExistingUserProfile = async (
+  email: string
+): Promise<Profile | null> => {
   try {
     console.log('🔍 Checking for existing profile with email:', email);
 
@@ -305,7 +366,7 @@ export const checkExistingUserProfile = async (email: string): Promise<Profile |
       .eq('email', email)
       .single();
 
-    if (error && error.code !== 'PGRST116') { // PGRST116 = no rows returned
+    if (error && error.code !== 'PGRST116') {
       console.error('❌ Error checking existing profile:', error);
       return null;
     }
@@ -315,7 +376,7 @@ export const checkExistingUserProfile = async (email: string): Promise<Profile |
       console.log('✅ Found existing profile:', {
         id: profile.id,
         user_type: profile.user_type,
-        email: profile.email
+        email: profile.email,
       });
       return profile;
     }
@@ -328,8 +389,10 @@ export const checkExistingUserProfile = async (email: string): Promise<Profile |
   }
 };
 
-// Helper function to check if user exists by email (lightweight check for registration)
-export const checkUserExistsByEmail = async (email: string): Promise<boolean> => {
+// Helper function to check if user exists by email
+export const checkUserExistsByEmail = async (
+  email: string
+): Promise<boolean> => {
   try {
     console.log('🔍 Checking if user exists with email:', email);
 
@@ -339,13 +402,16 @@ export const checkUserExistsByEmail = async (email: string): Promise<boolean> =>
       .eq('email', email)
       .single();
 
-    if (error && error.code !== 'PGRST116') { // PGRST116 = no rows returned
+    if (error && error.code !== 'PGRST116') {
       console.error('❌ Error checking user existence:', error);
       return false;
     }
 
     const exists = !!data;
-    console.log(`${exists ? '✅' : 'ℹ️'} User ${exists ? 'exists' : 'does not exist'} with email:`, email);
+    console.log(
+      `${exists ? '✅' : 'ℹ️'} User ${exists ? 'exists' : 'does not exist'} with email:`,
+      email
+    );
     return exists;
   } catch (error) {
     console.error('❌ Error checking user existence:', error);
@@ -374,8 +440,7 @@ export const signInWithGoogle = async (isRegistration = false) => {
       return { user: mockUser, session: null };
     }
 
-    // Get userType from session manager for registration
-    let userType = 'buyer'; // Default for sign-in
+    let userType = 'buyer';
     if (isRegistration) {
       try {
         const oauthState = await sessionManager.getOAuthState();
@@ -390,11 +455,9 @@ export const signInWithGoogle = async (isRegistration = false) => {
 
     const result = await signInWithGoogleOAuth(userType, intent);
 
-    // Handle post-OAuth processing
     if (result && result.sessionData) {
       console.log('✅ OAuth session established');
 
-      // Check if user already has a profile
       const user = result.sessionData.user;
       if (user) {
         console.log('🔍 Checking for existing profile...');
@@ -439,9 +502,13 @@ export const signInWithFacebook = async () => {
       return { user: mockUser, session: null };
     }
 
-    const facebookRedirectTo = Platform.OS === 'web'
-      ? (typeof window !== 'undefined' ? `${window.location.origin}/auth/callback` : 'http://localhost:8081/auth/callback')
-      : 'farm2go://auth/callback';
+    const facebookRedirectTo =
+      Platform.OS === 'web'
+        ? typeof window !== 'undefined'
+          ? `${window.location.origin}/auth/callback`
+          : 'http://localhost:8081/auth/callback'
+        : 'farm2go://auth/callback';
+
     console.log('🔗 Facebook Redirect URL:', facebookRedirectTo);
     console.log('📱 Platform:', Platform.OS);
 
@@ -453,7 +520,6 @@ export const signInWithFacebook = async () => {
       },
     };
 
-    // For mobile platforms, try to open OAuth in external browser
     if (Platform.OS !== 'web') {
       console.log('📱 Mobile platform detected, attempting external browser OAuth...');
     }
@@ -469,7 +535,6 @@ export const signInWithFacebook = async () => {
     console.log('✅ Facebook OAuth initiated');
     console.log('📤 OAuth data:', data);
 
-    // On mobile, the OAuth should open in the browser
     if (Platform.OS !== 'web' && data.url) {
       console.log('🌐 Opening Facebook OAuth URL in browser:', data.url);
       const canOpen = await Linking.canOpenURL(data.url);
@@ -491,13 +556,15 @@ export const signInWithFacebook = async () => {
 // Handle OAuth callback and create profile if needed
 export const handleOAuthCallback = async (userType: 'farmer' | 'buyer') => {
   try {
-    const { data: { user }, error: userError } = await supabase.auth.getUser();
+    const {
+      data: { user },
+      error: userError,
+    } = await supabase.auth.getUser();
 
     if (userError || !user) {
       throw new Error('No user found after OAuth');
     }
 
-    // Check if profile already exists
     const { data: existingProfile } = await supabase
       .from('profiles')
       .select('*')
@@ -509,7 +576,6 @@ export const handleOAuthCallback = async (userType: 'farmer' | 'buyer') => {
       return { user, profile: existingProfile };
     }
 
-    // Create profile for OAuth user
     const profileData: Database['public']['Tables']['profiles']['Insert'] = {
       id: user.id,
       email: user.email || '',
@@ -540,11 +606,11 @@ export const handleOAuthCallback = async (userType: 'farmer' | 'buyer') => {
   }
 };
 
-// Debounce mechanism to prevent concurrent calls
+// Debounce mechanism
 let getUserWithProfilePromise: Promise<{ user: any; profile: Profile | null } | null> | null = null;
 let cachedResult: { user: any; profile: Profile | null } | null = null;
 
-// Clear the user profile cache (called on logout)
+// Clear the user profile cache
 export const clearUserProfileCache = () => {
   cachedResult = null;
   getUserWithProfilePromise = null;
@@ -552,20 +618,16 @@ export const clearUserProfileCache = () => {
 
 // Get user profile with auth user
 export const getUserWithProfile = async (): Promise<{ user: any; profile: Profile | null } | null> => {
-  // Return cached result if exists (cache persists until logout)
   if (cachedResult) {
     return cachedResult;
   }
 
-  // If there's an ongoing call, return that promise
   if (getUserWithProfilePromise) {
     return getUserWithProfilePromise;
   }
 
   getUserWithProfilePromise = (async () => {
     try {
-
-      // Try to get from session manager first with timeout
       const sessionPromise = (async () => {
         return sessionManager.getSessionState();
       })();
@@ -581,21 +643,21 @@ export const getUserWithProfile = async (): Promise<{ user: any; profile: Profil
         if (sessionState.isAuthenticated && sessionState.user) {
           cachedResult = {
             user: sessionState.user,
-            profile: sessionState.profile
+            profile: sessionState.profile,
           };
           return cachedResult;
         }
       } catch (error) {
-        // Session manager unavailable, continue with direct query
+        // continue with direct query
       }
-
-      // Try to get session first (which includes user), then fallback to getUser
 
       let user, userError;
 
       try {
-        // First try to get from session (faster and more reliable during OAuth)
-        const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+        const {
+          data: { session },
+          error: sessionError,
+        } = await supabase.auth.getSession();
 
         if (session?.user && !sessionError) {
           user = session.user;
@@ -606,7 +668,7 @@ export const getUserWithProfile = async (): Promise<{ user: any; profile: Profil
             setTimeout(() => reject(new Error('User fetch timeout')), 15000);
           });
 
-          const result = await Promise.race([userPromise, userTimeout]);
+          const result = await Promise.race([userPromise, userTimeout]) as any;
           user = result.data?.user;
           userError = result.error;
         }
@@ -630,9 +692,12 @@ export const getUserWithProfile = async (): Promise<{ user: any; profile: Profil
       });
 
       try {
-        const { data: profile, error: profileError } = await Promise.race([profilePromise, profileTimeout]);
+        const { data: profile, error: profileError } = await Promise.race([
+          profilePromise,
+          profileTimeout,
+        ]) as any;
 
-        if (profileError && profileError.code !== 'PGRST116') { // PGRST116 = no rows returned
+        if (profileError && profileError.code !== 'PGRST116') {
           cachedResult = { user, profile: null };
           return cachedResult;
         }
@@ -643,13 +708,11 @@ export const getUserWithProfile = async (): Promise<{ user: any; profile: Profil
         console.error('❌ Profile fetch timeout:', error);
         return { user, profile: null };
       }
-
     } catch (error) {
       console.error('❌ Get user with profile error:', error);
       cachedResult = null;
       return null;
     } finally {
-      // Clear the promise immediately after completion
       getUserWithProfilePromise = null;
     }
   })();
