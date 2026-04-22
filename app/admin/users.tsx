@@ -161,6 +161,9 @@ const colors = {
 
 export default function AdminUsers() {
   const { showConfirmation } = useConfirmationModal();
+const showWebAlert = async (title: string, message: string) => {
+  await showConfirmation(title, message, async () => {}, false, "OK", "");
+};
   const [profile, setProfile] = useState<Profile | null>(null);
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
@@ -966,103 +969,95 @@ export default function AdminUsers() {
   };
 
   const handleDeleteProduct = async (productId: string) => {
-    // Get product details first for better confirmation message
+  try {
+    const { data: productData } = await supabase
+      .from("products")
+      .select("name")
+      .eq("id", productId)
+      .single();
+
+    const productName = productData?.name || "this product";
+
+    setModalVisible(false);
+    setBuyerModalVisible(false);
+
+    const confirmed = await showConfirmation(
+      "Delete Product",
+      `Are you sure you want to delete "${productName}"? This action cannot be undone and will notify the farmer.`,
+      undefined,
+      true,
+      "Delete Product",
+      "Cancel",
+    );
+
+    if (!confirmed) return;
+
     try {
-      const { data: productData, error: fetchError } = await supabase
-        .from('products')
-        .select('name')
-        .eq('id', productId)
+      const { data: fullProductData, error: fetchError } = await supabase
+        .from("products")
+        .select("name, farmer_id")
+        .eq("id", productId)
         .single();
 
-      const productName = productData?.name || 'this product';
+      if (fetchError || !fullProductData) {
+        console.error("Error fetching product data:", fetchError);
+        await showWebAlert("Error", "Failed to get product information");
+        return;
+      }
 
-      // Close the user detail modal immediately when showing confirmation
-      setModalVisible(false);
-      setBuyerModalVisible(false);
+      const { error } = await supabase
+        .from("products")
+        .delete()
+        .eq("id", productId);
 
-      showConfirmation(
-        'Delete Product',
-        `Are you sure you want to delete "${productName}"? This action cannot be undone and will notify the farmer.`,
-        async () => {
-          try {
-            // Get product details before deletion for notification
-            const { data: productData, error: fetchError } = await supabase
-              .from('products')
-              .select('name, farmer_id')
-              .eq('id', productId)
-              .single();
+      if (error) {
+        await showWebAlert("Error", "Failed to delete product");
+        return;
+      }
 
-            if (fetchError || !productData) {
-              console.error('Error fetching product data:', fetchError);
-              Alert.alert('Error', 'Failed to get product information');
-              return;
-            }
+      try {
+        await notifyUserAction(
+          fullProductData.farmer_id,
+          "deleted",
+          "product",
+          fullProductData.name,
+          profile?.id || "",
+          "Product removed by administrator",
+        );
 
-            const { error } = await supabase
-              .from('products')
-              .delete()
-              .eq('id', productId);
+        await notifyAllAdmins(
+          "Product Deleted",
+          `Admin ${profile?.first_name} ${profile?.last_name} deleted the product "${fullProductData.name}"`,
+          profile?.id || "",
+          {
+            action: "product_deleted",
+            productName: fullProductData.name,
+            farmerId: fullProductData.farmer_id,
+          },
+        );
 
-            if (error) {
-              Alert.alert('Error', 'Failed to delete product');
-              return;
-            }
+        console.log("✅ Notifications sent for product deletion");
+      } catch (notifError) {
+        console.error("⚠️ Failed to send notifications:", notifError);
+      }
 
-            // Send notifications
-            try {
-              // Notify the farmer whose product was deleted
-              await notifyUserAction(
-                productData.farmer_id,
-                'deleted',
-                'product',
-                productData.name,
-                profile?.id || '',
-                'Product removed by administrator'
-              );
+      if (selectedFarmer) {
+        await loadFarmerData(selectedFarmer.id);
+      }
 
-              // Notify all other admins about the product deletion
-              await notifyAllAdmins(
-                'Product Deleted',
-                `Admin ${profile?.first_name} ${profile?.last_name} deleted the product "${productData.name}"`,
-                profile?.id || '',
-                {
-                  action: 'product_deleted',
-                  productName: productData.name,
-                  farmerId: productData.farmer_id
-                }
-              );
-
-              console.log('✅ Notifications sent for product deletion');
-            } catch (notifError) {
-              console.error('⚠️ Failed to send notifications:', notifError);
-            }
-
-            // Refresh farmer data
-            if (selectedFarmer) {
-              await loadFarmerData(selectedFarmer.id);
-            }
-
-            // Show success message
-            Alert.alert(
-              'Success!',
-              `Product "${productData.name}" has been deleted successfully and the farmer has been notified.`,
-              [{ text: 'OK' }]
-            );
-          } catch (error) {
-            console.error('Error deleting product:', error);
-            Alert.alert('Error', 'Failed to delete product');
-          }
-        },
-        true, // isDestructive
-        'Delete Product',
-        'Cancel'
+      await showWebAlert(
+        "Success!",
+        `Product "${fullProductData.name}" has been deleted successfully and the farmer has been notified.`,
       );
     } catch (error) {
-      console.error('Error fetching product details:', error);
-      Alert.alert('Error', 'Failed to load product details');
+      console.error("Error deleting product:", error);
+      await showWebAlert("Error", "Failed to delete product");
     }
-  };
-
+  } catch (error) {
+    console.error("Error fetching product details:", error);
+    await showWebAlert("Error", "Failed to load product details");
+  }
+};
   const getOrderStatusColor = (status: string) => {
     switch (status) {
       case 'pending': return colors.warning + '40';
@@ -1117,49 +1112,50 @@ export default function AdminUsers() {
     }
   };
 
-  const handleOrderAction = (action: 'complete' | 'cancel') => {
-    if (!scannedOrderData) return;
+  const handleOrderAction = async (action: "complete" | "cancel") => {
+  if (!scannedOrderData) return;
 
-    const actionTitle = action === 'complete' ? 'Complete Transaction' : 'Cancel Order';
-    const actionMessage = action === 'complete'
-      ? `Are you sure you want to mark this order as completed? This will finalize the transaction.`
-      : `Are you sure you want to cancel this order? This action cannot be undone and will notify both the buyer and farmer.`;
+  const actionTitle =
+    action === "complete" ? "Complete Transaction" : "Cancel Order";
+  const actionMessage =
+    action === "complete"
+      ? "Are you sure you want to mark this order as completed? This will finalize the transaction."
+      : "Are you sure you want to cancel this order? This action cannot be undone and will notify both the buyer and farmer.";
 
-    showConfirmation(
-      actionTitle,
-      actionMessage,
-      async () => {
-        try {
-          const newStatus = action === 'complete' ? 'delivered' : 'cancelled';
+  const confirmed = await showConfirmation(
+    actionTitle,
+    actionMessage,
+    undefined,
+    action === "cancel",
+    action === "complete" ? "Complete" : "Cancel Order",
+    "Go Back",
+  );
 
-          const { error } = await supabase
-            .from('orders')
-            .update({ status: newStatus } as any)
-            .eq('id', scannedOrderData.id);
+  if (!confirmed) return;
 
-          if (error) throw error;
+  try {
+    const newStatus = action === "complete" ? "delivered" : "cancelled";
 
-          Alert.alert(
-            'Success',
-            `Order has been ${action === 'complete' ? 'completed' : 'cancelled'} successfully`
-          );
+    const { error } = await supabase
+      .from("orders")
+      .update({ status: newStatus } as any)
+      .eq("id", scannedOrderData.id);
 
-          setOrderProcessingVisible(false);
-          setScannedOrderData(null);
+    if (error) throw error;
 
-          // Refresh the users list to update any displayed data
-          loadData();
-        } catch (error) {
-          console.error('Error updating order:', error);
-          Alert.alert('Error', 'Failed to update order status');
-        }
-      },
-      action === 'cancel', // isDestructive - true for cancel, false for complete
-      action === 'complete' ? 'Complete' : 'Cancel Order',
-      'Go Back'
+    await showWebAlert(
+      "Success",
+      `Order has been ${action === "complete" ? "completed" : "cancelled"} successfully`,
     );
-  };
 
+    setOrderProcessingVisible(false);
+    setScannedOrderData(null);
+    loadData();
+  } catch (error) {
+    console.error("Error updating order:", error);
+    await showWebAlert("Error", "Failed to update order status");
+  }
+};
   // Create User Functions
   const openCreateUserModal = () => {
     setCreateUserForm({
@@ -1210,121 +1206,112 @@ export default function AdminUsers() {
     return null;
   };
 
-  const handleCreateUser = async () => {
-    const validationError = validateCreateUserForm();
-    if (validationError) {
-      Alert.alert('Validation Error', validationError);
-      return;
+ const handleCreateUser = async () => {
+  const validationError = validateCreateUserForm();
+  if (validationError) {
+    await showWebAlert("Validation Error", validationError);
+    return;
+  }
+
+  setCreateUserLoading(true);
+
+  try {
+    console.log("🚀 Creating user via Edge Function (no auto-login)");
+
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+
+    if (!session) {
+      throw new Error("No active session");
     }
 
-    setCreateUserLoading(true);
+    const { data, error } = await supabase.functions.invoke("create-user", {
+      body: {
+        email: createUserForm.email,
+        password: createUserForm.password,
+        user_metadata: {
+          first_name: createUserForm.first_name,
+          last_name: createUserForm.last_name,
+          user_type: createUserForm.user_type,
+          farm_name: createUserForm.farm_name.trim() || null,
+          phone: createUserForm.phone.trim() || null,
+          barangay: createUserForm.barangay,
+        },
+      },
+    });
+
+    if (error) {
+      if (
+        error.message?.includes("already registered") ||
+        error.message?.includes("User already registered")
+      ) {
+        throw new Error(
+          "This email address is already registered. Please use a different email.",
+        );
+      }
+      throw new Error(error.message || "Failed to create user");
+    }
+
+    if (!data?.success || !data?.user_id) {
+      throw new Error(data?.error || "Failed to create user");
+    }
+
+    const newUserId = data.user_id;
 
     try {
-      console.log('🚀 Creating user via Edge Function (no auto-login)');
-
-      // Get current session token
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) {
-        throw new Error('No active session');
-      }
-
-      // Call Edge Function to create user without logging in
-      const { data, error } = await supabase.functions.invoke('create-user', {
-        body: {
-          email: createUserForm.email,
-          password: createUserForm.password,
-          user_metadata: {
-            first_name: createUserForm.first_name,
-            last_name: createUserForm.last_name,
-            user_type: createUserForm.user_type,
-            farm_name: createUserForm.farm_name.trim() || null,
-            phone: createUserForm.phone.trim() || null,
-            barangay: createUserForm.barangay,
-          }
-        }
-      });
-
-      if (error) {
-        if (error.message?.includes('already registered') || error.message?.includes('User already registered')) {
-          throw new Error('This email address is already registered. Please use a different email.');
-        }
-        throw new Error(error.message || 'Failed to create user');
-      }
-
-      if (!data?.success || !data?.user_id) {
-        throw new Error(data?.error || 'Failed to create user');
-      }
-
-      const newUserId = data.user_id;
-      console.log('✅ User, profile, and verification created successfully via Edge Function');
-      console.log('✅ User ID:', newUserId);
-
-      // Send notifications
-      try {
-        // Notify the newly created user
-        await notifyUserAction(
-          newUserId,
-          'approved',
-          'account',
-          `${createUserForm.first_name} ${createUserForm.last_name}`,
-          profile?.id || '',
-          'Account created by administrator'
-        );
-
-        // Notify all other admins about the new user creation
-        await notifyAllAdmins(
-          `New ${createUserForm.user_type} Created`,
-          `Admin ${profile?.first_name} ${profile?.last_name} created a new ${createUserForm.user_type} account for ${createUserForm.first_name} ${createUserForm.last_name} (${createUserForm.email})`,
-          profile?.id || '',
-          {
-            action: 'user_created',
-            userType: createUserForm.user_type,
-            userEmail: createUserForm.email,
-            userName: `${createUserForm.first_name} ${createUserForm.last_name}`
-          }
-        );
-
-        console.log('✅ Notifications sent for user creation');
-      } catch (notifError) {
-        console.error('⚠️ Failed to send notifications:', notifError);
-        // Don't fail the user creation if notifications fail
-      }
-
-      // Success - user created WITHOUT logging you out!
-      console.log('🎉 User created successfully - you remain logged in as admin');
-
-      Alert.alert(
-        'Success',
-        `${createUserForm.user_type} account created successfully for ${createUserForm.first_name} ${createUserForm.last_name}`,
-        [
-          {
-            text: 'OK',
-            onPress: async () => {
-              closeCreateUserModal();
-
-              // Switch to the correct tab
-              if (createUserForm.user_type === 'farmer' || createUserForm.user_type === 'buyer') {
-                setActiveTab(createUserForm.user_type);
-              }
-
-              // Reload users list
-              if (profile) {
-                await loadUsers(profile);
-              }
-            }
-          }
-        ]
+      await notifyUserAction(
+        newUserId,
+        "approved",
+        "account",
+        `${createUserForm.first_name} ${createUserForm.last_name}`,
+        profile?.id || "",
+        "Account created by administrator",
       );
 
-    } catch (error) {
-      console.error('Create user error:', error);
-      const errorMessage = error instanceof Error ? error.message : 'Failed to create user';
-      Alert.alert('Error', errorMessage);
-    } finally {
-      setCreateUserLoading(false);
-    }
-  };
+      await notifyAllAdmins(
+        `New ${createUserForm.user_type} Created`,
+        `Admin ${profile?.first_name} ${profile?.last_name} created a new ${createUserForm.user_type} account for ${createUserForm.first_name} ${createUserForm.last_name} (${createUserForm.email})`,
+        profile?.id || "",
+        {
+          action: "user_created",
+          userType: createUserForm.user_type,
+          userEmail: createUserForm.email,
+          userName: `${createUserForm.first_name} ${createUserForm.last_name}`,
+        },
+      );
 
+      console.log("✅ Notifications sent for user creation");
+    } catch (notifError) {
+      console.error("⚠️ Failed to send notifications:", notifError);
+    }
+
+    await showWebAlert(
+      "Success",
+      `${createUserForm.user_type} account created successfully for ${createUserForm.first_name} ${createUserForm.last_name}`,
+    );
+
+    closeCreateUserModal();
+
+    if (
+      createUserForm.user_type === "farmer" ||
+      createUserForm.user_type === "buyer"
+    ) {
+      setActiveTab(createUserForm.user_type);
+    }
+
+    if (profile) {
+      await loadUsers(profile);
+    }
+  } catch (error) {
+    console.error("Create user error:", error);
+    const errorMessage =
+      error instanceof Error ? error.message : "Failed to create user";
+    await showWebAlert("Error", errorMessage);
+  } finally {
+    setCreateUserLoading(false);
+  }
+};
   const updateCreateUserForm = (field: keyof CreateUserForm, value: string) => {
     setCreateUserForm(prev => ({
       ...prev,
@@ -1333,168 +1320,155 @@ export default function AdminUsers() {
   };
 
   // Handle product status update
-  const handleProductStatusUpdate = async (productId: string, newStatus: 'approved' | 'rejected') => {
-    // Close the user detail modal immediately when showing confirmation
-    setModalVisible(false);
-    setBuyerModalVisible(false);
+  const handleProductStatusUpdate = async (
+  productId: string,
+  newStatus: "approved" | "rejected",
+) => {
+  setModalVisible(false);
+  setBuyerModalVisible(false);
 
-    const actionText = newStatus === 'approved' ? 'approve' : 'reject';
-    const confirmed = await showConfirmation(
-      `${actionText.charAt(0).toUpperCase() + actionText.slice(1)} Product`,
-      `Are you sure you want to ${actionText} this product?`
-    );
+  const actionText = newStatus === "approved" ? "approve" : "reject";
+  const confirmed = await showConfirmation(
+    `${actionText.charAt(0).toUpperCase() + actionText.slice(1)} Product`,
+    `Are you sure you want to ${actionText} this product?`,
+  );
 
-    if (!confirmed) return;
+  if (!confirmed) return;
 
-    try {
-      // Get product details for notification
-      const { data: productData, error: fetchError } = await supabase
-        .from('products')
-        .select('name, farmer_id')
-        .eq('id', productId)
-        .single();
+  try {
+    const { data: productData, error: fetchError } = await supabase
+      .from("products")
+      .select("name, farmer_id")
+      .eq("id", productId)
+      .single();
 
-      if (fetchError) throw fetchError;
+    if (fetchError) throw fetchError;
 
-      const { error } = await supabase
-        .from('products')
-        .update({ status: newStatus })
-        .eq('id', productId);
+    const { error } = await supabase
+      .from("products")
+      .update({ status: newStatus })
+      .eq("id", productId);
 
-      if (error) throw error;
-
-      // Send notification to farmer
-      try {
-        await notifyUserAction(
-          productData.farmer_id,
-          newStatus === 'approved' ? 'approved' : 'rejected',
-          'product',
-          productData.name,
-          profile?.id || '',
-          `Your product "${productData.name}" has been ${newStatus} by an administrator`
-        );
-
-        // Notify all admins
-        await notifyAllAdmins(
-          `Product ${newStatus === 'approved' ? 'Approved' : 'Rejected'}`,
-          `Admin ${profile?.first_name} ${profile?.last_name} ${newStatus} the product "${productData.name}"`,
-          profile?.id || '',
-          {
-            action: `product_${newStatus}`,
-            productId: productId,
-            productName: productData.name,
-            farmerId: productData.farmer_id
-          }
-        );
-      } catch (notifError) {
-        console.error('Failed to send notifications:', notifError);
-      }
-
-      // Show success message
-      Alert.alert('Success', `Product ${newStatus} successfully!`);
-
-      // Refresh farmer data
-      if (selectedFarmer) {
-        await loadFarmerData(selectedFarmer.id);
-      }
-    } catch (error) {
-      console.error('Error updating product status:', error);
-      Alert.alert('Error', 'Failed to update product status');
-    }
-  };
-
-  // Handle order status update
-  const handleOrderStatusUpdate = async (orderId: string, newStatus: string) => {
-    // Close the user detail modal immediately when showing confirmation
-    setModalVisible(false);
-    setBuyerModalVisible(false);
-
-    const actionMap: { [key: string]: string } = {
-      confirmed: 'confirm',
-      cancelled: 'cancel',
-      delivered: 'mark as delivered',
-      ready: 'mark as ready'
-    };
-
-    const actionText = actionMap[newStatus] || newStatus;
-    const confirmed = await showConfirmation(
-      `${actionText.charAt(0).toUpperCase() + actionText.slice(1)} Order`,
-      `Are you sure you want to ${actionText} this order?`
-    );
-
-    if (!confirmed) return;
+    if (error) throw error;
 
     try {
-      // Get order details for notification
-      const { data: orderData, error: fetchError } = await supabase
-        .from('orders')
-        .select(`
-          id,
-          buyer_id,
-          farmer_id,
-          products (name)
-        `)
-        .eq('id', orderId)
-        .single();
+      await notifyUserAction(
+        productData.farmer_id,
+        newStatus === "approved" ? "approved" : "rejected",
+        "product",
+        productData.name,
+        profile?.id || "",
+        `Your product "${productData.name}" has been ${newStatus} by an administrator`,
+      );
 
-      if (fetchError) throw fetchError;
-
-      const { error } = await supabase
-        .from('orders')
-        .update({ status: newStatus } as any)
-        .eq('id', orderId);
-
-      if (error) throw error;
-
-      // Send notifications
-      try {
-        const productName = orderData.products?.name || 'Product';
-
-        // Notify buyer about order status change
-        await notifyOrderStatusChange(
-          orderId,
-          orderData.buyer_id,
-          newStatus,
-          `Your order for ${productName} has been ${newStatus}`
-        );
-
-        // Notify farmer about order status change
-        await notifyOrderStatusChange(
-          orderId,
-          orderData.farmer_id,
-          newStatus,
-          `Order for ${productName} has been ${newStatus} by admin`
-        );
-
-        // Notify all admins
-        await notifyAllAdmins(
-          `Order ${newStatus.charAt(0).toUpperCase() + newStatus.slice(1)}`,
-          `Admin ${profile?.first_name} ${profile?.last_name} ${newStatus} order #${orderId.substring(0, 8)}`,
-          profile?.id || '',
-          {
-            action: `order_${newStatus}`,
-            orderId: orderId
-          }
-        );
-      } catch (notifError) {
-        console.error('Failed to send notifications:', notifError);
-      }
-
-      // Show success message
-      Alert.alert('Success', `Order ${newStatus} successfully!`);
-
-      // Refresh data
-      if (selectedFarmer) {
-        await loadFarmerData(selectedFarmer.id);
-      }
-      if (selectedBuyer) {
-        await loadBuyerData(selectedBuyer.id);
-      }
-    } catch (error) {
-      console.error('Error updating order status:', error);
-      Alert.alert('Error', 'Failed to update order status');
+      await notifyAllAdmins(
+        `Product ${newStatus === "approved" ? "Approved" : "Rejected"}`,
+        `Admin ${profile?.first_name} ${profile?.last_name} ${newStatus} the product "${productData.name}"`,
+        profile?.id || "",
+        {
+          action: `product_${newStatus}`,
+          productId: productId,
+          productName: productData.name,
+          farmerId: productData.farmer_id,
+        },
+      );
+    } catch (notifError) {
+      console.error("Failed to send notifications:", notifError);
     }
+
+    await showWebAlert("Success", `Product ${newStatus} successfully!`);
+
+    if (selectedFarmer) {
+      await loadFarmerData(selectedFarmer.id);
+    }
+  } catch (error) {
+    console.error("Error updating product status:", error);
+    await showWebAlert("Error", "Failed to update product status");
+  }
+};  // Handle order status update
+const handleOrderStatusUpdate = async (orderId: string, newStatus: string) => {
+  setModalVisible(false);
+  setBuyerModalVisible(false);
+
+  const actionMap: { [key: string]: string } = {
+    confirmed: "confirm",
+    cancelled: "cancel",
+    delivered: "mark as delivered",
+    ready: "mark as ready",
   };
+
+  const actionText = actionMap[newStatus] || newStatus;
+  const confirmed = await showConfirmation(
+    `${actionText.charAt(0).toUpperCase() + actionText.slice(1)} Order`,
+    `Are you sure you want to ${actionText} this order?`,
+  );
+
+  if (!confirmed) return;
+
+  try {
+    const { data: orderData, error: fetchError } = await supabase
+      .from("orders")
+      .select(`
+        id,
+        buyer_id,
+        farmer_id,
+        products (name)
+      `)
+      .eq("id", orderId)
+      .single();
+
+    if (fetchError) throw fetchError;
+
+    const { error } = await supabase
+      .from("orders")
+      .update({ status: newStatus } as any)
+      .eq("id", orderId);
+
+    if (error) throw error;
+
+    try {
+      const productName = orderData.products?.name || "Product";
+
+      await notifyOrderStatusChange(
+        orderId,
+        orderData.buyer_id,
+        newStatus,
+        `Your order for ${productName} has been ${newStatus}`,
+      );
+
+      await notifyOrderStatusChange(
+        orderId,
+        orderData.farmer_id,
+        newStatus,
+        `Order for ${productName} has been ${newStatus} by admin`,
+      );
+
+      await notifyAllAdmins(
+        `Order ${newStatus.charAt(0).toUpperCase() + newStatus.slice(1)}`,
+        `Admin ${profile?.first_name} ${profile?.last_name} ${newStatus} order #${orderId.substring(0, 8)}`,
+        profile?.id || "",
+        {
+          action: `order_${newStatus}`,
+          orderId: orderId,
+        },
+      );
+    } catch (notifError) {
+      console.error("Failed to send notifications:", notifError);
+    }
+
+    await showWebAlert("Success", `Order ${newStatus} successfully!`);
+
+    if (selectedFarmer) {
+      await loadFarmerData(selectedFarmer.id);
+    }
+    if (selectedBuyer) {
+      await loadBuyerData(selectedBuyer.id);
+    }
+  } catch (error) {
+    console.error("Error updating order status:", error);
+    await showWebAlert("Error", "Failed to update order status");
+  }
+};
 
   const renderUser = ({ item }: { item: User }) => {
     const chartData = {
