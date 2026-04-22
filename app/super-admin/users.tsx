@@ -274,7 +274,16 @@ export default function SuperAdminUsers() {
         console.error('❌ Auth error:', authError);
         throw authError;
       }
-
+      // Phone validation
+if (createForm.phone) {
+  if (!/^09\d{9}$/.test(createForm.phone)) {
+    await showWebAlert(
+      'Error',
+      'Phone number must be 11 digits and start with 09'
+    );
+    return;
+  }
+}
       if (authData.user) {
         console.log('👤 Creating profile for user:', authData.user.id);
 
@@ -667,7 +676,26 @@ export default function SuperAdminUsers() {
                   style={styles.input}
                   placeholder="Phone number"
                   value={createForm.phone}
-                  onChangeText={(text) => setCreateForm({ ...createForm, phone: text })}
+                  onChangeText={(text) => {
+  // remove non-numbers
+  let cleaned = text.replace(/[^0-9]/g, '');
+
+  // force starting with 09
+  if (!cleaned.startsWith('09')) {
+    if (cleaned.length === 1 && cleaned === '0') {
+      cleaned = '0';
+    } else {
+      cleaned = '09' + cleaned.replace(/^0+/, '');
+    }
+  }
+
+  // limit to 11 digits
+  cleaned = cleaned.slice(0, 11);
+
+  setCreateForm({ ...createForm, phone: cleaned });
+}}
+maxLength={11}
+keyboardType="number-pad"
                   keyboardType="phone-pad"
                 />
               </View>
