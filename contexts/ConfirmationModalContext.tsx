@@ -1,4 +1,10 @@
-import React, { createContext, useContext, useState, useRef, ReactNode } from 'react';
+import React, {
+  createContext,
+  useContext,
+  useState,
+  useRef,
+  ReactNode,
+} from 'react';
 import ConfirmationModal from '../components/ConfirmationModal';
 
 interface ConfirmationModalState {
@@ -8,13 +14,14 @@ interface ConfirmationModalState {
   confirmText: string;
   cancelText: string;
   isDestructive: boolean;
-  onConfirm: () => void;
+  onConfirm: () => void | Promise<void>;
 }
 
 interface ConfirmationModalContextType {
   showConfirmation: (
     title: string,
     message: string,
+    onConfirm?: () => void | Promise<void>,
     isDestructive?: boolean,
     confirmText?: string,
     cancelText?: string
@@ -36,7 +43,9 @@ interface ConfirmationModalProviderProps {
   children: ReactNode;
 }
 
-export const ConfirmationModalProvider: React.FC<ConfirmationModalProviderProps> = ({ children }) => {
+export const ConfirmationModalProvider: React.FC<ConfirmationModalProviderProps> = ({
+  children,
+}) => {
   const [modalState, setModalState] = useState<ConfirmationModalState>({
     visible: false,
     title: '',
@@ -52,12 +61,14 @@ export const ConfirmationModalProvider: React.FC<ConfirmationModalProviderProps>
   const showConfirmation = (
     title: string,
     message: string,
+    onConfirm?: () => void | Promise<void>,
     isDestructive: boolean = false,
     confirmText: string = 'Confirm',
     cancelText: string = 'Cancel'
   ): Promise<boolean> => {
     return new Promise((resolve) => {
       resolveRef.current = resolve;
+
       setModalState({
         visible: true,
         title,
@@ -65,11 +76,17 @@ export const ConfirmationModalProvider: React.FC<ConfirmationModalProviderProps>
         confirmText,
         cancelText,
         isDestructive,
-        onConfirm: () => {
-          setModalState(prev => ({ ...prev, visible: false }));
-          if (resolveRef.current) {
-            resolveRef.current(true);
-            resolveRef.current = null;
+        onConfirm: async () => {
+          try {
+            if (onConfirm) {
+              await onConfirm();
+            }
+            if (resolveRef.current) {
+              resolveRef.current(true);
+              resolveRef.current = null;
+            }
+          } finally {
+            setModalState((prev) => ({ ...prev, visible: false }));
           }
         },
       });
@@ -77,7 +94,7 @@ export const ConfirmationModalProvider: React.FC<ConfirmationModalProviderProps>
   };
 
   const hideConfirmation = () => {
-    setModalState(prev => ({ ...prev, visible: false }));
+    setModalState((prev) => ({ ...prev, visible: false }));
     if (resolveRef.current) {
       resolveRef.current(false);
       resolveRef.current = null;
@@ -85,10 +102,11 @@ export const ConfirmationModalProvider: React.FC<ConfirmationModalProviderProps>
   };
 
   return (
-    <ConfirmationModalContext.Provider value={{ showConfirmation, hideConfirmation }}>
+    <ConfirmationModalContext.Provider
+      value={{ showConfirmation, hideConfirmation }}
+    >
       {children}
 
-      {/* Global confirmation modal - renders at root level */}
       <ConfirmationModal
         visible={modalState.visible}
         title={modalState.title}
