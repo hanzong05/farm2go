@@ -86,7 +86,7 @@ export default function SuperAdminUsers() {
   const { showConfirmation } = useConfirmationModal();
 
   const showWebAlert = async (title: string, message: string) => {
-    await showConfirmation(title, message, async () => {}, false, 'OK', '');
+    await showConfirmation(title, message, undefined, false, 'OK', 'Close');
   };
 
   const [profile, setProfile] = useState<Profile | null>(null);
@@ -403,15 +403,6 @@ export default function SuperAdminUsers() {
 
     return matchesSearch;
   });
-
-  const getUserTypeColor = (userType: string) => {
-    switch (userType) {
-      case 'farmer': return [colors.primary, colors.primaryLight];
-      case 'buyer': return [colors.secondary, '#6ee7b7'];
-      case 'admin': return [colors.danger, colors.dangerLight];
-      default: return [colors.textSecondary, colors.textLight];
-    }
-  };
 
   const renderTableRow = ({ item, index }: { item: User; index: number }) => {
     return (
