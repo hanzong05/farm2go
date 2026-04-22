@@ -5,7 +5,6 @@ import { router } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   Animated,
   Dimensions,
   FlatList,
@@ -22,6 +21,7 @@ import {
 import Icon from 'react-native-vector-icons/FontAwesome5';
 import HeaderComponent from '../../components/HeaderComponent';
 import LocationPicker from '../../components/LocationPicker';
+import { useConfirmationModal } from '../../contexts/ConfirmationModalContext';
 import { supabase } from '../../lib/supabase';
 import { getUserWithProfile } from '../../services/auth';
 import { Database } from '../../types/database';
@@ -83,6 +83,12 @@ const colors = {
 };
 
 export default function SuperAdminUsers() {
+  const { showConfirmation } = useConfirmationModal();
+
+  const showWebAlert = async (title: string, message: string) => {
+    await showConfirmation(title, message, async () => {}, false, 'OK', '');
+  };
+
   const [profile, setProfile] = useState<Profile | null>(null);
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
@@ -93,8 +99,7 @@ export default function SuperAdminUsers() {
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [emailError, setEmailError] = useState('');
-  
-  // Animation values
+
   const fadeAnim = new Animated.Value(0);
   const slideAnim = new Animated.Value(50);
   const scaleAnim = new Animated.Value(0.9);
@@ -112,7 +117,7 @@ export default function SuperAdminUsers() {
 
   useEffect(() => {
     loadData();
-    // Start animations
+
     Animated.parallel([
       Animated.timing(fadeAnim, {
         toValue: 1,
@@ -141,7 +146,10 @@ export default function SuperAdminUsers() {
 
       if (!userData?.profile || userData.profile.user_type !== 'super-admin') {
         console.log('❌ Access denied - User type:', userData?.profile?.user_type);
-        Alert.alert('Access Denied', `You do not have super admin privileges. Current user type: ${userData?.profile?.user_type || 'none'}`);
+        await showWebAlert(
+          'Access Denied',
+          `You do not have super admin privileges. Current user type: ${userData?.profile?.user_type || 'none'}`
+        );
         router.replace('/');
         return;
       }
@@ -150,7 +158,7 @@ export default function SuperAdminUsers() {
       await loadUsers();
     } catch (error) {
       console.error('Error loading data:', error);
-      Alert.alert('Error', 'Failed to load user data');
+      await showWebAlert('Error', 'Failed to load user data');
     } finally {
       setLoading(false);
     }
@@ -200,24 +208,24 @@ export default function SuperAdminUsers() {
       }
 
       const usersData: User[] = data?.map(profile => ({
-          id: profile.id,
-          email: profile.email || '',
-          created_at: profile.created_at || '',
-          profiles: {
-            first_name: profile.first_name,
-            last_name: profile.last_name,
-            user_type: profile.user_type as 'farmer' | 'buyer' | 'admin' | 'super-admin',
-            farm_name: profile.farm_name,
-            phone: profile.phone,
-            barangay: profile.barangay,
-          },
-        })) || [];
+        id: profile.id,
+        email: profile.email || '',
+        created_at: profile.created_at || '',
+        profiles: {
+          first_name: profile.first_name,
+          last_name: profile.last_name,
+          user_type: profile.user_type as 'farmer' | 'buyer' | 'admin' | 'super-admin',
+          farm_name: profile.farm_name,
+          phone: profile.phone,
+          barangay: profile.barangay,
+        },
+      })) || [];
 
       console.log('👥 Processed users data:', usersData);
       setUsers(usersData);
     } catch (error) {
       console.error('Error loading users:', error);
-      Alert.alert('Error', 'Failed to load users');
+      await showWebAlert('Error', 'Failed to load users');
     }
   };
 
@@ -235,17 +243,17 @@ export default function SuperAdminUsers() {
   const createUser = async () => {
     try {
       if (!createForm.email || !createForm.password || !createForm.first_name || !createForm.barangay) {
-        Alert.alert('Error', 'Please fill in all required fields including barangay location');
+        await showWebAlert('Error', 'Please fill in all required fields including barangay location');
         return;
       }
 
       if (!validateEmail(createForm.email.trim())) {
-        Alert.alert('Error', 'Please enter a valid email address');
+        await showWebAlert('Error', 'Please enter a valid email address');
         return;
       }
 
       if (createForm.password.length < 6) {
-        Alert.alert('Error', 'Password must be at least 6 characters long');
+        await showWebAlert('Error', 'Password must be at least 6 characters long');
         return;
       }
 
@@ -318,45 +326,43 @@ export default function SuperAdminUsers() {
           error: verifyError
         });
 
-        Alert.alert('Success', `Admin user created successfully! User ID: ${authData.user.id}`);
+        await showWebAlert('Success', `Admin user created successfully! User ID: ${authData.user.id}`);
         setShowCreateModal(false);
         resetCreateForm();
         await loadUsers();
       }
     } catch (error: any) {
       console.error('Error creating user:', error);
-      Alert.alert('Error', error.message || 'Failed to create user');
+      await showWebAlert('Error', error.message || 'Failed to create user');
     }
   };
 
   const deleteUser = async (userId: string) => {
-    Alert.alert(
+    const confirmed = await showConfirmation(
       'Delete User',
       'Are you sure you want to delete this user? This action cannot be undone.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              const { error: profileError } = await supabase
-                .from('profiles')
-                .delete()
-                .eq('id', userId);
-
-              if (profileError) throw profileError;
-
-              Alert.alert('Success', 'User deleted successfully');
-              await loadUsers();
-            } catch (error: any) {
-              console.error('Error deleting user:', error);
-              Alert.alert('Error', error.message || 'Failed to delete user');
-            }
-          },
-        },
-      ]
+      undefined,
+      true,
+      'Delete',
+      'Cancel'
     );
+
+    if (!confirmed) return;
+
+    try {
+      const { error: profileError } = await supabase
+        .from('profiles')
+        .delete()
+        .eq('id', userId);
+
+      if (profileError) throw profileError;
+
+      await showWebAlert('Success', 'User deleted successfully');
+      await loadUsers();
+    } catch (error: any) {
+      console.error('Error deleting user:', error);
+      await showWebAlert('Error', error.message || 'Failed to delete user');
+    }
   };
 
   const resetCreateForm = () => {
@@ -489,7 +495,6 @@ export default function SuperAdminUsers() {
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
-        {/* Admin Users Table */}
         <View style={styles.tableContainer}>
           {filteredUsers.length === 0 ? (
             <View style={styles.emptyContainer}>
@@ -503,7 +508,6 @@ export default function SuperAdminUsers() {
             </View>
           ) : width >= 1024 ? (
             <View style={styles.tableInnerContainer}>
-              {/* Table Header */}
               <View style={styles.tableHeader}>
                 <Text style={[styles.tableHeaderCell, styles.nameCell]}>Name</Text>
                 <Text style={[styles.tableHeaderCell, styles.emailCell]}>Email</Text>
@@ -513,7 +517,6 @@ export default function SuperAdminUsers() {
                 <Text style={[styles.tableHeaderCell, styles.actionsCell]}>Actions</Text>
               </View>
 
-              {/* Table Body */}
               <FlatList
                 data={filteredUsers}
                 renderItem={renderTableRow}
@@ -528,7 +531,6 @@ export default function SuperAdminUsers() {
               style={styles.tableScrollView}
             >
               <View style={styles.tableInnerContainer}>
-                {/* Table Header */}
                 <View style={styles.tableHeader}>
                   <Text style={[styles.tableHeaderCell, styles.nameCell]}>Name</Text>
                   <Text style={[styles.tableHeaderCell, styles.emailCell]}>Email</Text>
@@ -538,7 +540,6 @@ export default function SuperAdminUsers() {
                   <Text style={[styles.tableHeaderCell, styles.actionsCell]}>Actions</Text>
                 </View>
 
-                {/* Table Body */}
                 <FlatList
                   data={filteredUsers}
                   renderItem={renderTableRow}
@@ -551,7 +552,6 @@ export default function SuperAdminUsers() {
         </View>
       </ScrollView>
 
-      {/* Floating Add Button */}
       <TouchableOpacity
         style={styles.floatingButton}
         onPress={() => setShowCreateModal(true)}
@@ -564,7 +564,6 @@ export default function SuperAdminUsers() {
         </LinearGradient>
       </TouchableOpacity>
 
-      {/* Enhanced Create User Modal */}
       <Modal
         visible={showCreateModal}
         animationType="slide"
@@ -721,7 +720,6 @@ export default function SuperAdminUsers() {
         </LinearGradient>
       </Modal>
 
-      {/* Edit User Modal */}
       <Modal
         visible={showEditModal}
         animationType="slide"
@@ -852,7 +850,7 @@ export default function SuperAdminUsers() {
                   onPress={async () => {
                     try {
                       if (!selectedUser.profiles?.first_name || !selectedUser.profiles?.barangay) {
-                        Alert.alert('Error', 'Please fill in all required fields');
+                        await showWebAlert('Error', 'Please fill in all required fields');
                         return;
                       }
 
@@ -868,13 +866,13 @@ export default function SuperAdminUsers() {
 
                       if (error) throw error;
 
-                      Alert.alert('Success', 'Admin updated successfully');
+                      await showWebAlert('Success', 'Admin updated successfully');
                       setShowEditModal(false);
                       setSelectedUser(null);
                       await loadUsers();
                     } catch (error: any) {
                       console.error('Error updating user:', error);
-                      Alert.alert('Error', error.message || 'Failed to update user');
+                      await showWebAlert('Error', error.message || 'Failed to update user');
                     }
                   }}
                 >
