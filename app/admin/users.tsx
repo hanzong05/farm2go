@@ -31,6 +31,8 @@ import { supabase } from '../../lib/supabase';
 import { getUserWithProfile } from '../../services/auth';
 import { notifyAllAdmins, notifyUserAction } from '../../services/notifications';
 import { Database } from '../../types/database';
+const [successModalVisible, setSuccessModalVisible] = useState(false);
+const [successMessage, setSuccessMessage] = useState('');
 
 const { width: screenWidth } = Dimensions.get('window');
 
@@ -1214,120 +1216,95 @@ export default function AdminUsers() {
         return null;
     };
 
-    const handleCreateUser = async () => {
-        const validationError = validateCreateUserForm();
-        if (validationError) {
-            Alert.alert('Validation Error', validationError);
-            return;
+  const handleCreateUser = async () => {
+    const validationError = validateCreateUserForm();
+    if (validationError) {
+        Alert.alert('Validation Error', validationError);
+        return;
+    }
+
+    setCreateUserLoading(true);
+
+    try {
+        console.log('🚀 Creating user via Edge Function (no auto-login)');
+
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session) {
+            throw new Error('No active session');
         }
 
-        setCreateUserLoading(true);
+        const { data, error } = await supabase.functions.invoke('create-user', {
+            body: {
+                email: createUserForm.email,
+                password: createUserForm.password,
+                user_metadata: {
+                    first_name: createUserForm.first_name,
+                    last_name: createUserForm.last_name,
+                    user_type: createUserForm.user_type,
+                    farm_name: createUserForm.farm_name.trim() || null,
+                    phone: createUserForm.phone.trim() || null,
+                    barangay: createUserForm.barangay,
+                }
+            }
+        });
+
+        if (error) {
+            if (error.message?.includes('already registered') || error.message?.includes('User already registered')) {
+                throw new Error('This email address is already registered. Please use a different email.');
+            }
+            throw new Error(error.message || 'Failed to create user');
+        }
+
+        if (!data?.success || !data?.user_id) {
+            throw new Error(data?.error || 'Failed to create user');
+        }
+
+        const newUserId = data.user_id;
+        console.log('✅ User, profile, and verification created successfully via Edge Function');
+        console.log('✅ User ID:', newUserId);
 
         try {
-            console.log('🚀 Creating user via Edge Function (no auto-login)');
-
-            // Get current session token
-            const { data: { session } } = await supabase.auth.getSession();
-            if (!session) {
-                throw new Error('No active session');
-            }
-
-            // Call Edge Function to create user without logging in
-            const { data, error } = await supabase.functions.invoke('create-user', {
-                body: {
-                    email: createUserForm.email,
-                    password: createUserForm.password,
-                    user_metadata: {
-                        first_name: createUserForm.first_name,
-                        last_name: createUserForm.last_name,
-                        user_type: createUserForm.user_type,
-                        farm_name: createUserForm.farm_name.trim() || null,
-                        phone: createUserForm.phone.trim() || null,
-                        barangay: createUserForm.barangay,
-                    }
-                }
-            });
-
-            if (error) {
-                if (error.message?.includes('already registered') || error.message?.includes('User already registered')) {
-                    throw new Error('This email address is already registered. Please use a different email.');
-                }
-                throw new Error(error.message || 'Failed to create user');
-            }
-
-            if (!data?.success || !data?.user_id) {
-                throw new Error(data?.error || 'Failed to create user');
-            }
-
-            const newUserId = data.user_id;
-            console.log('✅ User, profile, and verification created successfully via Edge Function');
-            console.log('✅ User ID:', newUserId);
-
-            // Send notifications
-            try {
-                // Notify the newly created user
-                await notifyUserAction(
-                    newUserId,
-                    'approved',
-                    'account',
-                    `${createUserForm.first_name} ${createUserForm.last_name}`,
-                    profile?.id || '',
-                    'Account created by administrator'
-                );
-
-                // Notify all other admins about the new user creation
-                await notifyAllAdmins(
-                    `New ${createUserForm.user_type} Created`,
-                    `Admin ${profile?.first_name} ${profile?.last_name} created a new ${createUserForm.user_type} account for ${createUserForm.first_name} ${createUserForm.last_name} (${createUserForm.email})`,
-                    profile?.id || '',
-                    {
-                        action: 'user_created',
-                        userType: createUserForm.user_type,
-                        userEmail: createUserForm.email,
-                        userName: `${createUserForm.first_name} ${createUserForm.last_name}`
-                    }
-                );
-
-                console.log('✅ Notifications sent for user creation');
-            } catch (notifError) {
-                console.error('⚠️ Failed to send notifications:', notifError);
-                // Don't fail the user creation if notifications fail
-            }
-
-            // Success - user created WITHOUT logging you out!
-            console.log('🎉 User created successfully - you remain logged in as admin');
-
-            Alert.alert(
-                'Success',
-                `${createUserForm.user_type} account created successfully for ${createUserForm.first_name} ${createUserForm.last_name}`,
-                [
-                    {
-                        text: 'OK',
-                        onPress: async () => {
-                            closeCreateUserModal();
-
-                            // Switch to the correct tab
-                            if (createUserForm.user_type === 'farmer' || createUserForm.user_type === 'buyer') {
-                                setActiveTab(createUserForm.user_type);
-                            }
-
-                            // Reload users list
-                            if (profile) {
-                                await loadUsers(profile);
-                            }
-                        }
-                    }
-                ]
+            await notifyUserAction(
+                newUserId,
+                'approved',
+                'account',
+                `${createUserForm.first_name} ${createUserForm.last_name}`,
+                profile?.id || '',
+                'Account created by administrator'
             );
 
-        } catch (error) {
-            console.error('Create user error:', error);
-            const errorMessage = error instanceof Error ? error.message : 'Failed to create user';
-            Alert.alert('Error', errorMessage);
-        } finally {
-            setCreateUserLoading(false);
+            await notifyAllAdmins(
+                `New ${createUserForm.user_type} Created`,
+                `Admin ${profile?.first_name} ${profile?.last_name} created a new ${createUserForm.user_type} account for ${createUserForm.first_name} ${createUserForm.last_name} (${createUserForm.email})`,
+                profile?.id || '',
+                {
+                    action: 'user_created',
+                    userType: createUserForm.user_type,
+                    userEmail: createUserForm.email,
+                    userName: `${createUserForm.first_name} ${createUserForm.last_name}`
+                }
+            );
+
+            console.log('✅ Notifications sent for user creation');
+        } catch (notifError) {
+            console.error('⚠️ Failed to send notifications:', notifError);
         }
-    };
+
+        console.log('🎉 User created successfully - you remain logged in as admin');
+
+        setSuccessMessage(
+            `${createUserForm.user_type} account created successfully for ${createUserForm.first_name} ${createUserForm.last_name}`
+        );
+        setSuccessModalVisible(true);
+
+    } catch (error) {
+        console.error('Create user error:', error);
+        const errorMessage = error instanceof Error ? error.message : 'Failed to create user';
+        Alert.alert('Error', errorMessage);
+    } finally {
+        setCreateUserLoading(false);
+    }
+};
 
     const updateCreateUserForm = (field: keyof CreateUserForm, value: string) => {
         setCreateUserForm(prev => ({
@@ -1802,7 +1779,7 @@ export default function AdminUsers() {
 
             {/* Create User Modal */}
             <Modal
-                animationKeyframesType="slide"
+                animationType="slide"
                 transparent={true}
                 visible={createUserModalVisible}
                 onRequestClose={closeCreateUserModal}
@@ -2025,10 +2002,42 @@ export default function AdminUsers() {
                     </ScrollView>
                 </View>
             </Modal>
+<Modal
+    animationType="fade"
+    transparent={true}
+    visible={successModalVisible}
+    onRequestClose={() => setSuccessModalVisible(false)}
+    presentationStyle="overFullScreen"
+>
+    <View style={styles.successModalOverlay}>
+        <View style={styles.successModalCard}>
+            <Icon name="check-circle" size={52} color={colors.success} />
+            <Text style={styles.successModalTitle}>Success</Text>
+            <Text style={styles.successModalMessage}>{successMessage}</Text>
 
+            <TouchableOpacity
+                style={styles.successModalButton}
+                onPress={async () => {
+                    setSuccessModalVisible(false);
+                    closeCreateUserModal();
+
+                    if (createUserForm.user_type === 'farmer' || createUserForm.user_type === 'buyer') {
+                        setActiveTab(createUserForm.user_type);
+                    }
+
+                    if (profile) {
+                        await loadUsers(profile);
+                    }
+                }}
+            >
+                <Text style={styles.successModalButtonText}>OK</Text>
+            </TouchableOpacity>
+        </View>
+    </View>
+</Modal>
             {/* Farmer Detail Modal */}
             <Modal
-                animationKeyframesType="slide"
+                animationType="slide"
                 transparent={true}
                 visible={modalVisible}
                 onRequestClose={() => setModalVisible(false)}
@@ -2310,7 +2319,7 @@ export default function AdminUsers() {
 
             {/* Buyer Detail Modal */}
             <Modal
-                animationKeyframesType="slide"
+                animationType="slide"
                 transparent={true}
                 visible={buyerModalVisible}
                 onRequestClose={() => setBuyerModalVisible(false)}
@@ -2499,7 +2508,7 @@ export default function AdminUsers() {
 
             {/* QR Scanner Modal */}
             <Modal
-                animationKeyframesType="slide"
+                animationType="slide"
                 transparent={false}
                 visible={qrScannerVisible}
                 onRequestClose={() => setQrScannerVisible(false)}
@@ -2585,7 +2594,7 @@ export default function AdminUsers() {
 
             {/* Order Processing Modal */}
             <Modal
-                animationKeyframesType="slide"
+                animationType="slide"
                 transparent={true}
                 visible={orderProcessingVisible}
                 onRequestClose={() => setOrderProcessingVisible(false)}
