@@ -1344,9 +1344,13 @@ export default function AdminUsers() {
 
         const actionText = newStatus === 'approved' ? 'approve' : 'reject';
         const confirmed = await showConfirmation(
-            `${actionText.charAt(0).toUpperCase() + actionText.slice(1)} Product`,
-            `Are you sure you want to ${actionText} this product?`
-        );
+    `${actionText.charAt(0).toUpperCase() + actionText.slice(1)} Product`,
+    `Are you sure you want to ${actionText} this product?`,
+    undefined,
+    newStatus === 'rejected',
+    newStatus === 'approved' ? 'Approve' : 'Reject',
+    'Cancel'
+);
 
         if (!confirmed) return;
 
@@ -1422,9 +1426,13 @@ export default function AdminUsers() {
 
         const actionText = actionMap[newStatus] || newStatus;
         const confirmed = await showConfirmation(
-            `${actionText.charAt(0).toUpperCase() + actionText.slice(1)} Order`,
-            `Are you sure you want to ${actionText} this order?`
-        );
+    `${actionText.charAt(0).toUpperCase() + actionText.slice(1)} Order`,
+    `Are you sure you want to ${actionText} this order?`,
+    undefined,
+    newStatus === 'cancelled',
+    actionText.charAt(0).toUpperCase() + actionText.slice(1),
+    'Cancel'
+);
 
         if (!confirmed) return;
 
