@@ -31,8 +31,7 @@ import { supabase } from '../../lib/supabase';
 import { getUserWithProfile } from '../../services/auth';
 import { notifyAllAdmins, notifyUserAction } from '../../services/notifications';
 import { Database } from '../../types/database';
-const [successModalVisible, setSuccessModalVisible] = useState(false);
-const [successMessage, setSuccessMessage] = useState('');
+
 
 const { width: screenWidth } = Dimensions.get('window');
 
@@ -199,7 +198,8 @@ export default function AdminUsers() {
     const [scannedOrderData, setScannedOrderData] = useState<any>(null);
     const [hasPermission, setHasPermission] = useState<boolean | null>(null);
     const [isScanning, setIsScanning] = useState(true);
-
+const [successModalVisible, setSuccessModalVisible] = useState(false);
+const [successMessage, setSuccessMessage] = useState('');
     // Camera setup (mobile only)
     const devices = useCameraDevices();
     const device = devices?.back;
