@@ -1,16 +1,31 @@
 // Edge Function to create users via Admin API without auto-login
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.95.0'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Methods': 'POST, OPTIONS',
+  'Access-Control-Allow-Headers':
+    'authorization, x-client-info, apikey, content-type, prefer',
 }
 
 serve(async (req) => {
   // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders })
+  }
+
+  if (req.method !== 'POST') {
+    return new Response(
+      JSON.stringify({
+        success: false,
+        error: 'Method not allowed',
+      }),
+      {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        status: 405,
+      }
+    )
   }
 
   try {
@@ -21,19 +36,23 @@ serve(async (req) => {
       {
         auth: {
           autoRefreshToken: false,
-          persistSession: false
-        }
+          persistSession: false,
+        },
       }
     )
 
     // Verify the caller is an admin
     const authHeader = req.headers.get('Authorization')
-    if (!authHeader) {
-      throw new Error('Missing authorization header')
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      throw new Error('Missing or invalid authorization header')
     }
 
-    const token = authHeader.replace('Bearer ', '')
-    const { data: { user }, error: authError } = await supabaseAdmin.auth.getUser(token)
+    const token = authHeader.replace('Bearer ', '').trim()
+
+    const {
+      data: { user },
+      error: authError,
+    } = await supabaseAdmin.auth.getUser(token)
 
     if (authError || !user) {
       throw new Error('Unauthorized')
@@ -46,7 +65,11 @@ serve(async (req) => {
       .eq('id', user.id)
       .single()
 
-    if (profileError || !profile || (profile.user_type !== 'admin' && profile.user_type !== 'super-admin')) {
+    if (
+      profileError ||
+      !profile ||
+      (profile.user_type !== 'admin' && profile.user_type !== 'super-admin')
+    ) {
       throw new Error('Only admins can create users')
     }
 
@@ -57,16 +80,21 @@ serve(async (req) => {
       throw new Error('Email and password are required')
     }
 
+    if (!user_metadata?.first_name || !user_metadata?.last_name || !user_metadata?.user_type) {
+      throw new Error('Missing required user metadata')
+    }
+
     // Create the user using Admin API (no auto-login)
-    const { data: newUser, error: createError } = await supabaseAdmin.auth.admin.createUser({
-      email,
-      password,
-      email_confirm: true, // Auto-confirm the email
-      user_metadata: user_metadata || {}
-    })
+    const { data: newUser, error: createError } =
+      await supabaseAdmin.auth.admin.createUser({
+        email,
+        password,
+        email_confirm: true,
+        user_metadata: user_metadata || {},
+      })
 
     if (createError) {
-      throw createError
+      throw new Error(createError.message)
     }
 
     if (!newUser.user) {
@@ -80,16 +108,21 @@ serve(async (req) => {
         {
           id: newUser.user.id,
           email: email,
-          first_name: user_metadata.first_name,
-          last_name: user_metadata.last_name,
-          user_type: user_metadata.user_type,
-          farm_name: user_metadata.farm_name,
-          phone: user_metadata.phone,
-          barangay: user_metadata.barangay,
-        }
+          first_name: user_metadata.first_name ?? null,
+          middle_name: user_metadata.middle_name ?? null,
+          last_name: user_metadata.last_name ?? null,
+          user_type: user_metadata.user_type ?? null,
+          farm_name: user_metadata.farm_name ?? null,
+          farm_size: user_metadata.farm_size ?? null,
+          phone: user_metadata.phone ?? null,
+          barangay: user_metadata.barangay ?? null,
+          full_address: user_metadata.full_address ?? user_metadata.address ?? null,
+        },
       ])
 
     if (profileInsertError) {
+      // cleanup auth user if profile insert fails
+      await supabaseAdmin.auth.admin.deleteUser(newUser.user.id)
       throw new Error(`Failed to create profile: ${profileInsertError.message}`)
     }
 
@@ -106,8 +139,9 @@ serve(async (req) => {
           submitted_at: new Date().toISOString(),
           reviewed_at: new Date().toISOString(),
           reviewed_by: user.id,
-          admin_notes: 'User created directly by administrator - no verification documents required'
-        }
+          admin_notes:
+            'User created directly by administrator - no verification documents required',
+        },
       ])
 
     if (verificationError) {
@@ -119,23 +153,23 @@ serve(async (req) => {
       JSON.stringify({
         success: true,
         user_id: newUser.user.id,
-        message: 'User created successfully'
+        message: 'User created successfully',
       }),
       {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         status: 200,
-      },
+      }
     )
   } catch (error) {
     return new Response(
       JSON.stringify({
         success: false,
-        error: error.message
+        error: error instanceof Error ? error.message : 'Unknown error',
       }),
       {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         status: 400,
-      },
+      }
     )
   }
 })
