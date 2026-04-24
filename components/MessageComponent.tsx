@@ -1,23 +1,22 @@
-import React, { useRef, useState, useEffect, useImperativeHandle, forwardRef } from 'react';
+import React, { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react';
 import {
-    Dimensions,
-    FlatList,
-    Modal,
-    Platform,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View,
-    Alert,
-    Image
+  Alert,
+  Dimensions,
+  FlatList,
+  Image,
+  Modal,
+  Platform,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/FontAwesome5';
 import { supabase } from '../lib/supabase';
-import { messageService, Conversation as DBConversation, Message as DBMessage } from '../services/messageService';
-import ChatModal, { ChatMessage, ChatParticipant } from './ChatModal';
+import { Conversation as DBConversation, Message as DBMessage, messageService } from '../services/messageService';
+import ChatModal, { ChatMessage } from './ChatModal';
 
 const { width } = Dimensions.get('window');
 const isDesktop = width >= 1024;
@@ -652,7 +651,7 @@ const MessageComponent = forwardRef<MessageComponentRef, MessageComponentProps>(
             onPress={onNewConversation}
           >
             <Icon name="plus" size={16} color={colors.white} />
-            <Text style={styles.newMessageButtonText}>Start New Conversation</Text>
+
           </TouchableOpacity>
         )}
       </View>
@@ -665,15 +664,7 @@ const MessageComponent = forwardRef<MessageComponentRef, MessageComponentProps>(
         <View style={styles.desktopDropdownHeader}>
           <Text style={styles.desktopDropdownTitle}>Messages</Text>
           <View style={styles.desktopHeaderActions}>
-            <TouchableOpacity
-              style={styles.desktopNewMessageButton}
-              onPress={() => {
-                onNewConversation?.();
-                setDropdownVisible(false);
-              }}
-            >
-              <Icon name="edit" size={14} color={colors.primary} />
-            </TouchableOpacity>
+
             <TouchableOpacity
               style={styles.desktopCloseButton}
               onPress={handleCloseModal}
@@ -818,34 +809,34 @@ const MessageComponent = forwardRef<MessageComponentRef, MessageComponentProps>(
           <View style={styles.modalContainer}>
             {/* Conversations List View Only */}
             <View style={styles.modalHeader}>
-            <Text style={styles.modalTitle}>Messages</Text>
-            <View style={styles.headerActions}>
-              <TouchableOpacity
-                style={styles.headerButton}
-                onPress={onNewConversation}
-              >
-                <Icon name="plus" size={14} color={colors.white} />
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.closeButton}
-                onPress={handleCloseModal}
-              >
-                <Icon name="times" size={20} color={colors.gray600} />
-              </TouchableOpacity>
+              <Text style={styles.modalTitle}>Messages</Text>
+              <View style={styles.headerActions}>
+                <TouchableOpacity
+                  style={styles.headerButton}
+                  onPress={onNewConversation}
+                >
+                  <Icon name="plus" size={14} color={colors.white} />
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.closeButton}
+                  onPress={handleCloseModal}
+                >
+                  <Icon name="times" size={20} color={colors.gray600} />
+                </TouchableOpacity>
+              </View>
             </View>
-          </View>
 
-          {conversations.length === 0 ? (
-            renderEmptyState()
-          ) : (
-            <FlatList
-              data={conversations}
-              renderItem={renderConversationItem}
-              keyExtractor={(item) => item.conversation_id}
-              style={styles.conversationsList}
-              showsVerticalScrollIndicator={false}
-            />
-          )}
+            {conversations.length === 0 ? (
+              renderEmptyState()
+            ) : (
+              <FlatList
+                data={conversations}
+                renderItem={renderConversationItem}
+                keyExtractor={(item) => item.conversation_id}
+                style={styles.conversationsList}
+                showsVerticalScrollIndicator={false}
+              />
+            )}
           </View>
         </SafeAreaView>
       </Modal>

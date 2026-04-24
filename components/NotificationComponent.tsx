@@ -513,57 +513,57 @@ export default function NotificationComponent({
         <SafeAreaView style={{ flex: 1, backgroundColor: '#000' }} edges={['bottom']}>
           <View style={styles.modalContainer}>
             <View style={styles.modalHeader}>
-            <Text style={styles.modalTitle}>Notifications</Text>
-            <View style={styles.headerActions}>
-              {unreadCount > 0 && (
+              <Text style={styles.modalTitle}>Notifications</Text>
+              <View style={styles.headerActions}>
+                {unreadCount > 0 && (
+                  <TouchableOpacity
+                    style={styles.headerButton}
+                    onPress={onMarkAllAsRead}
+                  >
+                    <Text style={styles.headerButtonText}>Mark All Read</Text>
+                  </TouchableOpacity>
+                )}
                 <TouchableOpacity
-                  style={styles.headerButton}
-                  onPress={onMarkAllAsRead}
+                  style={styles.closeButton}
+                  onPress={() => setModalVisible(false)}
                 >
-                  <Text style={styles.headerButtonText}>Mark All Read</Text>
+                  <Icon name="times" size={20} color={colors.gray600} />
                 </TouchableOpacity>
-              )}
-              <TouchableOpacity
-                style={styles.closeButton}
-                onPress={() => setModalVisible(false)}
-              >
-                <Icon name="times" size={20} color={colors.gray600} />
-              </TouchableOpacity>
+              </View>
             </View>
-          </View>
 
-          {notifications.length === 0 ? (
-            renderEmptyState()
-          ) : (
-            <FlatList
-              data={notifications}
-              renderItem={renderNotificationItem}
-              keyExtractor={(item) => item.id}
-              style={styles.notificationsList}
-              showsVerticalScrollIndicator={false}
-              refreshControl={
-                onRefresh ? (
-                  <RefreshControl
-                    refreshing={loading}
-                    onRefresh={onRefresh}
-                    colors={[colors.primary]}
-                    tintColor={colors.primary}
-                  />
-                ) : undefined
-              }
-            />
-          )}
+            {notifications.length === 0 ? (
+              renderEmptyState()
+            ) : (
+              <FlatList
+                data={notifications}
+                renderItem={renderNotificationItem}
+                keyExtractor={(item) => item.id}
+                style={styles.notificationsList}
+                showsVerticalScrollIndicator={false}
+                refreshControl={
+                  onRefresh ? (
+                    <RefreshControl
+                      refreshing={loading}
+                      onRefresh={onRefresh}
+                      colors={[colors.primary]}
+                      tintColor={colors.primary}
+                    />
+                  ) : undefined
+                }
+              />
+            )}
 
-          {notifications.length > 0 && (
-            <View style={styles.modalFooter}>
-              <TouchableOpacity
-                style={styles.clearAllButton}
-                onPress={onClearAll}
-              >
-                <Text style={styles.clearAllText}>Clear All Notifications</Text>
-              </TouchableOpacity>
-            </View>
-          )}
+            {notifications.length > 0 && (
+              <View style={styles.modalFooter}>
+                <TouchableOpacity
+                  style={styles.clearAllButton}
+                  onPress={onClearAll}
+                >
+
+                </TouchableOpacity>
+              </View>
+            )}
           </View>
         </SafeAreaView>
       </Modal>
