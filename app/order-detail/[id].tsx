@@ -677,6 +677,35 @@ export default function OrderDetailScreen() {
             <View style={styles.actionsCard}>
               <Text style={styles.cardTitle}>Quick Actions</Text>
               <View style={styles.actionsContainer}>
+                {order.status === "cancellation_requested" && (
+                  <>
+                    <TouchableOpacity
+                      style={[
+                        styles.actionButton,
+                        { backgroundColor: colors.danger },
+                      ]}
+                      onPress={() => handleStatusUpdate("cancelled")}
+                    >
+                      <Icon name="check" size={16} color={colors.white} />
+                      <Text style={styles.actionButtonText}>
+                        Confirm Cancellation
+                      </Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      style={[
+                        styles.actionButton,
+                        { backgroundColor: colors.secondary },
+                      ]}
+                      onPress={() => handleStatusUpdate("confirmed")}
+                    >
+                      <Icon name="times" size={16} color={colors.white} />
+                      <Text style={styles.actionButtonText}>
+                        Reject Cancellation
+                      </Text>
+                    </TouchableOpacity>
+                  </>
+                )}
                 {order.status === "pending" && (
                   <TouchableOpacity
                     style={[
