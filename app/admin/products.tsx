@@ -44,7 +44,8 @@ export default function AdminProducts() {
   const [filterState, setFilterState] = useState<FilterState>({
     status: 'all',
     category: 'all',
-    sort: 'newest'
+    sort: 'newest',
+    year: 'all'
   });
 
   const { showAlert, AlertComponent } = useCustomAlert();
@@ -91,6 +92,13 @@ export default function AdminProducts() {
     // Filter by category
     if (filterState.category !== 'all') {
       filtered = filtered.filter(product => product.category.toLowerCase() === filterState.category);
+    }
+
+    // Filter by year
+    if (filterState.year && filterState.year !== 'all') {
+      filtered = filtered.filter(product =>
+        new Date(product.created_at).getFullYear().toString() === filterState.year
+      );
     }
 
     // Filter by search query
@@ -346,6 +354,16 @@ export default function AdminProducts() {
         { key: 'herbs', label: 'Herbs', count: products.filter(p => p.category.toLowerCase() === 'herbs').length },
         { key: 'dairy', label: 'Dairy', count: products.filter(p => p.category.toLowerCase() === 'dairy').length },
         { key: 'meat', label: 'Meat', count: products.filter(p => p.category.toLowerCase() === 'meat').length }
+      ]
+    },
+    {
+      key: 'year',
+      title: 'Year Added',
+      type: 'category',
+      options: [
+        { key: 'all', label: 'All Years', count: products.length },
+        { key: '2025', label: '2025', count: products.filter(p => new Date(p.created_at).getFullYear() === 2025).length },
+        { key: '2024', label: '2024', count: products.filter(p => new Date(p.created_at).getFullYear() === 2024).length },
       ]
     },
     {
@@ -625,7 +643,7 @@ export default function AdminProducts() {
             {/* Products Header */}
             <View style={styles.productsHeader}>
               <Text style={styles.productsTitle}>
-                Product Management
+                Products
               </Text>
               <Text style={styles.productsCount}>
                 {filteredProducts.length} products found

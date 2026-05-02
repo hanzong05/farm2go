@@ -1,4 +1,5 @@
 import { router } from 'expo-router';
+import * as ImagePicker from 'expo-image-picker';
 import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
@@ -6,6 +7,7 @@ import {
   Animated,
   Dimensions,
   Image,
+  Modal,
   Platform,
   RefreshControl,
   SafeAreaView,
@@ -13,6 +15,7 @@ import {
   StatusBar,
   StyleSheet,
   Text,
+  TextInput,
   TouchableOpacity,
   View,
 } from 'react-native';
@@ -41,6 +44,7 @@ const STATUS_FILTERS = [
   { key: 'shipped', label: 'Shipped' },
   { key: 'delivered', label: 'Delivered' },
   { key: 'cancellation_requested', label: 'Cancellation Requested' },
+  { key: 'issue_reported', label: 'Issue Reported' },
   { key: 'cancelled', label: 'Cancelled' },
 ];
 
@@ -99,6 +103,14 @@ export default function BuyerMyOrdersScreen() {
     confirmText: '',
     onConfirm: () => {},
   });
+
+  // Report Issue state
+  const [showReportModal, setShowReportModal] = useState(false);
+  const [reportOrder, setReportOrder] = useState<OrderWithDetails | null>(null);
+  const [reportIssueType, setReportIssueType] = useState<'rotten' | 'damaged' | 'wrong_item' | ''>('');
+  const [reportPhoto, setReportPhoto] = useState<string | null>(null);
+  const [reportDescription, setReportDescription] = useState('');
+  const [isSubmittingReport, setIsSubmittingReport] = useState(false);
 
   // Filter state
   const [filterState, setFilterState] = useState({
@@ -326,6 +338,93 @@ export default function BuyerMyOrdersScreen() {
   const getStatusConfig = (status: string) => {
     const config = ORDER_STATUS_CONFIG[status as keyof typeof ORDER_STATUS_CONFIG];
     return config ? { color: config.color, bgColor: config.bgColor } : { color: '#6b7280', bgColor: '#f3f4f6' };
+  };
+
+  // Handle Report Issue
+  const handleOpenReportIssue = (order: OrderWithDetails) => {
+    setReportOrder(order);
+    setReportIssueType('');
+    setReportPhoto(null);
+    setReportDescription('');
+    setShowReportModal(true);
+  };
+
+  const handlePickReportPhoto = async () => {
+    try {
+      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert('Permission Required', 'Media library permission is required.');
+        return;
+      }
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ['images'],
+        allowsEditing: true,
+        quality: 0.8,
+      });
+      if (!result.canceled && result.assets?.length > 0) {
+        setReportPhoto(result.assets[0].uri);
+      }
+    } catch {
+      Alert.alert('Error', 'Failed to pick image. Please try again.');
+    }
+  };
+
+  const handleSubmitReport = async () => {
+    if (!reportOrder || !reportIssueType) {
+      Alert.alert('Missing Info', 'Please select an issue type.');
+      return;
+    }
+    if (!profile) return;
+
+    setIsSubmittingReport(true);
+    try {
+      const issueNote = `[ISSUE_REPORT:${reportIssueType}:${reportDescription || ''}]`;
+      const updatedNotes = reportOrder.notes
+        ? `${reportOrder.notes}\n${issueNote}`
+        : issueNote;
+
+      const { error } = await (supabase as any)
+        .from('orders')
+        .update({
+          status: 'issue_reported',
+          notes: updatedNotes,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', reportOrder.id);
+
+      if (error) throw error;
+
+      // Notify barangay admins
+      if (reportOrder.farmer_profile?.barangay) {
+        await notifyBarangayAdmins(
+          reportOrder.farmer_profile.barangay,
+          'Issue Report on Order',
+          `${profile.first_name} ${profile.last_name} reported an issue (${reportIssueType.replace('_', ' ')}) on order ${reportOrder.id} (${reportOrder.product?.name}).`,
+          profile.id,
+          {
+            orderId: reportOrder.id,
+            buyerId: profile.id,
+            farmerId: reportOrder.farmer_profile?.id,
+            issueType: reportIssueType,
+            productName: reportOrder.product?.name,
+            action: 'issue_reported',
+          }
+        );
+      }
+
+      Alert.alert(
+        'Report Submitted',
+        'Your issue report has been sent to the barangay admin for review. You will be notified of their decision.',
+        [{ text: 'OK' }]
+      );
+      setShowReportModal(false);
+      await onRefresh();
+    } catch (err) {
+      console.error('Error submitting report:', err);
+      Alert.alert('Error', 'Failed to submit report. Please try again.');
+    } finally {
+      setIsSubmittingReport(false);
+    }
   };
 
   // Handle cancellation request
@@ -781,8 +880,30 @@ export default function BuyerMyOrdersScreen() {
           )}
         </View>
 
+        {/* Report Issue Button — only for delivered orders not yet reported */}
+        {order.status === 'delivered' && (
+          <View style={styles.cancelButtonRow}>
+            <TouchableOpacity
+              style={[styles.cancelButton, { borderColor: '#dc2626' }]}
+              activeOpacity={0.8}
+              onPress={() => handleOpenReportIssue(order)}
+            >
+              <Text style={[styles.cancelButtonText, { color: '#dc2626' }]}>Report Issue</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
+        {/* Issue Already Reported badge */}
+        {order.status === 'issue_reported' && (
+          <View style={styles.cancelButtonRow}>
+            <View style={[styles.cancelRequestedBadge, { backgroundColor: '#fee2e2', borderColor: '#dc2626' }]}>
+              <Text style={[styles.cancelRequestedText, { color: '#dc2626' }]}>Issue Reported — Pending Admin Review</Text>
+            </View>
+          </View>
+        )}
+
         {/* Cancellation Button Row */}
-        {order.status !== 'cancelled' && order.status !== 'delivered' && order.status !== 'cancellation_requested' && !order.notes?.includes('CANCELLATION REQUESTED') && (
+        {order.status !== 'cancelled' && order.status !== 'delivered' && order.status !== 'issue_reported' && order.status !== 'cancellation_requested' && !order.notes?.includes('CANCELLATION REQUESTED') && (
           <View style={styles.cancelButtonRow}>
             <TouchableOpacity
               style={styles.cancelButton}
@@ -991,6 +1112,74 @@ export default function BuyerMyOrdersScreen() {
           title="Filters"
         />
       )}
+
+      {/* Report Issue Modal */}
+      <Modal
+        visible={showReportModal}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setShowReportModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.reportModal}>
+            <View style={styles.reportModalHeader}>
+              <Text style={styles.reportModalTitle}>Report Issue</Text>
+              <TouchableOpacity onPress={() => setShowReportModal(false)}>
+                <Text style={styles.reportModalClose}>✕</Text>
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView showsVerticalScrollIndicator={false}>
+              <Text style={styles.reportLabel}>Issue Type <Text style={{ color: '#dc2626' }}>*</Text></Text>
+              {(['rotten', 'damaged', 'wrong_item'] as const).map((type) => (
+                <TouchableOpacity
+                  key={type}
+                  style={[styles.issueTypeBtn, reportIssueType === type && styles.issueTypeBtnActive]}
+                  onPress={() => setReportIssueType(type)}
+                  activeOpacity={0.8}
+                >
+                  <Text style={[styles.issueTypeBtnText, reportIssueType === type && styles.issueTypeBtnTextActive]}>
+                    {type === 'rotten' ? '🤢 Rotten' : type === 'damaged' ? '💥 Damaged' : '❓ Wrong Item'}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+
+              <Text style={[styles.reportLabel, { marginTop: 16 }]}>Description (optional)</Text>
+              <TextInput
+                style={styles.reportTextInput}
+                multiline
+                numberOfLines={3}
+                placeholder="Describe the issue..."
+                value={reportDescription}
+                onChangeText={setReportDescription}
+                placeholderTextColor="#9ca3af"
+              />
+
+              <Text style={[styles.reportLabel, { marginTop: 16 }]}>Photo (optional)</Text>
+              <TouchableOpacity style={styles.photoPickerBtn} onPress={handlePickReportPhoto} activeOpacity={0.8}>
+                {reportPhoto ? (
+                  <Image source={{ uri: reportPhoto }} style={styles.reportPhotoPreview} resizeMode="cover" />
+                ) : (
+                  <Text style={styles.photoPickerText}>📷 Upload Photo</Text>
+                )}
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.submitReportBtn, isSubmittingReport && { opacity: 0.6 }]}
+                onPress={handleSubmitReport}
+                disabled={isSubmittingReport}
+                activeOpacity={0.8}
+              >
+                {isSubmittingReport ? (
+                  <ActivityIndicator size="small" color="#fff" />
+                ) : (
+                  <Text style={styles.submitReportBtnText}>Submit Report</Text>
+                )}
+              </TouchableOpacity>
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
 
       <ConfirmationModal
         visible={confirmModal.visible}
@@ -1660,5 +1849,107 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#6b7280',
     fontWeight: '500',
+  },
+
+  // Report Issue Modal
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'flex-end',
+  },
+  reportModal: {
+    backgroundColor: '#ffffff',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    padding: 24,
+    maxHeight: '85%',
+  },
+  reportModalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  reportModalTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#111827',
+  },
+  reportModalClose: {
+    fontSize: 18,
+    color: '#6b7280',
+    fontWeight: '600',
+  },
+  reportLabel: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#374151',
+    marginBottom: 8,
+  },
+  issueTypeBtn: {
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#d1d5db',
+    marginBottom: 8,
+    backgroundColor: '#f9fafb',
+  },
+  issueTypeBtnActive: {
+    borderColor: '#dc2626',
+    backgroundColor: '#fee2e2',
+  },
+  issueTypeBtnText: {
+    fontSize: 14,
+    color: '#374151',
+    fontWeight: '500',
+  },
+  issueTypeBtnTextActive: {
+    color: '#dc2626',
+    fontWeight: '700',
+  },
+  reportTextInput: {
+    borderWidth: 1,
+    borderColor: '#d1d5db',
+    borderRadius: 8,
+    padding: 12,
+    fontSize: 14,
+    color: '#111827',
+    backgroundColor: '#f9fafb',
+    textAlignVertical: 'top',
+    minHeight: 80,
+  },
+  photoPickerBtn: {
+    borderWidth: 2,
+    borderColor: '#d1d5db',
+    borderStyle: 'dashed',
+    borderRadius: 10,
+    minHeight: 100,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#f9fafb',
+    overflow: 'hidden',
+  },
+  photoPickerText: {
+    fontSize: 15,
+    color: '#6b7280',
+    fontWeight: '500',
+  },
+  reportPhotoPreview: {
+    width: '100%',
+    height: 160,
+  },
+  submitReportBtn: {
+    marginTop: 20,
+    marginBottom: 8,
+    backgroundColor: '#dc2626',
+    paddingVertical: 14,
+    borderRadius: 10,
+    alignItems: 'center',
+  },
+  submitReportBtnText: {
+    fontSize: 15,
+    color: '#ffffff',
+    fontWeight: '700',
   },
 });

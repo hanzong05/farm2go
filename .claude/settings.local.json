@@ -43,7 +43,8 @@
       "Read(//c/Users/**)",
       "Bash(nul)",
       "Bash(git restore:*)",
-      "Bash(eas build:configure:*)"
+      "Bash(eas build:configure:*)",
+      "Bash(ls -la \"c:\\\\xampp\\\\htdocs\\\\farm2go\\\\contexts\\\\\\\\\")"
     ],
     "deny": [],
     "ask": []

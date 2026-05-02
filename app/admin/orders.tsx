@@ -66,7 +66,7 @@ interface Order {
   buyer_id: string;
   farmer_id: string;
   total_amount: number;
-  status: 'pending' | 'confirmed' | 'processing' | 'ready' | 'delivered' | 'cancelled';
+  status: 'pending' | 'confirmed' | 'processing' | 'ready' | 'delivered' | 'cancelled' | 'cancellation_requested' | 'issue_reported';
   created_at: string;
   delivery_date: string | null;
   delivery_address: string | null;
@@ -102,6 +102,8 @@ const STATUS_FILTERS = [
   { key: 'processing', label: 'Processing' },
   { key: 'ready', label: 'Ready' },
   { key: 'delivered', label: 'Delivered' },
+  { key: 'cancellation_requested', label: 'Cancel Request' },
+  { key: 'issue_reported', label: 'Issue Reported' },
   { key: 'cancelled', label: 'Cancelled' },
 ];
 
@@ -335,16 +337,130 @@ export default function AdminOrdersScreen() {
   };
 
   const getStatusColor = (status: string) => {
-    const statusColors = {
+    const statusColors: Record<string, string> = {
       'all': '#6b7280',
       'pending': '#f59e0b',
       'confirmed': '#3b82f6',
       'processing': '#8b5cf6',
       'ready': '#10b981',
       'delivered': '#059669',
+      'cancellation_requested': '#f97316',
+      'issue_reported': '#dc2626',
       'cancelled': '#dc2626',
     };
-    return statusColors[status as keyof typeof statusColors] || '#6b7280';
+    return statusColors[status] || '#6b7280';
+  };
+
+  const handleCancellationDecision = async (order: Order, decision: 'approve' | 'reject') => {
+    const actionLabel = decision === 'approve' ? 'Approve Cancellation' : 'Reject Cancellation';
+    const actionMsg = decision === 'approve'
+      ? `Approving this will cancel the order. The buyer will be notified.`
+      : `Rejecting this will continue the order as confirmed.`;
+
+    setConfirmModal({
+      visible: true,
+      title: actionLabel,
+      message: actionMsg,
+      isDestructive: decision === 'approve',
+      confirmText: actionLabel,
+      onConfirm: () => processCancellationDecision(order, decision),
+    });
+  };
+
+  const processCancellationDecision = async (order: Order, decision: 'approve' | 'reject') => {
+    setConfirmModal(prev => ({ ...prev, visible: false }));
+    try {
+      const newStatus = decision === 'approve' ? 'cancelled' : 'confirmed';
+      const { error } = await supabase
+        .from('orders')
+        .update({ status: newStatus, updated_at: new Date().toISOString() })
+        .eq('id', order.id);
+      if (error) throw error;
+
+      if (decision === 'approve') {
+        // Restore stock
+        const { data: orderRow } = await supabase
+          .from('orders')
+          .select('product_id, quantity')
+          .eq('id', order.id)
+          .single();
+        if (orderRow) {
+          const { data: product } = await supabase
+            .from('products')
+            .select('quantity_available')
+            .eq('id', (orderRow as any).product_id)
+            .single();
+          if (product) {
+            await supabase
+              .from('products')
+              .update({ quantity_available: (product as any).quantity_available + (orderRow as any).quantity })
+              .eq('id', (orderRow as any).product_id);
+          }
+        }
+        // Mark transaction failed
+        await supabase.from('transactions').update({ status: 'failed' }).eq('order_id', order.id);
+      }
+
+      await notifyOrderStatusChange(
+        order.id, newStatus,
+        order.buyer_id, order.farmer_id,
+        { buyerName: `${order.buyer_profile?.first_name || ''} ${order.buyer_profile?.last_name || ''}`.trim(),
+          farmerName: order.farmer_profile?.farm_name || `${order.farmer_profile?.first_name || ''} ${order.farmer_profile?.last_name || ''}`.trim(),
+          totalAmount: order.total_amount },
+        profile?.id || ''
+      );
+
+      if (profile) await loadOrders(profile);
+    } catch (err) {
+      console.error('Error processing cancellation decision:', err);
+      showAlert('Error', 'Failed to process decision. Please try again.', [{ text: 'OK', style: 'default' }]);
+    }
+  };
+
+  const handleIssueDecision = async (order: Order, decision: 'approve' | 'reject') => {
+    const actionLabel = decision === 'approve' ? 'Approve Refund' : 'Reject Complaint';
+    const actionMsg = decision === 'approve'
+      ? `This will mark the order as refunded and notify the buyer.`
+      : `This will close the complaint and the order stays as delivered.`;
+
+    setConfirmModal({
+      visible: true,
+      title: actionLabel,
+      message: actionMsg,
+      isDestructive: decision === 'approve',
+      confirmText: actionLabel,
+      onConfirm: () => processIssueDecision(order, decision),
+    });
+  };
+
+  const processIssueDecision = async (order: Order, decision: 'approve' | 'reject') => {
+    setConfirmModal(prev => ({ ...prev, visible: false }));
+    try {
+      const newStatus = decision === 'approve' ? 'cancelled' : 'delivered';
+      const { error } = await supabase
+        .from('orders')
+        .update({ status: newStatus, updated_at: new Date().toISOString() })
+        .eq('id', order.id);
+      if (error) throw error;
+
+      if (decision === 'approve') {
+        await supabase.from('transactions').update({ status: 'refunded' }).eq('order_id', order.id);
+      }
+
+      await notifyOrderStatusChange(
+        order.id, decision === 'approve' ? 'cancelled' : 'delivered',
+        order.buyer_id, order.farmer_id,
+        { buyerName: `${order.buyer_profile?.first_name || ''} ${order.buyer_profile?.last_name || ''}`.trim(),
+          farmerName: order.farmer_profile?.farm_name || `${order.farmer_profile?.first_name || ''} ${order.farmer_profile?.last_name || ''}`.trim(),
+          totalAmount: order.total_amount },
+        profile?.id || ''
+      );
+
+      if (profile) await loadOrders(profile);
+    } catch (err) {
+      console.error('Error processing issue decision:', err);
+      showAlert('Error', 'Failed to process decision. Please try again.', [{ text: 'OK', style: 'default' }]);
+    }
   };
 
   const handleFilterChange = (key: string, value: any) => {
@@ -431,6 +547,54 @@ export default function AdminOrdersScreen() {
           <View style={styles.addressSection}>
             <Icon name="map-marker-alt" size={14} color="#64748b" style={styles.addressIcon} />
             <Text style={styles.addressText}>{order.delivery_address}</Text>
+          </View>
+        )}
+
+        {/* Cancellation Request Review */}
+        {order.status === 'cancellation_requested' && (
+          <View style={styles.reviewSection}>
+            <Text style={styles.reviewTitle}>Cancellation Request</Text>
+            <Text style={styles.reviewSubtext}>Buyer has requested to cancel this order.</Text>
+            <View style={styles.reviewButtons}>
+              <TouchableOpacity
+                style={[styles.reviewBtn, styles.reviewRejectBtn]}
+                onPress={() => handleCancellationDecision(order, 'reject')}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.reviewBtnText}>Reject</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.reviewBtn, styles.reviewApproveBtn]}
+                onPress={() => handleCancellationDecision(order, 'approve')}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.reviewBtnText}>Approve Cancel</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        )}
+
+        {/* Issue Report Review */}
+        {order.status === 'issue_reported' && (
+          <View style={styles.reviewSection}>
+            <Text style={styles.reviewTitle}>Issue Report</Text>
+            <Text style={styles.reviewSubtext}>Buyer reported a problem with this order.</Text>
+            <View style={styles.reviewButtons}>
+              <TouchableOpacity
+                style={[styles.reviewBtn, styles.reviewRejectBtn]}
+                onPress={() => handleIssueDecision(order, 'reject')}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.reviewBtnText}>Reject Complaint</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.reviewBtn, styles.reviewApproveBtn]}
+                onPress={() => handleIssueDecision(order, 'approve')}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.reviewBtnText}>Approve Refund</Text>
+              </TouchableOpacity>
+            </View>
           </View>
         )}
       </TouchableOpacity>
@@ -612,4 +776,12 @@ const styles = StyleSheet.create({
   emptyContainer: { alignItems: 'center', paddingVertical: 80 },
   emptyTitle: { fontSize: 24, fontWeight: 'bold', color: '#0f172a', marginTop: 24, marginBottom: 12 },
   emptyDescription: { fontSize: 16, color: '#64748b', textAlign: 'center', paddingHorizontal: 40 },
+  reviewSection: { marginTop: 12, paddingTop: 12, borderTopWidth: 1, borderTopColor: '#f1f5f9', paddingHorizontal: 4 },
+  reviewTitle: { fontSize: 13, fontWeight: '700', color: '#dc2626', marginBottom: 2 },
+  reviewSubtext: { fontSize: 12, color: '#64748b', marginBottom: 10 },
+  reviewButtons: { flexDirection: 'row', gap: 10 },
+  reviewBtn: { flex: 1, paddingVertical: 10, borderRadius: 8, alignItems: 'center' },
+  reviewApproveBtn: { backgroundColor: '#10b981' },
+  reviewRejectBtn: { backgroundColor: '#ef4444' },
+  reviewBtnText: { fontSize: 13, color: '#ffffff', fontWeight: '700' },
 });

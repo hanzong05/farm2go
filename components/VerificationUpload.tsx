@@ -475,6 +475,18 @@ const VerificationUpload: React.FC<VerificationUploadProps> = ({
         </Text>
       </View>
 
+      {/* Photo Requirements Notice */}
+      <View style={styles.requirementsBox}>
+        <Text style={styles.requirementsTitle}>📐 Photo Requirements</Text>
+        <Text style={styles.requirementsText}>ID Photo must match one of these official sizes:</Text>
+        <View style={styles.requirementsList}>
+          <Text style={styles.requirementsItem}>• Passport Size — 1.37 × 1.77 inches</Text>
+          <Text style={styles.requirementsItem}>• Driver's License — 3.375 × 2.125 inches</Text>
+          <Text style={styles.requirementsItem}>• National ID / Other Government ID</Text>
+        </View>
+        <Text style={styles.requirementsText}>Face Photo must match the same size as your chosen ID format. Face must be centered and fully visible.</Text>
+      </View>
+
       {/* ID Document Section */}
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>Valid ID Document</Text>
@@ -729,6 +741,36 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#374151',
     marginBottom: 4,
+  },
+  requirementsBox: {
+    margin: 16,
+    marginBottom: 0,
+    padding: 16,
+    backgroundColor: '#fffbeb',
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#fcd34d',
+  },
+  requirementsTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#92400e',
+    marginBottom: 6,
+  },
+  requirementsText: {
+    fontSize: 13,
+    color: '#78350f',
+    lineHeight: 18,
+    marginBottom: 6,
+  },
+  requirementsList: {
+    marginBottom: 8,
+  },
+  requirementsItem: {
+    fontSize: 13,
+    color: '#78350f',
+    lineHeight: 20,
+    paddingLeft: 4,
   },
   documentTypeLabel: {
     marginTop: 8,
