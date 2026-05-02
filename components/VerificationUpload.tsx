@@ -17,6 +17,7 @@ import Icon from 'react-native-vector-icons/FontAwesome5';
 import { supabase } from '../lib/supabase';
 import { Alert, showError, showSuccess } from '../utils/alert';
 import WebFileInput from './WebFileInput';
+import WebImageCrop from './WebImageCrop';
 
 // Platform-specific import to prevent VisionCamera loading on web
 const VisionCamera = Platform.OS === 'web'
@@ -59,6 +60,7 @@ const VerificationUpload: React.FC<VerificationUploadProps> = ({
   }>({});
   const [showVisionCamera, setShowVisionCamera] = useState<'id' | 'face' | null>(null);
   const [showFileInput, setShowFileInput] = useState<'id' | 'face' | null>(null);
+  const [pendingCrop, setPendingCrop] = useState<{ uri: string; type: 'id' | 'face' } | null>(null);
   const [selectedDocumentType, setSelectedDocumentType] = useState<string>('');
 
   // Check FileSystem availability on mount
@@ -438,9 +440,29 @@ const VerificationUpload: React.FC<VerificationUploadProps> = ({
       <VisionCamera
         type={showVisionCamera}
         onPhotoTaken={(uri: string) => {
-          updateVerificationData(showVisionCamera, uri, showVisionCamera === 'id' ? 'passport' : 'selfie');
+          setShowVisionCamera(null);
+          setPendingCrop({ uri, type: showVisionCamera });
         }}
         onClose={() => setShowVisionCamera(null)}
+      />
+    );
+  }
+
+  // Web crop step: file selected, waiting for user to confirm crop
+  if (pendingCrop) {
+    return (
+      <WebImageCrop
+        imageUri={pendingCrop.uri}
+        aspectRatio={pendingCrop.type === 'id' ? 4 / 3 : 1}
+        onCrop={(croppedUri) => {
+          updateVerificationData(
+            pendingCrop.type,
+            croppedUri,
+            pendingCrop.type === 'id' ? (selectedDocumentType || 'other') : 'selfie'
+          );
+          setPendingCrop(null);
+        }}
+        onCancel={() => setPendingCrop(null)}
       />
     );
   }
@@ -450,8 +472,9 @@ const VerificationUpload: React.FC<VerificationUploadProps> = ({
       <WebFileInput
         type={showFileInput}
         onFileSelected={(uri: string) => {
-          updateVerificationData(showFileInput, uri, showFileInput === 'id' ? 'passport' : 'selfie');
           setShowFileInput(null);
+          // Go to crop step instead of directly updating
+          setPendingCrop({ uri, type: showFileInput });
         }}
       />
     );
@@ -525,11 +548,15 @@ const VerificationUpload: React.FC<VerificationUploadProps> = ({
           disabled={isUploading}
         >
           {verificationData.idDocument.uri ? (
-            <View>
-              <Image source={{ uri: verificationData.idDocument.uri }} style={styles.previewImage} />
+            <View style={styles.idPreviewContainer}>
+              <Image
+                source={{ uri: verificationData.idDocument.uri }}
+                style={styles.idPreviewImage}
+                resizeMode="contain"
+              />
               {verificationData.idDocument.type && (
                 <Text style={styles.documentTypeLabel}>
-                  Type: {verificationData.idDocument.type.replace('_', ' ').toUpperCase()}
+                  Type: {verificationData.idDocument.type.replace(/_/g, ' ').toUpperCase()}
                 </Text>
               )}
             </View>
@@ -556,7 +583,13 @@ const VerificationUpload: React.FC<VerificationUploadProps> = ({
           disabled={isUploading}
         >
           {verificationData.facePhoto.uri ? (
-            <Image source={{ uri: verificationData.facePhoto.uri }} style={styles.previewImage} />
+            <View style={styles.facePreviewContainer}>
+              <Image
+                source={{ uri: verificationData.facePhoto.uri }}
+                style={styles.facePreviewImage}
+                resizeMode="contain"
+              />
+            </View>
           ) : (
             <View style={styles.uploadPlaceholder}>
               <Text style={styles.uploadText}>🤳 Take Face Photo</Text>
@@ -673,6 +706,32 @@ const styles = StyleSheet.create({
     width: '100%',
     height: 200,
     borderRadius: 8,
+  },
+  idPreviewContainer: {
+    width: '100%',
+    aspectRatio: 4 / 3,
+    backgroundColor: '#f3f4f6',
+    borderRadius: 8,
+    overflow: 'hidden',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  idPreviewImage: {
+    width: '100%',
+    height: '100%',
+  },
+  facePreviewContainer: {
+    width: '100%',
+    aspectRatio: 1,
+    backgroundColor: '#f3f4f6',
+    borderRadius: 8,
+    overflow: 'hidden',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  facePreviewImage: {
+    width: '100%',
+    height: '100%',
   },
   progressContainer: {
     marginTop: 12,

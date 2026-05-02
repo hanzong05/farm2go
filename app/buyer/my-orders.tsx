@@ -383,7 +383,8 @@ export default function BuyerMyOrdersScreen() {
         ? `${reportOrder.notes}\n${issueNote}`
         : issueNote;
 
-      const { error } = await (supabase as any)
+      // Try setting status to issue_reported; fall back to keeping 'delivered' + notes only
+      let { error } = await (supabase as any)
         .from('orders')
         .update({
           status: 'issue_reported',
@@ -391,6 +392,15 @@ export default function BuyerMyOrdersScreen() {
           updated_at: new Date().toISOString(),
         })
         .eq('id', reportOrder.id);
+
+      if (error && error.code === '23514') {
+        // DB constraint doesn't include issue_reported — store in notes only
+        const fallback = await (supabase as any)
+          .from('orders')
+          .update({ notes: updatedNotes, updated_at: new Date().toISOString() })
+          .eq('id', reportOrder.id);
+        error = fallback.error;
+      }
 
       if (error) throw error;
 
@@ -881,7 +891,7 @@ export default function BuyerMyOrdersScreen() {
         </View>
 
         {/* Report Issue Button — only for delivered orders not yet reported */}
-        {order.status === 'delivered' && (
+        {order.status === 'delivered' && !order.notes?.includes('[ISSUE_REPORT:') && (
           <View style={styles.cancelButtonRow}>
             <TouchableOpacity
               style={[styles.cancelButton, { borderColor: '#dc2626' }]}
@@ -894,7 +904,7 @@ export default function BuyerMyOrdersScreen() {
         )}
 
         {/* Issue Already Reported badge */}
-        {order.status === 'issue_reported' && (
+        {(order.status === 'issue_reported' || order.notes?.includes('[ISSUE_REPORT:')) && (
           <View style={styles.cancelButtonRow}>
             <View style={[styles.cancelRequestedBadge, { backgroundColor: '#fee2e2', borderColor: '#dc2626' }]}>
               <Text style={[styles.cancelRequestedText, { color: '#dc2626' }]}>Issue Reported — Pending Admin Review</Text>

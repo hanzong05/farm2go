@@ -625,7 +625,16 @@ export default function BuyerPurchaseHistoryScreen() {
 
         {/* Action buttons */}
         <View style={styles.actionButtonsContainer}>
-          <TouchableOpacity style={styles.secondaryButton}>
+          <TouchableOpacity
+            style={styles.secondaryButton}
+            onPress={() => {
+              const farmerId = order.farmer_profile?.id;
+              if (farmerId) {
+                router.push(`/buyer/contact-farmer/${farmerId}` as any);
+              }
+            }}
+            activeOpacity={0.8}
+          >
             <Text style={styles.secondaryButtonText}>Contact Seller</Text>
           </TouchableOpacity>
 
