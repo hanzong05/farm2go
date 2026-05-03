@@ -6,14 +6,13 @@ import {
   StyleSheet,
   ScrollView,
   TouchableOpacity,
-  Alert,
   ActivityIndicator,
   TextInput,
   KeyboardAvoidingView,
   Platform,
 } from 'react-native';
 import { supabase } from '../../../lib/supabase';
-import { useAuth } from '../../../contexts/AuthContext';
+import { messageService } from '../../../services/messageService';
 
 interface FarmerProfile {
   id: string;
@@ -29,11 +28,12 @@ interface FarmerProfile {
 
 export default function ContactFarmerScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
-  const { user } = useAuth();
   const [farmer, setFarmer] = useState<FarmerProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [sendStatus, setSendStatus] = useState<'idle' | 'success' | 'error'>('idle');
+  const [sendErrorMsg, setSendErrorMsg] = useState('');
 
   const [message, setMessage] = useState({
     subject: '',
@@ -72,58 +72,44 @@ export default function ContactFarmerScreen() {
   };
 
   const handleSendMessage = async () => {
-    if (!farmer || !user) return;
+    if (!farmer) return;
+
+    setSendStatus('idle');
+    setSendErrorMsg('');
 
     if (!message.subject.trim()) {
-      Alert.alert('Error', 'Please enter a subject');
+      setSendStatus('error');
+      setSendErrorMsg('Please enter a subject.');
       return;
     }
 
     if (!message.content.trim()) {
-      Alert.alert('Error', 'Please enter a message');
+      setSendStatus('error');
+      setSendErrorMsg('Please enter a message.');
       return;
     }
 
     try {
       setSending(true);
 
-      // Create message record
-      const { error: messageError } = await supabase
-        .from('messages')
-        .insert({
-          sender_id: user.id,
-          receiver_id: farmer.id,
-          subject: message.subject.trim(),
-          content: message.content.trim(),
-          status: 'unread',
-        });
+      const sent = await messageService.sendMessage({
+        receiverId: farmer.id,
+        content: message.content.trim(),
+        subject: message.subject.trim(),
+      });
 
-      if (messageError) {
-        console.error('Error sending message:', messageError);
-        Alert.alert('Error', 'Failed to send message. Please try again.');
+      if (!sent) {
+        setSendStatus('error');
+        setSendErrorMsg('Failed to send message. Please make sure you are logged in and try again.');
         return;
       }
 
-      Alert.alert(
-        'Message Sent!',
-        `Your message has been sent to ${farmer.first_name} ${farmer.last_name}. They will be notified and can respond to you directly.`,
-        [
-          {
-            text: 'Send Another',
-            onPress: () => {
-              setMessage({ subject: '', content: '' });
-            },
-          },
-          {
-            text: 'Back to Marketplace',
-            onPress: () => router.push('/'),
-            style: 'cancel',
-          },
-        ]
-      );
-    } catch (err) {
+      setSendStatus('success');
+      setMessage({ subject: '', content: '' });
+    } catch (err: any) {
       console.error('Send message error:', err);
-      Alert.alert('Error', 'An error occurred while sending the message');
+      setSendStatus('error');
+      setSendErrorMsg(err?.message || 'An error occurred while sending the message.');
     } finally {
       setSending(false);
     }
@@ -240,14 +226,37 @@ export default function ContactFarmerScreen() {
           </Text>
         </View>
 
+        {/* Inline status feedback */}
+        {sendStatus === 'success' && (
+          <View style={styles.successBanner}>
+            <Text style={styles.successBannerText}>
+              ✅ Message sent to {farmer?.first_name} {farmer?.last_name}! They will be notified shortly.
+            </Text>
+            <TouchableOpacity onPress={() => router.back()} style={styles.backFromSuccessBtn}>
+              <Text style={styles.backFromSuccessBtnText}>Go Back</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
+        {sendStatus === 'error' && (
+          <View style={styles.errorBanner}>
+            <Text style={styles.errorBannerText}>⚠️ {sendErrorMsg}</Text>
+          </View>
+        )}
+
         <TouchableOpacity
-          style={[styles.sendButton, sending && styles.sendButtonDisabled]}
+          style={[styles.sendButton, (sending || sendStatus === 'success') && styles.sendButtonDisabled]}
           onPress={handleSendMessage}
-          disabled={sending}
+          disabled={sending || sendStatus === 'success'}
         >
-          <Text style={styles.sendButtonText}>
-            {sending ? 'Sending...' : 'Send Message'}
-          </Text>
+          {sending ? (
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+              <ActivityIndicator size="small" color="#fff" />
+              <Text style={styles.sendButtonText}>Sending...</Text>
+            </View>
+          ) : (
+            <Text style={styles.sendButtonText}>Send Message</Text>
+          )}
         </TouchableOpacity>
       </ScrollView>
     </KeyboardAvoidingView>
@@ -403,5 +412,45 @@ const styles = StyleSheet.create({
     color: '#ffffff',
     fontSize: 16,
     fontWeight: '600',
+  },
+  successBanner: {
+    backgroundColor: '#d1fae5',
+    borderRadius: 8,
+    padding: 16,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: '#6ee7b7',
+  },
+  successBannerText: {
+    fontSize: 14,
+    color: '#065f46',
+    fontWeight: '500',
+    marginBottom: 10,
+    lineHeight: 20,
+  },
+  backFromSuccessBtn: {
+    backgroundColor: '#10b981',
+    borderRadius: 6,
+    paddingVertical: 8,
+    alignItems: 'center',
+  },
+  backFromSuccessBtnText: {
+    color: '#fff',
+    fontWeight: '700',
+    fontSize: 14,
+  },
+  errorBanner: {
+    backgroundColor: '#fee2e2',
+    borderRadius: 8,
+    padding: 12,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: '#fca5a5',
+  },
+  errorBannerText: {
+    fontSize: 13,
+    color: '#991b1b',
+    fontWeight: '500',
+    lineHeight: 18,
   },
 });

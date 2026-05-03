@@ -111,6 +111,8 @@ export default function BuyerMyOrdersScreen() {
   const [reportPhoto, setReportPhoto] = useState<string | null>(null);
   const [reportDescription, setReportDescription] = useState('');
   const [isSubmittingReport, setIsSubmittingReport] = useState(false);
+  const [reportSubmitStatus, setReportSubmitStatus] = useState<'idle' | 'success' | 'error'>('idle');
+  const [reportSubmitError, setReportSubmitError] = useState('');
 
   // Filter state
   const [filterState, setFilterState] = useState({
@@ -370,20 +372,33 @@ export default function BuyerMyOrdersScreen() {
   };
 
   const handleSubmitReport = async () => {
-    if (!reportOrder || !reportIssueType) {
-      Alert.alert('Missing Info', 'Please select an issue type.');
+    if (!reportOrder) {
+      setReportSubmitStatus('error');
+      setReportSubmitError('Order information missing. Please close and try again.');
       return;
     }
-    if (!profile) return;
+    if (!reportIssueType) {
+      setReportSubmitStatus('error');
+      setReportSubmitError('Please select an issue type (Rotten, Damaged, or Wrong Item).');
+      return;
+    }
+    if (!profile) {
+      setReportSubmitStatus('error');
+      setReportSubmitError('You must be logged in to submit a report.');
+      return;
+    }
 
+    setReportSubmitStatus('idle');
+    setReportSubmitError('');
     setIsSubmittingReport(true);
+
     try {
       const issueNote = `[ISSUE_REPORT:${reportIssueType}:${reportDescription || ''}]`;
       const updatedNotes = reportOrder.notes
         ? `${reportOrder.notes}\n${issueNote}`
         : issueNote;
 
-      // Try setting status to issue_reported; fall back to keeping 'delivered' + notes only
+      // Try setting status to issue_reported; fall back to notes-only on constraint error
       let { error } = await (supabase as any)
         .from('orders')
         .update({
@@ -393,8 +408,7 @@ export default function BuyerMyOrdersScreen() {
         })
         .eq('id', reportOrder.id);
 
-      if (error && error.code === '23514') {
-        // DB constraint doesn't include issue_reported — store in notes only
+      if (error && (error.code === '23514' || error.code === '22P02')) {
         const fallback = await (supabase as any)
           .from('orders')
           .update({ notes: updatedNotes, updated_at: new Date().toISOString() })
@@ -402,36 +416,49 @@ export default function BuyerMyOrdersScreen() {
         error = fallback.error;
       }
 
-      if (error) throw error;
-
-      // Notify barangay admins
-      if (reportOrder.farmer_profile?.barangay) {
-        await notifyBarangayAdmins(
-          reportOrder.farmer_profile.barangay,
-          'Issue Report on Order',
-          `${profile.first_name} ${profile.last_name} reported an issue (${reportIssueType.replace('_', ' ')}) on order ${reportOrder.id} (${reportOrder.product?.name}).`,
-          profile.id,
-          {
-            orderId: reportOrder.id,
-            buyerId: profile.id,
-            farmerId: reportOrder.farmer_profile?.id,
-            issueType: reportIssueType,
-            productName: reportOrder.product?.name,
-            action: 'issue_reported',
-          }
-        );
+      if (error) {
+        console.error('Order update error:', error);
+        setReportSubmitStatus('error');
+        setReportSubmitError(`Could not save report: ${error.message || 'Database error'}. Please try again.`);
+        return;
       }
 
-      Alert.alert(
-        'Report Submitted',
-        'Your issue report has been sent to the barangay admin for review. You will be notified of their decision.',
-        [{ text: 'OK' }]
-      );
-      setShowReportModal(false);
-      await onRefresh();
-    } catch (err) {
+      // Notify barangay admins (non-blocking — don't fail if this errors)
+      try {
+        if (reportOrder.farmer_profile?.barangay) {
+          await notifyBarangayAdmins(
+            reportOrder.farmer_profile.barangay,
+            'Issue Report on Order',
+            `${profile.first_name} ${profile.last_name} reported an issue (${reportIssueType.replace(/_/g, ' ')}) on order ${reportOrder.id} (${reportOrder.product?.name}).`,
+            profile.id,
+            {
+              orderId: reportOrder.id,
+              buyerId: profile.id,
+              farmerId: reportOrder.farmer_profile?.id,
+              issueType: reportIssueType,
+              productName: reportOrder.product?.name,
+              action: 'issue_reported',
+            }
+          );
+        }
+      } catch (notifErr) {
+        console.warn('Notification failed (non-blocking):', notifErr);
+      }
+
+      // Show success inside the modal
+      setReportSubmitStatus('success');
+
+      // Close modal and refresh after 1.5s so user can read the success message
+      setTimeout(async () => {
+        setShowReportModal(false);
+        setReportSubmitStatus('idle');
+        await onRefresh();
+      }, 1500);
+
+    } catch (err: any) {
       console.error('Error submitting report:', err);
-      Alert.alert('Error', 'Failed to submit report. Please try again.');
+      setReportSubmitStatus('error');
+      setReportSubmitError(err?.message || 'An unexpected error occurred. Please try again.');
     } finally {
       setIsSubmittingReport(false);
     }
@@ -1174,10 +1201,27 @@ export default function BuyerMyOrdersScreen() {
                 )}
               </TouchableOpacity>
 
+              {reportSubmitStatus === 'success' && (
+                <View style={styles.reportSuccessBanner}>
+                  <Text style={styles.reportSuccessText}>
+                    Report submitted! Admin will review shortly.
+                  </Text>
+                </View>
+              )}
+
+              {reportSubmitStatus === 'error' && (
+                <View style={styles.reportErrorBanner}>
+                  <Text style={styles.reportErrorText}>{reportSubmitError}</Text>
+                </View>
+              )}
+
               <TouchableOpacity
-                style={[styles.submitReportBtn, isSubmittingReport && { opacity: 0.6 }]}
+                style={[
+                  styles.submitReportBtn,
+                  (isSubmittingReport || reportSubmitStatus === 'success') && { opacity: 0.6 },
+                ]}
                 onPress={handleSubmitReport}
-                disabled={isSubmittingReport}
+                disabled={isSubmittingReport || reportSubmitStatus === 'success'}
                 activeOpacity={0.8}
               >
                 {isSubmittingReport ? (
@@ -1961,5 +2005,35 @@ const styles = StyleSheet.create({
     fontSize: 15,
     color: '#ffffff',
     fontWeight: '700',
+  },
+  reportSuccessBanner: {
+    backgroundColor: '#d1fae5',
+    borderRadius: 8,
+    padding: 12,
+    marginTop: 16,
+    marginBottom: 4,
+    borderWidth: 1,
+    borderColor: '#6ee7b7',
+  },
+  reportSuccessText: {
+    fontSize: 13,
+    color: '#065f46',
+    fontWeight: '600',
+    textAlign: 'center',
+  },
+  reportErrorBanner: {
+    backgroundColor: '#fee2e2',
+    borderRadius: 8,
+    padding: 12,
+    marginTop: 16,
+    marginBottom: 4,
+    borderWidth: 1,
+    borderColor: '#fca5a5',
+  },
+  reportErrorText: {
+    fontSize: 13,
+    color: '#991b1b',
+    fontWeight: '500',
+    lineHeight: 18,
   },
 });
