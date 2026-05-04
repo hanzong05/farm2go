@@ -336,6 +336,80 @@ export default function AdminOrdersScreen() {
     }).format(price);
   };
 
+  const parseIssueFromNotes = (notes: string | null) => {
+    if (!notes) return null;
+    const match = notes.match(/\[ISSUE_REPORT:([^:]+):([^\]]*)\]/);
+    if (!match) return null;
+    const typeLabels: Record<string, string> = {
+      rotten: 'Rotten Product',
+      damaged: 'Damaged Product',
+      wrong_item: 'Wrong Item Delivered',
+    };
+    return {
+      type: typeLabels[match[1]] || match[1],
+      description: match[2]?.trim() || '',
+    };
+  };
+
+  const handleCancelOrder = (order: Order) => {
+    setConfirmModal({
+      visible: true,
+      title: 'Cancel Order',
+      message: `Cancel order #${order.id.slice(-8)}? Stock will be restored and the buyer will be notified.`,
+      isDestructive: true,
+      confirmText: 'Yes, Cancel Order',
+      onConfirm: () => processCancelOrder(order),
+    });
+  };
+
+  const processCancelOrder = async (order: Order) => {
+    setConfirmModal(prev => ({ ...prev, visible: false }));
+    try {
+      const { error } = await supabase
+        .from('orders')
+        .update({ status: 'cancelled', updated_at: new Date().toISOString() })
+        .eq('id', order.id);
+      if (error) throw error;
+
+      // Restore stock
+      const { data: orderRow } = await supabase
+        .from('orders')
+        .select('product_id, quantity')
+        .eq('id', order.id)
+        .single();
+      if (orderRow) {
+        const { data: product } = await supabase
+          .from('products')
+          .select('quantity_available')
+          .eq('id', (orderRow as any).product_id)
+          .single();
+        if (product) {
+          await supabase
+            .from('products')
+            .update({ quantity_available: (product as any).quantity_available + (orderRow as any).quantity })
+            .eq('id', (orderRow as any).product_id);
+        }
+      }
+      await supabase.from('transactions').update({ status: 'failed' }).eq('order_id', order.id);
+
+      await notifyOrderStatusChange(
+        order.id, 'cancelled',
+        order.buyer_id, order.farmer_id,
+        {
+          buyerName: `${order.buyer_profile?.first_name || ''} ${order.buyer_profile?.last_name || ''}`.trim(),
+          farmerName: order.farmer_profile?.farm_name || `${order.farmer_profile?.first_name || ''} ${order.farmer_profile?.last_name || ''}`.trim(),
+          totalAmount: order.total_amount,
+        },
+        profile?.id || ''
+      );
+
+      if (profile) await loadOrders(profile);
+    } catch (err) {
+      console.error('Error cancelling order:', err);
+      showAlert('Error', 'Failed to cancel order. Please try again.', [{ text: 'OK', style: 'default' }]);
+    }
+  };
+
   const getStatusColor = (status: string) => {
     const statusColors: Record<string, string> = {
       'all': '#6b7280',
@@ -574,11 +648,32 @@ export default function AdminOrdersScreen() {
           </View>
         )}
 
+        {/* Issue Reported Badge */}
+        {order.status === 'issue_reported' && (() => {
+          const issue = parseIssueFromNotes(order.notes);
+          return (
+            <View style={styles.issueBadge}>
+              <View style={styles.issueBadgeHeader}>
+                <Text style={styles.issueBadgeIcon}>⚠️</Text>
+                <Text style={styles.issueBadgeTitle}>Issue Reported</Text>
+              </View>
+              {issue && (
+                <>
+                  <Text style={styles.issueType}>{issue.type}</Text>
+                  {issue.description ? (
+                    <Text style={styles.issueDescription}>"{issue.description}"</Text>
+                  ) : null}
+                </>
+              )}
+            </View>
+          );
+        })()}
+
         {/* Issue Report Review */}
         {order.status === 'issue_reported' && (
           <View style={styles.reviewSection}>
-            <Text style={styles.reviewTitle}>Issue Report</Text>
-            <Text style={styles.reviewSubtext}>Buyer reported a problem with this order.</Text>
+            <Text style={styles.reviewTitle}>Admin Action Required</Text>
+            <Text style={styles.reviewSubtext}>Review the buyer's complaint and take action.</Text>
             <View style={styles.reviewButtons}>
               <TouchableOpacity
                 style={[styles.reviewBtn, styles.reviewRejectBtn]}
@@ -595,6 +690,19 @@ export default function AdminOrdersScreen() {
                 <Text style={styles.reviewBtnText}>Approve Refund</Text>
               </TouchableOpacity>
             </View>
+          </View>
+        )}
+
+        {/* Admin Cancel Order */}
+        {order.status !== 'cancelled' && order.status !== 'issue_reported' && order.status !== 'cancellation_requested' && (
+          <View style={styles.cancelSection}>
+            <TouchableOpacity
+              style={styles.cancelOrderBtn}
+              onPress={(e) => { e.stopPropagation?.(); handleCancelOrder(order); }}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.cancelOrderBtnText}>Cancel Order</Text>
+            </TouchableOpacity>
           </View>
         )}
       </TouchableOpacity>
@@ -784,4 +892,13 @@ const styles = StyleSheet.create({
   reviewApproveBtn: { backgroundColor: '#10b981' },
   reviewRejectBtn: { backgroundColor: '#ef4444' },
   reviewBtnText: { fontSize: 13, color: '#ffffff', fontWeight: '700' },
+  issueBadge: { marginTop: 12, backgroundColor: '#fff1f2', borderWidth: 1, borderColor: '#fca5a5', borderRadius: 10, padding: 12 },
+  issueBadgeHeader: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 },
+  issueBadgeIcon: { fontSize: 14 },
+  issueBadgeTitle: { fontSize: 13, fontWeight: '700', color: '#b91c1c' },
+  issueType: { fontSize: 13, fontWeight: '600', color: '#dc2626', marginBottom: 2 },
+  issueDescription: { fontSize: 12, color: '#7f1d1d', fontStyle: 'italic' },
+  cancelSection: { marginTop: 12, paddingTop: 12, borderTopWidth: 1, borderTopColor: '#f1f5f9' },
+  cancelOrderBtn: { paddingVertical: 10, borderRadius: 8, alignItems: 'center', borderWidth: 1, borderColor: '#dc2626' },
+  cancelOrderBtnText: { fontSize: 13, color: '#dc2626', fontWeight: '700' },
 });
