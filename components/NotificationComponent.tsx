@@ -145,9 +145,19 @@ export default function NotificationComponent({
         targetRoute = notification.actionUrl;
       } else if (notification.action_data) {
         // Create smart routing based on notification type and data
-        const { type, data } = notification.action_data;
+        const { type, data, action, orderId } = notification.action_data;
 
-        switch (type) {
+        // Handle barangay admin notifications (issue reports, cancellation requests)
+        // These use action_data.action + action_data.orderId instead of type/data
+        if (action === 'issue_reported' || action === 'cancellation_requested') {
+          if (userType === 'admin') {
+            targetRoute = orderId ? `/admin/orders/${orderId}` : '/admin/orders';
+          } else if (userType === 'farmer') {
+            targetRoute = '/farmer/orders';
+          } else {
+            targetRoute = '/buyer/my-orders';
+          }
+        } else switch (type) {
           case 'new_order':
           case 'order_updated':
           case 'order_cancelled':

@@ -587,6 +587,7 @@ export default function AdminProducts() {
       <View style={styles.container}>
         <HeaderComponent
           profile={profile}
+          userType="admin"
           showMessages={true}
           showNotifications={true}
         />
@@ -602,6 +603,7 @@ export default function AdminProducts() {
     <View style={styles.container}>
       <HeaderComponent
         profile={profile}
+        userType="admin"
         showSearch={true}
         searchQuery={searchQuery}
         onSearchChange={setSearchQuery}

@@ -287,7 +287,8 @@ export default function HeaderComponent({
     type: getNotificationType(notif.type),
     timestamp: notif.created_at,
     read: notif.is_read,
-    actionUrl: notif.action_url || undefined
+    actionUrl: notif.action_url || undefined,
+    action_data: notif.action_data || undefined,
   }));
 
   // Update dimensions on window resize
