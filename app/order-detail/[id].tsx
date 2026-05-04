@@ -743,7 +743,7 @@ export default function OrderDetailScreen() {
         })()}
 
         {/* Proof of Payment */}
-        {(canUpdateStatus || order.proof_of_payment || selectedProofImage) && (
+        {(order.proof_of_payment || selectedProofImage || userType === 'admin' || userType === 'super-admin' || userType === 'farmer') && (
           <View style={styles.card}>
             <Text style={styles.cardTitle}>Proof of Payment</Text>
             {order.proof_of_payment ? (
@@ -769,7 +769,7 @@ export default function OrderDetailScreen() {
                 />
                 <Text style={styles.proofSelectedText}>
                   <Icon name="image" size={14} color={colors.primary} /> Image
-                  selected - will upload when marking as delivered
+                  selected — will upload when marking as delivered
                 </Text>
                 <TouchableOpacity
                   style={styles.changeImageButton}
@@ -779,14 +779,15 @@ export default function OrderDetailScreen() {
                   <Text style={styles.changeImageButtonText}>Change Image</Text>
                 </TouchableOpacity>
               </View>
+            ) : (userType === 'admin' || userType === 'super-admin') ? (
+              <Text style={styles.proofRequiredText}>
+                <Icon name="exclamation-circle" size={14} color={colors.textLight} />{" "}
+                No proof of payment uploaded for this order.
+              </Text>
             ) : (
               <View>
                 <Text style={styles.proofRequiredText}>
-                  <Icon
-                    name="exclamation-circle"
-                    size={14}
-                    color={colors.warning}
-                  />{" "}
+                  <Icon name="exclamation-circle" size={14} color={colors.warning} />{" "}
                   Proof of payment is required before delivery
                 </Text>
                 <TouchableOpacity
@@ -813,7 +814,7 @@ export default function OrderDetailScreen() {
           </View>
         </View>
 
-        {/* Action Buttons */}
+        {/* Action Buttons — status-progression actions (not for delivered/cancelled) */}
         {canUpdateStatus &&
           order.status !== "delivered" &&
           order.status !== "cancelled" && (
@@ -889,20 +890,7 @@ export default function OrderDetailScreen() {
                   </TouchableOpacity>
                 )}
 
-                {/* Admin cancel — available on most active statuses */}
-                {(userType === "admin" || userType === "super-admin") &&
-                  !["issue_reported", "cancellation_requested"].includes(order.status) && (
-                  <TouchableOpacity
-                    style={[styles.actionButton, { backgroundColor: colors.danger }]}
-                    onPress={handleAdminCancelOrder}
-                    disabled={uploadingProof}
-                  >
-                    <Icon name="ban" size={16} color={colors.white} />
-                    <Text style={styles.actionButtonText}>Cancel Order</Text>
-                  </TouchableOpacity>
-                )}
-
-                {/* Farmer/buyer cancel — pending only */}
+                {/* Non-admin cancel — pending only */}
                 {userType !== "admin" && userType !== "super-admin" && order.status === "pending" && (
                   <TouchableOpacity
                     style={[styles.actionButton, { backgroundColor: colors.danger }]}
@@ -915,6 +903,24 @@ export default function OrderDetailScreen() {
               </View>
             </View>
           )}
+
+        {/* Admin Cancel Order — shown on any non-cancelled, non-review status including delivered */}
+        {(userType === "admin" || userType === "super-admin") &&
+          order.status !== "cancelled" &&
+          order.status !== "issue_reported" &&
+          order.status !== "cancellation_requested" && (
+          <View style={[styles.actionsCard, { marginBottom: 24 }]}>
+            <Text style={styles.cardTitle}>Admin Actions</Text>
+            <TouchableOpacity
+              style={[styles.actionButton, { backgroundColor: colors.danger }]}
+              onPress={handleAdminCancelOrder}
+              disabled={uploadingProof}
+            >
+              <Icon name="ban" size={16} color={colors.white} />
+              <Text style={styles.actionButtonText}>Cancel Order</Text>
+            </TouchableOpacity>
+          </View>
+        )}
       </ScrollView>
     </SafeAreaView>
   );
