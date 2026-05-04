@@ -709,39 +709,43 @@ export default function OrderDetailScreen() {
           </View>
         )}
 
-        {/* Issue Reported Badge */}
-        {order.status === 'issue_reported' && issueData && (
+        {/* Issue Reported — show whenever issue data exists in notes, regardless of current status */}
+        {(order.status === 'issue_reported' || issueData) && (
           <View style={[styles.card, { borderWidth: 1, borderColor: '#fca5a5' }]}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12 }}>
               <Text style={{ fontSize: 20 }}>⚠️</Text>
-              <Text style={[styles.cardTitle, { color: '#b91c1c', marginBottom: 0 }]}>Issue Reported</Text>
-            </View>
-            <View style={{ backgroundColor: '#fff1f2', borderRadius: 8, padding: 12, marginBottom: 8 }}>
-              <Text style={{ fontSize: 13, fontWeight: '700', color: '#dc2626', marginBottom: 4 }}>{issueData.type}</Text>
-              {issueData.description ? (
-                <Text style={{ fontSize: 13, color: '#7f1d1d', fontStyle: 'italic' }}>"{issueData.description}"</Text>
-              ) : null}
-            </View>
-            {issueData.photoUrl ? (
-              <View>
-                <Text style={{ fontSize: 12, color: colors.textSecondary, marginBottom: 8 }}>Proof Photo:</Text>
-                <Image
-                  key={issueData.photoUrl}
-                  source={{ uri: issueData.photoUrl }}
-                  style={styles.proofImage}
-                  resizeMode="contain"
-                />
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.cardTitle, { color: '#b91c1c', marginBottom: 2 }]}>Issue Reported by Buyer</Text>
+                {order.status !== 'issue_reported' && (
+                  <Text style={{ fontSize: 11, color: colors.textSecondary }}>
+                    {order.status === 'cancelled' ? 'Resolved — refunded' : 'Resolved — complaint rejected'}
+                  </Text>
+                )}
               </View>
-            ) : null}
-          </View>
-        )}
-        {order.status === 'issue_reported' && !issueData && (
-          <View style={[styles.card, { borderWidth: 1, borderColor: '#fca5a5' }]}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-              <Text style={{ fontSize: 20 }}>⚠️</Text>
-              <Text style={[styles.cardTitle, { color: '#b91c1c', marginBottom: 0 }]}>Issue Reported</Text>
             </View>
-            <Text style={{ fontSize: 13, color: colors.textSecondary, marginTop: 8 }}>Buyer reported a problem with this order.</Text>
+            {issueData ? (
+              <>
+                <View style={{ backgroundColor: '#fff1f2', borderRadius: 8, padding: 12, marginBottom: 8 }}>
+                  <Text style={{ fontSize: 13, fontWeight: '700', color: '#dc2626', marginBottom: 4 }}>{issueData.type}</Text>
+                  {issueData.description ? (
+                    <Text style={{ fontSize: 13, color: '#7f1d1d', fontStyle: 'italic' }}>"{issueData.description}"</Text>
+                  ) : null}
+                </View>
+                {issueData.photoUrl ? (
+                  <View>
+                    <Text style={{ fontSize: 12, color: colors.textSecondary, marginBottom: 8 }}>Proof Photo:</Text>
+                    <Image
+                      key={issueData.photoUrl}
+                      source={{ uri: issueData.photoUrl }}
+                      style={styles.proofImage}
+                      resizeMode="contain"
+                    />
+                  </View>
+                ) : null}
+              </>
+            ) : (
+              <Text style={{ fontSize: 13, color: colors.textSecondary }}>Buyer reported a problem with this order.</Text>
+            )}
           </View>
         )}
 
