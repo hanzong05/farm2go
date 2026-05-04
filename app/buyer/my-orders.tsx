@@ -1,3 +1,5 @@
+import { decode } from 'base64-arraybuffer';
+import * as FileSystem from 'expo-file-system/legacy';
 import { router } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
 import React, { useEffect, useState } from 'react';
@@ -393,7 +395,56 @@ export default function BuyerMyOrdersScreen() {
     setIsSubmittingReport(true);
 
     try {
-      const issueNote = `[ISSUE_REPORT:${reportIssueType}:${reportDescription || ''}]`;
+      // Upload proof photo if provided
+      let photoUrl = '';
+      if (reportPhoto) {
+        try {
+          const { data: { session } } = await supabase.auth.getSession();
+          if (session) {
+            const timestamp = Date.now();
+            const cleanOrderId = reportOrder.id.replace(/[^a-zA-Z0-9-]/g, '_');
+            const fileExt = reportPhoto.split('.').pop()?.toLowerCase() || 'jpg';
+            const validExts = ['jpg', 'jpeg', 'png', 'gif', 'webp'];
+            const finalExt = validExts.includes(fileExt) ? fileExt : 'jpg';
+            const fileName = `issue_${cleanOrderId}_${timestamp}.${finalExt}`;
+            const contentType = finalExt === 'png' ? 'image/png' : 'image/jpeg';
+            const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL || '';
+
+            let arrayBuffer: ArrayBuffer;
+            if (Platform.OS === 'web') {
+              const resp = await fetch(reportPhoto);
+              const blob = await resp.blob();
+              arrayBuffer = await blob.arrayBuffer();
+            } else {
+              const base64 = await FileSystem.readAsStringAsync(reportPhoto, {
+                encoding: FileSystem.EncodingType.Base64,
+              });
+              arrayBuffer = decode(base64);
+            }
+
+            const uploadResp = await fetch(
+              `${supabaseUrl}/storage/v1/object/proofs/${fileName}`,
+              {
+                method: 'POST',
+                headers: {
+                  Authorization: `Bearer ${session.access_token}`,
+                  'Content-Type': contentType,
+                  'x-upsert': 'false',
+                },
+                body: arrayBuffer,
+              }
+            );
+            if (uploadResp.ok) {
+              const { data: { publicUrl } } = supabase.storage.from('proofs').getPublicUrl(fileName);
+              photoUrl = publicUrl;
+            }
+          }
+        } catch (photoErr) {
+          console.warn('Photo upload failed (non-blocking):', photoErr);
+        }
+      }
+
+      const issueNote = `[ISSUE_REPORT:${reportIssueType}:${reportDescription || ''}:${photoUrl}]`;
       const updatedNotes = reportOrder.notes
         ? `${reportOrder.notes}\n${issueNote}`
         : issueNote;

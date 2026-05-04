@@ -347,6 +347,110 @@ export default function OrderDetailScreen() {
     }
   };
 
+  const parseIssueFromNotes = (notes: string | null) => {
+    if (!notes) return null;
+    const match = notes.match(/\[ISSUE_REPORT:([^:]+):([^:\]]*):?([^\]]*)\]/);
+    if (!match) return null;
+    const typeLabels: Record<string, string> = {
+      rotten: 'Rotten Product',
+      damaged: 'Damaged Product',
+      wrong_item: 'Wrong Item Delivered',
+    };
+    return {
+      type: typeLabels[match[1]] || match[1],
+      description: match[2]?.trim() || '',
+      photoUrl: match[3]?.trim() || '',
+    };
+  };
+
+  const cleanNotes = (notes: string | null) => {
+    if (!notes) return null;
+    const cleaned = notes.replace(/\[ISSUE_REPORT:[^\]]*\]/g, '').trim();
+    return cleaned || null;
+  };
+
+  const handleIssueResolution = async (decision: 'approve' | 'reject') => {
+    const title = decision === 'approve' ? 'Approve Refund' : 'Reject Complaint';
+    const message = decision === 'approve'
+      ? 'This will mark the order as refunded and notify the buyer.'
+      : 'This will close the complaint and the order stays as delivered.';
+    const confirmed = await showConfirmation(title, message);
+    if (!confirmed || !order) return;
+
+    try {
+      setUploadingProof(true);
+      const newStatus = decision === 'approve' ? 'cancelled' : 'delivered';
+      const { error } = await supabase.from('orders').update({ status: newStatus, updated_at: new Date().toISOString() }).eq('id', id);
+      if (error) throw error;
+
+      if (decision === 'approve') {
+        await supabase.from('transactions').update({ status: 'refunded' }).eq('order_id', id);
+      }
+
+      const { user } = await getUserWithProfile();
+      await notifyOrderStatusChange(
+        order.id, newStatus,
+        order.buyer_id, order.farmer_id,
+        {
+          totalAmount: order.total_price,
+          buyerName: `${order.buyer_profile?.first_name || ''} ${order.buyer_profile?.last_name || ''}`.trim(),
+          farmerName: `${order.farmer_profile?.first_name || ''} ${order.farmer_profile?.last_name || ''}`.trim(),
+        },
+        user?.id || ''
+      );
+
+      Alert.alert('Done', decision === 'approve' ? 'Refund approved.' : 'Complaint rejected.');
+      await loadOrderDetail();
+    } catch (err) {
+      console.error('Issue resolution error:', err);
+      Alert.alert('Error', 'Failed to process. Please try again.');
+    } finally {
+      setUploadingProof(false);
+    }
+  };
+
+  const handleAdminCancelOrder = async () => {
+    if (!order) return;
+    const confirmed = await showConfirmation('Cancel Order', `Cancel order #${order.id.substring(0, 8)}? Stock will be restored and parties will be notified.`);
+    if (!confirmed) return;
+
+    try {
+      setUploadingProof(true);
+      const { error } = await supabase.from('orders').update({ status: 'cancelled', updated_at: new Date().toISOString() }).eq('id', id);
+      if (error) throw error;
+
+      // Restore stock
+      const { data: orderRow } = await supabase.from('orders').select('product_id, quantity').eq('id', id).single();
+      if (orderRow) {
+        const { data: product } = await supabase.from('products').select('quantity_available').eq('id', (orderRow as any).product_id).single();
+        if (product) {
+          await supabase.from('products').update({ quantity_available: (product as any).quantity_available + (orderRow as any).quantity }).eq('id', (orderRow as any).product_id);
+        }
+      }
+      await supabase.from('transactions').update({ status: 'failed' }).eq('order_id', id);
+
+      const { user } = await getUserWithProfile();
+      await notifyOrderStatusChange(
+        order.id, 'cancelled',
+        order.buyer_id, order.farmer_id,
+        {
+          totalAmount: order.total_price,
+          buyerName: `${order.buyer_profile?.first_name || ''} ${order.buyer_profile?.last_name || ''}`.trim(),
+          farmerName: `${order.farmer_profile?.first_name || ''} ${order.farmer_profile?.last_name || ''}`.trim(),
+        },
+        user?.id || ''
+      );
+
+      Alert.alert('Done', 'Order has been cancelled.');
+      await loadOrderDetail();
+    } catch (err) {
+      console.error('Admin cancel error:', err);
+      Alert.alert('Error', 'Failed to cancel order. Please try again.');
+    } finally {
+      setUploadingProof(false);
+    }
+  };
+
   const getStatusColor = (status: string) => {
     switch (status) {
       case "delivered":
@@ -593,13 +697,50 @@ export default function OrderDetailScreen() {
           </View>
         </View>
 
-        {/* Order Notes */}
-        {order.notes && (
+        {/* Order Notes — hide raw ISSUE_REPORT tag */}
+        {cleanNotes(order.notes) && (
           <View style={styles.card}>
             <Text style={styles.cardTitle}>Order Notes</Text>
-            <Text style={styles.notesText}>{order.notes}</Text>
+            <Text style={styles.notesText}>{cleanNotes(order.notes)}</Text>
           </View>
         )}
+
+        {/* Issue Reported Badge */}
+        {order.status === 'issue_reported' && (() => {
+          const issue = parseIssueFromNotes(order.notes);
+          return (
+            <View style={[styles.card, { borderWidth: 1, borderColor: '#fca5a5' }]}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+                <Text style={{ fontSize: 20 }}>⚠️</Text>
+                <Text style={[styles.cardTitle, { color: '#b91c1c', marginBottom: 0 }]}>Issue Reported</Text>
+              </View>
+              {issue ? (
+                <>
+                  <View style={{ backgroundColor: '#fff1f2', borderRadius: 8, padding: 12, marginBottom: 8 }}>
+                    <Text style={{ fontSize: 13, fontWeight: '700', color: '#dc2626', marginBottom: 4 }}>{issue.type}</Text>
+                    {issue.description ? (
+                      <Text style={{ fontSize: 13, color: '#7f1d1d', fontStyle: 'italic' }}>"{issue.description}"</Text>
+                    ) : null}
+                  </View>
+                  {issue.photoUrl ? (
+                    <View>
+                      <Text style={{ fontSize: 12, color: colors.textSecondary, marginBottom: 8 }}>Proof Photo:</Text>
+                      <Image
+                        key={issue.photoUrl}
+                        source={{ uri: issue.photoUrl }}
+                        style={styles.proofImage}
+                        resizeMode="contain"
+                        onError={() => console.warn('Issue proof image failed to load')}
+                      />
+                    </View>
+                  ) : null}
+                </>
+              ) : (
+                <Text style={{ fontSize: 13, color: colors.textSecondary }}>Buyer reported a problem with this order.</Text>
+              )}
+            </View>
+          );
+        })()}
 
         {/* Proof of Payment */}
         {(canUpdateStatus || order.proof_of_payment || selectedProofImage) && (
@@ -608,9 +749,11 @@ export default function OrderDetailScreen() {
             {order.proof_of_payment ? (
               <View>
                 <Image
+                  key={order.proof_of_payment}
                   source={{ uri: order.proof_of_payment }}
                   style={styles.proofImage}
                   resizeMode="contain"
+                  onError={() => console.warn('Proof image failed to load:', order.proof_of_payment)}
                 />
                 <Text style={styles.proofUploadedText}>
                   <Icon name="check-circle" size={14} color={colors.success} />{" "}
@@ -677,41 +820,50 @@ export default function OrderDetailScreen() {
             <View style={styles.actionsCard}>
               <Text style={styles.cardTitle}>Quick Actions</Text>
               <View style={styles.actionsContainer}>
-                {order.status === "cancellation_requested" && (
+                {/* Issue resolution — admin only */}
+                {order.status === "issue_reported" && (userType === "admin" || userType === "super-admin") && (
                   <>
                     <TouchableOpacity
-                      style={[
-                        styles.actionButton,
-                        { backgroundColor: colors.danger },
-                      ]}
-                      onPress={() => handleStatusUpdate("cancelled")}
-                    >
-                      <Icon name="check" size={16} color={colors.white} />
-                      <Text style={styles.actionButtonText}>
-                        Confirm Cancellation
-                      </Text>
-                    </TouchableOpacity>
-
-                    <TouchableOpacity
-                      style={[
-                        styles.actionButton,
-                        { backgroundColor: colors.secondary },
-                      ]}
-                      onPress={() => handleStatusUpdate("confirmed")}
+                      style={[styles.actionButton, { backgroundColor: colors.danger }]}
+                      onPress={() => handleIssueResolution('reject')}
+                      disabled={uploadingProof}
                     >
                       <Icon name="times" size={16} color={colors.white} />
-                      <Text style={styles.actionButtonText}>
-                        Reject Cancellation
-                      </Text>
+                      <Text style={styles.actionButtonText}>Reject Complaint</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={[styles.actionButton, { backgroundColor: colors.primary }]}
+                      onPress={() => handleIssueResolution('approve')}
+                      disabled={uploadingProof}
+                    >
+                      <Icon name="check" size={16} color={colors.white} />
+                      <Text style={styles.actionButtonText}>Approve Refund</Text>
                     </TouchableOpacity>
                   </>
                 )}
+
+                {order.status === "cancellation_requested" && (
+                  <>
+                    <TouchableOpacity
+                      style={[styles.actionButton, { backgroundColor: colors.danger }]}
+                      onPress={() => handleStatusUpdate("cancelled")}
+                    >
+                      <Icon name="check" size={16} color={colors.white} />
+                      <Text style={styles.actionButtonText}>Confirm Cancellation</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={[styles.actionButton, { backgroundColor: colors.secondary }]}
+                      onPress={() => handleStatusUpdate("confirmed")}
+                    >
+                      <Icon name="times" size={16} color={colors.white} />
+                      <Text style={styles.actionButtonText}>Reject Cancellation</Text>
+                    </TouchableOpacity>
+                  </>
+                )}
+
                 {order.status === "pending" && (
                   <TouchableOpacity
-                    style={[
-                      styles.actionButton,
-                      { backgroundColor: colors.success },
-                    ]}
+                    style={[styles.actionButton, { backgroundColor: colors.success }]}
                     onPress={() => handleStatusUpdate("confirmed")}
                   >
                     <Icon name="check" size={16} color={colors.white} />
@@ -720,10 +872,7 @@ export default function OrderDetailScreen() {
                 )}
                 {order.status === "confirmed" && (
                   <TouchableOpacity
-                    style={[
-                      styles.actionButton,
-                      { backgroundColor: colors.primary },
-                    ]}
+                    style={[styles.actionButton, { backgroundColor: colors.primary }]}
                     onPress={() => handleStatusUpdate("ready")}
                   >
                     <Icon name="box" size={16} color={colors.white} />
@@ -732,25 +881,31 @@ export default function OrderDetailScreen() {
                 )}
                 {order.status === "ready" && (
                   <TouchableOpacity
-                    style={[
-                      styles.actionButton,
-                      { backgroundColor: colors.success },
-                    ]}
+                    style={[styles.actionButton, { backgroundColor: colors.success }]}
                     onPress={() => handleStatusUpdate("delivered")}
                   >
                     <Icon name="check-circle" size={16} color={colors.white} />
-                    <Text style={styles.actionButtonText}>
-                      Mark as Delivered
-                    </Text>
+                    <Text style={styles.actionButtonText}>Mark as Delivered</Text>
                   </TouchableOpacity>
                 )}
-                {/* Cancel only available on pending */}
-                {order.status === "pending" && (
+
+                {/* Admin cancel — available on most active statuses */}
+                {(userType === "admin" || userType === "super-admin") &&
+                  !["issue_reported", "cancellation_requested"].includes(order.status) && (
                   <TouchableOpacity
-                    style={[
-                      styles.actionButton,
-                      { backgroundColor: colors.danger },
-                    ]}
+                    style={[styles.actionButton, { backgroundColor: colors.danger }]}
+                    onPress={handleAdminCancelOrder}
+                    disabled={uploadingProof}
+                  >
+                    <Icon name="ban" size={16} color={colors.white} />
+                    <Text style={styles.actionButtonText}>Cancel Order</Text>
+                  </TouchableOpacity>
+                )}
+
+                {/* Farmer/buyer cancel — pending only */}
+                {userType !== "admin" && userType !== "super-admin" && order.status === "pending" && (
+                  <TouchableOpacity
+                    style={[styles.actionButton, { backgroundColor: colors.danger }]}
                     onPress={() => handleStatusUpdate("cancelled")}
                   >
                     <Icon name="times" size={16} color={colors.white} />
