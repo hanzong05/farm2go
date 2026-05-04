@@ -91,50 +91,50 @@ export default function OrderDetailScreen() {
   const { showConfirmation } = useConfirmationModal();
 
   useEffect(() => {
-    loadOrderDetail();
-    loadUserType();
+    loadData();
   }, [id]);
 
-  const loadUserType = async () => {
-    const { user, profile } = await getUserWithProfile();
-    if (profile) {
-      setUserType(profile.user_type);
-      setUserProfile(profile);
-    }
-  };
-
-  const loadOrderDetail = async () => {
+  const loadData = async () => {
     if (!id) return;
     try {
       setLoading(true);
-      const { data, error } = await supabase
-        .from("orders")
-        .select(
-          `
-          *,
-          products (
-            name,
-            unit,
-            price,
-            category
-          ),
-          buyer_profile:profiles!orders_buyer_id_fkey (
-            first_name,
-            last_name,
-            phone,
-            barangay
-          ),
-          farmer_profile:profiles!orders_farmer_id_fkey (
-            first_name,
-            last_name,
-            phone,
-            farm_name,
-            barangay
+      // Load user and order in parallel — both must be ready before we render
+      const [{ profile }, { data, error }] = await Promise.all([
+        getUserWithProfile(),
+        supabase
+          .from("orders")
+          .select(
+            `
+            *,
+            products (
+              name,
+              unit,
+              price,
+              category
+            ),
+            buyer_profile:profiles!orders_buyer_id_fkey (
+              first_name,
+              last_name,
+              phone,
+              barangay
+            ),
+            farmer_profile:profiles!orders_farmer_id_fkey (
+              first_name,
+              last_name,
+              phone,
+              farm_name,
+              barangay
+            )
+          `,
           )
-        `,
-        )
-        .eq("id", id)
-        .single();
+          .eq("id", id)
+          .single(),
+      ]);
+
+      if (profile) {
+        setUserType(profile.user_type);
+        setUserProfile(profile);
+      }
       if (error) throw error;
       setOrder(data as OrderDetail);
     } catch (error: any) {
@@ -144,6 +144,8 @@ export default function OrderDetailScreen() {
       setLoading(false);
     }
   };
+
+  const loadOrderDetail = loadData;
 
   const handleStatusUpdate = async (newStatus: string) => {
     if (
@@ -523,10 +525,12 @@ export default function OrderDetailScreen() {
     );
   }
 
+  const isAdmin = userType === "admin" || userType === "super-admin";
+
   const canUpdateStatus =
-    userType === "admin" ||
-    userType === "super-admin" ||
-    (userType === "farmer" && order.status === "pending");
+    isAdmin || (userType === "farmer" && order.status === "pending");
+
+  const issueData = parseIssueFromNotes(order.notes);
 
   return (
     <SafeAreaView style={styles.container}>
@@ -706,44 +710,43 @@ export default function OrderDetailScreen() {
         )}
 
         {/* Issue Reported Badge */}
-        {order.status === 'issue_reported' && (() => {
-          const issue = parseIssueFromNotes(order.notes);
-          return (
-            <View style={[styles.card, { borderWidth: 1, borderColor: '#fca5a5' }]}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12 }}>
-                <Text style={{ fontSize: 20 }}>⚠️</Text>
-                <Text style={[styles.cardTitle, { color: '#b91c1c', marginBottom: 0 }]}>Issue Reported</Text>
-              </View>
-              {issue ? (
-                <>
-                  <View style={{ backgroundColor: '#fff1f2', borderRadius: 8, padding: 12, marginBottom: 8 }}>
-                    <Text style={{ fontSize: 13, fontWeight: '700', color: '#dc2626', marginBottom: 4 }}>{issue.type}</Text>
-                    {issue.description ? (
-                      <Text style={{ fontSize: 13, color: '#7f1d1d', fontStyle: 'italic' }}>"{issue.description}"</Text>
-                    ) : null}
-                  </View>
-                  {issue.photoUrl ? (
-                    <View>
-                      <Text style={{ fontSize: 12, color: colors.textSecondary, marginBottom: 8 }}>Proof Photo:</Text>
-                      <Image
-                        key={issue.photoUrl}
-                        source={{ uri: issue.photoUrl }}
-                        style={styles.proofImage}
-                        resizeMode="contain"
-                        onError={() => console.warn('Issue proof image failed to load')}
-                      />
-                    </View>
-                  ) : null}
-                </>
-              ) : (
-                <Text style={{ fontSize: 13, color: colors.textSecondary }}>Buyer reported a problem with this order.</Text>
-              )}
+        {order.status === 'issue_reported' && issueData && (
+          <View style={[styles.card, { borderWidth: 1, borderColor: '#fca5a5' }]}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+              <Text style={{ fontSize: 20 }}>⚠️</Text>
+              <Text style={[styles.cardTitle, { color: '#b91c1c', marginBottom: 0 }]}>Issue Reported</Text>
             </View>
-          );
-        })()}
+            <View style={{ backgroundColor: '#fff1f2', borderRadius: 8, padding: 12, marginBottom: 8 }}>
+              <Text style={{ fontSize: 13, fontWeight: '700', color: '#dc2626', marginBottom: 4 }}>{issueData.type}</Text>
+              {issueData.description ? (
+                <Text style={{ fontSize: 13, color: '#7f1d1d', fontStyle: 'italic' }}>"{issueData.description}"</Text>
+              ) : null}
+            </View>
+            {issueData.photoUrl ? (
+              <View>
+                <Text style={{ fontSize: 12, color: colors.textSecondary, marginBottom: 8 }}>Proof Photo:</Text>
+                <Image
+                  key={issueData.photoUrl}
+                  source={{ uri: issueData.photoUrl }}
+                  style={styles.proofImage}
+                  resizeMode="contain"
+                />
+              </View>
+            ) : null}
+          </View>
+        )}
+        {order.status === 'issue_reported' && !issueData && (
+          <View style={[styles.card, { borderWidth: 1, borderColor: '#fca5a5' }]}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+              <Text style={{ fontSize: 20 }}>⚠️</Text>
+              <Text style={[styles.cardTitle, { color: '#b91c1c', marginBottom: 0 }]}>Issue Reported</Text>
+            </View>
+            <Text style={{ fontSize: 13, color: colors.textSecondary, marginTop: 8 }}>Buyer reported a problem with this order.</Text>
+          </View>
+        )}
 
         {/* Proof of Payment */}
-        {(order.proof_of_payment || selectedProofImage || userType === 'admin' || userType === 'super-admin' || userType === 'farmer') && (
+        {(order.proof_of_payment || selectedProofImage || isAdmin || userType === 'farmer') && (
           <View style={styles.card}>
             <Text style={styles.cardTitle}>Proof of Payment</Text>
             {order.proof_of_payment ? (
@@ -779,7 +782,7 @@ export default function OrderDetailScreen() {
                   <Text style={styles.changeImageButtonText}>Change Image</Text>
                 </TouchableOpacity>
               </View>
-            ) : (userType === 'admin' || userType === 'super-admin') ? (
+            ) : isAdmin ? (
               <Text style={styles.proofRequiredText}>
                 <Icon name="exclamation-circle" size={14} color={colors.textLight} />{" "}
                 No proof of payment uploaded for this order.
@@ -822,7 +825,7 @@ export default function OrderDetailScreen() {
               <Text style={styles.cardTitle}>Quick Actions</Text>
               <View style={styles.actionsContainer}>
                 {/* Issue resolution — admin only */}
-                {order.status === "issue_reported" && (userType === "admin" || userType === "super-admin") && (
+                {order.status === "issue_reported" && isAdmin && (
                   <>
                     <TouchableOpacity
                       style={[styles.actionButton, { backgroundColor: colors.danger }]}
@@ -891,7 +894,7 @@ export default function OrderDetailScreen() {
                 )}
 
                 {/* Non-admin cancel — pending only */}
-                {userType !== "admin" && userType !== "super-admin" && order.status === "pending" && (
+                {!isAdmin && order.status === "pending" && (
                   <TouchableOpacity
                     style={[styles.actionButton, { backgroundColor: colors.danger }]}
                     onPress={() => handleStatusUpdate("cancelled")}
@@ -905,7 +908,7 @@ export default function OrderDetailScreen() {
           )}
 
         {/* Admin Cancel Order — shown on any non-cancelled, non-review status including delivered */}
-        {(userType === "admin" || userType === "super-admin") &&
+        {isAdmin &&
           order.status !== "cancelled" &&
           order.status !== "issue_reported" &&
           order.status !== "cancellation_requested" && (
