@@ -148,11 +148,14 @@ export default function OrderDetailScreen() {
   const loadOrderDetail = loadData;
 
   const handleStatusUpdate = async (newStatus: string) => {
-    if (
+    const callerIsAdmin = userType === "admin" || userType === "super-admin";
+    // Admin can mark as delivered without proof; farmers/others must upload first
+    const requiresProof =
       newStatus === "delivered" &&
       !order?.proof_of_payment &&
-      !selectedProofImage
-    ) {
+      !selectedProofImage &&
+      !callerIsAdmin;
+    if (requiresProof) {
       Alert.alert(
         "Proof of Payment Required",
         "Please select proof of payment before marking this order as delivered.",
@@ -786,16 +789,13 @@ export default function OrderDetailScreen() {
                   <Text style={styles.changeImageButtonText}>Change Image</Text>
                 </TouchableOpacity>
               </View>
-            ) : isAdmin ? (
-              <Text style={styles.proofRequiredText}>
-                <Icon name="exclamation-circle" size={14} color={colors.textLight} />{" "}
-                No proof of payment uploaded for this order.
-              </Text>
             ) : (
               <View>
                 <Text style={styles.proofRequiredText}>
                   <Icon name="exclamation-circle" size={14} color={colors.warning} />{" "}
-                  Proof of payment is required before delivery
+                  {isAdmin
+                    ? "No proof uploaded yet. You may attach one below."
+                    : "Proof of payment is required before delivery"}
                 </Text>
                 <TouchableOpacity
                   style={styles.uploadProofButton}
