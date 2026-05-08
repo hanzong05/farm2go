@@ -272,7 +272,9 @@ export default function AdminOrdersScreen() {
     if (selectedStatus === 'issue_reported') {
       filtered = filtered.filter(order =>
         order.status === 'issue_reported' ||
-        order.notes?.includes('[ISSUE_REPORT:')
+        (order.notes?.includes('[ISSUE_REPORT:') &&
+          order.status !== 'cancelled' &&
+          order.status !== 'delivered')
       );
     } else if (selectedStatus !== 'all') {
       filtered = filtered.filter(order => order.status === selectedStatus);
@@ -662,11 +664,18 @@ export default function AdminOrdersScreen() {
         {/* Issue Reported Badge */}
         {(order.status === 'issue_reported' || order.notes?.includes('[ISSUE_REPORT:')) && (() => {
           const issue = parseIssueFromNotes(order.notes);
+          const isResolved = order.status === 'cancelled' || order.status === 'delivered';
           return (
             <View style={styles.issueBadge}>
               <View style={styles.issueBadgeHeader}>
                 <Text style={styles.issueBadgeIcon}>⚠️</Text>
-                <Text style={styles.issueBadgeTitle}>Issue Reported</Text>
+                <Text style={styles.issueBadgeTitle}>
+                  {isResolved
+                    ? order.status === 'cancelled'
+                      ? 'Issue Resolved — Refunded'
+                      : 'Issue Resolved — Rejected'
+                    : 'Issue Reported'}
+                </Text>
               </View>
               {issue && (
                 <>
@@ -680,8 +689,11 @@ export default function AdminOrdersScreen() {
           );
         })()}
 
-        {/* Issue Report Review */}
-        {(order.status === 'issue_reported' || order.notes?.includes('[ISSUE_REPORT:')) && (
+        {/* Issue Report Review — only for unresolved issues */}
+        {(order.status === 'issue_reported' ||
+          (order.notes?.includes('[ISSUE_REPORT:') &&
+            order.status !== 'cancelled' &&
+            order.status !== 'delivered')) && (
           <View style={styles.reviewSection}>
             <Text style={styles.reviewTitle}>Admin Action Required</Text>
             <Text style={styles.reviewSubtext}>Review the buyer's complaint and take action.</Text>
@@ -705,7 +717,8 @@ export default function AdminOrdersScreen() {
         )}
 
         {/* Admin Cancel Order */}
-        {order.status !== 'cancelled' && order.status !== 'issue_reported' && order.status !== 'cancellation_requested' && !order.notes?.includes('[ISSUE_REPORT:') && (
+        {order.status !== 'cancelled' && order.status !== 'issue_reported' && order.status !== 'cancellation_requested' &&
+          !(order.notes?.includes('[ISSUE_REPORT:') && order.status !== 'delivered') && (
           <View style={styles.cancelSection}>
             <TouchableOpacity
               style={styles.cancelOrderBtn}

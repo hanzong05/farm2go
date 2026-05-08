@@ -249,35 +249,27 @@ export default function BuyerMyOrdersScreen() {
     }
   };
 
-  const filterOrders = () => {
-    console.log('🔍 Starting filter with', orders.length, 'orders');
-    console.log('🔍 Selected status:', selectedStatus);
-    console.log('🔍 Filter state:', JSON.stringify(filterState));
-    console.log('🔍 Sample order:', orders[0]);
+  const getOrderCategory = (order: OrderWithDetails): string => {
+    const cat = order.product?.category;
+    return cat ? cat.toLowerCase() : 'other';
+  };
 
+  const filterOrders = () => {
     let filtered = orders;
 
-    // Filter by status
     if (selectedStatus !== 'all') {
-      console.log('🔍 Filtering by status:', selectedStatus);
-      filtered = filtered.filter(order => {
-        const match = order.status === selectedStatus;
-        console.log(`  Order ${order.id} status: ${order.status}, match: ${match}`);
-        return match;
-      });
-      console.log('🔍 After status filter:', filtered.length, 'orders');
+      filtered = filtered.filter(order => order.status === selectedStatus);
     }
 
-    // Filter by search query
     if (searchQuery.trim()) {
       const searchLower = searchQuery.toLowerCase();
       filtered = filtered.filter(order => {
         const orderId = order.id.slice(-8).toLowerCase();
         const productName = order.product?.name?.toLowerCase() || '';
-        const farmerName = order.farmer_profile ?
-          `${order.farmer_profile.first_name || ''} ${order.farmer_profile.last_name || ''}`.toLowerCase() : '';
+        const farmerName = order.farmer_profile
+          ? `${order.farmer_profile.first_name || ''} ${order.farmer_profile.last_name || ''}`.toLowerCase()
+          : '';
         const address = order.delivery_address?.toLowerCase() || '';
-
         return orderId.includes(searchLower) ||
                productName.includes(searchLower) ||
                farmerName.includes(searchLower) ||
@@ -285,28 +277,46 @@ export default function BuyerMyOrdersScreen() {
       });
     }
 
-    // Apply other filters using the utility function
-    try {
-      const { applyFilters } = require('../../utils/filterConfigs');
-      console.log('🔍 Applying utility filters with config:', {
-        categoryKey: 'product.category',
-        priceKey: 'total_price',
-        dateKey: 'created_at',
-      });
-      filtered = applyFilters(filtered, filterState, {
-        categoryKey: 'product.category',
-        priceKey: 'total_price',
-        dateKey: 'created_at',
-      });
-      console.log('🔍 After additional filters:', filtered.length, 'orders');
-    } catch (error) {
-      console.error('❌ Error applying filters:', error);
-      console.error('❌ Error details:', error.message);
-      console.error('❌ Error stack:', error.stack);
+    if (filterState.category && filterState.category !== 'all') {
+      filtered = filtered.filter(order =>
+        getOrderCategory(order) === filterState.category.toLowerCase()
+      );
     }
 
-    console.log('🔍 Final filtered count:', filtered.length);
-    console.log('🔍 Final filtered orders:', filtered);
+    const amountRanges: Record<string, { min: number; max: number }> = {
+      low: { min: 0, max: 500 },
+      medium: { min: 500, max: 1500 },
+      high: { min: 1500, max: 3000 },
+      premium: { min: 3000, max: 10000 },
+    };
+    if (filterState.amountRange && filterState.amountRange !== 'all') {
+      const range = amountRanges[filterState.amountRange];
+      if (range) {
+        filtered = filtered.filter(o => {
+          const price = (o as any).total_price ?? 0;
+          return price >= range.min && price <= range.max;
+        });
+      }
+    }
+
+    if (filterState.sortBy) {
+      filtered = [...filtered];
+      switch (filterState.sortBy) {
+        case 'newest':
+          filtered.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+          break;
+        case 'oldest':
+          filtered.sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+          break;
+        case 'amount-high':
+          filtered.sort((a, b) => ((b as any).total_price ?? 0) - ((a as any).total_price ?? 0));
+          break;
+        case 'amount-low':
+          filtered.sort((a, b) => ((a as any).total_price ?? 0) - ((b as any).total_price ?? 0));
+          break;
+      }
+    }
+
     setFilteredOrders(filtered);
   };
 
@@ -686,7 +696,7 @@ export default function BuyerMyOrdersScreen() {
         label: category.label,
         count: category.key === 'all'
           ? orders.length
-          : orders.filter(o => o.product?.category?.toLowerCase() === category.key.toLowerCase()).length
+          : orders.filter(o => getOrderCategory(o) === category.key.toLowerCase()).length
       }))
     },
     {
