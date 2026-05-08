@@ -56,6 +56,9 @@ const CATEGORY_FILTERS = [
   { key: 'fruits', label: 'Fruits' },
   { key: 'grains', label: 'Grains' },
   { key: 'herbs', label: 'Herbs' },
+  { key: 'livestock', label: 'Livestock' },
+  { key: 'dairy', label: 'Dairy' },
+  { key: 'other', label: 'Other' },
 ];
 
 const AMOUNT_RANGES = [

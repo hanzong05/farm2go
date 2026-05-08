@@ -149,9 +149,17 @@ export default function NotificationComponent({
 
         // Handle barangay admin notifications (issue reports, cancellation requests)
         // These use action_data.action + action_data.orderId instead of type/data
-        if (action === 'issue_reported' || action === 'cancellation_requested') {
+        if (action === 'issue_reported') {
           if (userType === 'admin') {
-            targetRoute = orderId ? `/admin/orders/${orderId}` : '/admin/orders';
+            targetRoute = '/admin/orders?status=issue_reported';
+          } else if (userType === 'farmer') {
+            targetRoute = '/farmer/orders';
+          } else {
+            targetRoute = '/buyer/my-orders';
+          }
+        } else if (action === 'cancellation_requested') {
+          if (userType === 'admin') {
+            targetRoute = orderId ? `/admin/orders/${orderId}` : '/admin/orders?status=cancellation_requested';
           } else if (userType === 'farmer') {
             targetRoute = '/farmer/orders';
           } else {

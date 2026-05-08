@@ -1,4 +1,4 @@
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
@@ -141,7 +141,8 @@ export default function AdminOrdersScreen() {
     onConfirm: () => {},
   });
 
-  const [selectedStatus, setSelectedStatus] = useState('all');
+  const { status: statusParam } = useLocalSearchParams<{ status?: string }>();
+  const [selectedStatus, setSelectedStatus] = useState(statusParam || 'all');
   const [showMapModal, setShowMapModal] = useState(false);
   const [mapOrder, setMapOrder] = useState<Order | null>(null);
 
@@ -152,6 +153,10 @@ export default function AdminOrdersScreen() {
   useEffect(() => {
     loadData();
   }, []);
+
+  useEffect(() => {
+    if (statusParam) setSelectedStatus(statusParam);
+  }, [statusParam]);
 
   useEffect(() => {
     filterOrders();
@@ -264,7 +269,12 @@ export default function AdminOrdersScreen() {
   const filterOrders = () => {
     let filtered = orders;
 
-    if (selectedStatus !== 'all') {
+    if (selectedStatus === 'issue_reported') {
+      filtered = filtered.filter(order =>
+        order.status === 'issue_reported' ||
+        order.notes?.includes('[ISSUE_REPORT:')
+      );
+    } else if (selectedStatus !== 'all') {
       filtered = filtered.filter(order => order.status === selectedStatus);
     }
 
@@ -338,7 +348,7 @@ export default function AdminOrdersScreen() {
 
   const parseIssueFromNotes = (notes: string | null) => {
     if (!notes) return null;
-    const match = notes.match(/\[ISSUE_REPORT:([^:]+):([^\]]*)\]/);
+    const match = notes.match(/\[ISSUE_REPORT:([^:]+):([^:]*):?([^\]]*)\]/);
     if (!match) return null;
     const typeLabels: Record<string, string> = {
       rotten: 'Rotten Product',
@@ -348,6 +358,7 @@ export default function AdminOrdersScreen() {
     return {
       type: typeLabels[match[1]] || match[1],
       description: match[2]?.trim() || '',
+      photoUrl: match[3]?.trim() || '',
     };
   };
 
@@ -649,7 +660,7 @@ export default function AdminOrdersScreen() {
         )}
 
         {/* Issue Reported Badge */}
-        {order.status === 'issue_reported' && (() => {
+        {(order.status === 'issue_reported' || order.notes?.includes('[ISSUE_REPORT:')) && (() => {
           const issue = parseIssueFromNotes(order.notes);
           return (
             <View style={styles.issueBadge}>
@@ -670,7 +681,7 @@ export default function AdminOrdersScreen() {
         })()}
 
         {/* Issue Report Review */}
-        {order.status === 'issue_reported' && (
+        {(order.status === 'issue_reported' || order.notes?.includes('[ISSUE_REPORT:')) && (
           <View style={styles.reviewSection}>
             <Text style={styles.reviewTitle}>Admin Action Required</Text>
             <Text style={styles.reviewSubtext}>Review the buyer's complaint and take action.</Text>
@@ -694,7 +705,7 @@ export default function AdminOrdersScreen() {
         )}
 
         {/* Admin Cancel Order */}
-        {order.status !== 'cancelled' && order.status !== 'issue_reported' && order.status !== 'cancellation_requested' && (
+        {order.status !== 'cancelled' && order.status !== 'issue_reported' && order.status !== 'cancellation_requested' && !order.notes?.includes('[ISSUE_REPORT:') && (
           <View style={styles.cancelSection}>
             <TouchableOpacity
               style={styles.cancelOrderBtn}
