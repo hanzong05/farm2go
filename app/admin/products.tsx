@@ -91,7 +91,7 @@ export default function AdminProducts() {
 
     // Filter by category
     if (filterState.category !== 'all') {
-      filtered = filtered.filter(product => product.category.toLowerCase() === filterState.category);
+      filtered = filtered.filter(product => product.category?.toLowerCase() === filterState.category);
     }
 
     // Filter by year
@@ -348,12 +348,12 @@ export default function AdminProducts() {
       type: 'category',
       options: [
         { key: 'all', label: 'All Categories', count: products.length },
-        { key: 'vegetables', label: 'Vegetables', count: products.filter(p => p.category.toLowerCase() === 'vegetables').length },
-        { key: 'fruits', label: 'Fruits', count: products.filter(p => p.category.toLowerCase() === 'fruits').length },
-        { key: 'grains', label: 'Grains', count: products.filter(p => p.category.toLowerCase() === 'grains').length },
-        { key: 'herbs', label: 'Herbs', count: products.filter(p => p.category.toLowerCase() === 'herbs').length },
-        { key: 'dairy', label: 'Dairy', count: products.filter(p => p.category.toLowerCase() === 'dairy').length },
-        { key: 'meat', label: 'Meat', count: products.filter(p => p.category.toLowerCase() === 'meat').length }
+        { key: 'vegetables', label: 'Vegetables', count: products.filter(p => p.category?.toLowerCase() === 'vegetables').length },
+        { key: 'fruits', label: 'Fruits', count: products.filter(p => p.category?.toLowerCase() === 'fruits').length },
+        { key: 'grains', label: 'Grains', count: products.filter(p => p.category?.toLowerCase() === 'grains').length },
+        { key: 'herbs', label: 'Herbs', count: products.filter(p => p.category?.toLowerCase() === 'herbs').length },
+        { key: 'dairy', label: 'Dairy', count: products.filter(p => p.category?.toLowerCase() === 'dairy').length },
+        { key: 'meat', label: 'Meat', count: products.filter(p => p.category?.toLowerCase() === 'meat').length }
       ]
     },
     {
@@ -384,7 +384,8 @@ export default function AdminProducts() {
     setFilterState({
       status: 'all',
       category: 'all',
-      sort: 'newest'
+      sort: 'newest',
+      year: 'all',
     });
     setSearchQuery('');
   };

@@ -155,7 +155,8 @@ const VerificationUpload: React.FC<VerificationUploadProps> = ({
         mediaTypes: ['images'],
         allowsEditing: true,
         aspect: type === 'id' ? [4, 3] : [1, 1],
-        quality: 0.8,
+        quality: 0.6,
+        exif: false,
       });
 
       if (!result.canceled && result.assets && result.assets.length > 0) {

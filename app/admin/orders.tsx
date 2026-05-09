@@ -273,8 +273,8 @@ export default function AdminOrdersScreen() {
       filtered = filtered.filter(order =>
         order.status === 'issue_reported' ||
         (order.notes?.includes('[ISSUE_REPORT:') &&
-          order.status !== 'cancelled' &&
-          order.status !== 'delivered')
+          !order.notes?.includes('[ISSUE_RESOLVED:') &&
+          order.status !== 'cancelled')
       );
     } else if (selectedStatus !== 'all') {
       filtered = filtered.filter(order => order.status === selectedStatus);
@@ -523,15 +523,24 @@ export default function AdminOrdersScreen() {
   const processIssueDecision = async (order: Order, decision: 'approve' | 'reject') => {
     setConfirmModal(prev => ({ ...prev, visible: false }));
     try {
-      const newStatus = decision === 'approve' ? 'cancelled' : 'delivered';
-      const { error } = await supabase
-        .from('orders')
-        .update({ status: newStatus, updated_at: new Date().toISOString() })
-        .eq('id', order.id);
-      if (error) throw error;
+      const resolvedNote = `\n[ISSUE_RESOLVED:${decision === 'approve' ? 'approved_refund' : 'rejected'} by admin]`;
+      const updatedNotes = (order.notes || '') + resolvedNote;
 
       if (decision === 'approve') {
-        await supabase.from('transactions').update({ status: 'refunded' }).eq('order_id', order.id);
+        const { error } = await (supabase as any)
+          .from('orders')
+          .update({ status: 'cancelled', notes: updatedNotes, updated_at: new Date().toISOString() })
+          .eq('id', order.id);
+        if (error) throw error;
+        await (supabase as any).from('transactions').update({ status: 'refunded' }).eq('order_id', order.id);
+      } else {
+        // Reject: mark notes as resolved, keep current status (or reset issue_reported → delivered)
+        const resolvedStatus = order.status === 'issue_reported' ? 'delivered' : order.status;
+        const { error } = await (supabase as any)
+          .from('orders')
+          .update({ status: resolvedStatus, notes: updatedNotes, updated_at: new Date().toISOString() })
+          .eq('id', order.id);
+        if (error) throw error;
       }
 
       await notifyOrderStatusChange(
@@ -664,14 +673,14 @@ export default function AdminOrdersScreen() {
         {/* Issue Reported Badge */}
         {(order.status === 'issue_reported' || order.notes?.includes('[ISSUE_REPORT:')) && (() => {
           const issue = parseIssueFromNotes(order.notes);
-          const isResolved = order.status === 'cancelled' || order.status === 'delivered';
+          const isResolved = order.status === 'cancelled' || order.notes?.includes('[ISSUE_RESOLVED:');
           return (
             <View style={styles.issueBadge}>
               <View style={styles.issueBadgeHeader}>
                 <Text style={styles.issueBadgeIcon}>⚠️</Text>
                 <Text style={styles.issueBadgeTitle}>
                   {isResolved
-                    ? order.status === 'cancelled'
+                    ? order.notes?.includes('approved_refund')
                       ? 'Issue Resolved — Refunded'
                       : 'Issue Resolved — Rejected'
                     : 'Issue Reported'}
@@ -692,8 +701,8 @@ export default function AdminOrdersScreen() {
         {/* Issue Report Review — only for unresolved issues */}
         {(order.status === 'issue_reported' ||
           (order.notes?.includes('[ISSUE_REPORT:') &&
-            order.status !== 'cancelled' &&
-            order.status !== 'delivered')) && (
+            !order.notes?.includes('[ISSUE_RESOLVED:') &&
+            order.status !== 'cancelled')) && (
           <View style={styles.reviewSection}>
             <Text style={styles.reviewTitle}>Admin Action Required</Text>
             <Text style={styles.reviewSubtext}>Review the buyer's complaint and take action.</Text>
