@@ -91,7 +91,7 @@ export default function AdminProducts() {
 
     // Filter by category
     if (filterState.category !== 'all') {
-      filtered = filtered.filter(product => product.category?.toLowerCase() === filterState.category);
+      filtered = filtered.filter(product => product.category?.toLowerCase().trim() === filterState.category);
     }
 
     // Filter by year
@@ -330,55 +330,68 @@ export default function AdminProducts() {
     }
   };
 
-  const getFilterSections = (): FilterSection[] => [
-    {
-      key: 'status',
-      title: 'Status',
-      type: 'category',
-      options: [
-        { key: 'all', label: 'All Status', count: products.length },
-        { key: 'pending', label: 'Pending Review', count: products.filter(p => p.status === 'pending').length },
-        { key: 'approved', label: 'Approved', count: products.filter(p => p.status === 'approved').length },
-        { key: 'rejected', label: 'Rejected', count: products.filter(p => p.status === 'rejected').length }
-      ]
-    },
-    {
-      key: 'category',
-      title: 'Categories',
-      type: 'category',
-      options: [
-        { key: 'all', label: 'All Categories', count: products.length },
-        { key: 'vegetables', label: 'Vegetables', count: products.filter(p => p.category?.toLowerCase() === 'vegetables').length },
-        { key: 'fruits', label: 'Fruits', count: products.filter(p => p.category?.toLowerCase() === 'fruits').length },
-        { key: 'grains', label: 'Grains', count: products.filter(p => p.category?.toLowerCase() === 'grains').length },
-        { key: 'herbs', label: 'Herbs', count: products.filter(p => p.category?.toLowerCase() === 'herbs').length },
-        { key: 'dairy', label: 'Dairy', count: products.filter(p => p.category?.toLowerCase() === 'dairy').length },
-        { key: 'meat', label: 'Meat', count: products.filter(p => p.category?.toLowerCase() === 'meat').length }
-      ]
-    },
-    {
-      key: 'year',
-      title: 'Year Added',
-      type: 'category',
-      options: [
-        { key: 'all', label: 'All Years', count: products.length },
-        { key: '2025', label: '2025', count: products.filter(p => new Date(p.created_at).getFullYear() === 2025).length },
-        { key: '2024', label: '2024', count: products.filter(p => new Date(p.created_at).getFullYear() === 2024).length },
-      ]
-    },
-    {
-      key: 'sort',
-      title: 'Sort By',
-      type: 'sort',
-      options: [
-        { key: 'newest', label: 'Newest First' },
-        { key: 'name', label: 'Name A-Z' },
-        { key: 'farmer', label: 'Farmer Name' },
-        { key: 'price-low', label: 'Price: Low to High' },
-        { key: 'price-high', label: 'Price: High to Low' }
-      ]
-    }
-  ];
+  const getFilterSections = (): FilterSection[] => {
+    // Build category counts dynamically from actual DB values so counts always match
+    const categoryCounts: Record<string, number> = {};
+    products.forEach(p => {
+      if (p.category) {
+        const key = p.category.toLowerCase().trim();
+        categoryCounts[key] = (categoryCounts[key] || 0) + 1;
+      }
+    });
+    const dynamicCategoryOptions = [
+      { key: 'all', label: 'All Categories', count: products.length },
+      ...Object.entries(categoryCounts)
+        .sort(([a], [b]) => a.localeCompare(b))
+        .map(([key, count]) => ({
+          key,
+          label: key.charAt(0).toUpperCase() + key.slice(1).replace(/_/g, ' '),
+          count,
+        })),
+    ];
+
+    return [
+      {
+        key: 'status',
+        title: 'Status',
+        type: 'category',
+        options: [
+          { key: 'all', label: 'All Status', count: products.length },
+          { key: 'pending', label: 'Pending Review', count: products.filter(p => p.status === 'pending').length },
+          { key: 'approved', label: 'Approved', count: products.filter(p => p.status === 'approved').length },
+          { key: 'rejected', label: 'Rejected', count: products.filter(p => p.status === 'rejected').length }
+        ]
+      },
+      {
+        key: 'category',
+        title: 'Categories',
+        type: 'category',
+        options: dynamicCategoryOptions,
+      },
+      {
+        key: 'year',
+        title: 'Year Added',
+        type: 'category',
+        options: [
+          { key: 'all', label: 'All Years', count: products.length },
+          { key: '2025', label: '2025', count: products.filter(p => new Date(p.created_at).getFullYear() === 2025).length },
+          { key: '2024', label: '2024', count: products.filter(p => new Date(p.created_at).getFullYear() === 2024).length },
+        ]
+      },
+      {
+        key: 'sort',
+        title: 'Sort By',
+        type: 'sort',
+        options: [
+          { key: 'newest', label: 'Newest First' },
+          { key: 'name', label: 'Name A-Z' },
+          { key: 'farmer', label: 'Farmer Name' },
+          { key: 'price-low', label: 'Price: Low to High' },
+          { key: 'price-high', label: 'Price: High to Low' }
+        ]
+      }
+    ];
+  };
 
   const resetFilters = () => {
     setFilterState({
